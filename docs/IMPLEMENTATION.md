@@ -2,7 +2,7 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.99（versionCode 123）。最近两次安装验收没有重新确认传送门注入，不能据安装版本推断已加载新 Hook。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。追加屏幕文字仍使用截图选区 Activity，取消恢复已验证，确认追加未验收。中转站侧窗的收起/点击展开/复制后收起已通过，细条拖动与系统侧边栏冲突尚未解决。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
+当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.107（versionCode 131）。传送门最近完整握手为 1.7.105（129），Root输入已就绪；之后两版仅改中转站，不能据安装版本推断已加载131 Hook。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。追加屏幕文字仍使用截图选区 Activity，取消恢复已验证，确认追加未验收。中转站侧窗的收起/点击展开/复制后收起已通过，细条拖动与系统侧边栏冲突尚未解决。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
 
 ## 1. 运行边界
 

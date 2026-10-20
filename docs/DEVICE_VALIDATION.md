@@ -461,3 +461,13 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 ## 2026-10-21：1.7.107 中转站返回与拖出让位
 
 166项测试、lintDebug、assembleDebug通过并原位安装。系统小窗返回键关闭任务，恢复90×360触摸区的灰色侧条，前台bilipai，证据work/hds107-return.png。重新通过侧条放大后，在按住拖出按钮执行ADB draganddrop；仅在startDragAndDrop返回true后调用moveTaskToBack，日志确认调用及中转站任务不可见、bilipai前台。落点不是编辑器，此次不证明目标接收/粘贴成功。证据work/hds107-before-drag.png与hds107-after-drag.png。多选批量拖出入口已接通，尚未实测多项投递。
+
+### bilipai链路只读定位（1.7.107之后）
+
+传送门key_enable_taplus、enable_taplus_pref均true；其blacklist_for_sp未包含com.android.purebilibili。没有改动系统设置或黑名单。
+
+目标ROM /product/app/ContentCatcherOS4/ContentCatcherOS4.apk只读导出，SHA256 D8D21E7D3AE0DE9CFB0DD443A491B4BAA774E104AC364FFED6DE80196B1A0872。Interceptor.d在ViewGroup分支只递归真实getChildCount/getChildAt；childCount<=0直接返回；非ViewGroup才调用fetchViewContent。其长按处理l()调用此分支，虽然日志名称含Accessibility，不代表遍历虚拟节点。另有AICollector节点读取能力，但不能混同长按text_pick路径。
+
+上述证据支持Compose虚拟节点遗漏为候选原因，与已读到的评论TextView语义节点一致；尚未取得该评论实际命中View类型的运行时证据，所以不标为最终根因。bilipai APK存在Compose组件，MainActivity单类反编译有6个错误，不复制其代码。未修改/强停/注入ContentCatcher。
+
+下一实施方向是验证Root按需读取语义节点并复用现有节点选择器，避免依赖没有产出内容的传送门text_pick；必须验证连接不压制现有辅助服务、耗时、锁屏/密码/黑名单边界，不把启动uiautomator命令的多秒延迟当作可用产品方案。
