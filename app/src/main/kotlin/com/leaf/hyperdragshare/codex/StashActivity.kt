@@ -18,6 +18,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -652,13 +653,19 @@ internal fun StashEntryCard(
     onShare: (StashStore.Entry) -> Unit,
     onDelete: (StashStore.Entry) -> Unit,
     onDragStarted: () -> Unit = {},
+    compact: Boolean = false,
 ) {
-    val context = LocalContext.current
+    var moreActions by remember(entry.id, selectionMode) { mutableStateOf(false) }
+    val openContent = {
+        if (selectionMode) onToggleSelection()
+        else if (entry.kind == StashStore.KIND_TEXT) onOpenText(entry)
+        else onPreviewImage(entry)
+    }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(if (compact) 12.dp else 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -685,16 +692,18 @@ internal fun StashEntryCard(
             if (entry.kind == StashStore.KIND_TEXT) {
                 Text(
                     text = entry.text.orEmpty(),
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = openContent),
                     color = MiuixTheme.colorScheme.onSurface,
                     fontSize = 15.sp,
-                    maxLines = 5,
+                    maxLines = if (compact) 3 else 5,
                     overflow = TextOverflow.Ellipsis,
                 )
             } else {
                 StashImage(
                     entry = entry,
                     edgeLimit = 480,
-                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    modifier = Modifier.fillMaxWidth().height(if (compact) 72.dp else 120.dp)
+                        .clickable(onClick = openContent),
                 )
             }
             if (!selectionMode) {
@@ -704,14 +713,27 @@ internal fun StashEntryCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    TextButton(
-                        text = if (entry.kind == StashStore.KIND_TEXT) "分词" else "预览",
-                        onClick = { if (entry.kind == StashStore.KIND_TEXT) onOpenText(entry) else onPreviewImage(entry) },
-                        modifier = Modifier.weight(1f),
-                    )
+                    if (!compact) {
+                        TextButton(
+                            text = if (entry.kind == StashStore.KIND_TEXT) "分词" else "预览",
+                            onClick = openContent,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     TextButton(text = "复制", onClick = { onCopy(entry) }, modifier = Modifier.weight(1f))
-                    TextButton(text = "分享", onClick = { onShare(entry) }, modifier = Modifier.weight(1f))
-                    TextButton(text = "删除", onClick = { onDelete(entry) }, modifier = Modifier.weight(1f))
+                    if (compact) {
+                        TextButton(text = if (moreActions) "收起操作" else "更多",
+                            onClick = { moreActions = !moreActions }, modifier = Modifier.weight(1f))
+                    } else {
+                        TextButton(text = "分享", onClick = { onShare(entry) }, modifier = Modifier.weight(1f))
+                        TextButton(text = "删除", onClick = { onDelete(entry) }, modifier = Modifier.weight(1f))
+                    }
+                }
+                if (compact && moreActions) {
+                    Row(Modifier.fillMaxWidth()) {
+                        TextButton("分享", { onShare(entry) }, modifier = Modifier.weight(1f))
+                        TextButton("删除", { onDelete(entry) }, modifier = Modifier.weight(1f))
+                    }
                 }
                 StashDragHandle(listOf(entry), onDragStarted)
             }

@@ -410,7 +410,7 @@ object StashOverlayPanel {
                                                 else selectedIds + entry.id
                                         },
                                             ::openText, { preview = it }, ::copy, ::share,
-                                            { pendingDelete = it }, ::collapse)
+                                            { pendingDelete = it }, ::collapse, compact = true)
                                     }
                                 }
                             }
