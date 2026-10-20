@@ -35,13 +35,13 @@ object ImageOcrOverlay {
     private val main = Handler(Looper.getMainLooper())
     private var active: Job? = null
 
-    @JvmStatic fun start(context: Context, uri: Uri) {
+    @JvmStatic fun start(context: Context, uri: Uri): Boolean {
         if (!Settings.canDrawOverlays(context)) {
             main.post {
                 android.widget.Toast.makeText(context.applicationContext, "请先在模块设置中允许悬浮窗权限",
                     android.widget.Toast.LENGTH_LONG).show()
             }
-            return
+            return false
         }
         val app = context.applicationContext
         main.post {
@@ -51,6 +51,7 @@ object ImageOcrOverlay {
             active = job
             if (job.window.show()) job.decode()
         }
+        return true
     }
 
     private class Job(private val app: Context, private val uri: Uri) {

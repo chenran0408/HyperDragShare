@@ -134,6 +134,11 @@ class StashActivity : ComponentActivity() {
                         BigBangOverlayLauncher.showText(this, entry.text.orEmpty(), -1, -1, null)
                     },
                     onPreviewImage = { previewEntry = it },
+                    onRecognizeImage = { entry ->
+                        if (ImageOcrOverlay.start(this, StashImageProvider.uriForEntry(entry.id))) {
+                            previewEntry = null
+                        }
+                    },
                     onCopy = ::copyEntry,
                     onShare = ::shareEntry,
                     onDeleteRequest = { pendingDelete = it },
@@ -391,6 +396,7 @@ private fun StashScreen(
     onRetry: () -> Unit,
     onOpenText: (StashStore.Entry) -> Unit,
     onPreviewImage: (StashStore.Entry) -> Unit,
+    onRecognizeImage: (StashStore.Entry) -> Unit,
     onCopy: (StashStore.Entry) -> Unit,
     onShare: (StashStore.Entry) -> Unit,
     onDeleteRequest: (StashStore.Entry) -> Unit,
@@ -505,7 +511,11 @@ private fun StashScreen(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().height(360.dp),
             )
-            TextButton(text = "关闭", onClick = onPreviewDismiss, modifier = Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextButton(text = "关闭", onClick = onPreviewDismiss, modifier = Modifier.weight(1f))
+                TextButton(text = "识别文字", onClick = { onRecognizeImage(entry) },
+                    modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColorsPrimary())
+            }
         }
     }
     }

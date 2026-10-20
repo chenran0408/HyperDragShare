@@ -359,7 +359,14 @@ object StashOverlayPanel {
                                 }
                                 image != null -> Column(Modifier.padding(12.dp)) {
                                     StashImage(image, 1200, Modifier.fillMaxWidth().height(320.dp), ContentScale.Fit)
-                                    TextButton("返回列表", { preview = null })
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                        TextButton("返回列表", { preview = null })
+                                        TextButton("识别文字", {
+                                            if (ImageOcrOverlay.start(app, StashImageProvider.uriForEntry(image.id))) {
+                                                collapse()
+                                            }
+                                        })
+                                    }
                                 }
                                 entries.isEmpty() -> Text(
                                     if (loading) "正在读取…" else "还没有内容。拖拽或分享文字、图片存入这里。",
