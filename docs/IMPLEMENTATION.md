@@ -2,7 +2,7 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.109（versionCode 133），传送门注入与Root握手均133。Root语义取词可独立读到bilipai评论，但长按后会命中原生菜单；面积路径仅源码接通，真实尺寸校准与取词延迟仍未解决，保持关闭。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。追加屏幕文字仍使用截图选区 Activity，取消恢复已验证，确认追加未验收。中转站侧窗的收起/点击展开/复制后收起已通过，细条拖动与系统侧边栏冲突尚未解决。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
+当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.110（versionCode 134）；传送门注入与Root握手均134，设置首页已显示当前版本激活。Root语义取词可独立读到bilipai评论，但长按后会命中原生菜单；面积路径仅源码接通，真实尺寸校准与取词延迟仍未解决，保持关闭。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。追加屏幕文字仍使用截图选区 Activity，取消恢复已验证，确认追加未验收。中转站侧窗的收起/点击展开/复制后收起已通过，细条拖动与系统侧边栏冲突尚未解决。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
 
 ## 1. 运行边界
 
@@ -861,4 +861,3 @@ Controller把已有sourceBounds与当前屏幕尺寸经受限Provider传入分�
 用户要求中转站像侧边条收起。删除收起状态的60×88dp卡片，使用24×96dp透明点击/拖动区域和5×64dp贴边细条；点击展开、拖动吸边，保留位置持久化。复制成功也收起，错误留在面板；分享和原生拖出继续在成功启动后收起。关闭移除入口，收起保留入口，返回先结束预览或多选。
 
 1.7.97真机图片识别已证实桌面上独立分词浮窗，Root追加取消可恢复，中转站换边和全选可操作。该次截图暴露每个换行额外54dp空白，现改8dp，不更改原文或分词。新改动待安装验证，具体证据和未验项目见DEVICE_VALIDATION.md。
-

@@ -32,7 +32,8 @@ final class PortalThumbCaptureSource {
     private volatile long generation;
     private float x;
     private float y;
-    private boolean stopped;
+    private volatile boolean stopped;
+    private volatile RootNodeCaptureClient.Session nodeSession;
     private boolean busy;
     private volatile boolean pointerDown;
     private long captureDeadline;
@@ -46,6 +47,25 @@ final class PortalThumbCaptureSource {
         blocker = new BackgroundTouchBlocker(context);
         detector = new ContactAreaTriggerDetector(threshold,
                 context.getResources().getDisplayMetrics().density * 16f, 180L);
+        worker.execute(() -> {
+            try {
+                RootNodeCaptureClient.Session ready = RootNodeCaptureClient.open(context);
+                main.post(() -> {
+                    if (stopped) ready.close();
+                    else {
+                        nodeSession = ready;
+                        DragShareLog.i(TAG, "Root node process warmed; waiting for an area gesture");
+                    }
+                });
+            } catch (IOException | SecurityException error) {
+                DragShareLog.w(TAG, "cannot prepare Root node process", error);
+                main.post(() -> {
+                    if (!stopped) showFailure("面积取词服务连接失败，请重载传送门后重试");
+                });
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     void onPointerEvent(int action, float px, float py, long time, int major, int width) {
@@ -95,6 +115,11 @@ final class PortalThumbCaptureSource {
 
     private void capture() {
         if (busy) return;
+        RootNodeCaptureClient.Session session = nodeSession;
+        if (session == null) {
+            showFailure("面积取词服务尚未就绪，请稍后重试");
+            return;
+        }
         busy = true;
         long request = generation;
         float px = x, py = y;
@@ -104,21 +129,36 @@ final class PortalThumbCaptureSource {
         worker.execute(() -> {
             try {
                 if (request != generation || !pointerDown) return;
-                CapturedContent content = RootNodeCaptureClient.capture(context, px, py, excluded);
-                if (SystemClock.uptimeMillis() >= deadline) {
-                    DragShareLog.w(TAG, "area capture exceeded system long-press deadline; preserving original gesture");
-                    return;
-                }
-                // A blocked app or password must retain its original gesture. Only cancel after
-                // a safe text candidate has been obtained, and while this contact is still down.
-                if (content != null) {
-                    if (request != generation || !pointerDown) return;
-                    if (!blocker.start()) throw new IOException("Cannot cancel the original touch stream");
-                }
+                boolean[] cancelledOriginal = {false};
+                CapturedContent content = session.capture(px, py, excluded, () -> {
+                    if (request != generation || !pointerDown || !allowed()) return false;
+                    if (SystemClock.uptimeMillis() >= deadline) {
+                        DragShareLog.w(TAG, "candidate arrived after long-press deadline; preserving original gesture");
+                        main.post(() -> {
+                            if (request == generation && allowed()) {
+                                showFailure("当前页面取词较慢，本次保留原长按操作");
+                            }
+                        });
+                        return false;
+                    }
+                    // Confirm a safe text leaf before cancelling; then let the helper finish
+                    // nearby-text collection without racing the original app's long-press menu.
+                    if (!blocker.start()) {
+                        main.post(() -> {
+                            if (request == generation && allowed()) {
+                                showFailure("无法接管此页面的按压，已保留原操作");
+                            }
+                        });
+                        return false;
+                    }
+                    cancelledOriginal[0] = true;
+                    return true;
+                });
+                if (!cancelledOriginal[0]) return;
                 main.post(() -> {
                     if (request != generation || !allowed()) return;
                     if (content == null) {
-                        showFailure("触点下没有可读取的文字，可改用图片识字");
+                        showFailure("页面内容已变化，未显示分词，请重试");
                         return;
                     }
                     Bundle text = new Bundle();
@@ -139,7 +179,7 @@ final class PortalThumbCaptureSource {
             } catch (IOException | SecurityException error) {
                 DragShareLog.w(TAG, "area capture failed", error);
                 main.post(() -> {
-                    if (request == generation && !stopped) showFailure("面积取词失败，请查看诊断日志");
+                    if (request == generation && !stopped) showFailure("面积取词服务已中断，请重载传送门后重试");
                 });
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
@@ -161,6 +201,9 @@ final class PortalThumbCaptureSource {
             generation++;
             main.removeCallbacks(confirm);
             blocker.stop();
+            RootNodeCaptureClient.Session session = nodeSession;
+            nodeSession = null;
+            if (session != null) session.close();
             worker.shutdownNow();
         });
     }

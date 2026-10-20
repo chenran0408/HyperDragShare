@@ -501,3 +501,15 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 本机单次Root取词子进程耗时0.88秒（设备端time real，不含主机ADB统计）。它不足以抢在普通长按菜单前获取原内容；当前结果超时会记录并保留原操作。下一批必须优化进程冷启动，不能把接线版本作为体验验收。证据任务work/root-node-probe，APK outputs/HyperDragShare-1.7.109-debug.apk。
 
 观察到测试启动的传送门进程20496约一分钟后死亡，ActivityManager记录prcp FGS、isCrashing=false；未查明终止原因，不推断是内存或系统限制。重新启动后握手133成功。面积入口长期持有者的存活仍需观察。
+
+## 2026-10-21：1.7.110 Root取词预热与旋转清理
+
+170项单测、lintDebug、assembleDebug通过。包名com.leaf.hyperdragshare.codex、debug签名SHA256 b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0与前版一致，原位安装成功，设备确认1.7.110/134。传送门已重启；最新握手值按下次读取记录，不用即时旧Root值断言失败。
+
+最终设计与边界见CONTACT_AREA_TRIGGER.md的1.7.110节。实验证据work/root-node-probe/staged-richtext-result.txt：四次同一评论候选82–91ms、完整结果249–355ms，字段保留相邻候选；源文字不复制进Git。首次采用逐请求重连时出现Compose空节点，已改为持续连接；不承诺空闲无连接。采用默认getChild，未保留返回空节点的显式不可中断预取实验。
+
+Root进程EOF退出后自动化连接释放，测试期间修改的自动旋转关闭状态被保留，随后恢复原1/0设置。此证据覆盖当前ROM的正常退出；进程故障、其他自动化同时连接的冲突尚未全面验收。真实面积仍未校准，不宣称普通长按或面积触发到分词窗已通过。
+
+APK outputs/HyperDragShare-1.7.110-debug.apk。下一批优先做可独立推进的UI与OCR实际功能，面积输入和取消时序继续保留待办。
+
+打开本模块设置页后，异步回报已确认injected_version=134、portal_root_version=134、portal_root_granted=true，首页显示“已激活”。截图work/hds110-settings.png。此前即时文件中的133是旧值，不作新版Root失败证据。
