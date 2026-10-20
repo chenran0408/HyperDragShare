@@ -59,6 +59,8 @@ class ImageOcrActivity : ComponentActivity() {
     private var pendingText: String? = null
     private var sourceImageUri: Uri? = null
     private var resumed = false
+    @Volatile private var aicrRequest: AicrOcrClient.Request? = null
+    private var failureDetail by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +77,7 @@ class ImageOcrActivity : ComponentActivity() {
             ) {
                 OcrStatusScreen(
                     statusMessage = statusMessage,
+                    failureDetail = failureDetail,
                     isRecognizing = isRecognizing,
                     onRetry = ::recognizeIntent,
                     onCancel = ::finish,
@@ -92,6 +95,8 @@ class ImageOcrActivity : ComponentActivity() {
     }
 
     private fun recognizeIntent() {
+        aicrRequest?.cancel()
+        failureDetail = null
         val request = requests.begin()
         pendingText = null
         isRecognizing = true
@@ -143,6 +148,26 @@ class ImageOcrActivity : ComponentActivity() {
         if (!requests.accepts(request)) {
             bitmap.recycle()
             recognitionSlot.release()
+            return
+        }
+
+        if (IntegrationSettings.isAicrOcrEnabled(this)) {
+            val operation = AicrOcrClient.recognize(this, bitmap) { text, error ->
+                try {
+                    if (canAccept(request)) {
+                        if (error == null) acceptText(request, text.orEmpty())
+                        else if (error !is java.util.concurrent.CancellationException) {
+                            failureDetail = error.message
+                            showFailure(request, R.string.ocr_failed)
+                        }
+                    }
+                } finally {
+                    bitmap.recycle()
+                    recognitionSlot.release()
+                }
+            }
+            aicrRequest = operation
+            if (!requests.accepts(request)) operation.cancel()
             return
         }
 
@@ -237,6 +262,7 @@ class ImageOcrActivity : ComponentActivity() {
 
     override fun onDestroy() {
         requests.invalidate()
+        aicrRequest?.cancel()
         decoder.shutdownNow()
         super.onDestroy()
     }
@@ -269,6 +295,7 @@ class ImageOcrActivity : ComponentActivity() {
 @Composable
 private fun OcrStatusScreen(
     statusMessage: Int,
+    failureDetail: String?,
     isRecognizing: Boolean,
     onRetry: () -> Unit,
     onCancel: () -> Unit,
@@ -301,7 +328,7 @@ private fun OcrStatusScreen(
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = stringResource(statusMessage),
+                    text = failureDetail ?: stringResource(statusMessage),
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     fontSize = 15.sp,
                 )

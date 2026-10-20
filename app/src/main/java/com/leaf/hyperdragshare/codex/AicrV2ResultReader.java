@@ -4,7 +4,7 @@ import android.os.BadParcelableException;
 import android.os.Parcel;
 
 /**
- * Experimental wire reader for the V2 result in AICR 4.12.26.
+ * Wire reader for the V2 result verified with AICR 4.12.26.
  * Not an OCR engine: no service is bound and no vendor classes are loaded.
  */
 final class AicrV2ResultReader {

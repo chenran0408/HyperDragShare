@@ -11,7 +11,7 @@
 - 工程类型：Android LSPosed 模块，Java/Kotlin 17，minSdk 33，targetSdk 34，compileSdk 37。
 - 构建及本地测试运行时使用 JDK 21；Java/Kotlin 输出目标仍为 17。当前 Miuix 0.9.3 的宿主 JVM 类版本为 65，直接调用主题色的单测无法用 JDK 17 执行。
 - 当前分支版本见 `app/build.gradle`；使用 AGP 9.1.1 / Gradle 9.3.1。
-- 已验证宿主：传送门 `4.2.1`，包名 `com.miui.contentextension`。
+- 已验证宿主：传送门 `5.1.5`，包名 `com.miui.contentextension`。
 - LSPosed API：82，入口为 `com.leaf.hyperdragshare.codex.MainHook`。
 - 可靠的同手势跟手依赖 root 读取 Linux evdev；MIUI 输入监听仅作回退。
 - 当前目标为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17，设备和测试状态见
@@ -39,7 +39,7 @@
    `stage/grant/revoke` RPC 仍只允许模块自身或传送门 UID。
 6. 图片分享 Intent 的 `data`、`EXTRA_STREAM`、`ClipData`、MIME type 和
    `FLAG_GRANT_READ_URI_PERMISSION` 是兼容性组合，不能只保留其中一项。
-7. 不要随意修改传送门私有类名、方法名或控制码。它们绑定传送门 4.2.1，变更前需要反编译
+7. 不要随意修改传送门私有类名、方法名或控制码。它们绑定传送门 5.1.5，变更前需要反编译
    新版本并完成实机日志验证。
 8. 设置通过模块 UID 的 SharedPreferences 保存，由 `ShareImageProvider.call(get_settings)`
    受限返回给传送门；不要改成 world-readable 文件。边缘触发值以 dp 保存并在运行时限制

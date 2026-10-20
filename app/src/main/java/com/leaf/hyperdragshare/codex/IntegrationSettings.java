@@ -19,6 +19,14 @@ public final class IntegrationSettings {
 
     private IntegrationSettings() {}
 
+    public static boolean isAicrOcrEnabled(Context context) {
+        return preferences(context).getBoolean("aicr_ocr_enabled", false);
+    }
+
+    public static void setAicrOcrEnabled(Context context, boolean enabled) {
+        preferences(context).edit().putBoolean("aicr_ocr_enabled", enabled).apply();
+    }
+
     public static boolean isCopyDirectEnabled(Context context) {
         return preferences(context).getBoolean(
                 KEY_COPY_DIRECT_ENABLED,

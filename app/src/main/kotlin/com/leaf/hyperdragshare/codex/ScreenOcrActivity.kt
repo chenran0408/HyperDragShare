@@ -74,6 +74,9 @@ class ScreenOcrActivity : ComponentActivity() {
     @Volatile private var screenshotForRegion: Bitmap? = null
     private var regionSelectionMessage by mutableIntStateOf(0)
     private var darkTheme = false
+    @Volatile private var aicrRequest: AicrOcrClient.Request? = null
+    @Volatile private var aicrBitmap: Bitmap? = null
+    private var failureDetail by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,6 +103,7 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     private fun scheduleCapture() {
+        failureDetail = null
         window.decorView.postDelayed({ captureAndRecognize() }, CAPTURE_FRAME_DELAY_MILLIS)
     }
 
@@ -125,6 +129,35 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     private fun recognizeScreenshot(bitmap: Bitmap, retainScreenshotForRegion: Boolean) {
+        failureDetail = null
+        if (IntegrationSettings.isAicrOcrEnabled(this)) {
+            aicrBitmap = bitmap
+            val operation = AicrOcrClient.recognize(this, bitmap) { text, error ->
+                aicrBitmap = null
+                if (isFinishing || isDestroyed || error is java.util.concurrent.CancellationException) {
+                    if (bitmap !== screenshotForRegion) bitmap.recycle()
+                } else if (error != null) {
+                    if (bitmap !== screenshotForRegion) bitmap.recycle()
+                    failureDetail = error.message
+                    showFailure(R.string.screen_ocr_failed)
+                } else {
+                    if (retainScreenshotForRegion) {
+                        if (screenshotForRegion !== bitmap) screenshotForRegion?.recycle()
+                        screenshotForRegion = bitmap
+                    } else if (bitmap !== screenshotForRegion) bitmap.recycle()
+                    val lines = text.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }
+                    if (lines.isEmpty()) showFailure(R.string.screen_ocr_no_text)
+                    else {
+                        resultText = lines
+                        isRecognizing = false
+                        renderResults()
+                    }
+                }
+            }
+            aicrRequest = operation
+            if (isFinishing || isDestroyed) operation.cancel()
+            return
+        }
         val recognizer = try {
             TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
         } catch (error: RuntimeException) {
@@ -319,7 +352,8 @@ class ScreenOcrActivity : ComponentActivity() {
 
     override fun onDestroy() {
         captureExecutor.shutdownNow()
-        screenshotForRegion?.recycle()
+        aicrRequest?.cancel()
+        if (screenshotForRegion !== aicrBitmap) screenshotForRegion?.recycle()
         screenshotForRegion = null
         super.onDestroy()
     }
@@ -384,7 +418,7 @@ class ScreenOcrActivity : ComponentActivity() {
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = stringResource(statusMessage),
+                                text = failureDetail ?: stringResource(statusMessage),
                                 color = MiuixTheme.colorScheme.onSurface,
                             )
                         }
@@ -400,7 +434,7 @@ class ScreenOcrActivity : ComponentActivity() {
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
                             Text(
-                                text = stringResource(statusMessage),
+                                text = failureDetail ?: stringResource(statusMessage),
                                 color = MiuixTheme.colorScheme.onSurface,
                             )
                             Spacer(modifier = Modifier.height(8.dp))

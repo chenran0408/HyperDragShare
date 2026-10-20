@@ -2,11 +2,11 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.69（versionCode 93），传送门注入与 Root 握手报告 93。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并与编辑重分词；真正的宿主窗口内弹层尚未实现。中转站范围和真机证据见 [STASH.md](STASH.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。当前安装和验收状态以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。下文 1220×2656 等参数属于早期设备历史记录，不代表当前小米 15 Pro。
+当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.76（versionCode 100）；传送门注入与 Root 握手最近确认仍为 93，不能据安装版本推断已加载新 Hook。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并与编辑重分词；真正的宿主窗口内弹层尚未实现。中转站范围和真机证据见 [STASH.md](STASH.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。当前安装和验收状态以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。下文 1220×2656 等参数属于早期设备历史记录，不代表当前小米 15 Pro。
 
 ## 1. 运行边界
 
-- 传送门版本：`4.2.1`
+- 传送门版本：`5.1.5`
 - 注入包：`com.miui.contentextension`、`com.xiaomi.aicr`、`android`
 - 不注入：`com.miui.contentcatcher`（Application Extension Service `4.1.9`）
 - Android：minSdk 33，targetSdk 34，compileSdk 37
@@ -105,7 +105,7 @@ AICR 与系统框架入口的静态依据、未验证项和目标设备记录见
 
 `PortalContentCaptureSource.capture()` 先读取传送门静态字段 `sIsTextMode` 和 `sContent`。
 不是有效文字时，再调用传送门的静态 `getBitmap()`，并输出不依赖 Xposed 的
-`CapturedContent`。这些字段和方法属于传送门 4.2.1 的私有实现，是升级宿主版本时最需要
+`CapturedContent`。这些字段和方法属于传送门 5.1.5 的私有实现，是升级宿主版本时最需要
 重新核对的接口。
 
 活动会话中再次收到 `startPick*Task` 会被忽略，防止传送门移动过程中重复初始化并删除已有
@@ -561,7 +561,7 @@ flags: FLAG_ACTIVITY_NEW_TASK
 或模块的私有文件路径。直接传路径、`file://`，或只设置一个没有正确授权的
 `EXTRA_STREAM`，都会表现为“图片不存在”“读取失败”或接收端无内容。
 
-JADX 对传送门 4.2.1 的复核结果是：`viewBitmap` 来源直接赋给静态 `sBitmap`；矩形截图编辑
+JADX 对传送门 5.1.5 的复核结果是：`viewBitmap` 来源直接赋给静态 `sBitmap`；矩形截图编辑
 路径由 `RectScreenshot.getPartialBitmap()` 创建选区宽高的全不透明 Bitmap，再由
 `DrawShapeUtil.getResultBitmap()` 截取同一选区像素。`SaveImageUtils` 保存时把该 `sBitmap`
 原样传给 `BitmapUtils.saveBitmapToStorage()`，最终由 `FileUtils.cacheBitmap()` 直接压缩为
@@ -577,7 +577,7 @@ density 不一致时，内容会在固定尺寸画布内缩放，未覆盖的右
 `MediaStore` 的 `RELATIVE_PATH=Pictures/HyperDragShare` 写入并在完成后清除 `IS_PENDING`；
 更旧系统写入同名 Pictures 子目录并触发媒体扫描。文件名由本地时钟格式化为
 `yyyyMMdd_HHmmss.png`，精度到秒；同一秒在旧系统上冲突时追加短序号避免覆盖。保存项直接在
-工作线程把本次会话持有的原始 Bitmap 无损编码为 PNG，与传送门 4.2.1 的
+工作线程把本次会话持有的原始 Bitmap 无损编码为 PNG，与传送门 5.1.5 的
 `FileUtils.cacheBitmap()` 保存格式一致。PNG 也会保留图片原本存在的透明像素，但本问题中的
 白边并不是透明边转换而来。宿主的 `cancelTask()` 只清空静态 Bitmap 引用而不回收对象，
 会话和保存线程仍持有强引用，因此无需等待跨 UID 暂存 URI。
@@ -813,5 +813,5 @@ DragShareProvider: open uid=...
 - 当前按第一个有效 MT slot 跟踪，不保证复杂多指切换体验。
 - 内置保存、外部分享和图片剪贴板都使用原尺寸 PNG；跨 UID 缓存的单文件上限为 `32 MiB`，
   超限时会失败，不会静默改成 JPEG 或降采样。
-- 传送门私有类和字段绑定 4.2.1，升级传送门后可能需要重新适配。
+- 传送门私有类和字段绑定 5.1.5，升级传送门后可能需要重新适配。
 - Provider 的能力 URI 优先兼容分享中继；完整 URI 在缓存清理前应被视为可读取凭证。

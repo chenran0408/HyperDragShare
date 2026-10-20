@@ -238,6 +238,9 @@ private fun MainPage(
 ) {
     var showAccessibilityDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    var aicrOcrEnabled by remember(context) {
+        mutableStateOf(IntegrationSettings.isAicrOcrEnabled(context))
+    }
     var copyDirectEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
     }
@@ -518,6 +521,16 @@ private fun MainPage(
             }
             item(key = "system-integration-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    OverlayDropdownPreference(
+                        title = "文字识别引擎",
+                        summary = "用于图片、整屏和区域识字。AICR 为实验选项，失败会显示原因，不自动切换引擎",
+                        items = listOf("ML Kit（默认）", "系统 AICR V2（实验）"),
+                        selectedIndex = if (aicrOcrEnabled) 1 else 0,
+                        onSelectedIndexChange = { selected ->
+                            aicrOcrEnabled = selected == 1
+                            IntegrationSettings.setAicrOcrEnabled(context, aicrOcrEnabled)
+                        },
+                    )
                     SwitchPreference(
                         title = "AICR 文本直取",
                         summary = "在 LSPosed 启用 com.xiaomi.aicr 后，将 AICR 的复制操作接入本模块分词页；默认关闭",
