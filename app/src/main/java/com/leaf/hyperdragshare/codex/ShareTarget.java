@@ -87,6 +87,14 @@ final class ShareTarget {
                 true);
     }
 
+    static ShareTarget stash(Drawable icon) {
+        return new ShareTarget(null, "中转站", icon, DragShareSettings.TARGET_STASH, "builtin", true);
+    }
+
+    boolean isStash() {
+        return builtIn && DragShareSettings.TARGET_STASH.equals(key);
+    }
+
     String key() {
         return key;
     }

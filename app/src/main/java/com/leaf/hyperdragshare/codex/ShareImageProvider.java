@@ -17,6 +17,7 @@ import android.provider.MediaStore;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
@@ -41,6 +42,10 @@ public final class ShareImageProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (StashClient.METHOD_PUT.equals(method)) {
+            enforcePortalCaller();
+            return putInStash(extras);
+        }
         if (ModuleActivation.METHOD_REPORT_INJECTED.equals(method)) {
             enforcePortalCaller();
             ModuleActivation.recordInjected(contextOrThrow(), extras);
@@ -71,6 +76,31 @@ public final class ShareImageProvider extends ContentProvider {
         }
         enforcePortalCaller();
         return stageImage(extras);
+    }
+
+    private Bundle putInStash(Bundle extras) {
+        if (extras == null) throw new IllegalArgumentException("Missing stash content");
+        Uri image = extras.getParcelable(StashClient.EXTRA_IMAGE, Uri.class);
+        try (StashStore store = new StashStore(contextOrThrow())) {
+            StashStore.Entry entry;
+            if (image != null) {
+                // Only accept an image already staged by this provider, never an arbitrary file URI.
+                try (InputStream input = new FileInputStream(resolveFile(image))) {
+                    entry = store.addImage(input, getType(image));
+                }
+            } else {
+                String text = extras.getString(StashClient.EXTRA_TEXT);
+                if (text == null || text.isBlank()) throw new IllegalArgumentException("Missing stash text");
+                entry = store.addText(text);
+            }
+            Bundle result = new Bundle();
+            result.putString(StashClient.RESULT_ID, entry.id);
+            DragShareLog.i(TAG, "saved content to stash kind=" + entry.kind);
+            return result;
+        } catch (IOException error) {
+            DragShareLog.w(TAG, "unable to save content to stash", error);
+            throw new IllegalStateException("无法存入中转站：" + error.getMessage(), error);
+        }
     }
 
     private Bundle stageImage(Bundle extras) {

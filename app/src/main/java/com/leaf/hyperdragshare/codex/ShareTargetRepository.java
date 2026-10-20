@@ -41,9 +41,10 @@ final class ShareTargetRepository {
             if (activity == null || !activity.exported) {
                 continue;
             }
-            // The same image activity is exposed below as one configurable built-in action.
+            // These activities already have one configurable built-in action each.
             if (MODULE_PACKAGE.equals(activity.packageName)
-                    && "com.leaf.hyperdragshare.codex.ImageOcrActivity".equals(activity.name)) {
+                    && ("com.leaf.hyperdragshare.codex.ImageOcrActivity".equals(activity.name)
+                    || "com.leaf.hyperdragshare.codex.StashActivity".equals(activity.name))) {
                 continue;
             }
             ComponentName component = new ComponentName(activity.packageName, activity.name);
@@ -101,6 +102,10 @@ final class ShareTargetRepository {
                 ? DragShareSettings.defaults()
                 : settings;
         Map<String, ShareTarget> visible = new LinkedHashMap<>();
+        if (effective.isTargetVisible(DragShareSettings.TARGET_STASH)) {
+            visible.put(DragShareSettings.TARGET_STASH,
+                    ShareTarget.stash(loadBuiltInIcon(context, R.drawable.ic_stash)));
+        }
         String copyKey = imagePayload
                 ? DragShareSettings.TARGET_COPY_IMAGE
                 : DragShareSettings.TARGET_COPY_TEXT;
@@ -134,6 +139,8 @@ final class ShareTargetRepository {
         }
 
         List<ShareTarget> result = new ArrayList<>();
+        ShareTarget stash = visible.remove(DragShareSettings.TARGET_STASH);
+        if (stash != null) result.add(stash);
         ShareTarget copy = visible.remove(copyKey);
         if (copy != null) {
             result.add(copy);
@@ -215,6 +222,9 @@ final class ShareTargetRepository {
             return new TextSegmentationTargetIconDrawable(
                     target.icon,
                     BUILT_IN_ACTION_TILE_COLOR);
+        }
+        if (target.isStash()) {
+            return new SaveTargetIconDrawable(target.icon, BUILT_IN_ACTION_TILE_COLOR);
         }
         return target.icon;
     }

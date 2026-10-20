@@ -82,9 +82,9 @@ public final class DragShareSettings {
     public static final int DEFAULT_MODERN_BLUR_RADIUS_DP = 60;
     public static final int MAX_MODERN_BLUR_RADIUS_DP = 150;
 
-    public static final int MIN_MODERN_GLASS_OPACITY_PERCENT = 0;
-    public static final int DEFAULT_MODERN_GLASS_OPACITY_PERCENT = 36;
-    public static final int MAX_MODERN_GLASS_OPACITY_PERCENT = 90;
+    public static final int MIN_MODERN_GLASS_OPACITY_PERCENT = 68;
+    public static final int DEFAULT_MODERN_GLASS_OPACITY_PERCENT = 72;
+    public static final int MAX_MODERN_GLASS_OPACITY_PERCENT = 100;
 
     public static final boolean DEFAULT_BLOCK_BACKGROUND_SCROLL = false;
     public static final boolean DEFAULT_TEXT_SHARING_ENABLED = true;
@@ -111,6 +111,7 @@ public final class DragShareSettings {
     /** Stable key for the built-in text action. It is kept ahead of app targets. */
     public static final String TARGET_TEXT_SEGMENTATION = "builtin:text_segmentation";
     public static final String TARGET_IMAGE_OCR = "builtin:image_ocr";
+    public static final String TARGET_STASH = "builtin:stash";
 
     static final String METHOD_GET_SETTINGS = "get_settings";
 

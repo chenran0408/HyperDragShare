@@ -3,7 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import android.graphics.PointF;
 import android.graphics.Rect;
 
-/** Geometry used by the left/right edge semicircle share menu. */
+/** Geometry used by the four-edge semicircle share menu. */
 final class CircleMenuGeometry {
     static final int EDGE_NONE = 0;
     static final int EDGE_LEFT = 1;
@@ -31,41 +31,60 @@ final class CircleMenuGeometry {
     }
 
     static float edgeProgress(float x, float y, int width, int height, float softDistance) {
+        int edge = nearestEdge(x, y, width, height, softDistance);
+        return edgeProgress(edge, x, y, width, height, softDistance);
+    }
+
+    static float edgeProgress(
+            int edge, float x, float y, int width, int height, float softDistance) {
         if (width <= 0 || height <= 0 || softDistance <= 0
                 || !Float.isFinite(x) || !Float.isFinite(y)) {
             return 0f;
         }
-        if (y < height * 0.1f || y > height * 0.9f) {
-            return 0f;
+        float distance;
+        switch (edge) {
+            case EDGE_LEFT:
+                distance = Math.max(0f, x);
+                break;
+            case EDGE_RIGHT:
+                distance = Math.max(0f, width - x);
+                break;
+            case EDGE_TOP:
+                distance = Math.max(0f, y);
+                break;
+            case EDGE_BOTTOM:
+                distance = Math.max(0f, height - y);
+                break;
+            default:
+                return 0f;
         }
-        float distance = Math.min(Math.max(0f, x), Math.max(0f, width - x));
         return clamp01(1f - distance / softDistance);
     }
 
     static int startAngle(int edge, int itemCount) {
-        // These values intentionally use the same reference-angle convention
-        // as CircleMenu*Layout.setStartAngle(). itemCenterValues converts it
-        // to Canvas coordinates below.
-        int base;
+        int center = edgeCenterAngle(edge);
+        int sweep = arcSweepAngle(itemCount);
+        return Math.round(center - sweep / 2f);
+    }
+
+    static int arcSweepAngle(int itemCount) {
         int count = Math.max(1, Math.min(5, itemCount));
+        return Math.max(36, (count - 1) * 36);
+    }
+
+    private static int edgeCenterAngle(int edge) {
         switch (edge) {
             case EDGE_LEFT:
-                base = count == 1 ? 90 : count <= 3 ? 54 : 18;
-                break;
+                return 0;
             case EDGE_TOP:
-                base = count == 1 ? 180 : count <= 4 ? 144 : 108;
-                break;
+                return 90;
             case EDGE_RIGHT:
-                base = count == 1 ? 270 : count <= 4 ? 234 : 198;
-                break;
+                return 180;
             case EDGE_BOTTOM:
-                base = count == 1 ? 0 : count <= 3 ? 324 : 288;
-                break;
+                return 270;
             default:
-                base = 288;
-                break;
+                return 0;
         }
-        return base;
     }
 
     static int[] displayOrder(int edge, int itemCount) {
@@ -98,18 +117,11 @@ final class CircleMenuGeometry {
             float radius,
             int index,
             int itemCount) {
-        // The reference layouts use a radius-sized depth and a diameter-sized
-        // vertical span. Their circle center lies on the physical screen edge.
+        // Each layout centers its circle on the chosen screen edge and places
+        // target centers at equal angular intervals along the visible half.
         int count = Math.max(1, Math.min(5, itemCount));
         float centeredOffset = (index - (count - 1) / 2f) * 36f;
-        float degrees;
-        if (edge == EDGE_LEFT) {
-            degrees = centeredOffset;
-        } else if (edge == EDGE_RIGHT) {
-            degrees = 180f - centeredOffset;
-        } else {
-            degrees = startAngle(edge, count) - 90f + index * 36f;
-        }
+        float degrees = itemAngle(edge, centeredOffset);
         float angle = (float) Math.toRadians(degrees);
         float depth = containerSize / 2f;
         float centerX;
@@ -141,6 +153,21 @@ final class CircleMenuGeometry {
                 centerY + radius * (float) Math.sin(angle)};
     }
 
+    private static float itemAngle(int edge, float centeredOffset) {
+        switch (edge) {
+            case EDGE_LEFT:
+                return centeredOffset;
+            case EDGE_TOP:
+                return 90f - centeredOffset;
+            case EDGE_RIGHT:
+                return 180f - centeredOffset;
+            case EDGE_BOTTOM:
+                return 270f + centeredOffset;
+            default:
+                return centeredOffset;
+        }
+    }
+
     static Rect containerRect(
             int edge,
             float pointer,
@@ -162,51 +189,59 @@ final class CircleMenuGeometry {
             int containerSize,
             int topInset,
             int bottomInset) {
+        if (width <= 0 || height <= 0) {
+            return new int[]{0, 0, 0, 0};
+        }
+        int safeTop = Math.max(0, topInset);
+        int safeBottom = Math.max(0, bottomInset);
+        int size = Math.max(1, Math.min(
+                Math.max(1, containerSize),
+                Math.min(Math.max(1, width), Math.max(1, height - safeTop - safeBottom))));
         int left;
         int top;
-        int depth = Math.max(1, containerSize / 2);
+        int depth = Math.max(1, size / 2);
         int right;
         int bottom;
         switch (edge) {
             case EDGE_LEFT:
                 left = 0;
-                top = Math.round(pointer - containerSize / 2f);
+                top = Math.round(pointer - size / 2f);
                 right = depth;
-                bottom = top + containerSize;
+                bottom = top + size;
                 break;
             case EDGE_RIGHT:
                 left = width - depth;
-                top = Math.round(pointer - containerSize / 2f);
+                top = Math.round(pointer - size / 2f);
                 right = width;
-                bottom = top + containerSize;
+                bottom = top + size;
                 break;
             case EDGE_TOP:
-                left = Math.round(pointer - containerSize / 2f);
-                top = topInset;
-                right = left + containerSize;
+                left = Math.round(pointer - size / 2f);
+                top = safeTop;
+                right = left + size;
                 bottom = top + depth;
                 break;
             case EDGE_BOTTOM:
-                left = Math.round(pointer - containerSize / 2f);
-                top = height - bottomInset - depth;
-                right = left + containerSize;
-                bottom = height - bottomInset;
+                left = Math.round(pointer - size / 2f);
+                top = height - safeBottom - depth;
+                right = left + size;
+                bottom = height - safeBottom;
                 break;
             default:
                 left = 0;
-                top = Math.round(pointer - containerSize / 2f);
+                top = Math.round(pointer - size / 2f);
                 right = depth;
-                bottom = top + containerSize;
+                bottom = top + size;
                 break;
         }
-        int minTop = Math.max(0, topInset);
-        int maxTop = Math.max(minTop, height - bottomInset - containerSize);
+        int minTop = safeTop;
+        int maxTop = Math.max(minTop, height - safeBottom - size);
         if (edge == EDGE_LEFT || edge == EDGE_RIGHT || edge == EDGE_NONE) {
             top = clamp(top, minTop, maxTop);
-            bottom = top + containerSize;
+            bottom = top + size;
         } else {
-            left = clamp(left, 0, Math.max(0, width - containerSize));
-            right = left + containerSize;
+            left = clamp(left, 0, Math.max(0, width - size));
+            right = left + size;
         }
         return new int[]{left, top, right, bottom};
     }

@@ -40,6 +40,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,17 +53,11 @@ final class DragShareController {
     private static final int PREVIEW_IMAGE_SIZE_DP = 148;
     private static final int PORTAL_PREVIEW_TEXT_SIZE_DP = 112;
     private static final int PORTAL_PREVIEW_IMAGE_SIZE_DP = 116;
-    private static final int MENU_HEIGHT_DP = 96;
-    private static final int SIMPLE_SIDE_MENU_WIDTH_DP = 112;
-    private static final int PORTAL_MENU_HEIGHT_DP = 152;
     private static final int MENU_TRIGGER_DP = 72;
     private static final int EDGE_SCROLL_FULL_SPEED_INSET_DP = 8;
-    private static final int PORTAL_TRIGGER_FROM_BOTTOM_DP = 96;
-    private static final int PORTAL_ITEM_ENTER_OFFSET_DP = 168;
     private static final long MODERN_OVERLAY_EXIT_DURATION_MS = 220L;
     private static final long LINEAR_MENU_EXIT_DURATION_MS = 160L;
     private static final long PREVIEW_EXIT_DURATION_MS = 160L;
-    private static final int MODERN_BOTTOM_MENU_SIDE_MARGIN_DP = 12;
     private static final int CIRCLE_EDGE_TRIGGER_DP = 76;
     private static final int CIRCLE_EDGE_SOFT_DISTANCE_DP = 180;
     private static final long CIRCLE_EDGE_OPEN_DELAY_MS = 200L;
@@ -125,12 +120,8 @@ final class DragShareController {
                     || circlePendingEdge == CircleMenuGeometry.EDGE_NONE) {
                 return;
             }
-            int edge = CircleMenuGeometry.nearestEdge(
-                    lastX,
-                    lastY,
-                    screenWidth,
-                    screenHeight,
-                    circleTriggerPx());
+            int edge = distanceFromMenuEdge(lastX, lastY) <= circleTriggerPx()
+                    ? circleEdgeForPosition() : CircleMenuGeometry.EDGE_NONE;
             if (edge == circlePendingEdge) {
                 circleEdge = edge;
                 showMenuOnMain();
@@ -148,6 +139,8 @@ final class DragShareController {
     private volatile long lastObservedEventTime;
 
     private float lastX;
+    private float menuAnchorX;
+    private float menuAnchorY;
     private float lastY;
     private long lastHandledEventTime = Long.MIN_VALUE;
     private int lastHandledAction = -1;
@@ -469,6 +462,12 @@ final class DragShareController {
                 : Math.max(topInset + dp(80), screenHeight * 0.32f);
         lastX = initialX;
         lastY = initialY;
+        menuAnchorX = initialX;
+        menuAnchorY = initialY;
+        nearHandSide = initialX < screenWidth / 2f
+                ? DragShareSettings.SIMPLE_MENU_POSITION_LEFT
+                : DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
+        updateMenuGeometry();
         updatePreviewPosition(initialX, initialY);
         updatePortalPullEffect(initialX, initialY);
         startPreviewEnterAnimation();
@@ -713,6 +712,7 @@ final class DragShareController {
         }
     }
     private void createMenu() {
+        updateMenuGeometry();
         if (isModernStyle()) {
             Map<ShareTarget, Drawable> icons = new LinkedHashMap<>();
             for (ShareTarget target : shareTargets) {
@@ -762,7 +762,7 @@ final class DragShareController {
             return;
         }
         boolean portalStyle = isPortalStyle();
-        boolean vertical = !portalStyle && isVerticalSimpleMenu();
+        boolean vertical = isVerticalSimpleMenu();
         FrameLayout linearMenuView = new FrameLayout(context);
         menuView = linearMenuView;
         linearMenuView.setClipChildren(false);
@@ -770,14 +770,10 @@ final class DragShareController {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             linearMenuView.setForceDarkAllowed(false);
         }
-        int horizontalPadding = dp(portalStyle ? 10 : 4);
-        int verticalPadding = dp(portalStyle ? 4 : 4);
+        int horizontalPadding = dp(4);
+        int verticalPadding = dp(4);
         int bottomPadding = dp(portalStyle ? 2 : 4);
-        if (portalStyle) {
-            linearMenuView.setBackground(roundDrawable(Color.TRANSPARENT, 0));
-        } else {
-            addSimpleMenuBackground();
-        }
+        addLinearMenuBackground();
         linearMenuView.setElevation(dp(portalStyle ? 0 : 10));
 
         FrameLayout menuContent = new FrameLayout(context);
@@ -845,15 +841,14 @@ final class DragShareController {
                         ViewGroup.LayoutParams.MATCH_PARENT));
             }
         } else {
-            int itemWidth = dp(portalStyle ? 78 : 76);
-            int itemHeight = dp(portalStyle ? 124 : 84);
-            int iconSize = dp(portalStyle ? 50 : 44);
+            int itemWidth = dp(LinearMenuGeometry.ITEM_WIDTH_DP);
+            int itemHeight = dp(LinearMenuGeometry.ITEM_HEIGHT_DP);
+            int iconSize = dp(40);
             for (ShareTarget target : shareTargets) {
                 LinearLayout item = new LinearLayout(context);
                 item.setOrientation(LinearLayout.VERTICAL);
                 item.setGravity(Gravity.CENTER_HORIZONTAL);
-                item.setPadding(dp(portalStyle ? 5 : 4), dp(portalStyle ? 8 : 3),
-                        dp(portalStyle ? 5 : 4), dp(portalStyle ? 2 : 3));
+                item.setPadding(dp(3), dp(3), dp(3), dp(3));
                 item.setTag(target);
                 item.setBackground(itemBackground(target, false));
 
@@ -878,10 +873,10 @@ final class DragShareController {
                                     : 0x66000000);
                 }
                 item.addView(label, new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, dp(portalStyle ? 38 : 28)));
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(22)));
 
                 if (vertical) {
-                    int width = Math.max(dp(72), menuWidth - dp(8));
+                    int width = Math.max(1, menuWidth - dp(8));
                     menuRow.addView(item, new LinearLayout.LayoutParams(width, itemHeight));
                 } else {
                     menuRow.addView(item, new LinearLayout.LayoutParams(itemWidth, itemHeight));
@@ -895,17 +890,17 @@ final class DragShareController {
         menuParams.y = menuTop;
     }
 
-    private void addSimpleMenuBackground() {
+    private void addLinearMenuBackground() {
         if (!(menuView instanceof FrameLayout)) {
             return;
         }
         FrameLayout linearMenuView = (FrameLayout) menuView;
-        int cornerRadiusDp = settings.simpleMenuCornerRadiusDp;
+        int cornerRadiusDp = isPortalStyle() ? 16 : settings.simpleMenuCornerRadiusDp;
         View background = new View(context);
         background.setBackground(roundDrawable(
                 applyAbsoluteOpacity(palette.menuBackground, 100),
                 cornerRadiusDp));
-        background.setAlpha(simpleMenuBackgroundOpacityFraction(
+        background.setAlpha(isPortalStyle() ? 0.94f : simpleMenuBackgroundOpacityFraction(
                 settings.simpleMenuOpacityPercent));
         linearMenuView.addView(background, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -987,14 +982,13 @@ final class DragShareController {
                 return;
             }
             updateSelectedTarget(x, y);
-            boolean pointerInScrollableMenu = isPortalStyle()
-                    || isPointerInsideSimpleMenu(x, y);
+            boolean pointerInScrollableMenu = isPointerInsideSimpleMenu(x, y);
             int nextDirection = 0;
             if (pointerInScrollableMenu) {
                 int edgeAxisSize = edgeScrollAxisSize();
                 int edgeWidth = edgeScrollWidthPx();
                 nextDirection = GestureMath.edgeScrollDirection(
-                        isVerticalSimpleMenu() ? y : x,
+                        isVerticalSimpleMenu() ? y - menuTop : x - menuLeft,
                         edgeAxisSize,
                         edgeWidth);
             }
@@ -1018,11 +1012,11 @@ final class DragShareController {
             return;
         }
         int trigger = circleTriggerPx();
-        int nextEdge = CircleMenuGeometry.nearestEdge(
-                x, y, screenWidth, screenHeight, trigger);
-        float progress = CircleMenuGeometry.edgeProgress(
-                x, y, screenWidth, screenHeight,
-                Math.max(trigger, dp(CIRCLE_EDGE_SOFT_DISTANCE_DP)));
+        int wantedEdge = circleEdgeForPosition();
+        float distance = distanceFromMenuEdge(x, y);
+        int nextEdge = distance <= trigger ? wantedEdge : CircleMenuGeometry.EDGE_NONE;
+        float progress = GestureMath.clamp01(1f - distance
+                / Math.max(trigger, dp(CIRCLE_EDGE_SOFT_DISTANCE_DP)));
         if (menuShown) {
             circleMenuView.updatePointer(x, y);
             if (settings.closeMenuWhenPointerLeaves
@@ -1068,6 +1062,28 @@ final class DragShareController {
                 Math.max(dp(CIRCLE_EDGE_TRIGGER_DP), dp(settings.edgeTriggerDp)));
     }
 
+    private int circleEdgeForPosition() {
+        switch (simpleMenuPosition) {
+            case DragShareSettings.SIMPLE_MENU_POSITION_TOP: return CircleMenuGeometry.EDGE_TOP;
+            case DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM: return CircleMenuGeometry.EDGE_BOTTOM;
+            case DragShareSettings.SIMPLE_MENU_POSITION_LEFT: return CircleMenuGeometry.EDGE_LEFT;
+            default: return CircleMenuGeometry.EDGE_RIGHT;
+        }
+    }
+
+    private float distanceFromMenuEdge(float x, float y) {
+        switch (simpleMenuPosition) {
+            case DragShareSettings.SIMPLE_MENU_POSITION_TOP: return Math.max(0f, y - topInset);
+            case DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM: return Math.max(0f, screenHeight - bottomInset - y);
+            case DragShareSettings.SIMPLE_MENU_POSITION_LEFT: return Math.max(0f, x);
+            default: return Math.max(0f, screenWidth - x);
+        }
+    }
+
+    private float glowPointerFraction(float x, float y) {
+        return isVerticalSimpleMenu() ? y / Math.max(1f, screenHeight) : x / Math.max(1f, screenWidth);
+    }
+
     private int effectiveSimpleMenuPosition() {
         if (configuredSimpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND) {
             return nearHandSide == DragShareSettings.SIMPLE_MENU_POSITION_LEFT
@@ -1081,13 +1097,12 @@ final class DragShareController {
     }
 
     private boolean isVerticalSimpleMenu() {
-        return !isPortalStyle()
-                && (simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_LEFT
+        return (simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_LEFT
                 || simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_RIGHT);
     }
 
     private int edgeScrollAxisSize() {
-        return isVerticalSimpleMenu() ? screenHeight : screenWidth;
+        return isVerticalSimpleMenu() ? menuHeight : menuWidth;
     }
 
     private int edgeScrollWidthPx() {
@@ -1099,16 +1114,13 @@ final class DragShareController {
     private float edgeScrollSpeedMultiplier() {
         boolean vertical = isVerticalSimpleMenu();
         return GestureMath.edgeScrollSpeedMultiplier(
-                vertical ? lastY : lastX,
+                vertical ? lastY - menuTop : lastX - menuLeft,
                 edgeScrollAxisSize(),
                 edgeScrollWidthPx(),
                 dp(EDGE_SCROLL_FULL_SPEED_INSET_DP));
     }
 
     private boolean shouldShowSimpleMenu(float x, float y) {
-        if (isPortalStyle()) {
-            return GestureMath.shouldShowMenu(y, menuTriggerTop);
-        }
         int trigger = Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP));
         return GestureMath.shouldShowEdgeMenu(
                 simpleMenuPosition,
@@ -1170,13 +1182,18 @@ final class DragShareController {
     }
 
     private void updateNearHandMenuPosition() {
-        if (!active || isPortalStyle() || isCircleStyle()
+        if (!active
                 || nearHandSideLocked
                 || configuredSimpleMenuPosition != DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND) {
             return;
         }
         int nextPosition = effectiveSimpleMenuPosition();
         if (nextPosition == simpleMenuPosition) {
+            return;
+        }
+        if (isCircleStyle()) {
+            simpleMenuPosition = nextPosition;
+            updateCirclePointer(lastX, lastY);
             return;
         }
         boolean wasShown = menuShown;
@@ -1210,7 +1227,7 @@ final class DragShareController {
     }
 
     private void registerNearHandSensorIfNeeded() {
-        if (!active || isPortalStyle() || isCircleStyle()
+        if (!active
                 || configuredSimpleMenuPosition != DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND
                 || nearHandSensorRegistered) {
             return;
@@ -1277,6 +1294,7 @@ final class DragShareController {
                 return;
             }
             menuShown = true;
+            lockNearHandMenuSide();
             circleEdge = circlePendingEdge;
             circleScrollDirection = 0;
             circleMenuView.expand(circleEdge, lastX, lastY);
@@ -1335,10 +1353,12 @@ final class DragShareController {
             }
             menuShown = true;
             updatePreviewPosition(lastX, lastY);
-            log("menu shown pointerY=" + Math.round(lastY) + " menuTop=" + menuTop);
+            log("menu shown style=" + settings.uiStyle + " configuredPosition=" + configuredSimpleMenuPosition
+                    + " effectivePosition=" + simpleMenuPosition + " bounds=" + menuLeft + "," + menuTop
+                    + "," + menuWidth + "," + menuHeight + " pointer=" + Math.round(lastX) + "," + Math.round(lastY));
             if (isPortalStyle()) {
                 if (glowView != null) {
-                    glowView.setPullProgress(1f, lastX / Math.max(1f, screenWidth));
+                    glowView.setPullProgress(1f, glowPointerFraction(lastX, lastY));
                     glowView.expandMenu();
                 }
                 if (!portalGlowExpandedLogged) {
@@ -1415,15 +1435,21 @@ final class DragShareController {
 
     private void startPortalMenuEnterAnimation() {
         menuView.setAlpha(1f);
+        menuView.setTranslationX(0f);
         menuView.setTranslationY(0f);
         OvershootInterpolator springLike = new OvershootInterpolator(0.78f);
         for (int index = 0; index < menuItems.size(); index++) {
             View item = menuItems.get(index);
             item.animate().cancel();
             item.setAlpha(0f);
-            item.setTranslationY(dp(PORTAL_ITEM_ENTER_OFFSET_DP));
+            boolean vertical = isVerticalSimpleMenu();
+            float offset = dp(48) * (simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_LEFT
+                    || simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_TOP ? -1 : 1);
+            item.setTranslationX(vertical ? offset : 0f);
+            item.setTranslationY(vertical ? 0f : offset);
             item.animate()
                     .alpha(1f)
+                    .translationX(0f)
                     .translationY(0f)
                     .setStartDelay(Math.min(180L, index * 22L))
                     .setDuration(430L)
@@ -1593,6 +1619,11 @@ final class DragShareController {
     }
 
     private void launchShare(Session shareSession, ShareTarget target) {
+        if (target.isStash()) {
+            stashContent(shareSession.payload, shareSession.stagedUri);
+            shareSession.cancelled = true;
+            return;
+        }
         if (target.isSaveToLocal()) {
             saveImageLocally(shareSession.payload.bitmap);
             shareSession.cancelled = true;
@@ -1620,6 +1651,19 @@ final class DragShareController {
             log("share launch failed", error);
         }
         shareSession.cancelled = true;
+    }
+
+    private void stashContent(CapturedContent payload, Uri stagedImage) {
+        new Thread(() -> {
+            try {
+                StashClient.put(context, payload, stagedImage);
+                log("stored content in stash kind=" + (payload.isImage() ? "image" : "text"));
+                mainHandler.post(() -> showToast("已存入中转站"));
+            } catch (IOException | SecurityException | IllegalStateException error) {
+                log("stash save failed", error);
+                mainHandler.post(() -> showToast("存入中转站失败：" + error.getMessage(), Toast.LENGTH_LONG));
+            }
+        }, "drag-share-stash-save").start();
     }
 
     private void copyToClipboard(CapturedContent payload, Uri stagedImage) {
@@ -1714,6 +1758,12 @@ final class DragShareController {
                 case CircleMenuGeometry.EDGE_RIGHT:
                     left = avoid.left - previewWidth - margin;
                     break;
+                case CircleMenuGeometry.EDGE_TOP:
+                    top = avoid.bottom + margin;
+                    break;
+                case CircleMenuGeometry.EDGE_BOTTOM:
+                    top = avoid.top - previewHeight - margin;
+                    break;
                 default:
                     break;
             }
@@ -1776,15 +1826,14 @@ final class DragShareController {
         if (glowView == null || !isPortalStyle()) {
             return;
         }
-        float progressStart = Math.max(topInset + dp(120), screenHeight * 0.45f);
         float progress = menuShown
                 ? 1f
-                : GestureMath.dragPullProgress(y, progressStart, menuTriggerTop);
+                : GestureMath.clamp01(1f - distanceFromMenuEdge(x, y) / dp(180));
         if (progress > 0.02f && !portalGlowStartedLogged) {
             portalGlowStartedLogged = true;
             log("portal glow progress started");
         }
-        glowView.setPullProgress(progress, x / Math.max(1f, screenWidth));
+        glowView.setPullProgress(progress, glowPointerFraction(x, y));
     }
 
     private boolean refreshDisplayGeometry() {
@@ -1801,56 +1850,34 @@ final class DragShareController {
             Toast.makeText(context, R.string.drag_display_geometry_failed, Toast.LENGTH_SHORT).show();
             return false;
         }
+        updateMenuGeometry();
+        return true;
+    }
+
+    private void updateMenuGeometry() {
+        simpleMenuPosition = effectiveSimpleMenuPosition();
         if (isCircleStyle()) {
             menuWidth = screenWidth;
             menuHeight = dp(CircleMenuOverlayView.CONTAINER_SIZE_DP);
             menuLeft = 0;
             menuTop = Math.max(topInset, screenHeight - bottomInset - menuHeight);
             menuTriggerTop = menuTop;
-            return true;
+            return;
         }
-        if (isPortalStyle()) {
-            menuWidth = screenWidth;
-            menuHeight = dp(PORTAL_MENU_HEIGHT_DP);
-            menuLeft = 0;
-            menuTop = Math.max(topInset, screenHeight - bottomInset - menuHeight);
-            menuTriggerTop = Math.max(
-                    menuTop,
-                    screenHeight - bottomInset - dp(PORTAL_TRIGGER_FROM_BOTTOM_DP));
-            return true;
-        }
-
-        simpleMenuPosition = effectiveSimpleMenuPosition();
         int menuMargin = dp(settings.simpleMenuEdgeDistanceDp);
-        if (isVerticalSimpleMenu()) {
-            menuWidth = Math.min(dp(SIMPLE_SIDE_MENU_WIDTH_DP), Math.max(1, screenWidth / 2));
-            menuHeight = Math.max(1, screenHeight - topInset - bottomInset);
-            menuTop = topInset;
-            menuLeft = simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_LEFT
-                    ? menuMargin
-                    : Math.max(0, screenWidth - menuWidth - menuMargin);
-            menuTriggerTop = menuTop;
-        } else {
-            int horizontalInset = isModernStyle()
-                    && simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM
-                    ? Math.min(
-                            dp(MODERN_BOTTOM_MENU_SIDE_MARGIN_DP),
-                            Math.max(0, (screenWidth - 1) / 2))
-                    : 0;
-            menuWidth = Math.max(1, screenWidth - horizontalInset * 2);
-            menuHeight = dp(MENU_HEIGHT_DP);
-            menuLeft = horizontalInset;
-            if (simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_TOP) {
-                menuTop = topInset + menuMargin;
-                menuTriggerTop = menuTop + dp(MENU_TRIGGER_DP);
-            } else {
-                menuTop = Math.max(
-                        topInset,
-                        screenHeight - bottomInset - menuHeight - menuMargin);
-                menuTriggerTop = menuTop - dp(MENU_TRIGGER_DP);
-            }
+        int[] bounds = LinearMenuGeometry.bounds(simpleMenuPosition, screenWidth, screenHeight,
+                topInset, bottomInset, menuMargin, shareTargets.size(),
+                context.getResources().getDisplayMetrics().density, menuAnchorX, menuAnchorY);
+        menuLeft = bounds[0];
+        menuTop = bounds[1];
+        menuWidth = bounds[2];
+        menuHeight = bounds[3];
+        menuTriggerTop = screenHeight - bottomInset - menuMargin - dp(MENU_TRIGGER_DP);
+        if (glowView != null) {
+            int inset = simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_TOP ? topInset
+                    : simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM ? bottomInset : 0;
+            glowView.setEdge(simpleMenuPosition, inset);
         }
-        return true;
     }
 
     private WindowManager.LayoutParams overlayParams(int width, int height, String title) {
@@ -2291,68 +2318,12 @@ final class DragShareController {
         }
 
         static OverlayColors light() {
-            return new OverlayColors(
-                    0xF7FFFFFF,
-                    0xF4F8FAF9,
-                    0xFF17201D,
-                    0xFF55615C,
-                    0x26137A5A,
-                    0x00000000,
-                    0xFF137A5A);
+            return from(DragShareSettings.defaults());
         }
 
         static OverlayColors from(DragShareSettings settings) {
-            if (settings != null && settings.uiStyle == DragShareSettings.STYLE_CIRCLE) {
-                if (settings.colorMode == DragShareSettings.COLOR_DARK) {
-                    return new OverlayColors(
-                            0xF72A2D32,
-                            0xE91E242B,
-                            0xFFF3F5F4,
-                            0xFFB7BFBB,
-                            0x4C4C9DFF,
-                            0xAA7AC9FF,
-                            0xFF65C6E8);
-                }
-                return new OverlayColors(
-                        0xFCFFFFFF,
-                        0xE9F7FAFC,
-                        0xFF17201D,
-                        0xFF65716B,
-                        0x3A5DABE8,
-                        0xAA438CB6,
-                        0xFF2E9EB7);
-            }
-            if (settings != null && settings.uiStyle == DragShareSettings.STYLE_PORTAL) {
-                if (settings.colorMode == DragShareSettings.COLOR_DARK) {
-                    return new OverlayColors(
-                            0xF72A2D32,
-                            0x003A3E43,
-                            0xFFF3F5F4,
-                            0xFFB7BFBB,
-                            0x384F8BFF,
-                            0x887AC9FF,
-                            0xFF71DDEB);
-                }
-                return new OverlayColors(
-                        0xFCFFFFFF,
-                        0x00FFFFFF,
-                        0xFF17201D,
-                        0xFF65716B,
-                        0x306F9DFF,
-                        0x8074B8FF,
-                        0xFF2CA9BD);
-            }
-            if (settings != null && settings.colorMode == DragShareSettings.COLOR_DARK) {
-                return new OverlayColors(
-                        0xF725272A,
-                        0xF42F3135,
-                        0xFFF3F5F4,
-                        0xFFB7BFBB,
-                        0x3358B995,
-                        0x6658B995,
-                        0xFF58B995);
-            }
-            return light();
+            int[] colors = OverlayThemeColors.colors(settings.colorMode == DragShareSettings.COLOR_DARK);
+            return new OverlayColors(colors[0], colors[0], colors[1], colors[2], colors[4], colors[5], colors[3]);
         }
     }
 }

@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Left/right edge semicircle share menu based on the Oplus ROM circlemenuview.
+ * Four-edge semicircle share menu based on the Oplus ROM circlemenuview.
  *
  * <p>The window is intentionally passive.  It is added with
  * FLAG_NOT_TOUCHABLE and the controller feeds it the root-evdev coordinates,
@@ -39,9 +39,9 @@ import java.util.Map;
 @SuppressLint("ViewConstructor")
 final class CircleMenuOverlayView extends FrameLayout {
     private static final int MAX_ITEMS = 5;
-    static final int CONTAINER_SIZE_DP = 300;
-    private static final int ITEM_SIZE_DP = 68;
-    private static final int RADIUS_DP = 112;
+    static final int CONTAINER_SIZE_DP = 240;
+    private static final int ITEM_SIZE_DP = 56;
+    private static final int RADIUS_DP = 91;
     private static final int ARC_STROKE_DP = 2;
 
     private final int screenWidth;
@@ -105,7 +105,9 @@ final class CircleMenuOverlayView extends FrameLayout {
         int maximumContainer = Math.max(1, Math.min(screenWidth, availableHeight));
         this.containerSize = Math.min(dp(CONTAINER_SIZE_DP), maximumContainer);
         this.itemSize = Math.min(dp(ITEM_SIZE_DP), Math.max(1, containerSize / 4));
-        this.radius = Math.min(dp(RADIUS_DP), containerSize * 0.38f);
+        this.radius = Math.min(
+                dp(RADIUS_DP),
+                Math.min(containerSize * 0.38f, Math.max(0, (containerSize - itemSize) / 2f)));
         this.panelColor = dark ? 0xE91E242B : 0xE9F7FAFC;
         this.panelStrokeColor = dark ? 0x665E6D78 : 0x553E5662;
         this.accentColor = accentColor;
@@ -192,14 +194,14 @@ final class CircleMenuOverlayView extends FrameLayout {
         LinearLayout item = new LinearLayout(getContext());
         item.setOrientation(LinearLayout.VERTICAL);
         item.setGravity(Gravity.CENTER_HORIZONTAL);
-        item.setPadding(dp(4), dp(4), dp(4), dp(2));
+        item.setPadding(dp(3), dp(2), dp(3), dp(1));
         item.setBackground(itemBackground(target, false));
 
         ImageView icon = new ImageView(getContext());
         icon.setImageDrawable(iconFor(target));
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
         icon.setAlpha(contentAlpha);
-        item.addView(icon, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        item.addView(icon, new LinearLayout.LayoutParams(dp(34), dp(34)));
 
         TextView label = new TextView(getContext());
         label.setText(target.label);
@@ -210,7 +212,7 @@ final class CircleMenuOverlayView extends FrameLayout {
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         label.setAlpha(contentAlpha);
         item.addView(label, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(20)));
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(17)));
         slot.addView(item, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
@@ -276,8 +278,13 @@ final class CircleMenuOverlayView extends FrameLayout {
                 params.leftMargin = targetLeft;
                 params.topMargin = targetTop;
                 addView(item, params);
-                item.setTranslationX(0f);
-                item.setTranslationY(direction > 0 ? dp(52) : -dp(52));
+                if (isVerticalEdge(edge)) {
+                    item.setTranslationX(0f);
+                    item.setTranslationY(direction > 0 ? dp(52) : -dp(52));
+                } else {
+                    item.setTranslationX(direction > 0 ? dp(52) : -dp(52));
+                    item.setTranslationY(0f);
+                }
                 item.setAlpha(0f);
                 item.setScaleX(0.78f);
                 item.setScaleY(0.78f);
@@ -338,8 +345,7 @@ final class CircleMenuOverlayView extends FrameLayout {
     }
 
     void expand(int edge, float x, float y) {
-        if (edge != CircleMenuGeometry.EDGE_LEFT
-                && edge != CircleMenuGeometry.EDGE_RIGHT) {
+        if (!isValidEdge(edge)) {
             return;
         }
         this.edge = edge;
@@ -375,9 +381,13 @@ final class CircleMenuOverlayView extends FrameLayout {
             item.setScaleX(0.7f);
             item.setScaleY(0.7f);
             float travel = panelDepth() * 0.3f;
-            item.setTranslationX(edge == CircleMenuGeometry.EDGE_LEFT ? -travel
-                    : edge == CircleMenuGeometry.EDGE_RIGHT ? travel : 0f);
-            item.setTranslationY(0f);
+            if (isVerticalEdge(edge)) {
+                item.setTranslationX(edge == CircleMenuGeometry.EDGE_LEFT ? -travel : travel);
+                item.setTranslationY(0f);
+            } else {
+                item.setTranslationX(0f);
+                item.setTranslationY(edge == CircleMenuGeometry.EDGE_TOP ? -travel : travel);
+            }
             item.animate().alpha(1f).scaleX(1f).scaleY(1f)
                     .translationX(0f).translationY(0f)
                     .setStartDelay(Math.min(120L, index * 28L))
@@ -501,6 +511,7 @@ final class CircleMenuOverlayView extends FrameLayout {
         float centerX = panelCenterX();
         float centerY = panelCenterY();
         canvas.save();
+        canvas.clipRect(0, topInset, getWidth(), getHeight() - bottomInset);
         canvas.scale(scale, scale, centerX, centerY);
         panelPaint.setStyle(Paint.Style.FILL);
         panelPaint.setColor(panelColor);
@@ -518,10 +529,8 @@ final class CircleMenuOverlayView extends FrameLayout {
         arcPaint.setShader(arcShader);
         arcPath.reset();
         int arcItemCount = Math.max(1, targets.size());
-        float sweep = Math.max(36f, (arcItemCount - 1) * 36f);
-        float start = edge == CircleMenuGeometry.EDGE_RIGHT
-                ? 180f - sweep / 2f
-                : -sweep / 2f;
+        float sweep = CircleMenuGeometry.arcSweepAngle(arcItemCount);
+        float start = CircleMenuGeometry.startAngle(edge, arcItemCount);
         arcPath.addArc(
                 centerX - radius,
                 centerY - radius,
@@ -542,13 +551,19 @@ final class CircleMenuOverlayView extends FrameLayout {
         int color = (accentColor & 0x00FFFFFF) | (alpha << 24);
         int softColor = (accentColor & 0x00FFFFFF)
                 | (Math.round(alpha * 0.42f) << 24);
-        if (edge != CircleMenuGeometry.EDGE_LEFT
-                && edge != CircleMenuGeometry.EDGE_RIGHT) {
+        if (!isValidEdge(edge)) {
             return;
         }
-        float centerX = edge == CircleMenuGeometry.EDGE_LEFT ? 0f : getWidth();
-        float centerY = Math.max(topInset, Math.min(getHeight() - bottomInset, pointerY));
-        float glowRadius = dp(156) * (0.55f + edgeProgress * 0.45f);
+        float centerX;
+        float centerY;
+        if (isVerticalEdge(edge)) {
+            centerX = edge == CircleMenuGeometry.EDGE_LEFT ? 0f : getWidth();
+            centerY = Math.max(topInset, Math.min(getHeight() - bottomInset, pointerY));
+        } else {
+            centerX = Math.max(0f, Math.min(getWidth(), pointerX));
+            centerY = edge == CircleMenuGeometry.EDGE_TOP ? topInset : getHeight() - bottomInset;
+        }
+        float glowRadius = containerSize * (0.36f + edgeProgress * 0.29f);
         glowPaint.setShader(new RadialGradient(
                 centerX,
                 centerY,
@@ -615,13 +630,29 @@ final class CircleMenuOverlayView extends FrameLayout {
     }
 
     private float panelCenterX() {
-        return edge == CircleMenuGeometry.EDGE_RIGHT
-                ? panelRect.right
-                : panelRect.left;
+        switch (edge) {
+            case CircleMenuGeometry.EDGE_RIGHT:
+                return panelRect.right;
+            case CircleMenuGeometry.EDGE_TOP:
+            case CircleMenuGeometry.EDGE_BOTTOM:
+                return panelRect.centerX();
+            case CircleMenuGeometry.EDGE_LEFT:
+            default:
+                return panelRect.left;
+        }
     }
 
     private float panelCenterY() {
-        return panelRect.centerY();
+        switch (edge) {
+            case CircleMenuGeometry.EDGE_TOP:
+                return panelRect.top;
+            case CircleMenuGeometry.EDGE_BOTTOM:
+                return panelRect.bottom;
+            case CircleMenuGeometry.EDGE_LEFT:
+            case CircleMenuGeometry.EDGE_RIGHT:
+            default:
+                return panelRect.centerY();
+        }
     }
 
     private float panelDepth() {
@@ -631,6 +662,13 @@ final class CircleMenuOverlayView extends FrameLayout {
     private boolean isVerticalEdge(int edge) {
         return edge == CircleMenuGeometry.EDGE_LEFT
                 || edge == CircleMenuGeometry.EDGE_RIGHT;
+    }
+
+    private boolean isValidEdge(int edge) {
+        return edge == CircleMenuGeometry.EDGE_LEFT
+                || edge == CircleMenuGeometry.EDGE_RIGHT
+                || edge == CircleMenuGeometry.EDGE_TOP
+                || edge == CircleMenuGeometry.EDGE_BOTTOM;
     }
 
     private GradientDrawable itemBackground(ShareTarget target, boolean selected) {

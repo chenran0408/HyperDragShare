@@ -1,14 +1,14 @@
 package com.leaf.hyperdragshare.codex;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 public final class CircleMenuGeometryTest {
     @Test
-    public void onlyLeftAndRightEdgesCanTrigger() {
+    public void nearestEdgeKeepsAutomaticLeftRightBehavior() {
         assertEquals(
                 CircleMenuGeometry.EDGE_LEFT,
                 CircleMenuGeometry.nearestEdge(20, 500, 1080, 2000, 76));
@@ -30,90 +30,159 @@ public final class CircleMenuGeometryTest {
     }
 
     @Test
-    public void startAnglesMatchFourReferenceLayouts() {
-        assertEquals(18, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_LEFT, 5));
-        assertEquals(108, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_TOP, 5));
-        assertEquals(198, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_RIGHT, 5));
-        assertEquals(288, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_BOTTOM, 5));
-        assertEquals(324, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_BOTTOM, 2));
-        assertEquals(90, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_LEFT, 1));
-        assertEquals(0, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_BOTTOM, 1));
+    public void configuredEdgeProgressSupportsAllFourSides() {
+        assertEquals(0.75f, CircleMenuGeometry.edgeProgress(
+                CircleMenuGeometry.EDGE_LEFT, 20, 600, 1080, 2000, 80), 0.001f);
+        assertEquals(0.75f, CircleMenuGeometry.edgeProgress(
+                CircleMenuGeometry.EDGE_RIGHT, 1060, 600, 1080, 2000, 80), 0.001f);
+        assertEquals(0.75f, CircleMenuGeometry.edgeProgress(
+                CircleMenuGeometry.EDGE_TOP, 500, 20, 1080, 2000, 80), 0.001f);
+        assertEquals(0.75f, CircleMenuGeometry.edgeProgress(
+                CircleMenuGeometry.EDGE_BOTTOM, 500, 1980, 1080, 2000, 80), 0.001f);
+        assertEquals(0f, CircleMenuGeometry.edgeProgress(
+                CircleMenuGeometry.EDGE_NONE, 20, 20, 1080, 2000, 80), 0f);
     }
 
     @Test
-    public void sideContainersAreSemicirclesClampedInsideInsets() {
+    public void arcAnglesCenterAtEachEdgeAndUseThirtySixDegreeSpacing() {
+        assertEquals(-72, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_LEFT, 5));
+        assertEquals(18, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_TOP, 5));
+        assertEquals(108, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_RIGHT, 5));
+        assertEquals(198, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_BOTTOM, 5));
+        assertEquals(252, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_BOTTOM, 2));
+        assertEquals(-18, CircleMenuGeometry.startAngle(CircleMenuGeometry.EDGE_LEFT, 1));
+        assertEquals(36, CircleMenuGeometry.arcSweepAngle(1));
+        assertEquals(144, CircleMenuGeometry.arcSweepAngle(5));
+    }
+
+    @Test
+    public void containersAnchorAtEachEdgeAndClampAlongTheEdge() {
         int[] left = CircleMenuGeometry.containerBounds(
-                CircleMenuGeometry.EDGE_LEFT,
-                20,
-                1080,
-                2000,
-                600,
-                40,
-                80);
-        assertEquals(0, left[0]);
-        assertEquals(40, left[1]);
-        assertEquals(300, left[2]);
-        assertEquals(640, left[3]);
+                CircleMenuGeometry.EDGE_LEFT, 20, 1080, 2000, 600, 40, 80);
+        assertArrayEquals(new int[]{0, 40, 300, 640}, left);
 
         int[] right = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_RIGHT, 1900, 1080, 2000, 600, 40, 80);
+        assertArrayEquals(new int[]{780, 1320, 1080, 1920}, right);
+
+        int[] top = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_TOP, 20, 1080, 2000, 600, 40, 80);
+        assertArrayEquals(new int[]{0, 40, 600, 340}, top);
+
+        int[] bottom = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_BOTTOM, 1060, 1080, 2000, 600, 40, 80);
+        assertArrayEquals(new int[]{480, 1620, 1080, 1920}, bottom);
+    }
+
+    @Test
+    public void itemCentersProgressAlongEachSemicircleAndStayInsideScreen() {
+        int width = 1080;
+        int height = 2400;
+        int topInset = 72;
+        int bottomInset = 84;
+        int span = 720;
+        int itemSize = 168;
+        float radius = 273f;
+
+        int[] left = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_LEFT, 12, width, height, span, topInset, bottomInset);
+        int[] right = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_RIGHT, height - 12, width, height,
+                span, topInset, bottomInset);
+        int[] top = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_TOP, 12, width, height, span, topInset, bottomInset);
+        int[] bottom = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_BOTTOM, width - 12, width, height,
+                span, topInset, bottomInset);
+
+        float[] leftFirst = itemCenter(CircleMenuGeometry.EDGE_LEFT, left, span, radius, 0, 5);
+        float[] leftLast = itemCenter(CircleMenuGeometry.EDGE_LEFT, left, span, radius, 4, 5);
+        float[] rightFirst = itemCenter(CircleMenuGeometry.EDGE_RIGHT, right, span, radius, 0, 5);
+        float[] rightLast = itemCenter(CircleMenuGeometry.EDGE_RIGHT, right, span, radius, 4, 5);
+        float[] topFirst = itemCenter(CircleMenuGeometry.EDGE_TOP, top, span, radius, 0, 5);
+        float[] topLast = itemCenter(CircleMenuGeometry.EDGE_TOP, top, span, radius, 4, 5);
+        float[] bottomFirst = itemCenter(CircleMenuGeometry.EDGE_BOTTOM, bottom, span, radius, 0, 5);
+        float[] bottomLast = itemCenter(CircleMenuGeometry.EDGE_BOTTOM, bottom, span, radius, 4, 5);
+
+        assertTrue(leftFirst[1] < leftLast[1]);
+        assertTrue(rightFirst[1] < rightLast[1]);
+        assertTrue(topFirst[0] < topLast[0]);
+        assertTrue(bottomFirst[0] < bottomLast[0]);
+
+        for (int edge : new int[]{
+                CircleMenuGeometry.EDGE_LEFT,
+                CircleMenuGeometry.EDGE_TOP,
                 CircleMenuGeometry.EDGE_RIGHT,
-                1900,
-                1080,
-                2000,
-                600,
-                40,
-                80);
-        assertEquals(780, right[0]);
-        assertEquals(1320, right[1]);
-        assertEquals(1080, right[2]);
-        assertEquals(1920, right[3]);
+                CircleMenuGeometry.EDGE_BOTTOM}) {
+            int[] bounds = edge == CircleMenuGeometry.EDGE_LEFT ? left
+                    : edge == CircleMenuGeometry.EDGE_TOP ? top
+                    : edge == CircleMenuGeometry.EDGE_RIGHT ? right : bottom;
+            for (int index = 0; index < 5; index++) {
+                float[] center = itemCenter(edge, bounds, span, radius, index, 5);
+                assertTrue("left edge=" + edge + " index=" + index,
+                        center[0] - itemSize / 2f >= 0f);
+                assertTrue("right edge=" + edge + " index=" + index,
+                        center[0] + itemSize / 2f <= width);
+                assertTrue("top edge=" + edge + " index=" + index,
+                        center[1] - itemSize / 2f >= topInset);
+                assertTrue("bottom edge=" + edge + " index=" + index,
+                        center[1] + itemSize / 2f <= height - bottomInset);
+            }
+        }
     }
 
     @Test
-    public void itemCentersAdvanceAroundArc() {
-        float[] first = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_LEFT, 0, 700, 600, 220, 0, 5);
-        float[] second = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_LEFT, 0, 700, 600, 220, 1, 5);
-        assertTrue(first[0] != second[0] || first[1] != second[1]);
-        assertTrue(first[0] >= 0 && first[0] <= 300);
-        assertTrue(first[1] >= 700 && first[1] <= 1300);
-    }
-
-    @Test
-    public void centerItemUsesScreenEdgeAsCircleCenter() {
-        float[] leftCenter = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_LEFT, 0, 700, 600, 220, 2, 5);
-        assertEquals(220f, leftCenter[0], 0.01f);
-        assertEquals(1000f, leftCenter[1], 0.01f);
-
-        float[] rightCenter = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_RIGHT, 780, 700, 600, 220, 2, 5);
-        assertEquals(860f, rightCenter[0], 0.01f);
-        assertEquals(1000f, rightCenter[1], 0.01f);
-    }
-
-    @Test
-    public void displayOrderIsNaturalFromTopToBottom() {
+    public void geometryFitsSmallDisplaysAndInsets() {
+        int[] bounds = CircleMenuGeometry.containerBounds(
+                CircleMenuGeometry.EDGE_BOTTOM, 320, 600, 700, 720, 24, 24);
+        assertArrayEquals(new int[]{0, 376, 600, 676}, bounds);
         assertArrayEquals(
-                new int[]{0, 1, 2, 3, 4},
-                CircleMenuGeometry.displayOrder(CircleMenuGeometry.EDGE_LEFT, 5));
-        assertArrayEquals(
-                new int[]{0, 1, 2, 3, 4},
-                CircleMenuGeometry.displayOrder(CircleMenuGeometry.EDGE_RIGHT, 5));
+                new int[]{0, 0, 0, 0},
+                CircleMenuGeometry.containerBounds(
+                        CircleMenuGeometry.EDGE_TOP, 0, 0, 0, 720, 0, 0));
+    }
+
+    @Test
+    public void oneItemIsCenteredOnTheChosenEdge() {
+        assertCenter(CircleMenuGeometry.EDGE_LEFT, 0, 700, 600, 220, 220, 1000);
+        assertCenter(CircleMenuGeometry.EDGE_TOP, 0, 700, 600, 220, 300, 920);
+        assertCenter(CircleMenuGeometry.EDGE_RIGHT, 780, 700, 600, 220, 860, 1000);
+        assertCenter(CircleMenuGeometry.EDGE_BOTTOM, 0, 700, 600, 220, 300, 780);
+    }
+
+    @Test
+    public void displayOrderRemainsNatural() {
+        for (int edge : new int[]{
+                CircleMenuGeometry.EDGE_LEFT,
+                CircleMenuGeometry.EDGE_TOP,
+                CircleMenuGeometry.EDGE_RIGHT,
+                CircleMenuGeometry.EDGE_BOTTOM}) {
+            assertArrayEquals(
+                    new int[]{0, 1, 2, 3, 4},
+                    CircleMenuGeometry.displayOrder(edge, 5));
+        }
         assertArrayEquals(
                 new int[]{0, 1, 2},
                 CircleMenuGeometry.displayOrder(CircleMenuGeometry.EDGE_LEFT, 3));
+    }
 
-        float[] leftFirst = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_LEFT, 0, 700, 600, 220, 0, 5);
-        float[] leftLast = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_LEFT, 0, 700, 600, 220, 4, 5);
-        float[] rightFirst = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_RIGHT, 780, 700, 600, 220, 0, 5);
-        float[] rightLast = CircleMenuGeometry.itemCenterValues(
-                CircleMenuGeometry.EDGE_RIGHT, 780, 700, 600, 220, 4, 5);
-        assertTrue(leftFirst[1] < leftLast[1]);
-        assertTrue(rightFirst[1] < rightLast[1]);
+    private static float[] itemCenter(
+            int edge, int[] bounds, int span, float radius, int index, int itemCount) {
+        return CircleMenuGeometry.itemCenterValues(
+                edge, bounds[0], bounds[1], span, radius, index, itemCount);
+    }
+
+    private static void assertCenter(
+            int edge,
+            int originX,
+            int originY,
+            int span,
+            int radius,
+            float expectedX,
+            float expectedY) {
+        float[] center = CircleMenuGeometry.itemCenterValues(
+                edge, originX, originY, span, radius, 0, 1);
+        assertEquals(expectedX, center[0], 0.01f);
+        assertEquals(expectedY, center[1], 0.01f);
     }
 }

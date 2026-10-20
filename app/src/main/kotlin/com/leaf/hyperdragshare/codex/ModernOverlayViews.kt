@@ -81,9 +81,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import kotlin.math.max
 
-private const val MODERN_MENU_ICON_SIZE_DP = 44
-private const val MODERN_MENU_ITEM_WIDTH_DP = 76
-private const val MODERN_MENU_ITEM_HEIGHT_DP = 84
+private const val MODERN_MENU_ICON_SIZE_DP = 40
+private const val MODERN_MENU_ITEM_WIDTH_DP = LinearMenuGeometry.ITEM_WIDTH_DP
+private const val MODERN_MENU_ITEM_HEIGHT_DP = LinearMenuGeometry.ITEM_HEIGHT_DP
 private const val MODERN_MENU_ITEM_STAGGER_MS = 38L
 private const val MODERN_CARD_CORNER_RADIUS_DP = 16f
 private const val MODERN_OVERLAY_ENTER_DURATION_MS = 220L
@@ -327,7 +327,7 @@ internal class ModernMenuOverlayView(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .verticalScroll(state)
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             targets.forEachIndexed { index, target ->
@@ -352,7 +352,7 @@ internal class ModernMenuOverlayView(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .horizontalScroll(state)
-                                .padding(horizontal = 6.dp),
+                                .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             targets.forEachIndexed { index, target ->

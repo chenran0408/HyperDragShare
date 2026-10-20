@@ -384,13 +384,15 @@ public final class DragShareSettingsTest {
                 settings,
                 true);
 
-        assertEquals(2, textTargets.size());
-        assertTrue(textTargets.get(0).isCopyTextToClipboard());
-        assertTrue(textTargets.get(1).isTextSegmentation());
-        assertEquals(3, imageTargets.size());
-        assertTrue(imageTargets.get(0).isCopyImageToClipboard());
-        assertTrue(imageTargets.get(1).isSaveToLocal());
-        assertTrue(imageTargets.get(2).isImageOcr());
+        assertEquals(3, textTargets.size());
+        assertTrue(textTargets.get(0).isStash());
+        assertTrue(textTargets.get(1).isCopyTextToClipboard());
+        assertTrue(textTargets.get(2).isTextSegmentation());
+        assertEquals(4, imageTargets.size());
+        assertTrue(imageTargets.get(0).isStash());
+        assertTrue(imageTargets.get(1).isCopyImageToClipboard());
+        assertTrue(imageTargets.get(2).isSaveToLocal());
+        assertTrue(imageTargets.get(3).isImageOcr());
     }
 
     @Test
@@ -406,9 +408,10 @@ public final class DragShareSettingsTest {
         List<ShareTarget> targets = ShareTargetRepository.applySettings(
                 null, java.util.Collections.emptyList(),
                 DragShareSettings.fromBundle(settings.toBundle()), true);
-        assertEquals(2, targets.size());
-        assertTrue(targets.get(0).isCopyImageToClipboard());
-        assertTrue(targets.get(1).isSaveToLocal());
+        assertEquals(3, targets.size());
+        assertTrue(targets.get(0).isStash());
+        assertTrue(targets.get(1).isCopyImageToClipboard());
+        assertTrue(targets.get(2).isSaveToLocal());
     }
 
     @Test
@@ -496,12 +499,14 @@ public final class DragShareSettingsTest {
                 java.util.Collections.emptyList(),
                 settings,
                 true);
-        assertEquals(1, textTargets.size());
-        assertTrue(textTargets.get(0).isTextSegmentation());
-        assertEquals(3, imageTargets.size());
-        assertTrue(imageTargets.get(0).isCopyImageToClipboard());
-        assertTrue(imageTargets.get(1).isSaveToLocal());
-        assertTrue(imageTargets.get(2).isImageOcr());
+        assertEquals(2, textTargets.size());
+        assertTrue(textTargets.get(0).isStash());
+        assertTrue(textTargets.get(1).isTextSegmentation());
+        assertEquals(4, imageTargets.size());
+        assertTrue(imageTargets.get(0).isStash());
+        assertTrue(imageTargets.get(1).isCopyImageToClipboard());
+        assertTrue(imageTargets.get(2).isSaveToLocal());
+        assertTrue(imageTargets.get(3).isImageOcr());
         assertFalse(DragShareSettings.fromBundle(settings.toBundle()).preloadTextSegmenter);
         assertFalse(DragShareSettings.fromBundle(settings.toBundle())
                 .isTargetVisible(DragShareSettings.TARGET_COPY_TEXT));

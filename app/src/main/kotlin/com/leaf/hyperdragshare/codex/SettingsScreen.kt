@@ -566,6 +566,16 @@ private fun MainPage(
             }
             item(key = "text-panel-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    ArrowPreference(
+                        title = "中转站",
+                        summary = "查看暂存的文字与图片，复制、分享或拖出",
+                        onClick = {
+                            context.startActivity(
+                                Intent(context, StashActivity::class.java)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
+                    )
                     SwitchPreference(
                         title = "选词触感反馈",
                         summary = "手指选中或取消词语时轻振一次",
@@ -621,6 +631,19 @@ private fun MainPage(
                 }
             }
 
+            item(key = "menu-position") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    OverlayDropdownPreference(
+                        title = "菜单位置",
+                        summary = "四种样式通用。近手方向参考拖拽起点和手机倾斜，展开后固定",
+                        items = listOf("上", "下", "左", "右", "近手方向"),
+                        selectedIndex = settings.simpleMenuPosition.coerceIn(0, 4),
+                        onSelectedIndexChange = { selected ->
+                            persist(copySettings(settings, simpleMenuPosition = selected.coerceIn(0, 4)))
+                        },
+                    )
+                }
+            }
             if (settings.uiStyle == DragShareSettings.STYLE_SIMPLE
                 || settings.uiStyle == DragShareSettings.STYLE_MODERN
             ) {
@@ -635,20 +658,6 @@ private fun MainPage(
                 }
                 item(key = "simple-appearance-preferences") {
                     Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                        OverlayDropdownPreference(
-                            title = "菜单位置",
-                            summary = "选择分享菜单出现的屏幕边缘",
-                            items = listOf("上", "下", "左", "右", "近手方向"),
-                            selectedIndex = settings.simpleMenuPosition.coerceIn(0, 4),
-                            onSelectedIndexChange = { selected ->
-                                persist(
-                                    copySettings(
-                                        settings,
-                                        simpleMenuPosition = selected.coerceIn(0, 4),
-                                    ),
-                                )
-                            },
-                        )
                         if (settings.uiStyle == DragShareSettings.STYLE_SIMPLE) {
                             SliderPreference(
                                 title = "背景不透明度",
@@ -729,14 +738,14 @@ private fun MainPage(
                                 },
                             )
                             SliderPreference(
-                                title = "模糊不透明度",
+                                title = "底板不透明度",
                                 value = modernGlassOpacity,
                                 valueText = "${modernGlassOpacity.roundToInt()}%",
                                 valueRange = DragShareSettings.MIN_MODERN_GLASS_OPACITY_PERCENT.toFloat()
                                     ..DragShareSettings.MAX_MODERN_GLASS_OPACITY_PERCENT.toFloat(),
-                                steps = 18,
+                                steps = 8,
                                 showKeyPoints = true,
-                                keyPoints = listOf(0f, 25f, 50f, 75f, 90f),
+                                keyPoints = listOf(68f, 76f, 84f, 92f, 100f),
                                 onValueChange = { modernGlassOpacity = it },
                                 onValueChangeFinished = {
                                     persist(
@@ -1911,6 +1920,7 @@ private fun querySettingsTargets(context: Context): List<ShareTarget> {
         emptyList()
     }
     return targets + listOf(
+        ShareTarget.stash(context.getDrawable(R.drawable.ic_stash)),
         ShareTarget.copyTextToClipboard(ShareTargetRepository.loadCopyIcon(context)),
         ShareTarget.copyImageToClipboard(ShareTargetRepository.loadCopyIcon(context)),
         ShareTarget.saveToLocal(ShareTargetRepository.loadSaveIcon(context)),

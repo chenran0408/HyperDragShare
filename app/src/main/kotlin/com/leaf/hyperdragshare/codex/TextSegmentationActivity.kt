@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -79,6 +80,10 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
 
 /**
  * DragShare's text-only BigBang surface. The selectable word-chip implementation is retained
@@ -343,7 +348,47 @@ class TextSegmentationActivity : ComponentActivity() {
                     Toast.LENGTH_SHORT,
                 ).show()
             }
+            BigBangMoreAction.SaveToStash -> saveToStash()
             BigBangMoreAction.Translate -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_TRANSLATE)
+        }
+    }
+
+    private fun saveToStash() {
+        val originalText = boomChipPage?.originalText.orEmpty()
+        val text = selectedTextOrOriginal()
+        if (text.isBlank()) {
+            Toast.makeText(this, "没有可存入中转站的文字", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val savedSelection = text != originalText
+
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    StashStore(this@TextSegmentationActivity).use { store ->
+                        store.addText(text)
+                    }
+                }
+                Toast.makeText(
+                    this@TextSegmentationActivity,
+                    if (savedSelection) "所选文字已存入中转站" else "全部文字已存入中转站",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } catch (error: IOException) {
+                DragShareLog.w(TAG, "unable to save text to stash", error)
+                Toast.makeText(
+                    this@TextSegmentationActivity,
+                    "存入中转站失败：${error.message ?: "本地存储不可用"}",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } catch (error: SecurityException) {
+                DragShareLog.w(TAG, "permission denied while saving text to stash", error)
+                Toast.makeText(
+                    this@TextSegmentationActivity,
+                    "存入中转站失败：系统拒绝访问本地存储",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
         }
     }
 
@@ -420,6 +465,7 @@ class TextSegmentationActivity : ComponentActivity() {
 
 private enum class BigBangMoreAction {
     Translate,
+    SaveToStash,
     TextSize,
     PanelHeight,
     PanelOpacity,
@@ -702,6 +748,7 @@ private fun BigBangOverlayContent(
         ) {
             val actions = listOf(
                 BigBangMoreAction.Translate to stringResource(R.string.bigbang_more_translate),
+                BigBangMoreAction.SaveToStash to "存入中转站",
                 BigBangMoreAction.TextSize to stringResource(R.string.bigbang_more_text_size, textSizeSp),
                 BigBangMoreAction.PanelHeight to stringResource(
                     R.string.bigbang_more_panel_height,

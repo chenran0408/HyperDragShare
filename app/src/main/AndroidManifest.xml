@@ -76,6 +76,18 @@
             android:theme="@style/Theme.DragShare" />
 
         <activity
+            android:name=".StashActivity"
+            android:label="中转站"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".SearchOverlayActivity"
             android:excludeFromRecents="true"
             android:exported="false"
@@ -135,6 +147,12 @@
           Image staging and grant management accept calls only from this app or
           Taplus. Read URIs use unguessable UUID tokens and expire from cache.
         -->
+        <provider
+            android:name=".StashImageProvider"
+            android:authorities="${applicationId}.stash"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <provider
             android:name=".ShareImageProvider"
             android:authorities="com.leaf.hyperdragshare.codex.share"

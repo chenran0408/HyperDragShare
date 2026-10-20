@@ -9,6 +9,7 @@
 ## 工程基线
 
 - 工程类型：Android LSPosed 模块，Java/Kotlin 17，minSdk 33，targetSdk 34，compileSdk 37。
+- 构建及本地测试运行时使用 JDK 21；Java/Kotlin 输出目标仍为 17。当前 Miuix 0.9.3 的宿主 JVM 类版本为 65，直接调用主题色的单测无法用 JDK 17 执行。
 - 当前分支版本见 `app/build.gradle`；使用 AGP 9.1.1 / Gradle 9.3.1。
 - 已验证宿主：传送门 `4.2.1`，包名 `com.miui.contentextension`。
 - LSPosed API：82，入口为 `com.leaf.hyperdragshare.codex.MainHook`。
@@ -76,7 +77,9 @@
 - `CapturedContent.java`、`OverlayWindowPolicy.java`：来源无关的文字/图片模型和传送门/无障碍窗口类型。
 - `DragShareController.java`：拖拽会话、悬浮预览、方向菜单、边缘滚动、近手传感器和落点选择；不依赖 Xposed。
 - `PortalGlowView.java`：流光样式的全屏不可触摸光效、下拉进度和托盘展开绘制。
-- `CircleMenuOverlayView.java`、`CircleMenuGeometry.java`：按 JADX MCP 圆菜单类重建的左右贴边半圆样式。
+- `CircleMenuOverlayView.java`、`CircleMenuGeometry.java`：四边环形菜单，240dp 面板跨度、56dp 条目；预览需避让四边面板。
+- `LinearMenuGeometry.java`：简洁、流光、现代共用紧凑边界，64×68dp 单元、最多 5 项可见；设置方向必须对四种样式都生效。
+- `StashStore.java`、`StashClient.java`、`StashImageProvider.java`、`StashActivity.kt`：私有持久中转站、受限存入 RPC、按次授权读图和 Miuix 管理列表，进度见 `docs/STASH.md`。
 - `ModernOverlayViews.kt`、`ModernOverlayWindow.java`、`ModernPreviewSizer.java`：现代 Compose 内容、View outline、公开 Window 局部背景模糊和自适应正方形预览。
 - `DragShareSettings.java`：设置默认值、范围校验、本地持久化和 Provider 配置 RPC。
 - `BackgroundTouchBlocker.java`、`FrameworkBinderTransactionResolver.java`：可选地通过系统手势监视器取消原前台窗口的触摸流；直接 API 被拒绝或被隐藏 API 策略屏蔽时，从当前 ROM 的 framework DEX 动态解析输入 Binder 事务号并以 root 回退，失败时旁路观察。
