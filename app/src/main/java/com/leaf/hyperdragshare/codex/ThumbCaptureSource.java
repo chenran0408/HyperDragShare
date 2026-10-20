@@ -1,7 +1,5 @@
 package com.leaf.hyperdragshare.codex;
 
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.net.Uri;
@@ -105,9 +103,9 @@ final class ThumbCaptureSource {
                     @Override
                     public void onStaged(Uri uri) {
                         bitmap.recycle();
-                        Intent intent = ImageOcrActivity.createRecheckIntent(service, uri)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        main.post(() -> open(request, sourcePackage, intent));
+                        main.post(() -> {
+                            if (accepts(request, sourcePackage)) ImageOcrOverlay.start(service, uri);
+                        });
                     }
 
                     @Override
@@ -128,15 +126,6 @@ final class ThumbCaptureSource {
     private boolean accepts(long request, String sourcePackage) {
         return requests.accepts(request) && service.isThumbCaptureAllowed()
                 && Objects.equals(sourcePackage, service.foregroundPackage());
-    }
-
-    private void open(long request, String sourcePackage, Intent intent) {
-        if (!accepts(request, sourcePackage)) return;
-        try {
-            service.startActivity(intent);
-        } catch (ActivityNotFoundException | SecurityException error) {
-            fail(request, sourcePackage, "系统拒绝打开分词或识字窗口", error);
-        }
     }
 
     private void fail(long request, String sourcePackage, String reason, Throwable error) {

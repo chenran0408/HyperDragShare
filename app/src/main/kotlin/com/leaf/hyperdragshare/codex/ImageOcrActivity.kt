@@ -3,270 +3,101 @@ package com.leaf.hyperdragshare.codex
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import java.io.File
 import java.io.IOException
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.Semaphore
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.ThemeController
+import java.util.UUID
 
-/** Recognizes a granted image URI in the module process, never in the hooked host. */
+/** Transparent share receiver: retain the temporary URI before leaving the sending app. */
 class ImageOcrActivity : ComponentActivity() {
+    private var worker: Thread? = null
     private val requests = LatestRequest()
-    private val decoder: ExecutorService = Executors.newSingleThreadExecutor()
-    private val recognitionSlot = Semaphore(1)
-    private var statusMessage by mutableIntStateOf(R.string.ocr_recognizing)
-    private var isRecognizing by mutableStateOf(true)
-    private var pendingText: String? = null
-    private var sourceImageUri: Uri? = null
-    private var resumed = false
-    @Volatile private var aicrRequest: AicrOcrClient.Request? = null
-    private var failureDetail by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, true)
-        val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = !dark
-            isAppearanceLightNavigationBars = !dark
-        }
-        sourceImageUri = resolveImageUri(intent)
-        setContent {
-            MiuixTheme(
-                controller = ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light),
-            ) {
-                OcrStatusScreen(
-                    statusMessage = statusMessage,
-                    failureDetail = failureDetail,
-                    isRecognizing = isRecognizing,
-                    onRetry = ::recognizeIntent,
-                    onCancel = ::finish,
-                )
-            }
-        }
-        recognizeIntent()
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+        window.setDimAmount(0f)
+        receiveImage()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        sourceImageUri = resolveImageUri(intent)
-        recognizeIntent()
+        receiveImage()
     }
 
-    private fun recognizeIntent() {
-        aicrRequest?.cancel()
-        failureDetail = null
+    private fun receiveImage() {
+        worker?.interrupt()
         val request = requests.begin()
-        pendingText = null
-        isRecognizing = true
-        statusMessage = R.string.ocr_recognizing
-        val uri = sourceImageUri
-        if (uri == null) {
-            showFailure(request, R.string.ocr_invalid_image)
+        val source = resolveImageUri(intent)
+        if (source == null || !Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, if (source == null) "没有收到可读取的图片"
+                else "请先在模块设置中允许悬浮窗权限", Toast.LENGTH_LONG).show()
+            finish()
             return
         }
-        decoder.execute { decodeAndRecognize(uri, request) }
-    }
-
-    private fun decodeAndRecognize(uri: Uri, request: Long) {
-        try {
-            recognitionSlot.acquire()
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            return
-        }
-        if (!requests.accepts(request)) {
-            recognitionSlot.release()
-            return
-        }
-
-        val bitmap: Bitmap
-        try {
-            bitmap = ImageDecoder.decodeBitmap(
-                ImageDecoder.createSource(contentResolver, uri),
-            ) { imageDecoder, info, _ ->
-                imageDecoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
-                val longest = maxOf(info.size.width, info.size.height)
-                if (longest > MAX_IMAGE_EDGE) {
-                    val scale = MAX_IMAGE_EDGE / longest.toFloat()
-                    imageDecoder.setTargetSize(
-                        (info.size.width * scale).toInt().coerceAtLeast(1),
-                        (info.size.height * scale).toInt().coerceAtLeast(1),
-                    )
-                }
-            }
-        } catch (error: IOException) {
-            recognitionSlot.release()
-            reportFailure(request, R.string.ocr_read_failed, error)
-            return
-        } catch (error: RuntimeException) {
-            recognitionSlot.release()
-            reportFailure(request, R.string.ocr_read_failed, error)
-            return
-        }
-        if (!requests.accepts(request)) {
-            bitmap.recycle()
-            recognitionSlot.release()
-            return
-        }
-
-        if (IntegrationSettings.isAicrOcrEnabled(this)) {
-            val operation = AicrOcrClient.recognize(this, bitmap) { text, error ->
-                try {
-                    if (canAccept(request)) {
-                        if (error == null) acceptText(request, text.orEmpty())
-                        else if (error !is java.util.concurrent.CancellationException) {
-                            failureDetail = error.message
-                            showFailure(request, R.string.ocr_failed)
+        worker = Thread({
+            var copy: File? = null
+            try {
+                val directory = File(cacheDir, "ocr-input")
+                if (!directory.isDirectory && !directory.mkdirs()) throw IOException("无法创建图片暂存目录")
+                directory.listFiles()?.filter { it.isFile && System.currentTimeMillis() - it.lastModified() > 86_400_000L }
+                    ?.forEach { if (!it.delete()) DragShareLog.w(TAG, "unable to remove expired OCR input") }
+                copy = File(directory, UUID.randomUUID().toString() + ".image")
+                contentResolver.openInputStream(source).use { input ->
+                    if (input == null) throw IOException("无法读取分享图片")
+                    copy.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (true) {
+                            if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("接收已取消")
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > 32L * 1024 * 1024) throw IOException("图片超过32 MiB，请缩小后重试")
+                            output.write(buffer, 0, count)
                         }
                     }
-                } finally {
-                    bitmap.recycle()
-                    recognitionSlot.release()
                 }
+                val owned = copy
+                runOnUiThread {
+                    if (requests.accepts(request) && !isFinishing && !isDestroyed) {
+                        ImageOcrOverlay.start(applicationContext, Uri.fromFile(owned))
+                        finish()
+                    } else if (!owned.delete()) DragShareLog.w(TAG, "unable to remove cancelled OCR input")
+                }
+            } catch (error: IOException) {
+                copy?.delete()
+                fail(request, error)
+            } catch (error: SecurityException) {
+                copy?.delete()
+                fail(request, error)
             }
-            aicrRequest = operation
-            if (!requests.accepts(request)) operation.cancel()
-            return
-        }
-
-        val recognizer: TextRecognizer
-        try {
-            recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-        } catch (error: RuntimeException) {
-            bitmap.recycle()
-            recognitionSlot.release()
-            reportFailure(request, R.string.ocr_failed, error)
-            return
-        }
-        try {
-            recognizer.process(InputImage.fromBitmap(bitmap, 0))
-                .addOnCompleteListener(Runnable::run) { task ->
-                    try {
-                        if (task.isSuccessful) {
-                            val text = task.result?.text.orEmpty()
-                            runOnUiThread { acceptText(request, text) }
-                        } else {
-                            reportFailure(request, R.string.ocr_failed, task.exception)
-                        }
-                    } finally {
-                        recognizer.close()
-                        bitmap.recycle()
-                        recognitionSlot.release()
-                    }
-                }
-        } catch (error: RuntimeException) {
-            recognizer.close()
-            bitmap.recycle()
-            recognitionSlot.release()
-            reportFailure(request, R.string.ocr_failed, error)
-        }
+        }, "receive-ocr-image").also { it.start() }
     }
 
-    private fun acceptText(request: Long, text: String) {
-        if (!canAccept(request)) return
-        if (text.isBlank()) {
-            showFailure(request, R.string.ocr_no_text)
-            return
-        }
-        pendingText = text
-        openTextWhenResumed()
-    }
-
-    private fun openTextWhenResumed() {
-        if (resumed && pendingText != null && !isFinishing) {
-            val text = pendingText ?: return
-            if (BigBangOverlayLauncher.showText(this, text, -1, -1, sourceImageUri)) {
-                pendingText = null
+    private fun fail(request: Long, error: Exception) {
+        DragShareLog.w(TAG, "unable to receive shared image", error)
+        runOnUiThread {
+            if (requests.accepts(request) && !isFinishing && !isDestroyed) {
+                Toast.makeText(this, "接收图片失败：${error.message}", Toast.LENGTH_LONG).show()
                 finish()
-            } else {
-                isRecognizing = false
-                failureDetail = "请在模块设置中允许原页分词悬浮窗，然后返回重试"
             }
         }
-    }
-
-    private fun reportFailure(request: Long, message: Int, error: Exception?) {
-        // Log error type, never input URIs, recognized text, or image data.
-        DragShareLog.w(
-            TAG,
-            "image recognition failed: ${error?.javaClass?.simpleName ?: "cancelled"}",
-        )
-        runOnUiThread { showFailure(request, message) }
-    }
-
-    private fun showFailure(request: Long, message: Int) {
-        if (canAccept(request)) {
-            isRecognizing = false
-            statusMessage = message
-        }
-    }
-
-    private fun canAccept(request: Long): Boolean =
-        requests.accepts(request) && !isFinishing && !isDestroyed
-
-    override fun onResume() {
-        super.onResume()
-        resumed = true
-        openTextWhenResumed()
-    }
-
-    override fun onPause() {
-        resumed = false
-        super.onPause()
     }
 
     override fun onDestroy() {
         requests.invalidate()
-        aicrRequest?.cancel()
-        decoder.shutdownNow()
+        worker?.interrupt()
         super.onDestroy()
     }
 
     companion object {
         private const val TAG = "DragShare/OCR"
-        private const val MAX_IMAGE_EDGE = 4096
 
         @JvmStatic
         fun resolveImageUri(input: Intent): Uri? {
@@ -286,62 +117,5 @@ class ImageOcrActivity : ComponentActivity() {
                 clipData = ClipData.newRawUri("source image", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-    }
-}
-
-@Composable
-private fun OcrStatusScreen(
-    statusMessage: Int,
-    failureDetail: String?,
-    isRecognizing: Boolean,
-    onRetry: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp),
-            colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (isRecognizing) {
-                    CircularProgressIndicator()
-                    Spacer(Modifier.height(20.dp))
-                }
-                Text(
-                    text = stringResource(R.string.ocr_action),
-                    color = MiuixTheme.colorScheme.onSurface,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = failureDetail ?: stringResource(statusMessage),
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    fontSize = 15.sp,
-                )
-                Spacer(Modifier.height(20.dp))
-                if (!isRecognizing) {
-                    TextButton(
-                        text = stringResource(R.string.ocr_retry),
-                        onClick = onRetry,
-                        colors = ButtonDefaults.textButtonColorsPrimary(),
-                    )
-                }
-                TextButton(
-                    text = stringResource(android.R.string.cancel),
-                    onClick = onCancel,
-                )
-            }
-        }
     }
 }

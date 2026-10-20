@@ -36,7 +36,13 @@ object ImageOcrOverlay {
     private var active: Job? = null
 
     @JvmStatic fun start(context: Context, uri: Uri) {
-        check(Settings.canDrawOverlays(context)) { "请先在模块设置中允许悬浮窗权限" }
+        if (!Settings.canDrawOverlays(context)) {
+            main.post {
+                android.widget.Toast.makeText(context.applicationContext, "请先在模块设置中允许悬浮窗权限",
+                    android.widget.Toast.LENGTH_LONG).show()
+            }
+            return
+        }
         val app = context.applicationContext
         main.post {
             active?.window?.dismiss()
@@ -98,7 +104,9 @@ object ImageOcrOverlay {
         fun decode() {
             Thread({
                 try {
-                    val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(app.contentResolver, uri)) { decoder, info, _ ->
+                    val source = if (uri.scheme == "file") ImageDecoder.createSource(java.io.File(requireNotNull(uri.path)))
+                        else ImageDecoder.createSource(app.contentResolver, uri)
+                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                         decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                         val longest = maxOf(info.size.width, info.size.height)
                         if (longest > 4096) {

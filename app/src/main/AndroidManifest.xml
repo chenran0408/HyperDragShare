@@ -111,6 +111,7 @@
 
         <activity
             android:name=".ImageOcrActivity"
+            android:theme="@style/Theme.DragShare.BigBangOverlay"
             android:label="@string/ocr_action"
             android:exported="true"
             android:excludeFromRecents="true"

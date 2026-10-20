@@ -44,7 +44,7 @@ class TextSegmentationActivity : ComponentActivity() {
             override fun saveToStash(text: String, selectedOnly: Boolean) =
                 this@TextSegmentationActivity.saveToStash(text, selectedOnly)
             override fun reopenOcr(uri: Uri) {
-                startActivity(ImageOcrActivity.createRecheckIntent(this@TextSegmentationActivity, uri))
+                ImageOcrOverlay.start(this@TextSegmentationActivity, uri)
             }
         })
         setContent { panel.Content() }
