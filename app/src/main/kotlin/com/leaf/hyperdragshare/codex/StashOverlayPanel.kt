@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
@@ -137,9 +138,9 @@ object StashOverlayPanel {
             val metrics = context.getSystemService(WindowManager::class.java).currentWindowMetrics.bounds
             val density = context.resources.displayMetrics.density
             overlay.window.attributes = overlay.window.attributes.apply {
-                width = if (expanded) minOf((340 * density).toInt(), metrics.width() - (16 * density).toInt())
+                width = if (expanded) minOf((260 * density).toInt(), (metrics.width() * .7f).toInt())
                     else (24 * density).toInt()
-                height = if (expanded) minOf((640 * density).toInt(), (metrics.height() * .78f).toInt())
+                height = if (expanded) minOf((480 * density).toInt(), (metrics.height() * .6f).toInt())
                     else (96 * density).toInt()
                 gravity = Gravity.LEFT or Gravity.TOP
                 x = (dragLeft?.toInt() ?: if (onLeft) 0 else metrics.width() - width)
@@ -213,7 +214,7 @@ object StashOverlayPanel {
             ) {
                 Box(
                     Modifier.width(5.dp).height(64.dp)
-                        .background(MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        .background(Color(0xFF8E8E93),
                             RoundedCornerShape(3.dp))
                 )
             }
@@ -398,8 +399,8 @@ object StashOverlayPanel {
                                         }
                                     }
                                 }
-                                image != null -> Column(Modifier.padding(12.dp)) {
-                                    StashImage(image, 1200, Modifier.fillMaxWidth().height(320.dp), ContentScale.Fit)
+                                image != null -> Column(Modifier.weight(1f).padding(12.dp)) {
+                                    StashImage(image, 1200, Modifier.fillMaxWidth().weight(1f), ContentScale.Fit)
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                         TextButton("返回列表", { preview = null })
                                         TextButton("识别文字", {
@@ -412,7 +413,8 @@ object StashOverlayPanel {
                                 entries.isEmpty() -> Text(
                                     if (loading) "正在读取…" else "还没有内容。拖拽或分享文字、图片存入这里。",
                                     Modifier.padding(20.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                else -> LazyColumn(Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     items(entries, key = { it.id }) { entry ->
                                         StashEntryCard(entry, selectionMode, entry.id in selectedIds, {
                                             selectedIds = if (entry.id in selectedIds) selectedIds - entry.id
