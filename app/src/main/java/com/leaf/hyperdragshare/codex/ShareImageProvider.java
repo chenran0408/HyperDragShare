@@ -42,6 +42,19 @@ public final class ShareImageProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (ImageOcrOverlay.METHOD_RECOGNIZE.equals(method)) {
+            enforcePortalCaller();
+            Uri uri = extras == null ? null : extras.getParcelable("image", Uri.class);
+            if (uri == null) throw new IllegalArgumentException("缺少识别图片");
+            resolveFile(uri);
+            long identity = Binder.clearCallingIdentity();
+            try {
+                ImageOcrOverlay.start(contextOrThrow(), uri);
+                return Bundle.EMPTY;
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
         if (BigBangOverlayLauncher.METHOD_OPEN.equals(method)) {
             enforcePortalCaller();
             long identity = Binder.clearCallingIdentity();

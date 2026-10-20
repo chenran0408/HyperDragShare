@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -33,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +77,10 @@ object StashOverlayPanel {
     }
 
     private class Shelf(private val app: Context) {
+        private val position = app.getSharedPreferences("stash_window_position", Context.MODE_PRIVATE)
+        private var onLeft = position.getBoolean("left", false)
+        private var centerY = position.getFloat("center_y", .5f)
+        private var dragLeft: Float? = null
         private val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
         private val context = app.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
@@ -82,6 +89,8 @@ object StashOverlayPanel {
         private var loading by mutableStateOf(false)
         private var message by mutableStateOf<String?>(null)
         private var expanded by mutableStateOf(true)
+        private var selectionMode by mutableStateOf(false)
+        private var selectedIds by mutableStateOf<Set<String>>(emptySet())
         private var pendingDelete by mutableStateOf<StashStore.Entry?>(null)
         private var preview by mutableStateOf<StashStore.Entry?>(null)
         private val screenOffReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -124,10 +133,45 @@ object StashOverlayPanel {
                     else (60 * density).toInt()
                 height = if (expanded) minOf((640 * density).toInt(), (metrics.height() * .78f).toInt())
                     else (88 * density).toInt()
-                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                gravity = Gravity.LEFT or Gravity.TOP
+                x = (dragLeft?.toInt() ?: if (onLeft) 0 else metrics.width() - width)
+                    .coerceIn(0, (metrics.width() - width).coerceAtLeast(0))
+                y = (centerY * metrics.height() - height / 2f).toInt()
+                    .coerceIn(0, (metrics.height() - height).coerceAtLeast(0))
                 flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     if (expanded) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             }
+        }
+
+        private fun finishMove() {
+            val width = context.getSystemService(WindowManager::class.java).currentWindowMetrics.bounds.width()
+            onLeft = overlay.window.attributes.x + overlay.window.attributes.width / 2 < width / 2
+            dragLeft = null
+            position.edit().putBoolean("left", onLeft).putFloat("center_y", centerY).apply()
+            resize()
+        }
+
+        @Composable private fun MoveHandle() {
+            Text(
+                "— 拖动 —",
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                fontSize = 10.sp,
+                modifier = Modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { dragLeft = overlay.window.attributes.x.toFloat() },
+                        onDragEnd = ::finishMove,
+                        onDragCancel = ::finishMove,
+                    ) { change, delta ->
+                        change.consume()
+                        val height = context.getSystemService(WindowManager::class.java)
+                            .currentWindowMetrics.bounds.height()
+                        dragLeft = (dragLeft ?: overlay.window.attributes.x.toFloat()) + delta.x
+                        centerY = (centerY + delta.y / height).coerceIn(0f, 1f)
+                        resize()
+                    }
+                },
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
         }
 
         private fun reload() {
@@ -137,6 +181,7 @@ object StashOverlayPanel {
                 message = null
                 try {
                     entries = withContext(Dispatchers.IO) { StashStore(app).use { it.listEntries() } }
+                    selectedIds = selectedIds.intersect(entries.map { it.id }.toSet())
                 } catch (error: IOException) {
                     report("读取中转站失败", error)
                 } catch (error: SecurityException) {
@@ -199,6 +244,43 @@ object StashOverlayPanel {
             }
         }
 
+        private fun shareSelected() {
+            val selected = entries.filter { it.id in selectedIds }
+            if (selected.isEmpty()) return
+            val text = selected.filter { it.kind == StashStore.KIND_TEXT }
+                .mapNotNull { it.text }.joinToString("\n")
+            val images = selected.filter { it.kind == StashStore.KIND_IMAGE }
+            val send = if (images.isEmpty()) {
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+            } else {
+                val uris = ArrayList(images.map { StashImageProvider.uriForEntry(it.id) })
+                val description = ClipDescription("中转站内容",
+                    if (text.isEmpty()) arrayOf("image/*", "text/uri-list")
+                    else arrayOf("text/plain", "image/*", "text/uri-list"))
+                val clip = ClipData(description, ClipData.Item(uris.first()))
+                uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+                if (text.isNotEmpty()) clip.addItem(ClipData.Item(text))
+                Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "image/*"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                    if (text.isNotEmpty()) putExtra(Intent.EXTRA_TEXT, text)
+                    clipData = clip
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            launch(Intent.createChooser(send, "分享已选内容").apply {
+                if (images.isNotEmpty()) addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            })
+        }
+
+        private fun cancelSelection() {
+            selectedIds = emptySet()
+            selectionMode = false
+        }
+
         private fun openText(entry: StashStore.Entry) {
             if (BigBangOverlayLauncher.showText(app, entry.text.orEmpty(), -1, -1, null)) collapse()
         }
@@ -218,16 +300,21 @@ object StashOverlayPanel {
                     when {
                         preview != null -> preview = null
                         pendingDelete != null -> pendingDelete = null
+                        selectionMode -> cancelSelection()
                         else -> collapse()
                     }
                 }
                 Scaffold {
                     if (!expanded) {
                         Card(modifier = Modifier.fillMaxSize()) {
-                            TextButton(text = "中转\n${entries.size}", onClick = ::expand, modifier = Modifier.fillMaxSize())
+                            Column {
+                                MoveHandle()
+                                TextButton(text = "中转 ${entries.size}", onClick = ::expand, modifier = Modifier.fillMaxSize())
+                            }
                         }
                     } else {
                         Column(Modifier.fillMaxSize()) {
+                            MoveHandle()
                             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 Text("中转站 · ${entries.size}", modifier = Modifier.weight(1f),
@@ -237,7 +324,22 @@ object StashOverlayPanel {
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                 TextButton("刷新", ::reload, enabled = !loading)
+                                TextButton(if (selectionMode) "取消多选" else "多选", {
+                                    if (selectionMode) cancelSelection() else selectionMode = true
+                                }, enabled = selectionMode || entries.isNotEmpty())
                                 TextButton("管理", { launch(Intent(context, StashActivity::class.java)) })
+                            }
+                            if (selectionMode) {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Text("已选 ${selectedIds.size}", modifier = Modifier.weight(1f),
+                                        fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                    TextButton(if (selectedIds.size == entries.size) "全不选" else "全选", {
+                                        selectedIds = if (selectedIds.size == entries.size) emptySet()
+                                            else entries.map { it.id }.toSet()
+                                    })
+                                    TextButton("分享", ::shareSelected, enabled = selectedIds.isNotEmpty())
+                                }
                             }
                             message?.let {
                                 Text(it, Modifier.padding(12.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
@@ -263,7 +365,10 @@ object StashOverlayPanel {
                                     Modifier.padding(20.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     items(entries, key = { it.id }) { entry ->
-                                        StashEntryCard(entry, false, false, {},
+                                        StashEntryCard(entry, selectionMode, entry.id in selectedIds, {
+                                            selectedIds = if (entry.id in selectedIds) selectedIds - entry.id
+                                                else selectedIds + entry.id
+                                        },
                                             ::openText, { preview = it }, ::copy, ::share,
                                             { pendingDelete = it }, ::collapse)
                                     }

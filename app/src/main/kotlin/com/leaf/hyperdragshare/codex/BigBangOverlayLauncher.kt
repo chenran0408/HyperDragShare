@@ -13,6 +13,12 @@ import android.provider.Settings
 import android.view.Display
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.compose.foundation.layout.Row
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 /** Requests enter through the provider's module/portal UID check; UI stays in the module process. */
 object BigBangOverlayLauncher {
@@ -41,7 +47,7 @@ object BigBangOverlayLauncher {
         return true
     }
 
-    private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?) {
+    private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
@@ -54,7 +60,8 @@ object BigBangOverlayLauncher {
         val screenOff = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) = overlay.dismiss()
         }
-        val session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
+        lateinit var session: BigBangPanelSession
+        session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
             override fun dismiss() = overlay.dismiss()
             override fun search(text: String, type: Int) {
                 launch(Intent(context, SearchOverlayActivity::class.java)
@@ -68,17 +75,16 @@ object BigBangOverlayLauncher {
                 }, null))
             }
             override fun reopenOcr(uri: Uri) {
-                launch(Intent(context, ImageOcrActivity::class.java).apply {
-                    action = Intent.ACTION_SEND
-                    type = "image/*"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                })
+                ImageOcrOverlay.start(app, uri)
+                overlay.dismiss()
             }
             private fun launch(intent: Intent) {
                 try {
                     context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    val state = Bundle()
+                    session.saveState(state)
                     overlay.dismiss()
+                    showReturnTab(app) { open(app, text, x, y, sourceImage, state) }
                 } catch (error: android.content.ActivityNotFoundException) {
                     report(app, error)
                 } catch (error: SecurityException) {
@@ -110,7 +116,48 @@ object BigBangOverlayLauncher {
         ) { session.Content() }
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
-        if (overlay.show()) session.open(text, x, y, sourceImage)
+        if (overlay.show()) session.open(text, x, y, sourceImage, savedState)
+    }
+
+    private fun showReturnTab(app: Context, resume: () -> Unit) {
+        val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+        val context = app.createDisplayContext(display)
+            .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
+        lateinit var tab: InteractiveOverlayWindow
+        val screenOff = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = tab.dismiss()
+        }
+        val dark = DragShareSettings.readLocal(app).colorMode == DragShareSettings.COLOR_DARK
+        tab = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
+            onDismissed = {
+                app.unregisterReceiver(screenOff)
+                if (active === tab) active = null
+            },
+            onFailure = { report(app, it) },
+        ) {
+            MiuixTheme(controller = androidx.compose.runtime.remember {
+                ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
+            }) {
+                Card {
+                    Row {
+                        TextButton("返回分词", { tab.dismiss(); resume() })
+                        TextButton("关闭", tab::dismiss)
+                    }
+                }
+            }
+        }
+        val density = context.resources.displayMetrics.density
+        tab.window.attributes = tab.window.attributes.apply {
+            width = (180 * density).toInt()
+            height = (56 * density).toInt()
+            gravity = android.view.Gravity.END or android.view.Gravity.TOP
+            y = (120 * density).toInt()
+            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        }
+        app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
+        active = tab
+        tab.show()
     }
 
     private fun report(context: Context, error: Exception) {

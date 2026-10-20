@@ -1513,6 +1513,19 @@ final class DragShareController {
     }
 
     private void launchShare(Session shareSession, ShareTarget target) {
+        if (target.isImageOcr()) {
+            try {
+                android.os.Bundle input = new android.os.Bundle();
+                input.putParcelable("image", shareSession.stagedUri);
+                context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                        ImageOcrOverlay.METHOD_RECOGNIZE, null, input);
+            } catch (RuntimeException error) {
+                log("image OCR window failed", error);
+                showToast("无法识别图片：" + error.getMessage());
+            }
+            shareSession.cancelled = true;
+            return;
+        }
         if (target.isStash()) {
             stashContent(shareSession.payload, shareSession.stagedUri);
             shareSession.cancelled = true;
