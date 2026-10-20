@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -100,15 +101,34 @@ internal fun BigBangOverlayContent(
     totalCharacterCount: Int,
     selectedCharacterCount: Int,
     hasTextSelection: Boolean,
+    isSegmenting: Boolean,
     onClearSelection: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
     onPanelPositionChanged: (Float, Float) -> Unit,
     onOcr: () -> Unit,
 ) {
     val dark = MiuixTheme.colorScheme.background.luminance() < 0.5f
-    val panelMetrics = rememberOverlayPanelMetrics(panelHeightFraction = panelHeightFraction)
+    val maximumMetrics = rememberOverlayPanelMetrics(panelHeightFraction = panelHeightFraction)
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current.density
+    val words = remember(contentView) { contentView.findViewById<View>(R.id.boom_content) }
+    val table = remember(contentView) { contentView.findViewById<View>(R.id.boom_table) }
+    val scroller = remember(contentView) { contentView.findViewById<View>(R.id.boom_scroller) }
+    fun naturalBodyHeight() = words.height + table.paddingTop + table.paddingBottom +
+        scroller.paddingTop + scroller.paddingBottom
+    var bodyHeightPx by remember(contentView) { mutableIntStateOf(naturalBodyHeight()) }
+    DisposableEffect(contentView) {
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            bodyHeightPx = naturalBodyHeight()
+        }
+        words.addOnLayoutChangeListener(listener)
+        onDispose { words.removeOnLayoutChangeListener(listener) }
+    }
+    // Header/footer are 52dp each; the body adds 4dp above and below the native view.
+    val naturalPanelHeight = (bodyHeightPx / density).dp + 112.dp
+    val panelMetrics = if (maximumMetrics.fullScreen) maximumMetrics else maximumMetrics.copy(
+        height = minOf(maximumMetrics.height, naturalPanelHeight),
+    )
     var dragOffsetXdp by remember(panelOffsetXdp) { mutableFloatStateOf(panelOffsetXdp) }
     var dragOffsetYdp by remember(panelOffsetYdp) { mutableFloatStateOf(panelOffsetYdp) }
     val panelBackground = MiuixTheme.colorScheme.background
@@ -234,6 +254,7 @@ internal fun BigBangOverlayContent(
                         leading = {
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.Edit,
+                                enabled = !isSegmenting,
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = {
                                     editorText = originalText()
@@ -243,6 +264,7 @@ internal fun BigBangOverlayContent(
                             )
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.SelectAll,
+                                enabled = !isSegmenting,
                                 tint = MiuixTheme.colorScheme.onSurface,
                                 onClick = onSelectAll,
                                 contentDescription = stringResource(R.string.bigbang_action_select_all),
@@ -257,7 +279,8 @@ internal fun BigBangOverlayContent(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    text = if (hasTextSelection) "已选 $selectedCharacterCount / $totalCharacterCount"
+                                    text = if (isSegmenting) "正在分词…"
+                                        else if (hasTextSelection) "已选 $selectedCharacterCount / $totalCharacterCount"
                                         else "共 $totalCharacterCount 字符",
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     fontSize = 11.sp,
@@ -268,6 +291,7 @@ internal fun BigBangOverlayContent(
                         trailing = {
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.MoreHoriz,
+                                enabled = !isSegmenting,
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = { showMoreMenu = true },
                                 contentDescription = stringResource(R.string.bigbang_action_more),

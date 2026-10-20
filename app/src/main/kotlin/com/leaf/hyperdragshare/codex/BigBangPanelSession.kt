@@ -60,6 +60,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var totalCharacterCount by mutableIntStateOf(0)
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
+    private var isSegmenting by mutableStateOf(true)
     private var undoEditState by mutableStateOf<Bundle?>(null)
     private var beforeText: String? = null
     private var afterText: String? = null
@@ -144,6 +145,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     totalCharacterCount = totalCharacterCount,
                     selectedCharacterCount = selectedCharacterCount,
                     hasTextSelection = hasTextSelection,
+                    isSegmenting = isSegmenting,
                     onClearSelection = { boomChipPage?.handleClick() },
                     onMoreAction = ::handleMoreAction,
                     onPanelPositionChanged = ::savePanelPosition,
@@ -226,6 +228,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     }
 
     private fun segmentLocally(text: String) {
+        isSegmenting = true
         val request = requests.begin()
         Thread({
             try {
@@ -279,6 +282,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         text: String,
         result: IntArray?,
     ) {
+        isSegmenting = false
         if (result == null || result.isEmpty()) {
             Toast.makeText(context, R.string.a_msg_no_words, Toast.LENGTH_SHORT).show()
             actions.dismiss()

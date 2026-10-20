@@ -47,12 +47,12 @@
     <string name="bigbang_more_merge">合并相邻选词</string>
     <string name="bigbang_merge_select_adjacent">请选择同一段中至少两个相邻词语</string>
     <string name="bigbang_more_text_size">字号（%1$.0f sp）</string>
-    <string name="bigbang_more_panel_height">面板高度（%1$d%%）</string>
+    <string name="bigbang_more_panel_height">面板最大高度（%1$d%%）</string>
     <string name="bigbang_more_panel_opacity">面板透明度（%1$d%%）</string>
     <string name="bigbang_more_panel_adjustment_on">拖动调整位置：已开启</string>
     <string name="bigbang_more_panel_adjustment_off">拖动调整位置：已关闭</string>
     <string name="bigbang_text_size_changed">字号已调整为 %1$.0f sp</string>
-    <string name="bigbang_panel_height_changed">面板高度已调整为 %1$d%%</string>
+    <string name="bigbang_panel_height_changed">面板最大高度已调整为 %1$d%%，短文本自动缩小</string>
     <string name="bigbang_panel_opacity_changed">面板透明度已调整为 %1$d%%</string>
     <string name="bigbang_panel_adjustment_on">可以拖动文本面板顶部调整位置</string>
     <string name="bigbang_panel_adjustment_off">文本面板位置已锁定</string>

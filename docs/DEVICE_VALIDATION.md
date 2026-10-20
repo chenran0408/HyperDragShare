@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.112 / versionCode 136。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 136。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.113 / versionCode 137。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 137。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.112 / 136；172 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.113 / 137；172 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -533,3 +533,14 @@ APK outputs/HyperDragShare-1.7.110-debug.apk。下一批优先做可独立推进
 AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms；这不作为性能基准。实验结束恢复原AICR选择true，系统夜间auto及模块浅色0保持原设置。传送门重新加载136；没有因为纯UI变更重启android/AICR作用域，也不声称所有进程已加载本次代码。
 
 边界：本批仅复测首行单词选择和布局；首次旧布局测试第二次点击误触旧备用栏的搜索，未提交搜索内容或向他人分享。修复后没有据此宣称多选、合并、长文滚动/悬停工具栏、横屏与大字体均通过。当前窗口仍按用户已保存高度显示，尚未按短文本自动缩高。真实面积采集、bilipai普通长按、Root图片分支及实际中转站接收继续待完成。
+
+## 2026-10-21：1.7.113 内容自适应与原页搜索/词典/翻译
+
+- 最终172项单测、0失败/错误，Lint、assembleDebug通过；最终APK重新安装137，原包名/签名不变。传送门注入及Root握手均137。未重启android/AICR；本批不修改其Hook。
+- 新debug-only OverlayInteractionProbe生成短41字符三行、长616字符25段，保留进程90秒供UI验收，不读取用户屏幕文字。短文本自然高度约38%屏高，原60%设置作为上限；长文本UI显示615字符（末尾换行不显示），保留原约60%上限，滚动后可见第7~12段。横屏/多窗口满窗策略未改，未测试。
+- 短文选“传送门”→搜索，百度结果实际显示，dumpsys确认前台仍bilipai。输入框追加hello弹键盘，mInputShown=true；返回后mInputShown=false，搜索仍在。点关闭恢复原“已选3/41”，没有重新分词。证据work/hds113-short.png、hds113-search.png、hds113-keyboard.png、hds113-search-return.png。
+- 同一选词→词典，显示有道词典页面，站点提示该词未找到；证明请求带入及词典入口，不把无词条当模块失败。返回关闭恢复原分词。
+- 长文选“文字”→更多→翻译，发现旧fanyi.youdao.com链接只有空输入框。官方移动链接HTTP核验后，先在目标WebView通过现有HTTPS网址入口验证hello→你好，再改产品URL。最终重新构建安装后，短文选“传送门”→更多→翻译，页面原文传送门、译文Portal；返回恢复已选3/41。work/hds113-translation-fixed.png、hds113-finalreturn.xml。未使用页面JS注入或改权限。
+- 分词未完成时显示正在分词并禁用空操作；代码已接入，本批没有刻意延迟词典取得单独的加载态截图。样本测试期间bilipai自行出现连续观看提醒；未改提醒设置、未恢复视频播放。测试截图只留本机，不提交原应用画面。
+- 原页搜索、查词、翻译现由独立窗口承载；传统TextSegmentationActivity外部文本入口及ScreenOcrActivity选区/结果仍是Activity，尚未满足所有普通入口均独立窗口。
+- 待验：搜索历史前进/后退完整链、调整高度、搜索动态深浅色、息屏/来源移除资源、明确打开浏览器及返回条、复杂查询/其他引擎；短文编辑增减/字号改变后的尺寸、横屏/大字体、多行合并/拆分。不以本次窄范围结果宣称整体功能已完成。

@@ -21,7 +21,7 @@ class SearchEngineTest {
 
         assertEquals("youdao-translate", engine.id)
         assertEquals(
-            "https://fanyi.youdao.com/?keyfrom=dict2.index&i=hello%20world",
+            "https://m.youdao.com/translate?inputtext=hello%20world",
             SearchEngineCatalog.destination(engine, "hello world"),
         )
     }

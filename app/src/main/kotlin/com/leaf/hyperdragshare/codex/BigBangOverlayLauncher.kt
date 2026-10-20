@@ -76,9 +76,8 @@ object BigBangOverlayLauncher {
         session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
             override fun dismiss() = overlay.dismiss()
             override fun search(text: String, type: Int) {
-                launch(Intent(context, SearchOverlayActivity::class.java)
-                    .putExtra(Intent.EXTRA_TEXT, text)
-                    .putExtra(SearchOverlayActivity.EXTRA_SEARCH_TYPE, type))
+                SearchOverlayWindow.show(context, overlay.window.decorView, text, type,
+                    openExternal = { launch(it) })
             }
             override fun share(text: String) {
                 launch(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {

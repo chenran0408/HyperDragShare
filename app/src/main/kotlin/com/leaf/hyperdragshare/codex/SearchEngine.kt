@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex
 
 import java.net.URI
+import java.net.URISyntaxException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -24,7 +25,7 @@ internal object SearchEngineCatalog {
     private val youdaoTranslate = SearchEngine(
         "youdao-translate",
         "有道翻译",
-        "https://fanyi.youdao.com/?keyfrom=dict2.index&i=",
+        "https://m.youdao.com/translate?inputtext=",
     )
 
     val engines = listOf(
@@ -69,7 +70,7 @@ internal object SearchEngineCatalog {
         } else {
             uri.toASCIIString()
         }
-    } catch (_: Exception) {
+    } catch (_: URISyntaxException) {
         null
     }
 
