@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color as AndroidColor
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -107,6 +109,7 @@ class TextSegmentationActivity : ComponentActivity() {
             BoomAnimator.makeFadeIn(this, BoomAnimator.BOOM_DURATION)
         }
         boomChipPage = BoomChipPage(this, legacyContentView, false).also { page ->
+            page.setOnChipsChangedListener(::refreshLegacyTheme)
             page.restoreSelectedState(savedInstanceState?.getSerializable(SELECTED_STATE))
         }
         textSizeSp = BigBangSettings.getTextSizeSp(this)
@@ -258,7 +261,6 @@ class TextSegmentationActivity : ComponentActivity() {
         }
         currentText = text
         currentSegment = result
-        refreshLegacyTheme()
         if (fromSavedState) {
             // The chip core restores the serialised selection during its first layout pass.
         }
@@ -284,8 +286,6 @@ class TextSegmentationActivity : ComponentActivity() {
     private fun splitSelectedWords() {
         if (boomChipPage?.splitSelectedWordsToChars() != true) {
             Toast.makeText(this, R.string.bigbang_select_words_first, Toast.LENGTH_SHORT).show()
-        } else {
-            refreshLegacyTheme()
         }
     }
 
@@ -787,6 +787,14 @@ private fun applyLegacySegmentationTheme(
             fun tintActions(view: View) {
                 if (view is android.widget.ImageView) {
                     view.imageTintList = ColorStateList.valueOf(actionColor)
+                    view.background = RippleDrawable(
+                        ColorStateList.valueOf(selectionColor),
+                        GradientDrawable().apply {
+                            setColor(surfaceColor)
+                            cornerRadius = 16f * view.resources.displayMetrics.density
+                        },
+                        null,
+                    )
                 } else if (view is ViewGroup) {
                     for (index in 0 until view.childCount) tintActions(view.getChildAt(index))
                 }

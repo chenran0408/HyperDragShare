@@ -163,6 +163,12 @@ public class BoomChipPage {
         void onAdjacentRequest(String direction);
     }
 
+    private Runnable mOnChipsChanged;
+
+    public void setOnChipsChangedListener(Runnable listener) {
+        mOnChipsChanged = listener;
+    }
+
     private void removeLegacyChromeSpacing() {
         int selectBarHeadroom = Math.abs(
                 mActivity.getResources().getDimensionPixelOffset(R.dimen.chip_row_move_up_offset)
@@ -509,6 +515,9 @@ public class BoomChipPage {
                 row.addView(chipView);
             }
             mBoomConent.addView(row);
+        }
+        if (mOnChipsChanged != null) {
+            mOnChipsChanged.run();
         }
         mBoomConent.requestLayout();
         mScroller.post(new Runnable() {
