@@ -243,6 +243,12 @@ private fun MainPage(
     var backTapMode by remember(context) {
         mutableIntStateOf(IntegrationSettings.getBackTapMode(context))
     }
+    var selectionHapticEnabled by remember(context) {
+        mutableStateOf(BigBangSettings.isSelectionHapticEnabled(context))
+    }
+    var exitAfterCopyEnabled by remember(context) {
+        mutableStateOf(BigBangSettings.isExitAfterCopyEnabled(context))
+    }
     val exportLogLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain"),
     ) { destination ->
@@ -506,6 +512,32 @@ private fun MainPage(
                                     ).show()
                                 }
                             }
+                        },
+                    )
+                }
+            }
+
+            item(key = "text-panel-title") {
+                SmallTitle(text = "文本面板")
+            }
+            item(key = "text-panel-preferences") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    SwitchPreference(
+                        title = "选词触感反馈",
+                        summary = "手指选中或取消词语时轻振一次",
+                        checked = selectionHapticEnabled,
+                        onCheckedChange = { enabled ->
+                            BigBangSettings.setSelectionHapticEnabled(context, enabled)
+                            selectionHapticEnabled = enabled
+                        },
+                    )
+                    SwitchPreference(
+                        title = "复制后退出",
+                        summary = "复制所选文字后关闭分词面板",
+                        checked = exitAfterCopyEnabled,
+                        onCheckedChange = { enabled ->
+                            BigBangSettings.setExitAfterCopyEnabled(context, enabled)
+                            exitAfterCopyEnabled = enabled
                         },
                     )
                 }

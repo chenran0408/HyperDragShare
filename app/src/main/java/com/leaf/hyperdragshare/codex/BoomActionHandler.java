@@ -198,10 +198,13 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     }
 
     private void copy(String text) {
-        mToast.setText(mBoomPage.mActivity.getResources().getString(R.string.copy_tips));
-        mToast.show();
         ClipboardManager clipboard = (ClipboardManager) mBoomPage.mActivity.getSystemService(Context.CLIPBOARD_SERVICE);
         clipboard.setPrimaryClip(ClipData.newPlainText(null, text));
+        mToast.setText(mBoomPage.mActivity.getResources().getString(R.string.copy_tips));
+        mToast.show();
+        if (mBoomPage.mActivity instanceof TextSegmentationActivity) {
+            ((TextSegmentationActivity) mBoomPage.mActivity).closeAfterCopyIfEnabled();
+        }
     }
 
     public void search(String text, int type) {

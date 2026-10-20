@@ -6,6 +6,7 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.graphics.Rect;
 import android.view.MotionEvent;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.widget.LinearLayout;
@@ -129,6 +130,9 @@ public class SwipeSelectView extends LinearLayout {
                             mBoomPage.mBoomActionHandler.onSelect(mSelEnd + 1, mEndBound);
                         }
                         mBoomPage.mBoomActionHandler.deSelect(mSelStart, mSelEnd);
+                    }
+                    if (BigBangSettings.isSelectionHapticEnabled(getContext())) {
+                        performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE);
                     }
                 }
                 mAutoScrollVelocity = 0;

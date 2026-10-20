@@ -147,6 +147,12 @@ class TextSegmentationActivity : ComponentActivity() {
         animatedDismissRequester?.invoke() ?: finish()
     }
 
+    fun closeAfterCopyIfEnabled() {
+        if (BigBangSettings.isExitAfterCopyEnabled(this)) {
+            requestAnimatedDismissFromLegacy()
+        }
+    }
+
     /** Called by the imported selection toolbar. */
     fun openSearch(text: String, type: Int) {
         if (text.isBlank()) {
@@ -299,6 +305,7 @@ class TextSegmentationActivity : ComponentActivity() {
                         (service as ClipboardManager).setPrimaryClip(ClipData.newPlainText(null, text))
                     }
                     Toast.makeText(this, R.string.copy_tips, Toast.LENGTH_SHORT).show()
+                    closeAfterCopyIfEnabled()
                 }
             }
             BigBangMoreAction.Search -> openSearch(text, BoomActionHandler.SEARCH_WEB)
