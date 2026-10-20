@@ -82,12 +82,26 @@ class ScreenOcrActivity : ComponentActivity() {
     @Volatile private var aicrBitmap: Bitmap? = null
     private var failureDetail by mutableStateOf<String?>(null)
     private val pendingCapture = Runnable { captureAndRecognize() }
+    private val screenOff = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            window.decorView.removeCallbacks(pendingCapture)
+            aicrRequest?.cancel()
+            if (!resultSent) {
+                resultSent = true
+                resultReceiver?.send(RESULT_CANCELED, Bundle().apply {
+                    putBoolean("restore_panel", false)
+                })
+            }
+            finish()
+        }
+    }
     private var resultReceiver: ResultReceiver? = null
     private var resultSent = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         resultReceiver = intent.getParcelableExtra(EXTRA_RESULT_RECEIVER, ResultReceiver::class.java)
+        registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF), RECEIVER_NOT_EXPORTED)
         darkTheme = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.setBackgroundDrawableResource(android.R.color.transparent)
@@ -389,6 +403,7 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(screenOff)
         if (isFinishing && !resultSent) {
             resultSent = true
             resultReceiver?.send(RESULT_CANCELED, Bundle.EMPTY)

@@ -123,6 +123,10 @@ object BigBangOverlayLauncher {
             val receiver = object : android.os.ResultReceiver(main) {
                 override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
                     if (generation != windowGeneration) return
+                    if (resultData?.getBoolean("restore_panel", true) == false) {
+                        ++generation
+                        return
+                    }
                     val extra = resultData?.getString("text")
                     if (resultCode != android.app.Activity.RESULT_OK || extra.isNullOrBlank()) {
                         open(app, text, x, y, sourceImage, state, sourceArea = sourceArea)
