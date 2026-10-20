@@ -9,14 +9,14 @@ import android.service.quicksettings.TileService;
 
 /** Quick Settings entry point for user-requested screen text recognition. */
 public class DragShareTileService extends TileService {
-    protected Intent captureIntent() {
+    protected Intent entryIntent() {
         return new Intent(this, ScreenOcrActivity.class);
     }
     @Override
     @SuppressLint("StartActivityAndCollapseDeprecated")
     public void onClick() {
         super.onClick();
-        Intent intent = captureIntent()
+        Intent intent = entryIntent()
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         if (Build.VERSION.SDK_INT >= 34) {
             PendingIntent pendingIntent = PendingIntent.getActivity(

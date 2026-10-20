@@ -123,6 +123,25 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".StashWindowActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.DragShare.BigBangOverlay" />
+
+        <service
+            android:name=".StashTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/stash_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
+
         <service
             android:name=".DragShareAccessibilityService"
             android:exported="true"
