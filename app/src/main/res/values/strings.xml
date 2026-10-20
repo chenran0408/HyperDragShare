@@ -15,6 +15,9 @@
     <string name="a_msg_no_words">没有可分词的文字</string>
     <string name="drag_display_geometry_failed">无法读取屏幕区域，已保留系统拖拽操作</string>
     <string name="launcher_icon_change_failed">无法更改桌面图标显示状态</string>
+    <string name="launcher_icon_summary">隐藏后从 LSPosed 模块设置进入</string>
+    <string name="launcher_icon_hidden">桌面图标已隐藏，桌面可能需要几秒刷新</string>
+    <string name="launcher_icon_restored">桌面图标已恢复</string>
     <string name="bigbang_overlay_title">文本分词</string>
     <string name="bigbang_action_edit">编辑</string>
     <string name="bigbang_action_select_all">全选</string>

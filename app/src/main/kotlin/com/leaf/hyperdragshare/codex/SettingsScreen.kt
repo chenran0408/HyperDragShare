@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -331,11 +332,20 @@ private fun MainPage(
             item(key = "launcher-icon") {
                 SwitchPreference(
                     title = "桌面显示应用图标",
-                    summary = "只影响桌面入口；传送门、AICR 和快捷设置磁贴不受影响",
+                    summary = stringResource(R.string.launcher_icon_summary),
                     checked = launcherIconEnabled,
                     onCheckedChange = { enabled ->
                         if (LauncherIconSettings.setEnabled(context, enabled)) {
                             launcherIconEnabled = enabled
+                            Toast.makeText(
+                                context,
+                                if (enabled) {
+                                    R.string.launcher_icon_restored
+                                } else {
+                                    R.string.launcher_icon_hidden
+                                },
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         } else {
                             Toast.makeText(
                                 context,
