@@ -600,3 +600,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 识别引擎保留AICR=true，没有静默切换；“·”被识成“-”，其余样本文字肉眼可读，不将单样本写成准确率通过。Instrumentation的accepted只证明请求提交，识别成功依据实际83字符窗口和节点内容。
 - 实验绕过面积确认与原触摸接管，不模拟面积：Portal UID暂存、180ms确认、完整密码扫描耗时是否能赶在300ms原生长按前、真实手指流程仍未验。Root语义样本本次4ms，不作为复杂页面性能基准。面积输入无有效新样本，继续关闭。bilipai普通长按与115旧侧条ANR继续未解决。
 - 诊断应用/临时安装APK已移除，未写入中转站；恢复原bilipai任务2183，保留休息提醒，不恢复播放。引擎/直接复制/主题偏好未改。最终APK outputs/HyperDragShare-1.7.117-debug.apk，SHA256 5F7C09632CB95C94D9078C7E15DEF793AA7E8FA02CC077F81727AA515EFDFF15。
+
+## 2026-10-21：1.7.118 原页二维码与复制权限根因
+
+- 图片识字窗新增明确扫码按钮，正在识别、无文字或失败均可进入；有来源图的分词“更多”增加识别原图二维码。使用ZXing core 3.5.4离线二维码解码，不把OCR文字当码内容；原LICENSE/NOTICE已加入APK assets。多个结果去重保序，内容可选择、复制、主动搜索/打开HTTPS链接；没有自动打开应用或新Hook作用域。
+- 生成纯640×640二维码内容为https://example.com/，经独立应用临时URI分享进入透明ImageOcrActivity后立即退出。AICR明确返回没有文字，扫码按钮仍可用；点击后正确显示链接。原页搜索窗实际加载文档域名页，前台Activity仍是诊断应用；键盘返回隐藏输入法，关闭搜索恢复原二维码结果。work/hds118-qr-ocr.xml、hds118-qr-result.xml/png、hds118-qr-link.xml、hds118-qr-return.xml。未发送给其他人、未自动启动浏览器；允许应用启动仅选择本次允许。
+- 本批发现真实旧缺陷：普通ClipboardManager.setPrimaryClip无异常，但独立接收端严格匹配false，ADB粘贴也为空。AppOps显示模块UID WRITE_CLIPBOARD=foreground、rejectTime对应本次点击。Toast另被用户策略明确屏蔽，不能拿无Toast推断点击未执行；未改变该策略。work/hds118-final-copy-verified.xml保留失败，不能覆盖为成功。
+- Root实验也区分身份：UID0+SystemContext写后核对false；Root启动UID1000+SystemContext后核对true，前台独立UID也匹配true。没有修改AppOps、签名权限或系统组件。可复现生成内容实验见diagnostics/root-clipboard，原文不输出。
+- 新ClipboardWriter读取unsafeCheckOpRawNoThrow的原始模式，避免普通检查把FOREGROUND翻译为ALLOWED。正常允许走普通API，实际限制时走已验证的系统UID路径。UTF8原文经stdin，Root写入后严格回读匹配，stdout仅copied；整个后台请求限时5秒。扫码复制中禁用重复点击，确认后按钮显示已复制，失败在卡片内显示原因；取消后不更新失效窗口。未单独实测超时/授权撤销。
+- 最终产品复制前，先用生成标记QR-COPY-BASELINE-118写入剪贴板；独立接收端显示匹配false，work/hds118-copy-negative.xml、hds118-rootfinal-baseline.xml。随后最终产品点击复制，日志route=system appOp=4，按钮已复制；关闭窗口后独立接收端匹配true，work/hds118-rootfinal-copied.xml、hds118-rootfinal-verified.xml、hds118-rootfinal-clipboard-log.txt。不能把旧剪贴板碰巧相同当通过。结果与反馈均基于最终Root修正包。
+- 最终181项单测、0失败/错误，Lint、assembleDebug通过（build218-rootcopy-final.log）；三项新增生成图片测试覆盖混排中文码、多码去重、空白无结果。最终1.7.118/142已安装，原包名/debug签名不变；Portal注入及Root握手均142。没有重启android/AICR。
+- 仍未验：分词更多扫码入口与选词保留、扫码中取消/息屏、实机多码、旋转/低光/损坏照片、专用scheme内容、外部浏览器。源码接线不代替这些设备证据。其它分词/屏幕OCR/中转站/拖拽的旧复制点尚未使用新Writer，受同一UID限制的风险保留为下一优先项，尤其图片URI授权须单独验证；不宣称复制全局已修复。
+- 未添加中转站条目；诊断应用、临时APK及Root实验DEX已移除。原bilipai任务2183恢复，不重新启动Activity/播放；AICR、复制直取、主题偏好未改。旧115侧条ANR、bilipai普通长按、真实面积校准仍未解决。最终APK outputs/HyperDragShare-1.7.118-debug.apk，SHA256 91693538C760BA668106EB0D6F013038A14BC8FB2D19CF89248A8658825C67A1。

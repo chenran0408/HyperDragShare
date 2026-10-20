@@ -35,6 +35,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         fun share(text: String)
         fun saveToStash(text: String, selectedOnly: Boolean)
         fun reopenOcr(uri: Uri)
+        fun readQr(uri: Uri)
     }
     private val main = Handler(Looper.getMainLooper())
     private var closed = false
@@ -326,6 +327,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     private fun handleMoreAction(action: BigBangMoreAction) {
         when (action) {
+            BigBangMoreAction.ReadQr -> sourceImageUri?.let(actions::readQr)
             BigBangMoreAction.CaptureMore -> captureMoreText?.invoke()
             BigBangMoreAction.UndoEdit -> {
                 val state = undoEditState ?: return

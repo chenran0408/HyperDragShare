@@ -94,6 +94,7 @@
 - `ShareTargetRepository.java`：查询可处理对应 MIME 的导出 Activity，并克隆/着色内置目标的旧矢量图标。
 - `BitmapEncoder.java`、`ImageStagingClient.java`、`ShareImageProvider.java`：图片压缩、
   跨 UID 暂存、能力 URI 和授权。
+- `ClipboardWriter.java`、`RootClipboardMain.java`：读取剪贴板AppOps原始模式，受限时用Root系统UID写入并核对；原文只经stdin，不能把无异常当复制成功，不能修改AppOps来掩盖限制。118仅接入扫码复制，其余入口见进度。
 - `LocalImageSaver.java`：把图片首项保存到系统 Pictures，按秒生成文件名。
 - `ShareLauncher.java`：构造显式 `ACTION_SEND` 并启动目标 Activity。
 - `GestureMath.java`、`ShareUriToken.java`：可单测的纯逻辑。

@@ -2,6 +2,7 @@ package com.leaf.dragdrop.probe;
 
 import android.app.Activity;
 import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -18,6 +19,10 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -45,6 +50,8 @@ public final class MainActivity extends Activity {
         addButton(root, "存入 STASH-115-B", () -> shareText("STASH-115-B"));
         addButton(root, "存入生成图片", this::shareImage);
         addButton(root, "显示识字样本", this::showRecognitionSample);
+        addButton(root, "识别生成二维码", this::recognizeGeneratedQr);
+        addButton(root, "核对测试复制", this::verifyTestCopy);
         TextView drop = new TextView(this);
         drop.setText("拖到这里松手\n支持文字 / 图片 / 多项\n结果显示在顶部");
         drop.setTextSize(24);
@@ -104,6 +111,17 @@ public final class MainActivity extends Activity {
         root.addView(button);
     }
 
+    private void verifyTestCopy() {
+        try {
+            ClipData clip = getSystemService(ClipboardManager.class).getPrimaryClip();
+            CharSequence text = clip != null && clip.getItemCount() > 0 ? clip.getItemAt(0).getText() : null;
+            boolean matches = text != null && "https://example.com/".contentEquals(text);
+            result.setText("测试复制匹配：" + matches);
+        } catch (SecurityException error) {
+            result.setText("测试复制读取受限：" + error);
+        }
+    }
+
     private Intent share(String type) {
         return new Intent(Intent.ACTION_SEND).setType(type)
                 .setClassName("com.leaf.hyperdragshare.codex", "com.leaf.hyperdragshare.codex.StashActivity");
@@ -161,5 +179,37 @@ public final class MainActivity extends Activity {
             Log.e("StashDropProbe", "drop read failed", error);
             return false;
         } finally { if (permission != null) permission.release(); }
+    }
+
+    private void recognizeGeneratedQr() {
+        Bitmap bitmap = Bitmap.createBitmap(640, 640, Bitmap.Config.ARGB_8888);
+        try {
+            BitMatrix code = new QRCodeWriter().encode("https://example.com/",
+                    BarcodeFormat.QR_CODE, 640, 640);
+            int[] pixels = new int[640 * 640];
+            for (int y = 0; y < 640; y++) {
+                for (int x = 0; x < 640; x++) {
+                    pixels[y * 640 + x] = code.get(x, y) ? Color.BLACK : Color.WHITE;
+                }
+            }
+            bitmap.setPixels(pixels, 0, 640, 0, 0, 640, 640);
+            try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), "sample.png"))) {
+                if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                    throw new IOException("PNG encoding failed");
+                }
+            }
+        } catch (WriterException | IOException error) {
+            result.setText("生成二维码失败：" + error);
+            return;
+        } finally {
+            bitmap.recycle();
+        }
+        Intent intent = new Intent(Intent.ACTION_SEND)
+                .setClassName("com.leaf.hyperdragshare.codex", "com.leaf.hyperdragshare.codex.ImageOcrActivity")
+                .setDataAndType(IMAGE, "image/png")
+                .putExtra(Intent.EXTRA_STREAM, IMAGE)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setClipData(ClipData.newRawUri("generated QR", IMAGE));
+        startActivity(intent);
     }
 }

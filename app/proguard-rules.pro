@@ -3,6 +3,9 @@
 -keep class com.leaf.hyperdragshare.codex.RootNodeCaptureMain {
     public static void main(java.lang.String[]);
 }
+-keep class com.leaf.hyperdragshare.codex.RootClipboardMain {
+    public static void main(java.lang.String[]);
+}
 
 # cppjieba registers these methods by their Java class and method names in JNI_OnLoad.
 -keep class com.leaf.hyperdragshare.codex.TextSegmenter {

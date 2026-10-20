@@ -89,6 +89,9 @@ object BigBangOverlayLauncher {
                 ImageOcrOverlay.start(app, uri)
                 overlay.dismiss()
             }
+            override fun readQr(uri: Uri) {
+                ImageOcrOverlay.startQr(app, uri, overlay.window.decorView)
+            }
             private fun launch(intent: Intent) {
                 try {
                     context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

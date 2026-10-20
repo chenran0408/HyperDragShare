@@ -37,3 +37,5 @@ adb uninstall com.leaf.dragdrop.probe
 “显示识字样本”在同一Activity显示900×500五行中英Canvas图片，ImageView描述为“图片”，上方普通TextView用作对照。用于主工程debug OverlayInteractionProbe的mode=root_image；先读取实际ImageView边界，再明确传入x/y，不默认采集屏幕。
 
 1.7.117目标机实验取到1392×773节点截图，实际AICR原页分词83字符；“·”误识“-”。accepted只表示OCR请求提交，不能替代检查最终窗口。此入口不模拟触摸面积，也不证明面积校准、Portal UID或原手势接管。
+
+“识别生成二维码”生成纯640×640二维码，内容https://example.com/，通过临时URI授权分享给ImageOcrActivity，不写入中转站。进入图片识字窗口后点“识别二维码”，检查原页扫码结果；只有主动点“打开链接”才发出网络请求。普通图片识别无文字状态仍应能进入扫码，不默认把二维码图当文字成功样本。

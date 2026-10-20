@@ -71,6 +71,7 @@ internal enum class BigBangMoreAction {
     SaveToStash,
     UndoEdit,
     CaptureMore,
+    ReadQr,
     TextSize,
     PanelHeight,
     PanelOpacity,
@@ -431,6 +432,7 @@ internal fun BigBangOverlayContent(
             val availableActions = buildList {
                 if (canUndoEdit) add(BigBangMoreAction.UndoEdit to "撤销编辑")
                 if (canCaptureMoreText) add(BigBangMoreAction.CaptureMore to "追加屏幕文字")
+                if (sourceImageAvailable) add(BigBangMoreAction.ReadQr to "识别原图二维码")
                 addAll(actions)
             }
             availableActions.forEach { (action, label) ->
