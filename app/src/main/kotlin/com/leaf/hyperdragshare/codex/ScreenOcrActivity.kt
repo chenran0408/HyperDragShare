@@ -77,6 +77,7 @@ class ScreenOcrActivity : ComponentActivity() {
     @Volatile private var aicrRequest: AicrOcrClient.Request? = null
     @Volatile private var aicrBitmap: Bitmap? = null
     private var failureDetail by mutableStateOf<String?>(null)
+    private val pendingCapture = Runnable { captureAndRecognize() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,10 +105,11 @@ class ScreenOcrActivity : ComponentActivity() {
 
     private fun scheduleCapture() {
         failureDetail = null
-        window.decorView.postDelayed({ captureAndRecognize() }, CAPTURE_FRAME_DELAY_MILLIS)
+        window.decorView.postDelayed(pendingCapture, CAPTURE_FRAME_DELAY_MILLIS)
     }
 
     private fun captureAndRecognize() {
+        if (isFinishing || isDestroyed) return
         val keyguard = getSystemService(KeyguardManager::class.java)
         if (keyguard?.isKeyguardLocked == true) {
             showFailure(R.string.screen_ocr_locked)
@@ -124,7 +126,10 @@ class ScreenOcrActivity : ComponentActivity() {
                 reportFailure(R.string.screen_ocr_capture_failed, error)
                 return@execute
             }
-            recognizeScreenshot(screenshot, retainScreenshotForRegion = true)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) screenshot.recycle()
+                else recognizeScreenshot(screenshot, retainScreenshotForRegion = true)
+            }
         }
     }
 
@@ -351,6 +356,7 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        window.decorView.removeCallbacks(pendingCapture)
         captureExecutor.shutdownNow()
         aicrRequest?.cancel()
         if (screenshotForRegion !== aicrBitmap) screenshotForRegion?.recycle()
