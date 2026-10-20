@@ -5,7 +5,7 @@
 无需抬起即可继续拖动；简洁和现代样式可按设置出现在上、下、左、右或近手侧，流光样式在底部显示横向分享菜单，环形样式可从左右边缘展开半圆
 菜单；停留在可滚动热区时自动滚动；松手落在目标上时直接分享。
 
-当前 HyperOS 4 fork 为 1.7.54（versionCode 78）。本分支继续以 DragShare 源码为基线独立维护；搜索、OCR、分词和设置页使用 Miuix 主题，拖拽菜单保留专用绘制组件。应用内搜索面板细节见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md)，图片 OCR 与原图重识字见 [IMAGE_OCR.md](IMAGE_OCR.md)，功能迁移顺序见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。目标宿主静态核对见 [HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)；设备运行结果以独立验收记录为准。
+当前 HyperOS 4 fork 为 1.7.55（versionCode 79）。本分支继续以 DragShare 源码为基线独立维护；搜索、OCR、分词和设置页使用 Miuix 主题，拖拽菜单保留专用绘制组件。屏幕 OCR 支持整屏识别和结果页区域选择；此功能尚待目标设备验收。应用内搜索面板细节见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md)，图片 OCR 与原图重识字见 [IMAGE_OCR.md](IMAGE_OCR.md)，功能迁移顺序见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。目标宿主静态核对见 [HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)；设备运行结果以独立验收记录为准。
 
 ## 1. 运行边界
 

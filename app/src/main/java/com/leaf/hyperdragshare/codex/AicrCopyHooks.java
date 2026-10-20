@@ -4,6 +4,7 @@ import android.content.ClipData;
 import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
+import android.content.ContentProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -31,7 +32,14 @@ final class AicrCopyHooks {
     private AicrCopyHooks() {}
 
     static void install(ClassLoader classLoader) {
-        Class<?> providerClass = XposedHelpers.findClassIfExists(PROVIDER_CLASS, classLoader);
+        Class<?> providerClass;
+        try {
+            providerClass = XposedHelpers.findClassIfExists(PROVIDER_CLASS, classLoader);
+        } catch (RuntimeException | LinkageError error) {
+            log("text-direct provider lookup failed; leaving the copy flow unchanged: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage());
+            return;
+        }
         if (providerClass == null) {
             log("text-direct provider is absent; leaving the copy flow unchanged");
             return;
@@ -50,20 +58,24 @@ final class AicrCopyHooks {
                         if (result != null) {
                             param.setResult(result);
                         }
-                    } catch (Throwable error) {
+                    } catch (RuntimeException error) {
                         log("copy handling failed; leaving the provider result unchanged: "
-                                + error.getClass().getSimpleName());
+                                + error.getClass().getSimpleName() + ": " + error.getMessage());
                     }
                 }
             });
             log("text-direct copy hook installed");
-        } catch (Throwable error) {
-            log("text-direct copy hook unavailable: " + error.getClass().getSimpleName());
+        } catch (RuntimeException | LinkageError error) {
+            log("text-direct copy hook unavailable: " + error.getClass().getSimpleName()
+                    + ": " + error.getMessage());
         }
     }
 
-    private static Bundle openClipboardText(Object provider) throws Throwable {
-        Context context = (Context) XposedHelpers.callMethod(provider, "getContext");
+    private static Bundle openClipboardText(Object provider) {
+        if (!(provider instanceof ContentProvider)) {
+            return null;
+        }
+        Context context = ((ContentProvider) provider).getContext();
         if (context == null || !copyDirectEnabled(context)) {
             return null;
         }
@@ -123,17 +135,14 @@ final class AicrCopyHooks {
                     null);
             return result != null
                     && result.getBoolean(IntegrationSettings.EXTRA_COPY_DIRECT_ENABLED, false);
-        } catch (Throwable error) {
-            log("settings provider unavailable; AICR copy remains unchanged");
+        } catch (RuntimeException error) {
+            log("settings provider unavailable; AICR copy remains unchanged: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage());
             return false;
         }
     }
 
     private static void log(String message) {
-        try {
-            XposedBridge.log(TAG + ": " + message);
-        } catch (Throwable ignored) {
-            // Logging must never change the original copy behavior.
-        }
+        XposedBridge.log(TAG + ": " + message);
     }
 }

@@ -33,9 +33,16 @@ final class BackTapFrameworkHooks {
     private BackTapFrameworkHooks() {}
 
     static void install(XC_LoadPackage.LoadPackageParam loadPackageParam) {
-        Class<?> serviceClass = XposedHelpers.findClassIfExists(
-                SERVICE_CLASS,
-                loadPackageParam.classLoader);
+        Class<?> serviceClass;
+        try {
+            serviceClass = XposedHelpers.findClassIfExists(
+                    SERVICE_CLASS,
+                    loadPackageParam.classLoader);
+        } catch (RuntimeException | LinkageError error) {
+            log("target service lookup failed; ROM shortcut remains unchanged: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage());
+            return;
+        }
         if (serviceClass == null) {
             log("target service class is absent on this ROM");
             return;
@@ -59,8 +66,9 @@ final class BackTapFrameworkHooks {
                     }
                 }
             });
-        } catch (Throwable error) {
-            log("shortcut dispatch hook unavailable: " + error.getClass().getSimpleName());
+        } catch (RuntimeException | LinkageError error) {
+            log("shortcut dispatch hook unavailable: " + error.getClass().getSimpleName()
+                    + ": " + error.getMessage());
         }
 
         hookSensorCallbacks(loadPackageParam.classLoader);
@@ -87,8 +95,9 @@ final class BackTapFrameworkHooks {
                     }
                 }
             });
-        } catch (Throwable error) {
-            log(methodName + " hook unavailable: " + error.getClass().getSimpleName());
+        } catch (RuntimeException | LinkageError error) {
+            log(methodName + " hook unavailable: " + error.getClass().getSimpleName()
+                    + ": " + error.getMessage());
         }
     }
 
@@ -119,9 +128,9 @@ final class BackTapFrameworkHooks {
             lastHandledWasDoubleTap = doubleTap;
             log("intercepted " + (doubleTap ? "double" : "triple") + " back tap");
             return true;
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             log("screen OCR launch failed; allowing the ROM shortcut: "
-                    + error.getClass().getSimpleName());
+                    + error.getClass().getSimpleName() + ": " + error.getMessage());
             return false;
         }
     }
@@ -143,7 +152,9 @@ final class BackTapFrameworkHooks {
                     ? BackTapMode.OFF
                     : Integer.parseInt(value.trim()));
             modeReadAt = now;
-        } catch (Throwable ignored) {
+        } catch (RuntimeException error) {
+            log("back-tap setting read failed; allowing the ROM shortcut: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage());
             cachedMode = BackTapMode.OFF;
             modeReadAt = now;
         }
@@ -163,7 +174,9 @@ final class BackTapFrameworkHooks {
             Method getSystemContext = activityThreadClass.getDeclaredMethod("getSystemContext");
             getSystemContext.setAccessible(true);
             return (Context) getSystemContext.invoke(activityThread);
-        } catch (Throwable ignored) {
+        } catch (ReflectiveOperationException | SecurityException | LinkageError error) {
+            log("system context lookup failed; allowing the ROM shortcut: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage());
             return null;
         }
     }
@@ -186,10 +199,6 @@ final class BackTapFrameworkHooks {
     }
 
     private static void log(String message) {
-        try {
-            XposedBridge.log(TAG + ": " + message);
-        } catch (Throwable ignored) {
-            // Logging must never alter system input handling.
-        }
+        XposedBridge.log(TAG + ": " + message);
     }
 }

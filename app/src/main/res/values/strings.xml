@@ -60,4 +60,11 @@
     <string name="screen_ocr_share_all">分享全部</string>
     <string name="screen_ocr_segment_line">分词</string>
     <string name="screen_ocr_copy_line">复制</string>
+    <string name="screen_ocr_select_region">选择区域识字</string>
+    <string name="screen_ocr_region_title">拖动选择区域</string>
+    <string name="screen_ocr_region_hint">框选文字区域后开始识别</string>
+    <string name="screen_ocr_region_recognize">识别选区</string>
+    <string name="screen_ocr_region_recognizing">正在识别所选区域…</string>
+    <string name="screen_ocr_region_invalid">先拖动框选一块区域</string>
+    <string name="screen_ocr_region_unavailable">当前截图不可用，请重新截取屏幕</string>
 </resources>
