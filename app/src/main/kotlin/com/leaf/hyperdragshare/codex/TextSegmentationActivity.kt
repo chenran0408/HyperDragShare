@@ -598,6 +598,18 @@ private fun BigBangOverlayContent(
                 topBar = {
                     OverlayHeaderBar(
                         backgroundColor = topBarColor.copy(alpha = panelOpacity),
+                        modifier = Modifier.pointerInput(panelAdjustmentEnabled, density) {
+                            if (!panelAdjustmentEnabled) return@pointerInput
+                            detectDragGestures(
+                                onDragEnd = { onPanelPositionChanged(dragOffsetXdp, dragOffsetYdp) },
+                            ) { change, dragAmount ->
+                                change.consume()
+                                dragOffsetXdp = (dragOffsetXdp + dragAmount.x / density)
+                                    .coerceIn(-configuration.screenWidthDp * 0.35f, configuration.screenWidthDp * 0.35f)
+                                dragOffsetYdp = (dragOffsetYdp + dragAmount.y / density)
+                                    .coerceIn(-configuration.screenHeightDp * 0.35f, configuration.screenHeightDp * 0.35f)
+                            }
+                        },
                         topInset = panelMetrics.topSystemInset,
                         leftInset = panelMetrics.leftSystemInset,
                         rightInset = panelMetrics.rightSystemInset,
@@ -616,30 +628,12 @@ private fun BigBangOverlayContent(
                             )
                         },
                         center = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .pointerInput(panelAdjustmentEnabled, density) {
-                                        if (!panelAdjustmentEnabled) return@pointerInput
-                                        detectDragGestures(
-                                            onDragEnd = { onPanelPositionChanged(dragOffsetXdp, dragOffsetYdp) },
-                                        ) { change, dragAmount ->
-                                            change.consume()
-                                            dragOffsetXdp = (dragOffsetXdp + dragAmount.x / density)
-                                                .coerceIn(-configuration.screenWidthDp * 0.35f, configuration.screenWidthDp * 0.35f)
-                                            dragOffsetYdp = (dragOffsetYdp + dragAmount.y / density)
-                                                .coerceIn(-configuration.screenHeightDp * 0.35f, configuration.screenHeightDp * 0.35f)
-                                        }
-                                    },
-                                contentAlignment = androidx.compose.ui.Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.bigbang_overlay_title),
-                                    color = MiuixTheme.colorScheme.onSurface,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
+                            Text(
+                                text = stringResource(R.string.bigbang_overlay_title),
+                                color = MiuixTheme.colorScheme.onSurface,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                         },
                         trailing = {
                             OverlayIconAction(

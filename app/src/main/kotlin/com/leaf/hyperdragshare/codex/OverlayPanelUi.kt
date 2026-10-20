@@ -245,6 +245,7 @@ internal fun OverlayPanelScaffold(
 @Composable
 internal fun OverlayHeaderBar(
     backgroundColor: Color,
+    modifier: Modifier = Modifier,
     topInset: Dp = 0.dp,
     leftInset: Dp = 0.dp,
     rightInset: Dp = 0.dp,
@@ -253,7 +254,7 @@ internal fun OverlayHeaderBar(
     trailing: @Composable RowScope.() -> Unit,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(52.dp + topInset)
             .background(backgroundColor)

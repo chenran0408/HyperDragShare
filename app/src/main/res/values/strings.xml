@@ -37,7 +37,7 @@
     <string name="bigbang_text_size_changed">字号已调整为 %1$.0f sp</string>
     <string name="bigbang_panel_height_changed">面板高度已调整为 %1$d%%</string>
     <string name="bigbang_panel_opacity_changed">面板透明度已调整为 %1$d%%</string>
-    <string name="bigbang_panel_adjustment_on">可以拖动文本面板中间的标题调整位置</string>
+    <string name="bigbang_panel_adjustment_on">可以拖动文本面板顶部调整位置</string>
     <string name="bigbang_panel_adjustment_off">文本面板位置已锁定</string>
     <string name="search_overlay_close">关闭</string>
     <string name="search_close">关闭搜索</string>
