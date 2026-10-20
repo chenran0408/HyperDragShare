@@ -81,3 +81,11 @@
 准入验证：目标ROM实际小窗启动入口、大小限制、最小化/恢复、焦点与输入法、跨应用拖出、开始拖出时让开目标窗口。不能宣称系统小窗可缩到1/6；该限制仍由默认取用窗保证。在入口核验和设备测试前不暴露无效按钮，不猜测私有Intent参数。
 
 Android基础参考：https://developer.android.com/develop/ui/views/layout/support-multi-window-mode
+
+## 1.7.106：系统小窗入口已接通
+
+在灰色侧条展开窗标题增加放大图标；按需通过Root启动独立中转站Activity的windowingMode=5，成功后原侧窗收起。保持默认侧窗面积<=16%。这是系统小窗任务，不是设置首页。启动在IO线程，Root拒绝/超时显示错误；Activity检查实际多窗口状态，不以全屏管理页掩盖失败。暂不保证其它ROM。
+
+目标设备miui-framework.jar SHA256为62027316103100269F3882FB5E33C1D934420E01C77B1E9ABC2EBF260B93CD4E。android.util.MiuiMultiWindowUtils.getActivityOptions有checkAuthority第三方名单限制；本批不修改授权名单。shell am start --windowingMode 5已真机验证可进入freeform，模块内采用已授权Root执行同一系统入口。
+
+真机：从侧窗放大按钮成功进入freeform，中转站之外仍为bilipai；右下角拖出放大、往内拖缩小均有截图。证据work/hds106-freeform-ready.png、hds106-resize.png、hds106-shrink.png。窄布局改紧凑标题、横向分类与图标操作；后续仍需验证系统最小化恢复、跨应用拖出、搜索输入法。系统缩放不等于增加逻辑布局宽度，不能靠缩放解决全部内容密度问题。

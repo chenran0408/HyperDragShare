@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SelectAll
@@ -148,6 +149,43 @@ object StashOverlayPanel {
             expanded = true
             resize()
             if (overlay.show()) reload()
+        }
+
+        private var openingSystemWindow by mutableStateOf(false)
+
+        private fun openSystemWindow() {
+            if (openingSystemWindow) return
+            openingSystemWindow = true
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val command = "am start --user current --windowingMode 5 -n " +
+                            BuildConfig.APPLICATION_ID + "/.StashActivity --ez system_stash_window true"
+                        val process = ProcessBuilder("su", "-c", command).redirectErrorStream(true).start()
+                        try {
+                            if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
+                                throw IOException("Root 启动小窗超时")
+                            }
+                            val output = process.inputStream.bufferedReader().use { it.readText() }
+                            if (process.exitValue() != 0 || output.contains("Error:")) {
+                                throw IOException(output.trim().ifEmpty { "系统拒绝启动小窗" })
+                            }
+                        } finally {
+                            process.destroy()
+                        }
+                    }
+                    collapse()
+                } catch (error: IOException) {
+                    report("无法打开系统小窗，请检查 Root 授权", error)
+                } catch (error: SecurityException) {
+                    report("系统拒绝中转站小窗请求", error)
+                } catch (error: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    report("系统小窗启动被中断", error)
+                } finally {
+                    openingSystemWindow = false
+                }
+            }
         }
 
         private fun collapse() {
@@ -426,6 +464,10 @@ object StashOverlayPanel {
                             } else {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.weight(1f)) { MoveHandle() }
+                                    OverlayIconAction(Icons.Outlined.OpenInFull,
+                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        enabled = !openingSystemWindow,
+                                        onClick = ::openSystemWindow, contentDescription = "放大为系统小窗")
                                     OverlayIconAction(Icons.Outlined.ExpandMore,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         onClick = ::collapse, contentDescription = "收起中转站")

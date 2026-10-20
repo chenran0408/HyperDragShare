@@ -78,6 +78,7 @@
 
         <activity
             android:name=".StashActivity"
+            android:resizeableActivity="true"
             android:label="中转站"
             android:theme="@style/Theme.DragShare.BigBangOverlay"
             android:excludeFromRecents="true"

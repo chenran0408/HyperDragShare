@@ -30,6 +30,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,7 +100,7 @@ class StashActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         receiveOnly = isSupportedShare(intent)
-        if (receiveOnly) setTheme(R.style.Theme_DragShare_BigBangOverlay)
+        setTheme(if (receiveOnly) R.style.Theme_DragShare_BigBangOverlay else R.style.Theme_DragShare)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         shareImported = savedInstanceState?.getBoolean("share_imported") == true
@@ -440,8 +448,16 @@ private fun StashScreen(
     onPreviewDismiss: () -> Unit,
 ) {
     var searchExpanded by remember { mutableStateOf(false) }
+    val compact = LocalConfiguration.current.screenWidthDp < 300
     Scaffold(topBar = {
-        TopAppBar(
+        if (compact) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
+                Text(if (selectionMode) "已选 ${selectedIds.size}" else "中转站",
+                    modifier = Modifier.weight(1f), fontSize = 14.sp, maxLines = 1)
+                TextButton(text = if (selectionMode) "完成" else "多选", onClick = onToggleSelectionMode)
+            }
+        } else TopAppBar(
             title = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
             largeTitle = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
             navigationIcon = {
@@ -473,13 +489,13 @@ private fun StashScreen(
                                     onSearch = { searchExpanded = false },
                                     expanded = searchExpanded,
                                     onExpandedChange = { searchExpanded = it },
-                                    label = "搜索已存文字",
+                                    label = if (compact) "搜索文字" else "搜索已存文字",
                                 )
                             },
                             expanded = searchExpanded,
                             onExpandedChange = { searchExpanded = it },
                         ) {}
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.SpaceEvenly) {
                             listOf("all" to "全部", StashStore.KIND_TEXT to "文字",
                                 StashStore.KIND_IMAGE to "图片").forEach { (kind, label) ->
                                 TextButton(
@@ -519,6 +535,7 @@ private fun StashScreen(
                 items(entries, key = { it.id }) { entry ->
                     StashEntryCard(
                         entry = entry,
+                        compact = compact,
                         selectionMode = selectionMode,
                         selected = entry.id in selectedIds,
                         onToggleSelection = { onToggleEntrySelection(entry.id) },
@@ -733,19 +750,23 @@ internal fun StashEntryCard(
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    TextButton(text = "复制", onClick = { onCopy(entry) }, modifier = Modifier.weight(1f))
                     if (compact) {
-                        TextButton(text = if (moreActions) "收起操作" else "更多",
-                            onClick = { moreActions = !moreActions }, modifier = Modifier.weight(1f))
+                        OverlayIconAction(Icons.Outlined.ContentCopy, MiuixTheme.colorScheme.primary,
+                            onClick = { onCopy(entry) }, contentDescription = "复制内容")
+                        OverlayIconAction(Icons.Outlined.MoreHoriz, MiuixTheme.colorScheme.onSurface,
+                            onClick = { moreActions = !moreActions }, contentDescription = "更多操作")
                     } else {
+                        TextButton(text = "复制", onClick = { onCopy(entry) }, modifier = Modifier.weight(1f))
                         TextButton(text = "分享", onClick = { onShare(entry) }, modifier = Modifier.weight(1f))
                         TextButton(text = "删除", onClick = { onDelete(entry) }, modifier = Modifier.weight(1f))
                     }
                 }
                 if (compact && moreActions) {
                     Row(Modifier.fillMaxWidth()) {
-                        TextButton("分享", { onShare(entry) }, modifier = Modifier.weight(1f))
-                        TextButton("删除", { onDelete(entry) }, modifier = Modifier.weight(1f))
+                        OverlayIconAction(Icons.Outlined.Share, MiuixTheme.colorScheme.onSurface,
+                            onClick = { onShare(entry) }, contentDescription = "分享内容")
+                        OverlayIconAction(Icons.Outlined.Delete, MiuixTheme.colorScheme.onSurface,
+                            onClick = { onDelete(entry) }, contentDescription = "删除内容")
                     }
                 }
                 StashDragHandle(listOf(entry), onDragStarted)

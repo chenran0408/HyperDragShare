@@ -453,3 +453,7 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 - 发送合成文本HDS_stash_validation_105到分享接收入口成功保存。窗口实测576×1200，屏幕1440×3200，占15%，满足小于1/6。测试条目保留供后续拖出验收。
 - 切到bilipai后灰色细条可见；点击细条展开6项内容，前台仍com.android.purebilibili/.MainActivity。截图work/hds105-stash-bilipai.png，支持独立浮窗与跨应用展开，不证明跨应用拖放已完成。
 - 原始握手104是历史值，不能把首次即时读值当作重启失败；等待异步回报后已确认为129。
+
+## 2026-10-21：1.7.106 系统中转站小窗
+
+实现和接口证据见STASH.md。166项单测、lintDebug、assembleDebug全部通过；APK归档outputs/HyperDragShare-1.7.106-debug.apk，原位安装成功，包版本130复核通过。侧窗放大按钮已实际启动freeform，右下角拖动放大和缩小均成功；最终图标版安装后截图work/hds106-final.png确认复制/更多不再竖排换行。未声称小窗跨应用拖出、最小化恢复、搜索输入法已通过。传送门Hook最后握手129，本批未改Hook实现也未重载成130。
