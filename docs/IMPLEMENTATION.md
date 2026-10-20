@@ -2,7 +2,7 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.118（versionCode 142）；传送门注入与Root握手均142，设置首页已显示当前版本激活。Root语义取词可独立读到bilipai评论，但长按后会命中原生菜单；面积路径仅源码接通，真实尺寸校准与取词延迟仍未解决，保持关闭。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。外部文字分享/选词处理通过透明接收桥打开独立分词窗；屏幕OCR选区和结果已由ScreenOcrSession独立窗口承载，内部追加不启动Activity。真机取消恢复7/16、AICR区域确认追加7/25保留旧选词通过；两引擎整屏返回与单行点选分词通过，ML Kit样本仍有漏字/错字。中转站侧窗新增直接按住内容拖出，文字/图片及混合六项由另一UID成功接收；新内容自动置顶已验。灰条注入手势左右拖动通过，但收尾出现一次输入ANR，打开设置后原通道恢复，根因未明；116设置往返、拖出后往返和安全页隐藏恢复均通过，但不据此宣称旧ANR修复，仍是开发节点。原生系统小窗已复用直接按住内容拖出，单条文字/PNG跨UID通过。真实手指与系统侧边栏共存待验。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
+当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.119（versionCode 143）；传送门注入与Root握手均143，设置首页已显示当前版本激活。Root语义取词可独立读到bilipai评论，但长按后会命中原生菜单；面积路径仅源码接通，真实尺寸校准与取词延迟仍未解决，保持关闭。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。外部文字分享/选词处理通过透明接收桥打开独立分词窗；屏幕OCR选区和结果已由ScreenOcrSession独立窗口承载，内部追加不启动Activity。真机取消恢复7/16、AICR区域确认追加7/25保留旧选词通过；两引擎整屏返回与单行点选分词通过，ML Kit样本仍有漏字/错字。中转站侧窗新增直接按住内容拖出，文字/图片及混合六项由另一UID成功接收；新内容自动置顶已验。灰条注入手势左右拖动通过，但收尾出现一次输入ANR，打开设置后原通道恢复，根因未明；116设置往返、拖出后往返和安全页隐藏恢复均通过，但不据此宣称旧ANR修复，仍是开发节点。原生系统小窗已复用直接按住内容拖出，单条文字/PNG跨UID通过。真实手指与系统侧边栏共存待验。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
 
 ## 1. 运行边界
 
@@ -895,3 +895,10 @@ RootNodeCaptureMain按内容开关返回文字或明确图片节点，图片等�
 ImageOcrOverlay新增明确QR模式，复用解码、窗口、Miuix及生命周期；QrImageDecoder离线解码多码并去重。图片无文字/失败仍能扫码，带图分词更多入口保留原窗口，二维码结果支持复制与原页搜索/HTTPS。未加相机、区域扫码或作用域，完整范围见QR_IMAGE.md。
 
 真机纯QR正确解出HTTPS，原页链接及关闭返回通过。发现目标机UID WRITE_CLIPBOARD=foreground导致普通浮窗写入静默拒绝；Root UID0实验也不能写，UID1000系统上下文写及独立UID读取通过。新ClipboardWriter检查原始AppOp，受限时只采用已验证Root调用，stdin传正文、5秒后台截止、Root严格核对；扫码UI显示复制中/确认/失败，避免被禁用Toast掩盖状态。最终不同生成标记→产品复制→独立读取false变true，181项单测、Lint、构建及142安装/Portal握手通过。其它旧复制入口尚未迁移，下一批优先修正，不宣称全局已解决。
+
+
+### 1.7.119：文字复制统一
+
+BoomActionHandler把复制交给PanelSession，分词可见反馈与成功后退出沿用原偏好；屏幕OCR、中转站管理/侧窗和拖拽文字都使用ClipboardWriter。异步成功后才触发退出/收起，失败保留当前数据，已销毁窗口不处理迟到UI回调。图片分支尚未接共享Writer，不能认为无异常等于成功。
+
+181项单测、Lint、构建及143安装/Portal握手通过。分词全选COPY-119、侧窗COPY-119-STASH、真实磁贴入口Root屏幕OCR单行COPY-119，三个场景均由独立UID严格读回匹配。临时磁贴完整列表恢复；测试记录8→7清理，原数据保留。系统复制编辑浮层覆盖一次关闭区域的共存问题仍待处理，具体误点与未验范围见DEVICE_VALIDATION.md。

@@ -62,11 +62,14 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
     private var isSegmenting by mutableStateOf(true)
+    private var copying = false
+    private var copyFeedback by mutableStateOf<String?>(null)
     private var undoEditState by mutableStateOf<Bundle?>(null)
     private var beforeText: String? = null
     private var afterText: String? = null
 
     private fun updateSelectionSummary() {
+        if (!copying) copyFeedback = null
         val page = boomChipPage ?: return
         val original = page.originalText.orEmpty()
         hasTextSelection = page.hasSelection()
@@ -84,7 +87,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         }
         boomChipPage = BoomChipPage(context, legacyContentView, false, object : BoomChipPage.Actions {
             override fun dismiss() = requestAnimatedDismissFromLegacy()
-            override fun afterCopy() = closeAfterCopyIfEnabled()
+            override fun copy(text: String) = copyText(text)
             override fun search(text: String, type: Int) = openSearch(text, type)
             override fun share(text: String) = actions.share(text)
         }).also { page ->
@@ -147,6 +150,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     selectedCharacterCount = selectedCharacterCount,
                     hasTextSelection = hasTextSelection,
                     isSegmenting = isSegmenting,
+                    copyFeedback = copyFeedback,
                     onClearSelection = { boomChipPage?.handleClick() },
                     onMoreAction = ::handleMoreAction,
                     onPanelPositionChanged = ::savePanelPosition,
@@ -276,6 +280,19 @@ internal class BigBangPanelSession(private val context: Context, private val act
     fun closeAfterCopyIfEnabled() {
         if (BigBangSettings.isExitAfterCopyEnabled(context)) {
             requestAnimatedDismissFromLegacy()
+        }
+    }
+
+    private fun copyText(text: String) {
+        if (closed || copying) return
+        copying = true
+        copyFeedback = "正在复制…"
+        ClipboardWriter.copy(context, text) { error ->
+            if (!closed) {
+                copying = false
+                copyFeedback = if (error == null) "已复制" else "复制失败：${error.message}"
+                if (error == null) closeAfterCopyIfEnabled()
+            }
         }
     }
 

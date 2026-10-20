@@ -86,6 +86,8 @@ class StashActivity : ComponentActivity() {
     private var entries by mutableStateOf<List<StashStore.Entry>>(emptyList())
     private var loading by mutableStateOf(true)
     private var message by mutableStateOf<String?>(null)
+    private var copying by mutableStateOf(false)
+    private var copyMessage by mutableStateOf<String?>(null)
     private var pendingDelete by mutableStateOf<StashStore.Entry?>(null)
     private var confirmBatchDelete by mutableStateOf(false)
     private var previewEntry by mutableStateOf<StashStore.Entry?>(null)
@@ -137,6 +139,8 @@ class StashActivity : ComponentActivity() {
                     onQueryChange = { searchQuery = it },
                     onKindChange = { kindFilter = it },
                     loading = loading,
+                    copying = copying,
+                    copyMessage = copyMessage,
                     message = message,
                     pendingDelete = pendingDelete,
                     previewEntry = previewEntry,
@@ -300,15 +304,24 @@ class StashActivity : ComponentActivity() {
     }
 
     private fun copyEntry(entry: StashStore.Entry) {
+        if (copying || isFinishing || isDestroyed) return
+        if (entry.kind == StashStore.KIND_TEXT) {
+            copying = true
+            copyMessage = "正在复制…"
+            ClipboardWriter.copy(this, entry.text.orEmpty()) { error ->
+                if (!isFinishing && !isDestroyed) {
+                    copying = false
+                    copyMessage = if (error == null) "已复制文字"
+                        else "复制失败：${error.message ?: "无法写入剪贴板"}"
+                }
+            }
+            return
+        }
         try {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = if (entry.kind == StashStore.KIND_TEXT) {
-                ClipData.newPlainText("中转站文字", entry.text.orEmpty())
-            } else {
-                ClipData.newUri(contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
-            }
+            val clip = ClipData.newUri(contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(this, if (entry.kind == StashStore.KIND_TEXT) "已复制文字" else "已复制图片", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "已复制图片", Toast.LENGTH_SHORT).show()
         } catch (error: SecurityException) {
             DragShareLog.w("DragShare/Stash", "permission denied while copying stash content", error)
             Toast.makeText(this, "复制失败：系统拒绝访问剪贴板或图片。", Toast.LENGTH_LONG).show()
@@ -440,6 +453,8 @@ private fun StashScreen(
     onQueryChange: (String) -> Unit,
     onKindChange: (String) -> Unit,
     loading: Boolean,
+    copying: Boolean,
+    copyMessage: String?,
     message: String?,
     pendingDelete: StashStore.Entry?,
     previewEntry: StashStore.Entry?,
@@ -469,27 +484,33 @@ private fun StashScreen(
     var searchExpanded by remember { mutableStateOf(false) }
     val compact = LocalConfiguration.current.screenWidthDp < 300
     Scaffold(topBar = {
-        if (compact) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
-                Text(if (selectionMode) "已选 ${selectedIds.size}" else "中转站",
-                    modifier = Modifier.weight(1f), fontSize = 14.sp, maxLines = 1)
-                TextButton(text = if (selectionMode) "完成" else "多选", onClick = onToggleSelectionMode)
+        Column {
+            if (compact) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
+                    Text(if (selectionMode) "已选 ${selectedIds.size}" else "中转站",
+                        modifier = Modifier.weight(1f), fontSize = 14.sp, maxLines = 1)
+                    TextButton(text = if (selectionMode) "完成" else "多选", onClick = onToggleSelectionMode)
+                }
+            } else TopAppBar(
+                title = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
+                largeTitle = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
+                navigationIcon = {
+                    BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
+                },
+                actions = {
+                    TextButton(
+                        text = if (selectionMode) "完成" else "多选",
+                        onClick = onToggleSelectionMode,
+                        enabled = selectionMode || entries.isNotEmpty(),
+                    )
+                },
+            )
+            copyMessage?.let {
+                Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
             }
-        } else TopAppBar(
-            title = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
-            largeTitle = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
-            navigationIcon = {
-                BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
-            },
-            actions = {
-                TextButton(
-                    text = if (selectionMode) "完成" else "多选",
-                    onClick = onToggleSelectionMode,
-                    enabled = selectionMode || entries.isNotEmpty(),
-                )
-            },
-        )
+        }
     }) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -563,6 +584,7 @@ private fun StashScreen(
                         onOpenText = onOpenText,
                         onPreviewImage = onPreviewImage,
                         onCopy = onCopy,
+                        copyEnabled = !copying,
                         onShare = onShare,
                         onDelete = onDeleteRequest,
                     )
@@ -705,6 +727,7 @@ internal fun StashEntryCard(
     onDelete: (StashStore.Entry) -> Unit,
     onDragStarted: () -> Unit = {},
     compact: Boolean = false,
+    copyEnabled: Boolean = true,
 ) {
     var moreActions by remember(entry.id, selectionMode) { mutableStateOf(false) }
     val openContent = {
@@ -777,11 +800,12 @@ internal fun StashEntryCard(
                     }
                     if (compact) {
                         OverlayIconAction(Icons.Outlined.ContentCopy, MiuixTheme.colorScheme.primary,
-                            onClick = { onCopy(entry) }, contentDescription = "复制内容")
+                            enabled = copyEnabled, onClick = { onCopy(entry) }, contentDescription = "复制内容")
                         OverlayIconAction(Icons.Outlined.MoreHoriz, MiuixTheme.colorScheme.onSurface,
                             onClick = { moreActions = !moreActions }, contentDescription = "更多操作")
                     } else {
-                        TextButton(text = "复制", onClick = { onCopy(entry) }, modifier = Modifier.weight(1f))
+                        TextButton(text = "复制", enabled = copyEnabled,
+                            onClick = { onCopy(entry) }, modifier = Modifier.weight(1f))
                         TextButton(text = "分享", onClick = { onShare(entry) }, modifier = Modifier.weight(1f))
                         TextButton(text = "删除", onClick = { onDelete(entry) }, modifier = Modifier.weight(1f))
                     }

@@ -103,6 +103,7 @@ internal fun BigBangOverlayContent(
     selectedCharacterCount: Int,
     hasTextSelection: Boolean,
     isSegmenting: Boolean,
+    copyFeedback: String?,
     onClearSelection: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
     onPanelPositionChanged: (Float, Float) -> Unit,
@@ -342,6 +343,10 @@ internal fun BigBangOverlayContent(
             ) { bodyModifier ->
                 Column(modifier = bodyModifier.fillMaxSize()) {
                     Spacer(modifier = Modifier.height(4.dp))
+                    copyFeedback?.let {
+                        Text(it, color = MiuixTheme.colorScheme.onSurface,
+                            fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                    }
                     AndroidView(
                         modifier = Modifier
                             .fillMaxWidth()

@@ -612,3 +612,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 最终181项单测、0失败/错误，Lint、assembleDebug通过（build218-rootcopy-final.log）；三项新增生成图片测试覆盖混排中文码、多码去重、空白无结果。最终1.7.118/142已安装，原包名/debug签名不变；Portal注入及Root握手均142。没有重启android/AICR。
 - 仍未验：分词更多扫码入口与选词保留、扫码中取消/息屏、实机多码、旋转/低光/损坏照片、专用scheme内容、外部浏览器。源码接线不代替这些设备证据。其它分词/屏幕OCR/中转站/拖拽的旧复制点尚未使用新Writer，受同一UID限制的风险保留为下一优先项，尤其图片URI授权须单独验证；不宣称复制全局已修复。
 - 未添加中转站条目；诊断应用、临时APK及Root实验DEX已移除。原bilipai任务2183恢复，不重新启动Activity/播放；AICR、复制直取、主题偏好未改。旧115侧条ANR、bilipai普通长按、真实面积校准仍未解决。最终APK outputs/HyperDragShare-1.7.118-debug.apk，SHA256 91693538C760BA668106EB0D6F013038A14BC8FB2D19CF89248A8658825C67A1。
+
+## 2026-10-21：1.7.119 文字复制统一与整屏磁贴入口
+
+- 分词工具栏/旧备用栏统一委托BigBangPanelSession，使用ClipboardWriter，复制期间避免重复提交；仅成功后按原“复制后退出”设置关闭，失败留面板。分词、屏幕OCR、中转站管理页增加当前窗口可见的复制反馈，不依赖被用户禁用的Toast。侧窗仅成功回调后收起；关闭/销毁后的回调不操作失效界面。拖拽菜单文字复制也已接共享Writer，保留已有自有浮层提示。
+- 最终181项单测、0失败/错误，Lint、assembleDebug通过，日志build219.log；1.7.119/143原位安装，包名/debug签名不变。Portal注入及Root握手均143，Root=true。未重启android/AICR，无新增作用域或权限修改。
+- 先写入不同生成标记COPY-BASELINE-119并核对成功。独立应用分享COPY-119进入原页分词，显示8字符，全选8/8后点复制；原设置exit_after_copy_enabled=true，因此成功后窗关闭。接收端严格匹配true，work/hds119-copy-selected.xml、hds119-copy-feedback.xml/png、hds119-copy-verified.xml，日志route=system appOp=4。没有据此宣称关闭设置下的分词反馈行已设备验收。
+- 新生成记录COPY-119-STASH存入后计数7→8；侧窗复制该记录，成功后收起，独立应用严格匹配true。work/hds119-stash-inserted.xml、hds119-stash-copy-collapsed.xml、hds119-stash-copy-verified.xml。测试结束只选择该生成记录，经删除确认1项后8→7，原记录保留；work/hds119-stash-delete-confirm.xml、hds119-stash-cleaned.xml。
+- 原控制中心没有本模块整屏OCR磁贴。测试临时add-tile后用系统click-tile真实触发DragShareTileService→透明ScreenOcrActivity→Root截图与AICR，实际返回5行，包含生成页面COPY-119及该页按钮/状态栏。复制COPY-119单行后结果页仍保留5行并显示已复制文字，独立应用严格匹配true；前台Activity保持生成页面。work/hds119-screen-entry.xml、hds119-screen-copied.xml/png、hds119-screen-copy-verified.xml。只计单行复制，不代替全部复制、追加模式或物理下拉控制中心点击测试。
+- 系统复制后出现原生“编辑所选文本”浮层，曾覆盖OCR右上关闭区域。自动化点击误进入系统剪贴板编辑；未修改正文，点击取消退出后回生成页。该误点不计模块关闭按钮验收；共存与位置问题仍待定位来源，不通过关闭其他模块/系统功能来掩盖。固定反馈行占用后列表可滚动，底部重新识别项不保证首屏可见。
+- 临时OCR磁贴已移除，sysui_qs_tiles与测试前完整字符串相同，work/hds119-tiles-before.txt、hds119-tiles-restored.txt。诊断应用及临时APK/DEX已移除，侧条收起，原bilipai任务2183置前，未重新启动页面或恢复播放。AICR、复制直取、主题及退出复制设置均保留。
+- 仍待：文字复制失败/Root撤销实际UI、管理页/原生小窗与拖拽文字复制的实际入口、全部复制；图片复制仍是原普通ClipData/ClipboardManager路径，尚未解决同一后台限制及URI授权，不标为可用。真实面积、bilipai普通长按、115侧条ANR根因继续未解决。本批不新增镜像实现测试，用真实跨UID结果核对。
+- 最终APK outputs/HyperDragShare-1.7.119-debug.apk，SHA256 EB4E70C6B32106303112F36E67F23756996EB4FD317E3AFAADB7FE99CF0D6658。

@@ -18,6 +18,7 @@ import android.view.Gravity;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
@@ -31,6 +32,7 @@ import java.io.InputStream;
 /** Independent UID, generated samples only; no network or screen capture. */
 public final class MainActivity extends Activity {
     private TextView result;
+    private String expectedClipboard = "https://example.com/";
     private static final Uri IMAGE = Uri.parse("content://com.leaf.dragdrop.probe.image/sample");
 
     @Override public void onCreate(Bundle state) {
@@ -51,6 +53,9 @@ public final class MainActivity extends Activity {
         addButton(root, "存入生成图片", this::shareImage);
         addButton(root, "显示识字样本", this::showRecognitionSample);
         addButton(root, "识别生成二维码", this::recognizeGeneratedQr);
+        addButton(root, "分词复制样本", this::shareSegmentationSample);
+        addButton(root, "存入复制测试119", () -> shareText("COPY-119-STASH"));
+        addButton(root, "屏幕识字样本", this::showScreenSample);
         addButton(root, "核对测试复制", this::verifyTestCopy);
         TextView drop = new TextView(this);
         drop.setText("拖到这里松手\n支持文字 / 图片 / 多项\n结果显示在顶部");
@@ -70,7 +75,36 @@ public final class MainActivity extends Activity {
                 default: return true;
             }
         });
-        root.addView(drop, new LinearLayout.LayoutParams(-1, 0, 1));
+        int dropHeight = (int) (180 * getResources().getDisplayMetrics().density);
+        root.addView(drop, new LinearLayout.LayoutParams(-1, dropHeight, 1));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        setContentView(scroll);
+    }
+
+    private void shareSegmentationSample() {
+        expectedClipboard = "COPY-119";
+        startActivity(new Intent(Intent.ACTION_SEND).setType("text/plain")
+                .setClassName("com.leaf.hyperdragshare.codex", "com.leaf.hyperdragshare.codex.TextSegmentationActivity")
+                .putExtra(Intent.EXTRA_TEXT, expectedClipboard));
+    }
+
+    private void showScreenSample() {
+        expectedClipboard = "COPY-119";
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 50, 24, 30);
+        addButton(root, "返回拖拽接收器", this::showReceiver);
+        addButton(root, "核对测试复制", this::verifyTestCopy);
+        result = new TextView(this);
+        result.setTextSize(18);
+        root.addView(result);
+        TextView sample = new TextView(this);
+        sample.setText(expectedClipboard);
+        sample.setTextSize(42);
+        sample.setGravity(Gravity.CENTER);
+        root.addView(sample, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
     }
 
@@ -115,7 +149,7 @@ public final class MainActivity extends Activity {
         try {
             ClipData clip = getSystemService(ClipboardManager.class).getPrimaryClip();
             CharSequence text = clip != null && clip.getItemCount() > 0 ? clip.getItemAt(0).getText() : null;
-            boolean matches = text != null && "https://example.com/".contentEquals(text);
+            boolean matches = text != null && expectedClipboard.contentEquals(text);
             result.setText("测试复制匹配：" + matches);
         } catch (SecurityException error) {
             result.setText("测试复制读取受限：" + error);
@@ -127,7 +161,10 @@ public final class MainActivity extends Activity {
                 .setClassName("com.leaf.hyperdragshare.codex", "com.leaf.hyperdragshare.codex.StashActivity");
     }
 
-    private void shareText(String text) { startActivity(share("text/plain").putExtra(Intent.EXTRA_TEXT, text)); }
+    private void shareText(String text) {
+        expectedClipboard = text;
+        startActivity(share("text/plain").putExtra(Intent.EXTRA_TEXT, text));
+    }
 
     private void shareImage() {
         Bitmap bitmap = Bitmap.createBitmap(640, 240, Bitmap.Config.ARGB_8888);
@@ -182,6 +219,7 @@ public final class MainActivity extends Activity {
     }
 
     private void recognizeGeneratedQr() {
+        expectedClipboard = "https://example.com/";
         Bitmap bitmap = Bitmap.createBitmap(640, 640, Bitmap.Config.ARGB_8888);
         try {
             BitMatrix code = new QRCodeWriter().encode("https://example.com/",

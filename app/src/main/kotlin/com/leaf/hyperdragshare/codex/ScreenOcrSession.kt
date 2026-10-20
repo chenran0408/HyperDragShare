@@ -1,8 +1,6 @@
 package com.leaf.hyperdragshare.codex
 
 import android.app.KeyguardManager
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -104,6 +102,8 @@ internal class ScreenOcrSession(
     private var regionSelectionMessage by mutableIntStateOf(0)
     private var aicrRequest: AicrOcrClient.Request? = null
     private var failureDetail by mutableStateOf<String?>(null)
+    private var copying by mutableStateOf(false)
+    private var copyMessage by mutableStateOf<String?>(null)
     private val pendingCapture = Runnable { captureAndRecognize() }
     private val screenOff = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) = close(restorePanel = false)
@@ -118,6 +118,7 @@ internal class ScreenOcrSession(
 
     private fun scheduleCapture() {
         failureDetail = null
+        copyMessage = null
         main.postDelayed(pendingCapture, CAPTURE_FRAME_DELAY_MILLIS)
     }
 
@@ -300,9 +301,16 @@ internal class ScreenOcrSession(
                         fillMax = metrics.fullScreen,
                         modifier = overlayPanelPlacement(metrics),
                         backgroundColor = MiuixTheme.colorScheme.background) {
-                        ScreenOcrPage(resultText, statusMessage, isRecognizing,
-                            screenshotForRegion != null, { close() }, ::retryCapture, ::showRegionSelector,
-                            ::openSegmentation, ::copyText, ::shareText)
+                        Column(Modifier.fillMaxSize()) {
+                            copyMessage?.let { message ->
+                                Text(message, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    fontSize = 13.sp)
+                            }
+                            ScreenOcrPage(resultText, statusMessage, isRecognizing,
+                                screenshotForRegion != null, { close() }, ::retryCapture, ::showRegionSelector,
+                                ::openSegmentation, ::copyText, ::shareText)
+                        }
                     }
                 }
             }
@@ -356,8 +364,16 @@ internal class ScreenOcrSession(
     }
 
     private fun copyText(text: String) {
-        if (text.isNotBlank()) context.getSystemService(ClipboardManager::class.java)
-            .setPrimaryClip(ClipData.newPlainText("screen text", text))
+        if (closed || copying || text.isBlank()) return
+        copying = true
+        copyMessage = "正在复制…"
+        ClipboardWriter.copy(context, text) { error ->
+            if (!closed) {
+                copying = false
+                copyMessage = if (error == null) "已复制文字"
+                    else "复制失败：${error.message ?: "无法写入剪贴板"}"
+            }
+        }
     }
 
     private fun shareText(text: String) {
@@ -541,6 +557,7 @@ internal class ScreenOcrSession(
                                 TextButton(
                                     text = stringResource(R.string.screen_ocr_copy_all),
                                     onClick = { onCopy(allText) },
+                                    enabled = !copying,
                                 )
                                 TextButton(
                                     text = stringResource(R.string.screen_ocr_share_all),
@@ -594,7 +611,7 @@ internal class ScreenOcrSession(
                                     ),
                                 )
                                 if (resultReceiver == null) {
-                                    IconButton(onClick = { onCopy(line) }) {
+                                    IconButton(onClick = { onCopy(line) }, enabled = !copying) {
                                         MiuixIcon(
                                             imageVector = Icons.Outlined.ContentCopy,
                                             contentDescription = stringResource(R.string.screen_ocr_copy_line),

@@ -1,8 +1,5 @@
 package com.leaf.hyperdragshare.codex;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Rect;
 import android.util.TypedValue;
@@ -198,11 +195,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     }
 
     private void copy(String text) {
-        ClipboardManager clipboard = (ClipboardManager) mBoomPage.mContext.getSystemService(Context.CLIPBOARD_SERVICE);
-        clipboard.setPrimaryClip(ClipData.newPlainText(null, text));
-        mToast.setText(mBoomPage.mContext.getResources().getString(R.string.copy_tips));
-        mToast.show();
-        mBoomPage.mActions.afterCopy();
+        mBoomPage.mActions.copy(text);
     }
 
     public void search(String text, int type) {

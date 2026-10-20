@@ -74,6 +74,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card
@@ -141,6 +142,7 @@ object StashOverlayPanel {
         private var query by mutableStateOf("")
         private var confirmDelete by mutableStateOf(false)
         private var deleting by mutableStateOf(false)
+        private var copying by mutableStateOf(false)
         private var preview by mutableStateOf<StashStore.Entry?>(null)
         private val screenOffReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -326,10 +328,25 @@ object StashOverlayPanel {
         }
 
         private fun copy(entry: StashStore.Entry) {
+            if (copying || !scope.isActive) return
+            if (entry.kind == StashStore.KIND_TEXT) {
+                copying = true
+                message = "正在复制…"
+                ClipboardWriter.copy(app, entry.text.orEmpty()) { error ->
+                    if (scope.isActive) {
+                        copying = false
+                        if (error == null) {
+                            message = "已复制文字"
+                            collapse()
+                        } else {
+                            message = "复制失败：${error.message ?: "无法写入剪贴板"}"
+                        }
+                    }
+                }
+                return
+            }
             try {
-                val clip = if (entry.kind == StashStore.KIND_TEXT) {
-                    ClipData.newPlainText("中转站文字", entry.text.orEmpty())
-                } else ClipData.newUri(app.contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
+                val clip = ClipData.newUri(app.contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
                 app.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
                 Toast.makeText(app, "已复制", Toast.LENGTH_SHORT).show()
                 collapse()
@@ -402,7 +419,7 @@ object StashOverlayPanel {
                                 if (selected) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank
                             } else Icons.Outlined.ContentCopy,
                             tint = MiuixTheme.colorScheme.primary,
-                            enabled = !deleting,
+                            enabled = !deleting && !copying,
                             onClick = { if (selectionMode) open() else copy(entry) },
                             contentDescription = if (selectionMode) {
                                 if (selected) "取消选择这条内容" else "选择这条内容"

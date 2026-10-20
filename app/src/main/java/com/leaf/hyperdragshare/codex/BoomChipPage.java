@@ -26,7 +26,7 @@ public class BoomChipPage {
 
     public interface Actions {
         void dismiss();
-        void afterCopy();
+        void copy(String text);
         void search(String text, int type);
         void share(String text);
     }

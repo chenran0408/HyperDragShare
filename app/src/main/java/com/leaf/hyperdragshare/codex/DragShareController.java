@@ -1575,33 +1575,36 @@ final class DragShareController {
 
     private void copyToClipboard(CapturedContent payload, Uri stagedImage) {
         boolean image = payload != null && payload.isImage();
+        if (!image) {
+            String text = payload == null ? null : payload.text;
+            if (text == null || text.trim().isEmpty()) {
+                showToast("没有可复制的文字");
+                return;
+            }
+            ClipboardWriter.copy(context, text, error -> {
+                if (error == null) {
+                    log("copied text to clipboard");
+                    showToast("文字已复制到剪贴板");
+                } else {
+                    log("clipboard text copy failed", error);
+                    showToast("复制文字失败：" + error.getMessage(), Toast.LENGTH_LONG);
+                }
+            });
+            return;
+        }
         try {
             ClipboardManager clipboard = context.getSystemService(ClipboardManager.class);
             if (clipboard == null) {
                 throw new IllegalStateException("Clipboard service is unavailable");
             }
-            ClipData clip;
-            if (image) {
-                if (stagedImage == null) {
-                    throw new IllegalArgumentException("Image URI is not ready");
-                }
-                clip = ClipData.newUri(
-                        context.getContentResolver(),
-                        "drag-share-image",
-                        stagedImage);
-            } else {
-                String text = payload == null ? null : payload.text;
-                if (text == null || text.trim().isEmpty()) {
-                    throw new IllegalArgumentException("Text is empty");
-                }
-                clip = ClipData.newPlainText("drag-share-text", text);
-            }
+            if (stagedImage == null) throw new IllegalArgumentException("Image URI is not ready");
+            ClipData clip = ClipData.newUri(context.getContentResolver(), "drag-share-image", stagedImage);
             clipboard.setPrimaryClip(clip);
-            log("copied " + (image ? "image" : "text") + " to clipboard");
-            showToast(image ? "图片已复制到剪贴板" : "文字已复制到剪贴板");
-        } catch (Throwable error) {
+            log("copied image to clipboard");
+            showToast("图片已复制到剪贴板");
+        } catch (RuntimeException error) {
             log("clipboard copy failed", error);
-            showToast(image ? "复制图片失败" : "复制文字失败");
+            showToast("复制图片失败：" + error.getMessage(), Toast.LENGTH_LONG);
         }
     }
 
