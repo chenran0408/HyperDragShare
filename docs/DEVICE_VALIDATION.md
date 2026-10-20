@@ -457,3 +457,7 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 ## 2026-10-21：1.7.106 系统中转站小窗
 
 实现和接口证据见STASH.md。166项单测、lintDebug、assembleDebug全部通过；APK归档outputs/HyperDragShare-1.7.106-debug.apk，原位安装成功，包版本130复核通过。侧窗放大按钮已实际启动freeform，右下角拖动放大和缩小均成功；最终图标版安装后截图work/hds106-final.png确认复制/更多不再竖排换行。未声称小窗跨应用拖出、最小化恢复、搜索输入法已通过。传送门Hook最后握手129，本批未改Hook实现也未重载成130。
+
+## 2026-10-21：1.7.107 中转站返回与拖出让位
+
+166项测试、lintDebug、assembleDebug通过并原位安装。系统小窗返回键关闭任务，恢复90×360触摸区的灰色侧条，前台bilipai，证据work/hds107-return.png。重新通过侧条放大后，在按住拖出按钮执行ADB draganddrop；仅在startDragAndDrop返回true后调用moveTaskToBack，日志确认调用及中转站任务不可见、bilipai前台。落点不是编辑器，此次不证明目标接收/粘贴成功。证据work/hds107-before-drag.png与hds107-after-drag.png。多选批量拖出入口已接通，尚未实测多项投递。

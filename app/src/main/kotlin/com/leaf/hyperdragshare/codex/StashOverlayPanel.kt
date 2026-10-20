@@ -102,6 +102,20 @@ object StashOverlayPanel {
         }
     }
 
+    @JvmStatic fun showCollapsed(context: Context) {
+        val app = context.applicationContext
+        main.post {
+            if (app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return@post
+            if (!Settings.canDrawOverlays(app)) {
+                Toast.makeText(app, "悬浮窗权限已关闭，无法恢复中转站侧条", Toast.LENGTH_LONG).show()
+                return@post
+            }
+            val shelf = active ?: Shelf(app).also { active = it }
+            shelf.collapse()
+            shelf.overlay.show()
+        }
+    }
+
     @JvmStatic fun dismiss() {
         main.post { active?.overlay?.dismiss() }
     }
@@ -188,7 +202,7 @@ object StashOverlayPanel {
             }
         }
 
-        private fun collapse() {
+        fun collapse() {
             preview = null
             confirmDelete = false
             expanded = false

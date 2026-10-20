@@ -119,6 +119,10 @@ class StashActivity : ComponentActivity() {
                 controller = remember { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
             ) {
                 val scope = rememberCoroutineScope()
+                BackHandler(enabled = isInMultiWindowMode && !selectionMode &&
+                    previewEntry == null && pendingDelete == null && !confirmBatchDelete) {
+                    returnToShelf()
+                }
                 BackHandler(enabled = selectionMode) {
                     selectionMode = false
                     selectedIds = emptySet()
@@ -140,7 +144,8 @@ class StashActivity : ComponentActivity() {
                     selectionMode = selectionMode,
                     selectedIds = selectedIds,
                     confirmBatchDelete = confirmBatchDelete,
-                    onBack = ::finish,
+                    onBack = ::returnToShelf,
+                    onDragStarted = ::hideForDrag,
                     onToggleSelectionMode = {
                         selectionMode = !selectionMode
                         selectedIds = emptySet()
@@ -189,6 +194,20 @@ class StashActivity : ComponentActivity() {
         setIntent(intent)
         shareImported = false
         pendingImport = intent.takeIf(::isSupportedShare)
+    }
+
+    private fun returnToShelf() {
+        if (isInMultiWindowMode) StashOverlayPanel.showCollapsed(this)
+        finish()
+    }
+
+    private fun hideForDrag() {
+        if (isInMultiWindowMode) {
+            StashOverlayPanel.showCollapsed(this)
+            if (!moveTaskToBack(true)) {
+                DragShareLog.w("DragShare/Stash", "system refused to hide stash task during drag")
+            }
+        }
     }
 
     override fun onResume() {
@@ -429,6 +448,7 @@ private fun StashScreen(
     selectedIds: Set<String>,
     confirmBatchDelete: Boolean,
     onBack: () -> Unit,
+    onDragStarted: () -> Unit,
     onToggleSelectionMode: () -> Unit,
     onToggleEntrySelection: (String) -> Unit,
     onToggleSelectAll: () -> Unit,
@@ -523,6 +543,7 @@ private fun StashScreen(
             } else {
                 if (selectionMode) {
                     item(key = "selection-actions") {
+                        StashDragHandle(entries.filter { it.id in selectedIds }, onDragStarted)
                         StashSelectionActions(
                             selectedCount = selectedIds.size,
                             allSelected = selectedIds.size == entries.size,
@@ -536,6 +557,7 @@ private fun StashScreen(
                     StashEntryCard(
                         entry = entry,
                         compact = compact,
+                        onDragStarted = onDragStarted,
                         selectionMode = selectionMode,
                         selected = entry.id in selectedIds,
                         onToggleSelection = { onToggleEntrySelection(entry.id) },
