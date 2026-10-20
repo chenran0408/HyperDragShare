@@ -1,10 +1,8 @@
 package com.leaf.hyperdragshare.codex
 
 import android.app.KeyguardManager
-import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ClipData
-import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -34,7 +32,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,10 +56,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
@@ -100,7 +120,10 @@ object StashOverlayPanel {
         private var expanded by mutableStateOf(true)
         private var selectionMode by mutableStateOf(false)
         private var selectedIds by mutableStateOf<Set<String>>(emptySet())
-        private var pendingDelete by mutableStateOf<StashStore.Entry?>(null)
+        private var searching by mutableStateOf(false)
+        private var query by mutableStateOf("")
+        private var confirmDelete by mutableStateOf(false)
+        private var deleting by mutableStateOf(false)
         private var preview by mutableStateOf<StashStore.Entry?>(null)
         private val screenOffReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -129,7 +152,7 @@ object StashOverlayPanel {
 
         private fun collapse() {
             preview = null
-            pendingDelete = null
+            confirmDelete = false
             expanded = false
             resize()
         }
@@ -138,9 +161,10 @@ object StashOverlayPanel {
             val metrics = context.getSystemService(WindowManager::class.java).currentWindowMetrics.bounds
             val density = context.resources.displayMetrics.density
             overlay.window.attributes = overlay.window.attributes.apply {
-                width = if (expanded) minOf((260 * density).toInt(), (metrics.width() * .7f).toInt())
+                // Both dimensions are at most 40% of the display: area <= 16%, below 1/6.
+                width = if (expanded) minOf((200 * density).toInt(), (metrics.width() * .4f).toInt())
                     else (24 * density).toInt()
-                height = if (expanded) minOf((480 * density).toInt(), (metrics.height() * .6f).toInt())
+                height = if (expanded) minOf((320 * density).toInt(), (metrics.height() * .4f).toInt())
                     else (96 * density).toInt()
                 gravity = Gravity.LEFT or Gravity.TOP
                 x = (dragLeft?.toInt() ?: if (onLeft) 0 else metrics.width() - width)
@@ -169,9 +193,9 @@ object StashOverlayPanel {
 
         @Composable private fun MoveHandle() {
             Text(
-                "— 拖动 —",
+                if (selectionMode) "已选 ${selectedIds.size}" else "中转站 · ${entries.size}",
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth().height(28.dp).systemGestureExclusion().pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { dragLeft = overlay.window.attributes.x.toFloat() },
@@ -236,20 +260,6 @@ object StashOverlayPanel {
             }
         }
 
-        private fun delete(entry: StashStore.Entry) {
-            pendingDelete = null
-            scope.launch {
-                try {
-                    withContext(Dispatchers.IO) { StashStore(app).use { it.delete(entry.id) } }
-                    entries = entries.filterNot { it.id == entry.id }
-                } catch (error: IOException) {
-                    report("删除失败", error)
-                } catch (error: SecurityException) {
-                    report("系统拒绝删除内容", error)
-                }
-            }
-        }
-
         private fun copy(entry: StashStore.Entry) {
             try {
                 val clip = if (entry.kind == StashStore.KIND_TEXT) {
@@ -263,64 +273,26 @@ object StashOverlayPanel {
             }
         }
 
-        private fun share(entry: StashStore.Entry) {
-            val send = Intent(Intent.ACTION_SEND)
-            if (entry.kind == StashStore.KIND_TEXT) {
-                send.type = "text/plain"
-                send.putExtra(Intent.EXTRA_TEXT, entry.text.orEmpty())
-            } else {
-                val uri = StashImageProvider.uriForEntry(entry.id)
-                send.setDataAndType(uri, entry.mime ?: "image/*")
-                send.putExtra(Intent.EXTRA_STREAM, uri)
-                send.clipData = ClipData.newRawUri("中转站图片", uri)
-                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            launch(Intent.createChooser(send, "分享中转站内容").apply {
-                if (entry.kind == StashStore.KIND_IMAGE) addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            })
-        }
-
-        private fun launch(intent: Intent) {
-            try {
-                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                collapse()
-            } catch (error: ActivityNotFoundException) {
-                report("没有可打开此内容的应用", error)
-            } catch (error: SecurityException) {
-                report("系统拒绝打开内容", error)
-            }
-        }
-
-        private fun shareSelected() {
-            val selected = entries.filter { it.id in selectedIds }
-            if (selected.isEmpty()) return
-            val text = selected.filter { it.kind == StashStore.KIND_TEXT }
-                .mapNotNull { it.text }.joinToString("\n")
-            val images = selected.filter { it.kind == StashStore.KIND_IMAGE }
-            val send = if (images.isEmpty()) {
-                Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, text)
-                }
-            } else {
-                val uris = ArrayList(images.map { StashImageProvider.uriForEntry(it.id) })
-                val description = ClipDescription("中转站内容",
-                    if (text.isEmpty()) arrayOf("image/*", "text/uri-list")
-                    else arrayOf("text/plain", "image/*", "text/uri-list"))
-                val clip = ClipData(description, ClipData.Item(uris.first()))
-                uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
-                if (text.isNotEmpty()) clip.addItem(ClipData.Item(text))
-                Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                    type = "image/*"
-                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                    if (text.isNotEmpty()) putExtra(Intent.EXTRA_TEXT, text)
-                    clipData = clip
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        private fun deleteSelected() {
+            val targets = entries.filter { it.id in selectedIds }
+            confirmDelete = false
+            deleting = true
+            scope.launch {
+                try {
+                    for (entry in targets) {
+                        withContext(Dispatchers.IO) { StashStore(app).use { it.delete(entry.id) } }
+                        entries = entries.filterNot { it.id == entry.id }
+                        selectedIds = selectedIds - entry.id
+                    }
+                    cancelSelection()
+                } catch (error: IOException) {
+                    report("删除未完成，剩余内容已保留", error)
+                } catch (error: SecurityException) {
+                    report("系统拒绝删除，剩余内容已保留", error)
+                } finally {
+                    deleting = false
                 }
             }
-            launch(Intent.createChooser(send, "分享已选内容").apply {
-                if (images.isNotEmpty()) addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            })
         }
 
         private fun cancelSelection() {
@@ -338,16 +310,74 @@ object StashOverlayPanel {
             Toast.makeText(app, message, Toast.LENGTH_LONG).show()
         }
 
+        @Composable private fun ShelfItem(entry: StashStore.Entry) {
+            val selected = entry.id in selectedIds
+            val open = {
+                if (selectionMode) {
+                    selectedIds = if (selected) selectedIds - entry.id else selectedIds + entry.id
+                } else if (entry.kind == StashStore.KIND_TEXT) openText(entry)
+                else preview = entry
+            }
+            Card(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                Column(Modifier.padding(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f).clickable(enabled = !deleting, onClick = open)) {
+                            if (entry.kind == StashStore.KIND_IMAGE) {
+                                StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp))
+                            } else {
+                                Text(entry.text.orEmpty(), fontSize = 13.sp, maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MiuixTheme.colorScheme.onSurface)
+                            }
+                        }
+                        OverlayIconAction(
+                            imageVector = if (selectionMode) {
+                                if (selected) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank
+                            } else Icons.Outlined.ContentCopy,
+                            tint = MiuixTheme.colorScheme.primary,
+                            enabled = !deleting,
+                            onClick = { if (selectionMode) open() else copy(entry) },
+                            contentDescription = if (selectionMode) {
+                                if (selected) "取消选择这条内容" else "选择这条内容"
+                            } else "复制这条内容",
+                        )
+                    }
+                    if (!selectionMode) StashDragHandle(listOf(entry), ::collapse)
+                }
+            }
+        }
+
         @Composable private fun Content() {
             val dark = remember { DragShareSettings.readLocal(app).colorMode == DragShareSettings.COLOR_DARK }
+            val focusManager = LocalFocusManager.current
+            val keyboard = LocalSoftwareKeyboardController.current
+            val closeSearch = {
+                focusManager.clearFocus()
+                keyboard?.hide()
+                searching = false
+                query = ""
+                confirmDelete = false
+                cancelSelection()
+            }
+            val visibleEntries = entries.filter {
+                query.isBlank() || (it.kind == StashStore.KIND_TEXT &&
+                    it.text.orEmpty().contains(query, ignoreCase = true))
+            }
+            LaunchedEffect(expanded) {
+                if (!expanded) {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                }
+            }
             MiuixTheme(controller = remember {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
                 BackHandler(enabled = expanded) {
                     when {
+                        confirmDelete -> confirmDelete = false
                         preview != null -> preview = null
-                        pendingDelete != null -> pendingDelete = null
                         selectionMode -> cancelSelection()
+                        searching -> closeSearch()
                         else -> collapse()
                     }
                 }
@@ -356,74 +386,133 @@ object StashOverlayPanel {
                 } else {
                     Scaffold {
                         Column(Modifier.fillMaxSize()) {
-                            MoveHandle()
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Text("中转站 · ${entries.size}", modifier = Modifier.weight(1f),
-                                    fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface)
-                                TextButton("收起", ::collapse)
-                                TextButton("关闭", overlay::dismiss)
-                            }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                TextButton(if (onLeft) "移到右侧" else "移到左侧", ::switchSide)
-                                TextButton(if (selectionMode) "取消多选" else "多选", {
-                                    if (selectionMode) cancelSelection() else selectionMode = true
-                                }, enabled = selectionMode || entries.isNotEmpty())
-                                TextButton("管理", { launch(Intent(context, StashActivity::class.java)) })
-                            }
-                            if (selectionMode) {
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Text("已选 ${selectedIds.size}", modifier = Modifier.weight(1f),
-                                        fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                                    TextButton(if (selectedIds.size == entries.size) "全不选" else "全选", {
-                                        selectedIds = if (selectedIds.size == entries.size) emptySet()
-                                            else entries.map { it.id }.toSet()
-                                    })
-                                    TextButton("分享", ::shareSelected, enabled = selectedIds.isNotEmpty())
+                            if (searching) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    OverlayIconAction(Icons.Outlined.ArrowBack,
+                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        onClick = closeSearch, contentDescription = "退出搜索")
+                                    BasicTextField(
+                                        value = query,
+                                        onValueChange = {
+                                            query = it
+                                            cancelSelection()
+                                            preview = null
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = !deleting && !confirmDelete,
+                                        singleLine = true,
+                                        textStyle = TextStyle(fontSize = 13.sp,
+                                            color = MiuixTheme.colorScheme.onSurface),
+                                        cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                        keyboardActions = KeyboardActions(onSearch = {
+                                            focusManager.clearFocus()
+                                            keyboard?.hide()
+                                        }),
+                                        decorationBox = { field ->
+                                            Box {
+                                                if (query.isEmpty()) Text("搜索文字", fontSize = 13.sp,
+                                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                                field()
+                                            }
+                                        },
+                                    )
+                                    OverlayIconAction(Icons.Outlined.Close,
+                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        enabled = query.isNotEmpty() && !deleting && !confirmDelete,
+                                        onClick = { query = ""; cancelSelection() },
+                                        contentDescription = "清空搜索文字")
                                 }
-                                StashDragHandle(entries.filter { it.id in selectedIds }, ::collapse)
+                            } else {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.weight(1f)) { MoveHandle() }
+                                    OverlayIconAction(Icons.Outlined.ExpandMore,
+                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        onClick = ::collapse, contentDescription = "收起中转站")
+                                }
                             }
                             message?.let {
-                                Text(it, Modifier.padding(12.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                Text(it, Modifier.padding(horizontal = 6.dp), fontSize = 11.sp,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             }
-                            val toDelete = pendingDelete
                             val image = preview
                             when {
-                                toDelete != null -> Card(Modifier.padding(12.dp)) {
-                                    Column(Modifier.padding(12.dp)) {
-                                        Text("删除这条内容？", color = MiuixTheme.colorScheme.onSurface)
-                                        Row {
-                                            TextButton("取消", { pendingDelete = null })
-                                            TextButton("删除", { delete(toDelete) })
-                                        }
+                                confirmDelete -> Column(Modifier.weight(1f).padding(8.dp),
+                                    verticalArrangement = Arrangement.Center) {
+                                    Text("删除已选 ${selectedIds.size} 项？", fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurface)
+                                    Text("删除后无法恢复", fontSize = 12.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                    Row {
+                                        TextButton("取消", { confirmDelete = false }, modifier = Modifier.weight(1f))
+                                        TextButton("删除", ::deleteSelected, modifier = Modifier.weight(1f))
                                     }
                                 }
-                                image != null -> Column(Modifier.weight(1f).padding(12.dp)) {
+                                image != null -> Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
                                     StashImage(image, 1200, Modifier.fillMaxWidth().weight(1f), ContentScale.Fit)
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                        TextButton("返回列表", { preview = null })
-                                        TextButton("识别文字", {
-                                            if (ImageOcrOverlay.start(app, StashImageProvider.uriForEntry(image.id))) {
-                                                collapse()
-                                            }
-                                        })
+                                        OverlayIconAction(Icons.Outlined.ArrowBack,
+                                            MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                            onClick = { preview = null }, contentDescription = "返回内容列表")
+                                        OverlayIconAction(Icons.Outlined.DocumentScanner,
+                                            MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                            onClick = {
+                                                if (ImageOcrOverlay.start(app, StashImageProvider.uriForEntry(image.id))) {
+                                                    collapse()
+                                                }
+                                            }, contentDescription = "识别图片文字")
                                     }
                                 }
-                                entries.isEmpty() -> Text(
-                                    if (loading) "正在读取…" else "还没有内容。拖拽或分享文字、图片存入这里。",
-                                    Modifier.padding(20.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                visibleEntries.isEmpty() -> Box(Modifier.weight(1f).padding(8.dp),
+                                    contentAlignment = Alignment.Center) {
+                                    Text(if (loading) "正在读取…" else if (query.isNotBlank()) "没有匹配文字"
+                                        else "拖拽或分享内容存入这里",
+                                        fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                }
                                 else -> LazyColumn(Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    items(entries, key = { it.id }) { entry ->
-                                        StashEntryCard(entry, selectionMode, entry.id in selectedIds, {
-                                            selectedIds = if (entry.id in selectedIds) selectedIds - entry.id
-                                                else selectedIds + entry.id
-                                        },
-                                            ::openText, { preview = it }, ::copy, ::share,
-                                            { pendingDelete = it }, ::collapse, compact = true)
-                                    }
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    items(visibleEntries, key = { it.id }) { ShelfItem(it) }
                                 }
+                            }
+                            if (deleting) {
+                                Text("正在删除…", Modifier.padding(6.dp), fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            } else if (selectionMode && !confirmDelete) {
+                                StashDragHandle(entries.filter { it.id in selectedIds }, ::collapse)
+                            }
+                            if (!confirmDelete) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                OverlayIconAction(Icons.Outlined.SelectAll,
+                                    if (selectionMode) MiuixTheme.colorScheme.primary
+                                    else MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    enabled = !deleting && (selectionMode || visibleEntries.isNotEmpty()),
+                                    onClick = {
+                                        preview = null
+                                        if (selectionMode) cancelSelection() else selectionMode = true
+                                    }, contentDescription = if (selectionMode) "取消多选" else "多选拖出")
+                                OverlayIconAction(if (selectionMode) Icons.Outlined.Delete else Icons.Outlined.SwapHoriz,
+                                    MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    enabled = !deleting && (!selectionMode || selectedIds.isNotEmpty()),
+                                    onClick = {
+                                        if (selectionMode) {
+                                            focusManager.clearFocus()
+                                            keyboard?.hide()
+                                            confirmDelete = true
+                                        } else switchSide()
+                                    },
+                                    contentDescription = if (selectionMode) "删除所选内容"
+                                        else if (onLeft) "移到右侧" else "移到左侧")
+                                OverlayIconAction(Icons.Outlined.Search,
+                                    MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    enabled = !deleting,
+                                    onClick = {
+                                        preview = null
+                                        if (searching) closeSearch() else searching = true
+                                    },
+                                    contentDescription = if (searching) "退出搜索" else "搜索已存文字")
+                                OverlayIconAction(Icons.Outlined.Close,
+                                    MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    onClick = overlay::dismiss, contentDescription = "关闭中转站入口")
                             }
                         }
                     }

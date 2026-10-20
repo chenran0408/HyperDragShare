@@ -29,6 +29,7 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
     SwitchPreference(
         title = "拇指面积触发",
         summary = when {
+            thumb.requiresRecalibration -> "采集方式已更新，请重新校准指尖与拇指"
             !thumb.calibrated -> "先校准指尖与拇指的接触大小"
             !serviceEnabled -> "需要 Root 与无障碍服务；按压确认后松手打开分词或识字"
             else -> "按压确认后松手打开分词或识字；启用后取代无障碍长按触发"

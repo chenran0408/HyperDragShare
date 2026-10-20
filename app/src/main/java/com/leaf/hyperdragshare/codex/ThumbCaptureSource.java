@@ -34,7 +34,7 @@ final class ThumbCaptureSource {
                 threshold, service.getResources().getDisplayMetrics().density * 16f, 180L);
     }
 
-    void onPointerEvent(int action, float x, float y, long time, int major, int minor) {
+    void onPointerEvent(int action, float x, float y, long time, int major, int minor, int widthMajor) {
         if (action == MotionEvent.ACTION_DOWN) {
             requests.invalidate();
         }
@@ -42,7 +42,8 @@ final class ThumbCaptureSource {
             cancel();
             return;
         }
-        if (detector.onPointerEvent(action, x, y, time, major, minor)) {
+        if (detector.onPointerEvent(action, x, y, time,
+                (float) input.normalizedContactSize(major, widthMajor))) {
             capture(x, y);
         } else if (action == MotionEvent.ACTION_CANCEL) {
             cancel();
@@ -51,7 +52,7 @@ final class ThumbCaptureSource {
 
     void cancel() {
         requests.invalidate();
-        detector.onPointerEvent(MotionEvent.ACTION_CANCEL, 0, 0, 0, 0, 0);
+        detector.onPointerEvent(MotionEvent.ACTION_CANCEL, 0, 0, 0, 0f);
         screenshotter.cancelAll();
     }
 

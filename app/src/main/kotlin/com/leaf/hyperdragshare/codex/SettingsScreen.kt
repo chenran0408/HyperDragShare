@@ -591,18 +591,8 @@ private fun MainPage(
                     )
                     ArrowPreference(
                         title = "打开侧边中转站",
-                        summary = "在当前界面旁取用暂存内容，可收起、复制、分享或拖出",
+                        summary = "在小窗内取用、搜索和整理内容，可收起、复制或拖出",
                         onClick = { StashOverlayPanel.show(context) },
-                    )
-                    ArrowPreference(
-                        title = "中转站",
-                        summary = "查看暂存的文字与图片，复制、分享或拖出",
-                        onClick = {
-                            context.startActivity(
-                                Intent(context, StashActivity::class.java)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        },
                     )
                     SwitchPreference(
                         title = "选词触感反馈",

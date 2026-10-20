@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 final class RootTouchSource {
     interface Listener {
         void onPointerEvent(
-                int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor);
+                int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor);
     }
 
     private static final String TAG = "DragShare/RootInput";
@@ -33,6 +33,9 @@ final class RootTouchSource {
             "ABS_MT_TOUCH_MAJOR\\s*:.*?max\\s+(\\d+)");
     private static final Pattern MAX_TOUCH_MINOR = Pattern.compile(
             "ABS_MT_TOUCH_MINOR\\s*:.*?max\\s+(\\d+)");
+
+    private static final Pattern MAX_WIDTH_MAJOR = Pattern.compile(
+            "ABS_MT_WIDTH_MAJOR\\s*:.*?max\\s+(\\d+)");
 
     private final Context context;
     private final Listener listener;
@@ -48,6 +51,8 @@ final class RootTouchSource {
 
     private int rawMaxX;
     private int rawMaxY;
+    private int rawMaxTouchMajor;
+    private int rawMaxWidthMajor;
     private boolean firstEventLogged;
     private String discoveredDevices = "";
     private int rawEventsInFrame;
@@ -135,9 +140,11 @@ final class RootTouchSource {
                         null);
                 return;
             }
-            hasContactSize = ranges[2] > 0 && ranges[3] > 0;
+            rawMaxTouchMajor = ranges[2];
+            rawMaxWidthMajor = ranges[4];
+            hasContactSize = rawMaxTouchMajor > 0 || rawMaxWidthMajor > 0;
             if (!hasContactSize) {
-                failureReason = "触摸设备未报告完整的接触尺寸轴，无法进行拇指校准。";
+                failureReason = "触摸设备未声明接触主轴或工具宽度主轴，无法进行拇指校准。";
             }
 
             InputStream stream = openDevice(devicePath);
@@ -268,6 +275,7 @@ final class RootTouchSource {
                 parseMaximum(MAX_Y, output),
                 parseMaximum(MAX_TOUCH_MAJOR, output),
                 parseMaximum(MAX_TOUCH_MINOR, output),
+                parseMaximum(MAX_WIDTH_MAJOR, output),
         };
     }
 
@@ -345,7 +353,11 @@ final class RootTouchSource {
         parser.consume(type, code, value);
     }
 
-    private void onRawFrame(int action, float rawX, float rawY, int rawTouchMajor, int rawTouchMinor) {
+    double normalizedContactSize(int major, int widthMajor) {
+        return ThumbCalibration.contactSize(major, rawMaxTouchMajor, widthMajor, rawMaxWidthMajor);
+    }
+
+    private void onRawFrame(int action, float rawX, float rawY, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
         if (rawMaxX <= 0 || rawMaxY <= 0) {
             return;
         }
@@ -353,17 +365,17 @@ final class RootTouchSource {
         DragShareLog.d(TAG, "decoded " + MotionEvent.actionToString(action)
                 + " raw=" + Math.round(rawX) + ',' + Math.round(rawY)
                 + " mapped=" + Math.round(screenPoint[0]) + ',' + Math.round(screenPoint[1]));
-        emit(action, screenPoint[0], screenPoint[1], rawTouchMajor, rawTouchMinor);
+        emit(action, screenPoint[0], screenPoint[1], rawTouchMajor, rawTouchMinor, rawWidthMajor);
     }
 
-    private void emit(int action, float x, float y, int rawTouchMajor, int rawTouchMinor) {
+    private void emit(int action, float x, float y, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
         if (!firstEventLogged) {
             firstEventLogged = true;
             log("first event action=" + MotionEvent.actionToString(action)
                     + " point=" + Math.round(x) + "," + Math.round(y));
         }
         listener.onPointerEvent(
-                action, x, y, SystemClock.uptimeMillis(), rawTouchMajor, rawTouchMinor);
+                action, x, y, SystemClock.uptimeMillis(), rawTouchMajor, rawTouchMinor, rawWidthMajor);
     }
 
     private float[] toScreenCoordinates(float rawX, float rawY) {

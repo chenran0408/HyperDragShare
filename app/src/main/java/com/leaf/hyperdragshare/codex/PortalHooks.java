@@ -414,7 +414,7 @@ final class PortalHooks {
     }
 
     private static void dispatchRootPointer(
-            int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor) {
+            int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
         DragShareLog.d(TAG, "root pointer action=" + MotionEvent.actionToString(action)
                 + " point=" + Math.round(x) + "," + Math.round(y)
                 + " time=" + eventTime);

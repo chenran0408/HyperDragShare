@@ -79,6 +79,9 @@
         <activity
             android:name=".StashActivity"
             android:label="中转站"
+            android:theme="@style/Theme.DragShare.BigBangOverlay"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />

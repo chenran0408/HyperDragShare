@@ -34,8 +34,11 @@ public final class ThumbCalibrationTest {
     }
 
     @Test
-    public void contactSizeRejectsZeroAndUsesGeometricMean() {
-        assertEquals(0d, ThumbCalibration.contactSize(0, 20), 0d);
-        assertEquals(10d, ThumbCalibration.contactSize(5, 20), 0.001d);
+    public void contactSizeAcceptsEitherMajorAxisAndUsesItsOwnMaximum() {
+        assertEquals(0d, ThumbCalibration.contactSize(0, 100, 0, 255), 0d);
+        assertEquals(.5d, ThumbCalibration.contactSize(50, 100, 0, 255), .0001d);
+        assertEquals(.5d, ThumbCalibration.contactSize(0, 100, 128, 256), .0001d);
+        assertEquals(.8d, ThumbCalibration.contactSize(50, 100, 80, 100), .0001d);
+        assertEquals(0d, ThumbCalibration.contactSize(50, 0, 80, -1), 0d);
     }
 }

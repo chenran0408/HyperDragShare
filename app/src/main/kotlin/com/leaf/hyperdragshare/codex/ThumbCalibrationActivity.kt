@@ -54,6 +54,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
     private var frameworkSize by mutableStateOf("尚未触摸")
     private var frameworkPeakMajor = 0f
     private var frameworkPeakMinor = 0f
+    private var frameworkPeakToolMajor = 0f
     private var frameworkPeakSize = 0f
     private var calibrationStarted by mutableStateOf(false)
     private val fingertipSamples = mutableStateListOf<Double>()
@@ -90,8 +91,11 @@ class ThumbCalibrationActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = !isDarkTheme
         }
         window.decorView.getLocationOnScreen(screenOrigin)
-        touchSource = RootTouchSource(this) { action, x, y, _, major, minor ->
-            runOnUiThread { onRawContact(action, x, y, major, minor) }
+        if (ThumbTriggerSettings.read(this).requiresRecalibration) {
+            sampleMessage = "接触尺寸采集方式已更新，旧阈值已停用，请重新校准指尖与拇指。"
+        }
+        touchSource = RootTouchSource(this) { action, x, y, _, major, minor, widthMajor ->
+            runOnUiThread { onRawContact(action, x, y, major, minor, widthMajor) }
         }
         setContent {
             MiuixTheme(
@@ -142,13 +146,15 @@ class ThumbCalibrationActivity : ComponentActivity() {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             frameworkPeakMajor = 0f
             frameworkPeakMinor = 0f
+            frameworkPeakToolMajor = 0f
             frameworkPeakSize = 0f
         }
         frameworkPeakMajor = maxOf(frameworkPeakMajor, event.touchMajor)
         frameworkPeakMinor = maxOf(frameworkPeakMinor, event.touchMinor)
+        frameworkPeakToolMajor = maxOf(frameworkPeakToolMajor, event.toolMajor)
         frameworkPeakSize = maxOf(frameworkPeakSize, event.size)
-        frameworkSize = "长轴 %.1f，短轴 %.1f，size %.3f".format(
-            frameworkPeakMajor, frameworkPeakMinor, frameworkPeakSize,
+        frameworkSize = "接触长轴 %.1f，短轴 %.1f，工具宽度 %.1f，size %.3f".format(
+            frameworkPeakMajor, frameworkPeakMinor, frameworkPeakToolMajor, frameworkPeakSize,
         )
         if (event.actionMasked == MotionEvent.ACTION_UP) {
             DragShareLog.i("DragShare/Thumb", "app MotionEvent contact $frameworkSize")
@@ -177,7 +183,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
         discardPress()
     }
 
-    private fun onRawContact(action: Int, x: Float, y: Float, major: Int, minor: Int) {
+    private fun onRawContact(action: Int, x: Float, y: Float, major: Int, minor: Int, widthMajor: Int) {
         val inside = x >= contactRegion[0] && x <= contactRegion[2]
                 && y >= contactRegion[1] && y <= contactRegion[3]
         when (action) {
@@ -185,16 +191,16 @@ class ThumbCalibrationActivity : ComponentActivity() {
                 pressInRegion = inside && samplingEnabled
                 pressLeftRegion = false
                 peakSize = 0.0
-                updatePeak(major, minor)
+                updatePeak(major, minor, widthMajor)
             }
             MotionEvent.ACTION_MOVE -> {
                 if (pressInRegion && !inside) pressLeftRegion = true
-                if (pressInRegion && !pressLeftRegion) updatePeak(major, minor)
+                if (pressInRegion && !pressLeftRegion) updatePeak(major, minor, widthMajor)
             }
             MotionEvent.ACTION_UP -> {
                 if (pressInRegion && !inside) pressLeftRegion = true
                 if (pressInRegion && !pressLeftRegion) {
-                    updatePeak(major, minor)
+                    updatePeak(major, minor, widthMajor)
                     commitSample()
                 } else if (pressInRegion) {
                     sampleMessage = "按压移出了采样区域，本次未计入；请在区域内完成按压。"
@@ -208,11 +214,12 @@ class ThumbCalibrationActivity : ComponentActivity() {
         }
     }
 
-    private fun updatePeak(major: Int, minor: Int) {
-        val size = ThumbCalibration.contactSize(major, minor)
+    private fun updatePeak(major: Int, minor: Int, widthMajor: Int) {
+        val size = touchSource.normalizedContactSize(major, widthMajor)
         if (size > 0.0) validSizeSeen = true
         if (size > peakSize) peakSize = size
-        liveSize = if (size > 0.0) "%.1f".format(size) else "无有效面积数据"
+        liveSize = "接触长轴 $major，短轴 $minor，工具宽度 $widthMajor；" +
+                if (size > 0.0) "归一化尺寸 %.3f".format(size) else "尚无有效尺寸值"
     }
 
     private fun commitSample() {
@@ -237,7 +244,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
             }
             ThumbTriggerSettings.saveCalibration(this, result.threshold.toFloat())
             samplingEnabled = false
-            sampleMessage = "校准成功：设备单位阈值 %.1f（指尖最大 %.1f，拇指最小 %.1f）。".format(
+            sampleMessage = "校准成功：归一化阈值 %.3f（指尖最大 %.3f，拇指最小 %.3f）。".format(
                 result.threshold, result.fingertipMaximum, result.thumbMinimum,
             )
         } else {

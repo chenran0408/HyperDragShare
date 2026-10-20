@@ -2,7 +2,7 @@ package com.leaf.hyperdragshare.codex;
 
 import java.util.Arrays;
 
-/** Calculates a device-unit threshold from fingertip and thumb contact-size samples. */
+/** Calibrates a threshold for the larger of the two independently normalized contact axes. */
 public final class ThumbCalibration {
     private ThumbCalibration() {}
 
@@ -22,11 +22,13 @@ public final class ThumbCalibration {
         return new Result(true, (fingertipMax + thumbMin) / 2d, fingertipMax, thumbMin);
     }
 
-    public static double contactSize(int rawTouchMajor, int rawTouchMinor) {
-        if (rawTouchMajor <= 0 || rawTouchMinor <= 0) {
-            return 0d;
-        }
-        return Math.sqrt((double) rawTouchMajor * rawTouchMinor);
+    public static double contactSize(int rawTouchMajor, int maxTouchMajor,
+                                     int rawWidthMajor, int maxWidthMajor) {
+        double touch = rawTouchMajor > 0 && maxTouchMajor > 0
+                ? Math.min(1d, (double) rawTouchMajor / maxTouchMajor) : 0d;
+        double width = rawWidthMajor > 0 && maxWidthMajor > 0
+                ? Math.min(1d, (double) rawWidthMajor / maxWidthMajor) : 0d;
+        return Math.max(touch, width);
     }
 
     private static boolean areValid(double[] samples) {

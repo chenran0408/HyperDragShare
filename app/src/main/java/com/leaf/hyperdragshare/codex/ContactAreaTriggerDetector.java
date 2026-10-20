@@ -2,7 +2,7 @@ package com.leaf.hyperdragshare.codex;
 
 import android.view.MotionEvent;
 
-/** Detects a stationary contact whose evdev touch dimensions stay above a calibrated threshold. */
+/** Detects a stationary contact whose normalized size stays above a calibrated threshold. */
 final class ContactAreaTriggerDetector {
     private final float threshold;
     private final float touchSlop;
@@ -34,14 +34,13 @@ final class ContactAreaTriggerDetector {
             float x,
             float y,
             long eventTime,
-            int major,
-            int minor) {
+            float contactSize) {
         if (action == MotionEvent.ACTION_DOWN) {
             reset();
             gestureActive = true;
             downX = x;
             downY = y;
-            updateContactSize(major, minor, eventTime);
+            updateContactSize(contactSize, eventTime);
             return false;
         }
         if (!gestureActive) {
@@ -66,16 +65,16 @@ final class ContactAreaTriggerDetector {
         }
 
         if (action == MotionEvent.ACTION_MOVE) {
-            updateContactSize(major, minor, eventTime);
+            updateContactSize(contactSize, eventTime);
             return false;
         }
 
         boolean confirmedBeforeRelease = isConfirmed(eventTime);
-        if (hasContactSize(major, minor)
-                && contactArea(major, minor) < threshold
+        if (contactSize > 0f
+                && contactSize < threshold
                 && !confirmedBeforeRelease) {
             thresholdSince = -1L;
-        } else if (hasContactSize(major, minor) && thresholdSince < 0L) {
+        } else if (contactSize >= threshold && thresholdSince < 0L) {
             thresholdSince = eventTime;
         }
 
@@ -84,8 +83,8 @@ final class ContactAreaTriggerDetector {
         return confirmed;
     }
 
-    private void updateContactSize(int major, int minor, long eventTime) {
-        if (!hasContactSize(major, minor) || contactArea(major, minor) < threshold) {
+    private void updateContactSize(float contactSize, long eventTime) {
+        if (contactSize < threshold) {
             thresholdSince = -1L;
         } else if (thresholdSince < 0L) {
             thresholdSince = eventTime;
@@ -100,14 +99,6 @@ final class ContactAreaTriggerDetector {
         float dx = x - downX;
         float dy = y - downY;
         return (float) Math.sqrt((dx * dx) + (dy * dy));
-    }
-
-    private static boolean hasContactSize(int major, int minor) {
-        return major > 0 && minor > 0;
-    }
-
-    private static float contactArea(int major, int minor) {
-        return (float) Math.sqrt((double) major * minor);
     }
 
     private void reset() {

@@ -17,9 +17,26 @@ import java.util.List;
 @Config(manifest = Config.NONE)
 public final class EvdevTouchParserTest {
     @Test
+    public void widthOnlyFramesAreIndependentOfTouchMinorAndResetForNextContact() {
+        List<Integer> widths = new ArrayList<>();
+        List<Integer> minors = new ArrayList<>();
+        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor, widthMajor) -> {
+            widths.add(widthMajor);
+            minors.add(minor);
+        });
+        pointerDown(parser, 0, 42, 10, 20);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_WIDTH_MAJOR, 40);
+        parser.consume(EvdevTouchParser.EV_SYN, EvdevTouchParser.SYN_REPORT, 0);
+        pointerUp(parser, 0);
+        pointerDown(parser, 0, 43, 10, 20);
+        assertEquals(Arrays.asList(0, 40, 40, 0), widths);
+        assertEquals(Arrays.asList(0, 0, 0, 0), minors);
+    }
+
+    @Test
     public void emitsStableDownMoveAndUp() {
         List<Frame> frames = new ArrayList<>();
-        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor) ->
+        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor, widthMajor) ->
                 frames.add(new Frame(action, x, y, major, minor)));
 
         pointerDown(parser, 0, 42, 10, 20, 18, 9);
@@ -40,7 +57,7 @@ public final class EvdevTouchParserTest {
     @Test
     public void touchSizeChangeEmitsMoveWithoutCoordinateChange() {
         List<Frame> frames = new ArrayList<>();
-        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor) ->
+        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor, widthMajor) ->
                 frames.add(new Frame(action, x, y, major, minor)));
 
         pointerDown(parser, 0, 42, 10, 20, 12, 7);
@@ -60,7 +77,7 @@ public final class EvdevTouchParserTest {
     @Test
     public void newTouchStartsWithZeroSizeAfterUp() {
         List<Frame> frames = new ArrayList<>();
-        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor) ->
+        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor, widthMajor) ->
                 frames.add(new Frame(action, x, y, major, minor)));
 
         pointerDown(parser, 0, 42, 10, 20, 35, 22);
@@ -74,7 +91,7 @@ public final class EvdevTouchParserTest {
     @Test
     public void cancelClearsTouchSizeForNextTouch() {
         List<Frame> frames = new ArrayList<>();
-        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor) ->
+        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor, widthMajor) ->
                 frames.add(new Frame(action, x, y, major, minor)));
 
         pointerDown(parser, 0, 42, 10, 20, 35, 22);
@@ -88,7 +105,7 @@ public final class EvdevTouchParserTest {
     @Test
     public void secondPointerCancelsInsteadOfFinishingShare() {
         List<Frame> frames = new ArrayList<>();
-        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor) ->
+        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor, widthMajor) ->
                 frames.add(new Frame(action, x, y, major, minor)));
 
         pointerDown(parser, 0, 42, 10, 20, 18, 9);

@@ -88,14 +88,22 @@ class StashActivity : ComponentActivity() {
     private var pendingImport: Intent? = null
     private var shareImported = false
     private val importLock = Mutex()
+    private var receiveOnly = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        receiveOnly = isSupportedShare(intent)
+        if (receiveOnly) setTheme(R.style.Theme_DragShare_BigBangOverlay)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         shareImported = savedInstanceState?.getBoolean("share_imported") == true
         searchQuery = savedInstanceState?.getString("search_query").orEmpty()
         kindFilter = savedInstanceState?.getString("kind_filter") ?: "all"
         pendingImport = intent.takeIf { !shareImported && isSupportedShare(it) }
+        if (receiveOnly) {
+            window.setBackgroundDrawableResource(android.R.color.transparent)
+            window.setDimAmount(0f)
+            return
+        }
         val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
 
         setContent {
@@ -179,7 +187,12 @@ class StashActivity : ComponentActivity() {
         super.onResume()
         lifecycleScope.launch {
             importPendingShare()
-            reloadEntries()
+            if (receiveOnly) {
+                if (shareImported) StashOverlayPanel.show(this@StashActivity)
+                else Toast.makeText(this@StashActivity,
+                    message ?: "保存失败，请重新分享后重试", Toast.LENGTH_LONG).show()
+                finish()
+            } else reloadEntries()
         }
     }
 

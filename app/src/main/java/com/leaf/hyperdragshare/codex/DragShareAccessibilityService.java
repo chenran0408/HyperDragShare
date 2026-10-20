@@ -332,7 +332,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         screenshotter = new AccessibilityScreenshotter(this, classifierExecutor);
         rootTouchSource = new RootTouchSource(
                 getApplicationContext(),
-                (action, x, y, eventTime, major, minor) -> {
+                (action, x, y, eventTime, major, minor, widthMajor) -> {
                     if (action == android.view.MotionEvent.ACTION_DOWN
                             || action == android.view.MotionEvent.ACTION_UP
                             || action == android.view.MotionEvent.ACTION_CANCEL) {
@@ -342,7 +342,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                     mainHandler.post(() -> {
                         ThumbCaptureSource areaSource = thumbCaptureSource;
                         if (areaSource != null) {
-                            areaSource.onPointerEvent(action, x, y, eventTime, major, minor);
+                            areaSource.onPointerEvent(action, x, y, eventTime, major, minor, widthMajor);
                         } else if (captureSource != null) {
                             captureSource.onPointerEvent(action, x, y, eventTime);
                         }
