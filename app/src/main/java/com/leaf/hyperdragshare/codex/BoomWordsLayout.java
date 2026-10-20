@@ -374,6 +374,24 @@ public class BoomWordsLayout {
         return segment;
     }
 
+    /** Concatenates valid word/-1/punctuation arrays; secondOffset includes the joining gap. */
+    public static int[] concatenateSegments(int[] first, int[] second, int secondOffset) {
+        int firstPunctuation = 0;
+        while (first[firstPunctuation] != -1) ++firstPunctuation;
+        int secondPunctuation = 0;
+        while (second[secondPunctuation] != -1) ++secondPunctuation;
+        int[] joined = new int[first.length + second.length - 1];
+        int output = 0;
+        for (int i = 0; i < firstPunctuation; ++i) joined[output++] = first[i];
+        for (int i = 0; i < secondPunctuation; ++i) joined[output++] = second[i] + secondOffset;
+        joined[output++] = -1;
+        for (int i = firstPunctuation + 1; i < first.length; ++i) joined[output++] = first[i];
+        for (int i = secondPunctuation + 1; i < second.length; ++i) {
+            joined[output++] = second[i] + secondOffset;
+        }
+        return joined;
+    }
+
     /** Merge each adjacent selected run, preserving spaces and paragraph boundaries. */
     public TreeSet<Integer> mergeSelectedWords(TreeSet<Integer> selectedIds) {
         if (selectedIds == null || selectedIds.size() < 2) {

@@ -12,6 +12,8 @@ final class CapturedContent {
 
     final Kind kind;
     final String text;
+    final String beforeText;
+    final String afterText;
     final Bitmap bitmap;
     final String sourcePackage;
     final Rect sourceBounds;
@@ -23,9 +25,13 @@ final class CapturedContent {
             Bitmap bitmap,
             String sourcePackage,
             Rect sourceBounds,
-            boolean bitmapOwnedByDragShare) {
+            boolean bitmapOwnedByDragShare,
+            String beforeText,
+            String afterText) {
         this.kind = kind;
         this.text = text;
+        this.beforeText = beforeText;
+        this.afterText = afterText;
         this.bitmap = bitmap;
         this.sourcePackage = sourcePackage;
         this.sourceBounds = sourceBounds == null ? null : new Rect(sourceBounds);
@@ -33,10 +39,15 @@ final class CapturedContent {
     }
 
     static CapturedContent text(String value, String sourcePackage, Rect sourceBounds) {
+        return text(value, sourcePackage, sourceBounds, null, null);
+    }
+
+    static CapturedContent text(String value, String sourcePackage, Rect sourceBounds,
+                                String beforeText, String afterText) {
         if (value == null || value.trim().isEmpty()) {
             return null;
         }
-        return new CapturedContent(Kind.TEXT, value, null, sourcePackage, sourceBounds, false);
+        return new CapturedContent(Kind.TEXT, value, null, sourcePackage, sourceBounds, false, beforeText, afterText);
     }
 
     static CapturedContent image(
@@ -53,7 +64,9 @@ final class CapturedContent {
                 value,
                 sourcePackage,
                 sourceBounds,
-                bitmapOwnedByDragShare);
+                bitmapOwnedByDragShare,
+                null,
+                null);
     }
 
     boolean isImage() {

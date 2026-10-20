@@ -61,6 +61,8 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
     private var undoEditState by mutableStateOf<Bundle?>(null)
+    private var beforeText: String? = null
+    private var afterText: String? = null
 
     private fun updateSelectionSummary() {
         val page = boomChipPage ?: return
@@ -86,6 +88,11 @@ internal class BigBangPanelSession(private val context: Context, private val act
         }).also { page ->
             page.setOnChipsChangedListener(::refreshLegacyTheme)
             page.setOnSelectionChangedListener(::updateSelectionSummary)
+            page.setOnAdjacentRequestListener(object : BoomChipPage.OnAdjacentRequestListener {
+                override fun peekAdjacentText(direction: String): String? =
+                    if (direction == "before") beforeText else afterText
+                override fun onAdjacentRequest(direction: String) = expandAdjacent(direction)
+            })
         }
         textSizeSp = BigBangSettings.getTextSizeSp(context)
         panelHeightFraction = BigBangSettings.getPanelHeightFraction(context)
@@ -145,10 +152,13 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     }
 
-    fun open(text: String, touchX: Int, touchY: Int, sourceImage: Uri?, savedState: Bundle? = null) {
+    fun open(text: String, touchX: Int, touchY: Int, sourceImage: Uri?, savedState: Bundle? = null,
+        before: String? = null, after: String? = null) {
         check(!closed) { "Create a new panel session after close" }
         requests.invalidate()
         undoEditState = savedState?.getBundle(UNDO_EDIT)
+        beforeText = (if (savedState != null) savedState.getString("before_text") else before)?.takeIf { it.isNotBlank() }
+        afterText = (if (savedState != null) savedState.getString("after_text") else after)?.takeIf { it.isNotBlank() }
         launchTouchX = touchX
         launchTouchY = touchY
         sourceImageUri = sourceImage
@@ -158,6 +168,53 @@ internal class BigBangPanelSession(private val context: Context, private val act
         val savedSegments = savedState?.getIntArray(SAVED_SEGMENT)
         if (savedText != null && savedSegments != null) handleSegmentResult(savedText, savedSegments)
         else segmentLocally(text)
+        boomChipPage?.finishAdjacentPull()
+    }
+
+    private fun expandAdjacent(direction: String) {
+        val page = boomChipPage ?: return
+        val prepend = direction == "before"
+        val adjacent = (if (prepend) beforeText else afterText) ?: return
+        val original = page.originalText.orEmpty()
+        val prefix = if (prepend) "$adjacent\n" else ""
+        val combined = if (prepend) prefix + original else "$original\n$adjacent"
+        val existingSegments = page.currentSegments
+        val request = requests.begin()
+        Thread({
+            try {
+                val neighborSegments = TextSegmenter.get(context).segment(adjacent)
+                val segments = if (prepend) BoomWordsLayout.concatenateSegments(
+                    neighborSegments, existingSegments, prefix.length)
+                else BoomWordsLayout.concatenateSegments(existingSegments, neighborSegments, original.length + 1)
+                main.post {
+                    if (!closed && requests.accepts(request)) {
+                        if (page.replaceWords(segments, combined, 0, prefix.length)) {
+                            if (prepend) beforeText = null else afterText = null
+                            updateSelectionSummary()
+                        } else {
+                            Toast.makeText(context, "无法展开附近文字，请重试", Toast.LENGTH_SHORT).show()
+                        }
+                        page.finishAdjacentPull()
+                    }
+                }
+            } catch (error: IllegalStateException) {
+                adjacentFailed(request, error)
+            } catch (error: UnsatisfiedLinkError) {
+                adjacentFailed(request, error)
+            } catch (error: SecurityException) {
+                adjacentFailed(request, error)
+            }
+        }, "bigbang-adjacent").start()
+    }
+
+    private fun adjacentFailed(request: Long, error: Throwable) {
+        DragShareLog.w(TAG, "adjacent text segmentation failed", error)
+        main.post {
+            if (!closed && requests.accepts(request)) {
+                boomChipPage?.finishAdjacentPull()
+                Toast.makeText(context, "扩展文字失败：${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     fun close() {
@@ -324,6 +381,8 @@ internal class BigBangPanelSession(private val context: Context, private val act
     }
 
     fun saveState(outState: Bundle) {
+        outState.putString("before_text", beforeText)
+        outState.putString("after_text", afterText)
         undoEditState?.let { outState.putBundle(UNDO_EDIT, it) }
         boomChipPage?.captureSelectedState()?.let { outState.putSerializable(SELECTED_STATE, it) }
         boomChipPage?.let { page ->

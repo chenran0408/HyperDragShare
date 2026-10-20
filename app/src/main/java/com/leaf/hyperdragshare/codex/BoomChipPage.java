@@ -167,6 +167,7 @@ public class BoomChipPage {
 
     public interface OnAdjacentRequestListener {
         void onAdjacentRequest(String direction);
+        String peekAdjacentText(String direction);
     }
 
     private Runnable mOnChipsChanged;
@@ -455,6 +456,7 @@ public class BoomChipPage {
 
     public void setOnAdjacentRequestListener(OnAdjacentRequestListener listener) {
         mOnAdjacentRequestListener = listener;
+        finishAdjacentPull();
     }
 
     public boolean replaceWords(int[] segment, String text, int targetWordIndex, int charOffset) {
@@ -516,7 +518,9 @@ public class BoomChipPage {
 
     public void finishAdjacentPull() {
         mAdjacentLoading = false;
-        mScroller.setEdgeDragEnabled(true);
+        mScroller.setEdgeDragEnabled(mOnAdjacentRequestListener != null
+                && (mOnAdjacentRequestListener.peekAdjacentText("before") != null
+                || mOnAdjacentRequestListener.peekAdjacentText("after") != null));
         animateContentOffset(0f);
         hideAdjacentHint(mAdjacentTopHint);
         hideAdjacentHint(mAdjacentBottomHint);
@@ -655,7 +659,8 @@ public class BoomChipPage {
             return;
         }
         final String direction = offset > 0f ? "before" : offset < 0f ? "after" : null;
-        final String previewText = direction == null ? null : TextSessionCoordinator.INSTANCE.peekAdjacentText(direction);
+        final String previewText = direction == null || mOnAdjacentRequestListener == null
+                ? null : mOnAdjacentRequestListener.peekAdjacentText(direction);
         if (!triggered || direction == null || previewText == null) {
             finishAdjacentPull();
             return;
@@ -669,7 +674,8 @@ public class BoomChipPage {
     }
 
     private void showAdjacentHint(TextView view, String direction, float distance) {
-        final String preview = TextSessionCoordinator.INSTANCE.peekAdjacentText(direction);
+        final String preview = mOnAdjacentRequestListener == null
+                ? null : mOnAdjacentRequestListener.peekAdjacentText(direction);
         if (preview == null) {
             hideAdjacentHint(view);
             return;

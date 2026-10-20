@@ -67,8 +67,9 @@ final class ThumbCaptureSource {
                 if (selection != null && !selection.isImage()) {
                     main.post(() -> {
                         if (accepts(request, sourcePackage)) {
-                            BigBangOverlayLauncher.showText(service, selection.candidate.text,
-                                    Math.round(x), Math.round(y), null);
+                            BigBangOverlayLauncher.showTextWithAdjacent(service, selection.candidate.text,
+                                    Math.round(x), Math.round(y), null,
+                                    selection.beforeText, selection.afterText);
                         }
                     });
                     return;

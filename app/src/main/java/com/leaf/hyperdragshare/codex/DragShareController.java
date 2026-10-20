@@ -1542,7 +1542,7 @@ final class DragShareController {
             return;
         }
         if (target.isTextSegmentation()) {
-            openTextSegmentation(shareSession.payload.text);
+            openTextSegmentation(shareSession.payload);
             shareSession.cancelled = true;
             return;
         }
@@ -1605,7 +1605,8 @@ final class DragShareController {
         }
     }
 
-    private void openTextSegmentation(String text) {
+    private void openTextSegmentation(CapturedContent payload) {
+        String text = payload.text;
         if (text == null || text.trim().isEmpty()) {
             showToast("没有可分词的文字");
             return;
@@ -1613,6 +1614,8 @@ final class DragShareController {
         try {
             android.os.Bundle input = new android.os.Bundle();
             input.putString("text", text);
+            input.putString("before_text", payload.beforeText);
+            input.putString("after_text", payload.afterText);
             input.putInt("x", Math.round(lastX));
             input.putInt("y", Math.round(lastY));
             android.os.Bundle result = context.getContentResolver().call(

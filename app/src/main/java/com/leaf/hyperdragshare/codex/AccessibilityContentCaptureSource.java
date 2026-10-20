@@ -132,7 +132,9 @@ final class AccessibilityContentCaptureSource {
                     CapturedContent content = CapturedContent.text(
                             candidate.text,
                             candidate.sourcePackage,
-                            candidate.bounds);
+                            candidate.bounds,
+                            selection.beforeText,
+                            selection.afterText);
                     mainHandler.post(() -> showCapturedContent(gestureId, content));
                     return;
                 }

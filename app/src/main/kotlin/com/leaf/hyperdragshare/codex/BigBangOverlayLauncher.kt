@@ -33,21 +33,29 @@ object BigBangOverlayLauncher {
         val x = input.getInt("x", -1)
         val y = input.getInt("y", -1)
         val sourceImage = input.getParcelable("source_image", Uri::class.java)
-        main.post { open(context.applicationContext, text, x, y, sourceImage) }
+        val before = input.getString("before_text")
+        val after = input.getString("after_text")
+        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after) }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
     @JvmStatic fun showText(context: Context, text: String, x: Int, y: Int, sourceImage: Uri?): Boolean {
+        return showTextWithAdjacent(context, text, x, y, sourceImage, null, null)
+    }
+
+    @JvmStatic fun showTextWithAdjacent(context: Context, text: String, x: Int, y: Int,
+        sourceImage: Uri?, before: String?, after: String?): Boolean {
         if (!Settings.canDrawOverlays(context)) {
             Toast.makeText(context, "请先在模块设置中允许悬浮窗权限", Toast.LENGTH_LONG).show()
             return false
         }
         if (text.isBlank()) return false
-        main.post { open(context.applicationContext, text, x, y, sourceImage) }
+        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after) }
         return true
     }
 
-    private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null) {
+    private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null,
+        before: String? = null, after: String? = null) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
@@ -116,7 +124,7 @@ object BigBangOverlayLauncher {
         ) { session.Content() }
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
-        if (overlay.show()) session.open(text, x, y, sourceImage, savedState)
+        if (overlay.show()) session.open(text, x, y, sourceImage, savedState, before, after)
     }
 
     private fun showReturnTab(app: Context, resume: () -> Unit) {

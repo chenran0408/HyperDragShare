@@ -110,6 +110,53 @@ public final class AccessibilityNodeClassifierTest {
         assertEquals(new Rect(20, 20, 100, 60), buckets.nativeText.get(0).bounds);
     }
 
+    @Test
+    public void adjacentTextUsesNearestSameColumnAndPackageFromExistingSnapshot() {
+        AccessibilityNodeSnapshot hit = snapshot(new Rect(100, 300, 400, 400))
+                .packageName("reader").text("current").build();
+        AccessibilityNodeSnapshot before = snapshot(new Rect(110, 200, 390, 270))
+                .packageName("reader").text("previous").build();
+        AccessibilityNodeSnapshot distant = snapshot(new Rect(100, 20, 400, 80))
+                .packageName("reader").text("too far").build();
+        AccessibilityNodeSnapshot after = snapshot(new Rect(100, 430, 400, 490))
+                .packageName("reader").text("next").build();
+        AccessibilityNodeSnapshot parent = snapshot(new Rect(90, 100, 410, 500))
+                .packageName("reader").text("aggregate").leaf(false).build();
+        AccessibilityNodeSnapshot otherColumn = snapshot(new Rect(450, 280, 700, 299))
+                .packageName("reader").text("different column").build();
+        AccessibilityNodeSnapshot otherPackage = snapshot(new Rect(100, 280, 400, 299))
+                .packageName("other").text("different app").build();
+        AccessibilityNodeSnapshot password = snapshot(new Rect(100, 401, 400, 420))
+                .packageName("reader").text("secret").password(true).build();
+        AccessibilityCandidateSelector.Selection selection = AccessibilityCandidateSelector.select(
+                new AccessibilityNodeClassifier(1f, 1080, 2400).classify(Arrays.asList(
+                        hit, before, distant, after, parent, otherColumn, otherPackage, password)), 200, 350);
+        assertNotNull(selection);
+        assertEquals("current", selection.candidate.text);
+        assertEquals("previous", selection.beforeText);
+        assertEquals("next", selection.afterText);
+        CapturedContent content = CapturedContent.text(selection.candidate.text, "reader",
+                selection.candidate.bounds, selection.beforeText, selection.afterText);
+        assertEquals("previous", content.beforeText);
+        assertEquals("next", content.afterText);
+    }
+
+    @Test
+    public void editableSelectionDoesNotAcquireSurroundingText() {
+        AccessibilityNodeSnapshot hit = snapshot(new Rect(100, 300, 400, 400))
+                .packageName("reader").text("editing").editable(true).build();
+        AccessibilityNodeSnapshot before = snapshot(new Rect(100, 200, 400, 270))
+                .packageName("reader").text("previous").build();
+        AccessibilityCandidateSelector.Selection selection = AccessibilityCandidateSelector.select(
+                new AccessibilityNodeClassifier(1f, 1080, 2400).classify(Arrays.asList(hit, before)), 200, 350);
+        assertNotNull(selection);
+        assertNull(selection.beforeText);
+        assertNull(selection.afterText);
+        CapturedContent legacy = CapturedContent.text("text", "reader", hit.bounds);
+        assertNull(legacy.beforeText);
+        assertNull(legacy.afterText);
+    }
+
     private static AccessibilityNodeSnapshot.Builder snapshot(Rect bounds) {
         return new AccessibilityNodeSnapshot.Builder()
                 .bounds(bounds)
