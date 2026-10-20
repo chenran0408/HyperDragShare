@@ -21,7 +21,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -39,6 +38,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -435,9 +435,12 @@ final class DragShareController {
             return;
         }
 
+        if (!refreshDisplayGeometry()) {
+            pendingPortalHostFloatWindowSuppression = false;
+            return;
+        }
         try {
             session = new Session(payload);
-            refreshDisplayGeometry();
             createPreview(payload);
             createGlow();
             if (glowView != null && glowParams != null) {
@@ -449,7 +452,7 @@ final class DragShareController {
             pendingPortalHostFloatWindowSuppression = false;
             registerNearHandSensorIfNeeded();
             traceAccessibility("overlay added kind=" + payload.kind);
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             pendingPortalHostFloatWindowSuppression = false;
             log("unable to add preview overlay", error);
             traceAccessibility("overlay add failed=" + error.getClass().getSimpleName()
@@ -1196,7 +1199,9 @@ final class DragShareController {
         menuVerticalScroll = null;
         menuRow = null;
         simpleMenuPosition = nextPosition;
-        refreshDisplayGeometry();
+        if (!refreshDisplayGeometry()) {
+            return;
+        }
         createMenu();
         if (wasShown) {
             showMenuOnMain();
@@ -1782,26 +1787,19 @@ final class DragShareController {
         glowView.setPullProgress(progress, x / Math.max(1f, screenWidth));
     }
 
-    private void refreshDisplayGeometry() {
+    private boolean refreshDisplayGeometry() {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                WindowMetrics metrics = windowManager.getCurrentWindowMetrics();
-                screenWidth = metrics.getBounds().width();
-                screenHeight = metrics.getBounds().height();
-                Insets insets = metrics.getWindowInsets().getInsetsIgnoringVisibility(
-                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-                topInset = insets.top;
-                bottomInset = insets.bottom;
-            } else {
-                throw new UnsupportedOperationException("legacy display metrics");
-            }
-        } catch (Throwable ignored) {
-            DisplayMetrics metrics = new DisplayMetrics();
-            windowManager.getDefaultDisplay().getRealMetrics(metrics);
-            screenWidth = metrics.widthPixels;
-            screenHeight = metrics.heightPixels;
-            topInset = 0;
-            bottomInset = 0;
+            WindowMetrics metrics = windowManager.getCurrentWindowMetrics();
+            screenWidth = metrics.getBounds().width();
+            screenHeight = metrics.getBounds().height();
+            Insets insets = metrics.getWindowInsets().getInsetsIgnoringVisibility(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+            topInset = insets.top;
+            bottomInset = insets.bottom;
+        } catch (RuntimeException error) {
+            log("unable to read display geometry; system drag remains untouched", error);
+            Toast.makeText(context, R.string.drag_display_geometry_failed, Toast.LENGTH_SHORT).show();
+            return false;
         }
         if (isCircleStyle()) {
             menuWidth = screenWidth;
@@ -1809,7 +1807,7 @@ final class DragShareController {
             menuLeft = 0;
             menuTop = Math.max(topInset, screenHeight - bottomInset - menuHeight);
             menuTriggerTop = menuTop;
-            return;
+            return true;
         }
         if (isPortalStyle()) {
             menuWidth = screenWidth;
@@ -1819,7 +1817,7 @@ final class DragShareController {
             menuTriggerTop = Math.max(
                     menuTop,
                     screenHeight - bottomInset - dp(PORTAL_TRIGGER_FROM_BOTTOM_DP));
-            return;
+            return true;
         }
 
         simpleMenuPosition = effectiveSimpleMenuPosition();
@@ -1852,6 +1850,7 @@ final class DragShareController {
                 menuTriggerTop = menuTop - dp(MENU_TRIGGER_DP);
             }
         }
+        return true;
     }
 
     private WindowManager.LayoutParams overlayParams(int width, int height, String title) {

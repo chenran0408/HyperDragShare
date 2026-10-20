@@ -13,6 +13,7 @@
     <string name="accessibility_service_description">长按时读取当前界面的文字，并在识别为图片时截取对应区域用于 HyperDragShare 分享。</string>
     <string name="copy_tips">已复制所选文字</string>
     <string name="a_msg_no_words">没有可分词的文字</string>
+    <string name="drag_display_geometry_failed">无法读取屏幕区域，已保留系统拖拽操作</string>
     <string name="bigbang_overlay_title">文本分词</string>
     <string name="bigbang_action_edit">编辑</string>
     <string name="bigbang_action_select_all">全选</string>
