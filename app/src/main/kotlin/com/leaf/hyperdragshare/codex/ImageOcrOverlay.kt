@@ -76,8 +76,9 @@ object ImageOcrOverlay {
                 android.widget.Toast.makeText(app, "无法显示识别窗口：${it.message}", android.widget.Toast.LENGTH_LONG).show()
             },
         ) {
-            MiuixTheme(controller = androidx.compose.runtime.remember {
-                ThemeController(if (DragShareSettings.readLocal(app).colorMode == DragShareSettings.COLOR_DARK)
+            val dark = DragShareSettings.readLocal(app).isDarkThemeInComposition()
+            MiuixTheme(controller = androidx.compose.runtime.remember(dark) {
+                ThemeController(if (dark)
                     ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
                 Card {

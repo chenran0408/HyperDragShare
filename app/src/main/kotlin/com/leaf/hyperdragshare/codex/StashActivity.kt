@@ -112,11 +112,10 @@ class StashActivity : ComponentActivity() {
             window.setDimAmount(0f)
             return
         }
-        val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
-
         setContent {
+            val dark = DragShareSettings.readLocal(this).isDarkThemeInComposition()
             MiuixTheme(
-                controller = remember { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
+                controller = remember(dark) { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
             ) {
                 val scope = rememberCoroutineScope()
                 BackHandler(enabled = isInMultiWindowMode && !selectionMode &&

@@ -184,7 +184,6 @@ object BigBangOverlayLauncher {
         val screenOff = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) = tab.dismiss()
         }
-        val dark = DragShareSettings.readLocal(app).colorMode == DragShareSettings.COLOR_DARK
         tab = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
             onDismissed = {
                 app.unregisterReceiver(screenOff)
@@ -192,7 +191,8 @@ object BigBangOverlayLauncher {
             },
             onFailure = { report(app, it) },
         ) {
-            MiuixTheme(controller = androidx.compose.runtime.remember {
+            val dark = DragShareSettings.readLocal(app).isDarkThemeInComposition()
+            MiuixTheme(controller = androidx.compose.runtime.remember(dark) {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
                 Card {

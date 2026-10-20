@@ -381,7 +381,7 @@ final class DragShareController {
 
 
 
-        palette = OverlayColors.from(settings);
+        palette = OverlayColors.from(settings.isDarkTheme(context));
         stopEdgeScroll();
         backgroundTouchBlocker.stop();
         removeGestureViews();
@@ -622,7 +622,7 @@ final class DragShareController {
         }
         glowView = new PortalGlowView(
                 context,
-                settings.colorMode == DragShareSettings.COLOR_DARK,
+                settings.isDarkTheme(context),
                 bottomInset);
         glowParams = overlayParams(screenWidth, screenHeight, "DragShare portal glow");
     }
@@ -709,7 +709,7 @@ final class DragShareController {
                     screenHeight,
                     topInset,
                     bottomInset,
-                    settings.colorMode == DragShareSettings.COLOR_DARK,
+                    settings.isDarkTheme(context),
                     palette.accent,
                     palette.primaryText,
                     palette.selectedItemBackground,
@@ -829,7 +829,7 @@ final class DragShareController {
                 label.setAlpha(settings.iconOpacityPercent / 100f);
                 if (portalStyle) {
                     label.setShadowLayer(dpFloat(2), 0f, dpFloat(1),
-                            settings.colorMode == DragShareSettings.COLOR_DARK
+                            settings.isDarkTheme(context)
                                     ? 0xCC000000
                                     : 0x66000000);
                 }
@@ -2238,11 +2238,11 @@ final class DragShareController {
         }
 
         static OverlayColors light() {
-            return from(DragShareSettings.defaults());
+            return from(false);
         }
 
-        static OverlayColors from(DragShareSettings settings) {
-            int[] colors = OverlayThemeColors.colors(settings.colorMode == DragShareSettings.COLOR_DARK);
+        static OverlayColors from(boolean dark) {
+            int[] colors = OverlayThemeColors.colors(dark);
             return new OverlayColors(colors[0], colors[0], colors[1], colors[2], colors[4], colors[5], colors[3]);
         }
     }

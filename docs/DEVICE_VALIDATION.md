@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.69 / versionCode 93。沿用原包名和 debug 签名，原位升级成功；传送门新的注入与 Root 握手均为 93。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.111 / versionCode 135。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 135。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码进一步推进至 1.7.71 / 95，尚未安装。设备实际版本仍为 1.7.69 / 93；各批次验证状态见下文。
+- 当前源码与设备均为 1.7.111 / 135；172 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -513,3 +513,13 @@ Root进程EOF退出后自动化连接释放，测试期间修改的自动旋转�
 APK outputs/HyperDragShare-1.7.110-debug.apk。下一批优先做可独立推进的UI与OCR实际功能，面积输入和取消时序继续保留待办。
 
 打开本模块设置页后，异步回报已确认injected_version=134、portal_root_version=134、portal_root_granted=true，首页显示“已激活”。截图work/hds110-settings.png。此前即时文件中的133是旧值，不作新版Root失败证据。
+
+## 2026-10-21：1.7.111 统一主题与 AICR 产品链验证
+
+- 新增“外观→主题→跟随系统”；保留浅色=0、深色=1和旧默认浅色，系统模式为2。设置、原页分词、中转站、图片/屏幕OCR、搜索、校准及拖拽菜单统一解析。Compose读取配置变化；原生拖拽View新建/重绘时读取主题，已显示时即时换色尚未验证。
+- 最终172项测试、Lint、assembleDebug通过，debug签名不变，原位安装135成功。过程中修正静态配色方法引用及Kotlin缩进；最终产物已重新安装。传送门注入和Root握手均135。
+- debug-only AicrOcrProbe改为调用实际AicrOcrClient，不再维护重复Binder客户端。生成三行“传送门文字识别 / 小米15 Pro HyperOS 4 / 复制 搜索 分享 12345”，普通UID10270识别成功；首次738ms，绑定前取消恰好一次回调后再识别281ms。这里是调用到清理回调耗时，不是完整UI耗时或性能基准。
+- 真实ImageOcrOverlay选择AICR处理同一生成图片，成功进入38字符独立分词浮窗；前台Activity仍为bilipai。没有小爱进程转发、root识别或权限修改。AICR原选择在实验退出时恢复。
+- 设置页选择系统模式后深色显示正确。存活分词浮窗浅→深→浅，文字、词块、底色及工具栏同步更新；截图work/hds111-overlay-day.png、hds111-overlay-switch-night.png、hds111-overlay-switch-day.png（本机工作目录，不提交用户画面）。测试后系统night模式恢复auto，模块主题恢复原浅色0。
+- 暴露未修复UI问题：短文本整体垂直居中；单行旧nine-patch最小高度与外层padding导致行距大。已定位BoomChipPage.updateScrollerInsetsForContent与词块背景/布局，下一批改。没有把这项标为完成。
+- 未验：真实复杂图片、屏幕/区域AICR、UI取消按钮、系统其他OCR客户端并发；中转站等其余页面跟随切换；面积实手校准与bilipai普通长按仍未通过。

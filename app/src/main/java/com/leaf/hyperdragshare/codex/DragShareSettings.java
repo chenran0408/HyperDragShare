@@ -17,6 +17,7 @@ import java.util.Set;
 public final class DragShareSettings {
     public static final int COLOR_LIGHT = 0;
     public static final int COLOR_DARK = 1;
+    public static final int COLOR_SYSTEM = 2;
 
     public static final int CONTENT_CAPTURE_PORTAL = 0;
     public static final int CONTENT_CAPTURE_ACCESSIBILITY = 1;
@@ -629,7 +630,8 @@ public final class DragShareSettings {
             int modernGlassOpacityPercent,
             int logLevel,
             int logDestination) {
-        this.colorMode = colorMode == COLOR_DARK ? COLOR_DARK : COLOR_LIGHT;
+        this.colorMode = colorMode == COLOR_DARK || colorMode == COLOR_SYSTEM
+                ? colorMode : COLOR_LIGHT;
         this.contentCaptureMode = normalizeContentCaptureMode(contentCaptureMode);
         this.uiStyle = uiStyle == STYLE_SIMPLE
                 || uiStyle == STYLE_PORTAL
@@ -972,6 +974,15 @@ public final class DragShareSettings {
                         DEFAULT_MODERN_GLASS_OPACITY_PERCENT),
                 bundle.getInt(KEY_LOG_LEVEL, DEFAULT_LOG_LEVEL),
                 bundle.getInt(KEY_LOG_DESTINATION, DEFAULT_LOG_DESTINATION));
+    }
+
+    public boolean isDarkTheme(Context context) {
+        return isDarkTheme(context.getResources().getConfiguration().uiMode);
+    }
+
+    public boolean isDarkTheme(int uiMode) {
+        return colorMode == COLOR_DARK || (colorMode == COLOR_SYSTEM
+                && (uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES);
     }
 
     public boolean isSharingEnabled(boolean image) {

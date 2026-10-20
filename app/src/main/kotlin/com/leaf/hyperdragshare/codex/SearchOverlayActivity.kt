@@ -96,7 +96,7 @@ class SearchOverlayActivity : ComponentActivity() {
         window.statusBarColor = AndroidColor.TRANSPARENT
         window.navigationBarColor = AndroidColor.TRANSPARENT
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
+        val dark = DragShareSettings.readLocal(this).isDarkTheme(this)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
@@ -115,6 +115,7 @@ class SearchOverlayActivity : ComponentActivity() {
         restoredWebState = savedInstanceState?.getBundle("web")
 
         setContent {
+            val dark = DragShareSettings.readLocal(this).isDarkThemeInComposition()
             MiuixTheme(
                 controller = remember(dark) { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
             ) {

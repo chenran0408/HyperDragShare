@@ -38,7 +38,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
     }
     private val main = Handler(Looper.getMainLooper())
     private var closed = false
-    private val dark = DragShareSettings.readLocal(context).colorMode == DragShareSettings.COLOR_DARK
     private var boomChipPage: BoomChipPage? = null
     private lateinit var legacyContentView: View
     private var launchTouchX by mutableIntStateOf(-1)
@@ -107,50 +106,51 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     @Composable
     fun Content() {
+        val dark = DragShareSettings.readLocal(context).isDarkThemeInComposition()
 
-            MiuixTheme(
-                controller = remember { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
-            ) {
-                Scaffold(containerColor = Color.Transparent) {
-                    BigBangOverlayContent(
-                        contentView = legacyContentView,
-                        touchX = launchTouchX,
-                        touchY = launchTouchY,
-                        sourceImageAvailable = sourceImageUri != null,
-                        textSizeSp = textSizeSp,
-                        panelHeightFraction = panelHeightFraction,
-                        panelOpacity = panelOpacity,
-                        panelAdjustmentEnabled = panelAdjustmentEnabled,
-                        panelOffsetXdp = panelOffsetXdp,
-                        panelOffsetYdp = panelOffsetYdp,
-                        onLegacyThemeChanged = ::updateLegacyTheme,
-                        onDismissRequesterChanged = { animatedDismissRequester = it },
-                        onDismissRequest = { shouldDismissPage() },
-                        onDismissFinished = { actions.dismiss() },
-                        originalText = { boomChipPage?.originalText.orEmpty() },
-                        onEditText = { text ->
-                            if (text != boomChipPage?.originalText) {
-                                undoEditState = Bundle().also {
-                                    saveState(it)
-                                    it.remove(UNDO_EDIT)
-                                }
-                                boomChipPage?.prepareForReinit()
-                                segmentLocally(text)
+        MiuixTheme(
+            controller = remember(dark) { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
+        ) {
+            Scaffold(containerColor = Color.Transparent) {
+                BigBangOverlayContent(
+                    contentView = legacyContentView,
+                    touchX = launchTouchX,
+                    touchY = launchTouchY,
+                    sourceImageAvailable = sourceImageUri != null,
+                    textSizeSp = textSizeSp,
+                    panelHeightFraction = panelHeightFraction,
+                    panelOpacity = panelOpacity,
+                    panelAdjustmentEnabled = panelAdjustmentEnabled,
+                    panelOffsetXdp = panelOffsetXdp,
+                    panelOffsetYdp = panelOffsetYdp,
+                    onLegacyThemeChanged = ::updateLegacyTheme,
+                    onDismissRequesterChanged = { animatedDismissRequester = it },
+                    onDismissRequest = { shouldDismissPage() },
+                    onDismissFinished = { actions.dismiss() },
+                    originalText = { boomChipPage?.originalText.orEmpty() },
+                    onEditText = { text ->
+                        if (text != boomChipPage?.originalText) {
+                            undoEditState = Bundle().also {
+                                saveState(it)
+                                it.remove(UNDO_EDIT)
                             }
-                        },
-                        canUndoEdit = undoEditState != null,
-                        canCaptureMoreText = captureMoreText != null && totalCharacterCount > 0,
-                        onSelectAll = { selectAll() },
-                        totalCharacterCount = totalCharacterCount,
-                        selectedCharacterCount = selectedCharacterCount,
-                        hasTextSelection = hasTextSelection,
-                        onClearSelection = { boomChipPage?.handleClick() },
-                        onMoreAction = ::handleMoreAction,
-                        onPanelPositionChanged = ::savePanelPosition,
-                        onOcr = ::reopenOcr,
-                        )
-                }
+                            boomChipPage?.prepareForReinit()
+                            segmentLocally(text)
+                        }
+                    },
+                    canUndoEdit = undoEditState != null,
+                    canCaptureMoreText = captureMoreText != null && totalCharacterCount > 0,
+                    onSelectAll = { selectAll() },
+                    totalCharacterCount = totalCharacterCount,
+                    selectedCharacterCount = selectedCharacterCount,
+                    hasTextSelection = hasTextSelection,
+                    onClearSelection = { boomChipPage?.handleClick() },
+                    onMoreAction = ::handleMoreAction,
+                    onPanelPositionChanged = ::savePanelPosition,
+                    onOcr = ::reopenOcr,
+                    )
             }
+        }
 
     }
 

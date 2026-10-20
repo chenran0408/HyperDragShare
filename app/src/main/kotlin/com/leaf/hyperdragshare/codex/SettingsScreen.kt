@@ -139,7 +139,7 @@ fun DragShareSettingsApp(context: Context) {
     val backStack = remember { mutableStateListOf<NavKey>(SettingsRoute.Main) }
     val mainListState = rememberLazyListState()
     val mainTopAppBarState = rememberTopAppBarState()
-    val dark = settings.colorMode == DragShareSettings.COLOR_DARK
+    val dark = settings.isDarkThemeInComposition()
     val themeController = remember(dark) {
         ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
     }
@@ -362,7 +362,7 @@ private fun MainPage(
             item(key = "activation-status") {
                 ActivationStatusCard(
                     context = context,
-                    dark = settings.colorMode == DragShareSettings.COLOR_DARK,
+                    dark = settings.isDarkThemeInComposition(),
                     contentCaptureMode = settings.contentCaptureMode,
                     onOpenAccessibilitySettings = if (settings.isAccessibilityCaptureMode) {
                         { openAccessibilitySettings(context) }
@@ -616,23 +616,20 @@ private fun MainPage(
             }
 
             item(key = "appearance-title") {
-                SmallTitle(text = "拖拽菜单")
+                SmallTitle(text = "外观")
             }
             item(key = "appearance-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     OverlayDropdownPreference(
-                        title = "颜色",
-                        items = listOf("浅色", "深色"),
-                        selectedIndex = if (settings.colorMode == DragShareSettings.COLOR_DARK) 1 else 0,
+                        title = "主题",
+                        summary = "设置与所有悬浮面板共用",
+                        items = listOf("浅色", "深色", "跟随系统"),
+                        selectedIndex = settings.colorMode,
                         onSelectedIndexChange = { selected ->
                             persist(
                                 copySettings(
                                     settings,
-                                    colorMode = if (selected == 1) {
-                                        DragShareSettings.COLOR_DARK
-                                    } else {
-                                        DragShareSettings.COLOR_LIGHT
-                                    },
+                                    colorMode = selected,
                                 ),
                             )
                         },

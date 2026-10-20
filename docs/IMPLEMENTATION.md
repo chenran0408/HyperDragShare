@@ -861,3 +861,9 @@ Controller把已有sourceBounds与当前屏幕尺寸经受限Provider传入分�
 用户要求中转站像侧边条收起。删除收起状态的60×88dp卡片，使用24×96dp透明点击/拖动区域和5×64dp贴边细条；点击展开、拖动吸边，保留位置持久化。复制成功也收起，错误留在面板；分享和原生拖出继续在成功启动后收起。关闭移除入口，收起保留入口，返回先结束预览或多选。
 
 1.7.97真机图片识别已证实桌面上独立分词浮窗，Root追加取消可恢复，中转站换边和全选可操作。该次截图暴露每个换行额外54dp空白，现改8dp，不更改原文或分词。新改动待安装验证，具体证据和未验项目见DEVICE_VALIDATION.md。
+
+### 1.7.111：统一系统主题与实际AICR客户端实验
+
+DragShareSettings新增COLOR_SYSTEM=2，0/1及默认浅色保持不变。Java按当前uiMode统一解析，Compose通过LocalConfiguration更新并按dark重新创建ThemeController；设置、分词、中转站、OCR、搜索、校准和菜单共用。原生View菜单只保证创建/重绘时读取当前模式，未添加常驻监听。新增主题存储/Provider往返和模式解析测试，合计172项。
+
+debug AicrOcrProbe移除重复Binder协议，调用生产AicrOcrClient，生成中文混排样本、绑定前取消后复用，以及ImageOcrOverlay实际结果入口。目标机普通UID中文成功，原页38字符浮窗和浅深浅即时换色已验；具体耗时、复原设置与剩余范围见DEVICE_VALIDATION.md。生产AICR协议本批未变。短文本居中与旧词块行高问题仍需下一批修正。

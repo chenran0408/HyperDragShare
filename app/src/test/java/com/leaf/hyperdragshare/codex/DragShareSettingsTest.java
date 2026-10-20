@@ -7,9 +7,11 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
 import android.content.res.Configuration;
+import android.content.Context;
 import android.os.Bundle;
 
 import java.util.Arrays;
@@ -176,6 +178,45 @@ public final class DragShareSettingsTest {
         assertEquals(
                 DragShareSettings.MAX_SCROLL_SPEED_DP_PER_SECOND,
                 settings.scrollSpeedDpPerSecond);
+    }
+
+    @Test
+    public void systemThemeSurvivesPreferencesAndProviderBundle() {
+        DragShareSettings settings = new DragShareSettings(
+                DragShareSettings.COLOR_SYSTEM,
+                DragShareSettings.DEFAULT_EDGE_TRIGGER_DP,
+                DragShareSettings.DEFAULT_SCROLL_SPEED_DP_PER_SECOND);
+        Context context = RuntimeEnvironment.getApplication();
+        DragShareSettings previous = DragShareSettings.readLocal(context);
+        try {
+            settings.saveLocal(context);
+            assertEquals(DragShareSettings.COLOR_SYSTEM,
+                    DragShareSettings.readLocal(context).colorMode);
+            assertEquals(DragShareSettings.COLOR_SYSTEM,
+                    DragShareSettings.fromBundle(settings.toBundle()).colorMode);
+        } finally {
+            previous.saveLocal(context);
+        }
+    }
+
+    @Test
+    public void systemThemeFollowsNightModeAndExplicitThemesKeepTheirChoice() {
+        int day = Configuration.UI_MODE_TYPE_NORMAL | Configuration.UI_MODE_NIGHT_NO;
+        int night = Configuration.UI_MODE_TYPE_NORMAL | Configuration.UI_MODE_NIGHT_YES;
+        for (int mode : new int[] {DragShareSettings.COLOR_LIGHT,
+                DragShareSettings.COLOR_DARK, DragShareSettings.COLOR_SYSTEM}) {
+            DragShareSettings settings = new DragShareSettings(mode,
+                    DragShareSettings.DEFAULT_EDGE_TRIGGER_DP,
+                    DragShareSettings.DEFAULT_SCROLL_SPEED_DP_PER_SECOND);
+            assertEquals(mode == DragShareSettings.COLOR_DARK, settings.isDarkTheme(day));
+            assertEquals(mode != DragShareSettings.COLOR_LIGHT, settings.isDarkTheme(night));
+        }
+        DragShareSettings system = new DragShareSettings(DragShareSettings.COLOR_SYSTEM,
+                DragShareSettings.DEFAULT_EDGE_TRIGGER_DP,
+                DragShareSettings.DEFAULT_SCROLL_SPEED_DP_PER_SECOND);
+        Context context = RuntimeEnvironment.getApplication();
+        assertEquals(system.isDarkTheme(context.getResources().getConfiguration().uiMode),
+                system.isDarkTheme(context));
     }
 
     @Test

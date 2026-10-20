@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInWindow
@@ -42,7 +43,6 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 class ThumbCalibrationActivity : ComponentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var touchSource: RootTouchSource
-    private var isDarkTheme = false
     private var contactRegion = floatArrayOf(0f, 0f, 0f, 0f)
     private var sourceReady by mutableStateOf(false)
     private var sourceHasContactSize by mutableStateOf(false)
@@ -84,7 +84,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        isDarkTheme = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
+        val isDarkTheme = DragShareSettings.readLocal(this).isDarkTheme(this)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = !isDarkTheme
@@ -98,10 +98,11 @@ class ThumbCalibrationActivity : ComponentActivity() {
             runOnUiThread { onRawContact(action, x, y, major, minor, widthMajor) }
         }
         setContent {
+            val dark = DragShareSettings.readLocal(this).isDarkThemeInComposition()
             MiuixTheme(
-                controller = ThemeController(
-                    if (isDarkTheme) ColorSchemeMode.Dark else ColorSchemeMode.Light,
-                ),
+                controller = remember(dark) {
+                    ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
+                },
             ) {
                 CalibrationPage(
                     sourceReady = sourceReady,

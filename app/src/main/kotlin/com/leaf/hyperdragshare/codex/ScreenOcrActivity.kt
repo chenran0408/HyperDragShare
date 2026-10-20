@@ -78,7 +78,6 @@ class ScreenOcrActivity : ComponentActivity() {
     private var isRecognizing by mutableStateOf(true)
     @Volatile private var screenshotForRegion: Bitmap? = null
     private var regionSelectionMessage by mutableIntStateOf(0)
-    private var darkTheme = false
     @Volatile private var aicrRequest: AicrOcrClient.Request? = null
     @Volatile private var aicrBitmap: Bitmap? = null
     private var failureDetail by mutableStateOf<String?>(null)
@@ -103,7 +102,7 @@ class ScreenOcrActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         resultReceiver = intent.getParcelableExtra(EXTRA_RESULT_RECEIVER, ResultReceiver::class.java)
         registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF), RECEIVER_NOT_EXPORTED)
-        darkTheme = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
+        val darkTheme = DragShareSettings.readLocal(this).isDarkTheme(this)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.setBackgroundDrawableResource(android.R.color.transparent)
         window.setDimAmount(0f)
@@ -279,10 +278,11 @@ class ScreenOcrActivity : ComponentActivity() {
 
     private fun renderResults() {
         setContent {
+            val dark = DragShareSettings.readLocal(this).isDarkThemeInComposition()
             MiuixTheme(
-                controller = ThemeController(
-                    if (darkTheme) ColorSchemeMode.Dark else ColorSchemeMode.Light,
-                ),
+                controller = remember(dark) {
+                    ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
+                },
             ) {
                 ScreenOcrPage(
                     lines = resultText,
@@ -320,10 +320,11 @@ class ScreenOcrActivity : ComponentActivity() {
 
     private fun renderRegionSelector(screenshot: Bitmap) {
         setContent {
+            val dark = DragShareSettings.readLocal(this).isDarkThemeInComposition()
             MiuixTheme(
-                controller = ThemeController(
-                    if (darkTheme) ColorSchemeMode.Dark else ColorSchemeMode.Light,
-                ),
+                controller = remember(dark) {
+                    ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
+                },
             ) {
                 RegionSelectionPage(
                     screenshot = screenshot,

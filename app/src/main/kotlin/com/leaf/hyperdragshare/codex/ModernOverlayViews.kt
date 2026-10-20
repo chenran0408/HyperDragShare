@@ -408,7 +408,7 @@ private fun ModernOverlayTheme(
     settings: DragShareSettings,
     content: @Composable () -> Unit,
 ) {
-    val dark = settings.colorMode == DragShareSettings.COLOR_DARK
+    val dark = settings.isDarkThemeInComposition()
     val themeController = remember(dark) {
         ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
     }

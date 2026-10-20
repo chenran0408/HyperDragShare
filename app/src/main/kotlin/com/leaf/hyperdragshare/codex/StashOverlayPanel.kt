@@ -400,7 +400,7 @@ object StashOverlayPanel {
         }
 
         @Composable private fun Content() {
-            val dark = remember { DragShareSettings.readLocal(app).colorMode == DragShareSettings.COLOR_DARK }
+            val dark = DragShareSettings.readLocal(app).isDarkThemeInComposition()
             val focusManager = LocalFocusManager.current
             val keyboard = LocalSoftwareKeyboardController.current
             val closeSearch = {
@@ -421,7 +421,7 @@ object StashOverlayPanel {
                     keyboard?.hide()
                 }
             }
-            MiuixTheme(controller = remember {
+            MiuixTheme(controller = remember(dark) {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
                 BackHandler(enabled = expanded) {
