@@ -141,6 +141,50 @@ public final class ContactAreaTriggerDetectorTest {
         assertFalse(detector.confirmWhileDown(900L));
     }
 
+    @Test
+    public void movingAwayAfterConfirmationInvalidatesThePendingCandidate() {
+        ContactAreaTriggerDetector detector = detector(180L);
+        event(detector, MotionEvent.ACTION_DOWN, 100L, .6f);
+        assertTrue(detector.confirmWhileDown(280L));
+        assertTrue(detector.isConfirmedContactValid());
+
+        detector.onPointerEvent(MotionEvent.ACTION_MOVE, 20f, 0f, 290L, .6f);
+        assertFalse(detector.isConfirmedContactValid());
+        event(detector, MotionEvent.ACTION_MOVE, 300L, .6f);
+        assertFalse(detector.isConfirmedContactValid());
+        assertFalse(detector.confirmWhileDown(500L));
+    }
+
+    @Test
+    public void sizeDropAfterConfirmationRejectsTheCandidateUntilANewGesture() {
+        ContactAreaTriggerDetector detector = detector(180L);
+        event(detector, MotionEvent.ACTION_DOWN, 100L, .6f);
+        assertTrue(detector.confirmWhileDown(280L));
+        assertTrue(detector.isConfirmedContactValid());
+
+        event(detector, MotionEvent.ACTION_MOVE, 290L, .1f);
+        assertFalse(detector.isConfirmedContactValid());
+        event(detector, MotionEvent.ACTION_MOVE, 300L, .6f);
+        assertFalse(detector.isConfirmedContactValid());
+        assertFalse(event(detector, MotionEvent.ACTION_UP, 310L, 0f));
+
+        event(detector, MotionEvent.ACTION_DOWN, 400L, .6f);
+        assertTrue(detector.confirmWhileDown(580L));
+        assertTrue(detector.isConfirmedContactValid());
+    }
+
+    @Test
+    public void smallMovementKeepsConfirmedContactButReleaseDoesNotFireAgain() {
+        ContactAreaTriggerDetector detector = detector(180L);
+        event(detector, MotionEvent.ACTION_DOWN, 100L, .6f);
+        assertTrue(detector.confirmWhileDown(280L));
+        detector.onPointerEvent(MotionEvent.ACTION_MOVE, 1f, 1f, 290L, .6f);
+        assertTrue(detector.isConfirmedContactValid());
+
+        assertFalse(event(detector, MotionEvent.ACTION_UP, 300L, 0f));
+        assertFalse(detector.isConfirmedContactValid());
+    }
+
     private static boolean event(
             ContactAreaTriggerDetector detector,
             int action,

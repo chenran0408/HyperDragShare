@@ -43,8 +43,9 @@ final class RootNodeCaptureClient {
                 + "' /system/bin/app_process /system/bin " + RootNodeCaptureMain.class.getName() + " --serve";
         Session session = new Session(context, new ProcessBuilder("su", "-c", command).start());
         try {
-            if (!session.awaitResponse().getBoolean("ready")) {
-                throw new IOException("Root node process did not become ready");
+            JSONObject startup = session.awaitResponse();
+            if (!startup.getBoolean("ready")) {
+                throw new IOException(startup.optString("error", "界面取词服务未就绪"));
             }
             return session;
         } catch (JSONException error) {
@@ -101,7 +102,11 @@ final class RootNodeCaptureClient {
                 boolean accepted = notified && handler.onCandidate();
                 if (notified) result = awaitResponse();
                 DragShareLog.i(TAG, "semantic lookup elapsedMs=" + result.getLong("elapsed_ms"));
-                if (keyguard.isKeyguardLocked() || !result.getBoolean("found")) return null;
+                if (keyguard.isKeyguardLocked()) return null;
+                if (!result.getBoolean("found")) {
+                    DragShareLog.i(TAG, "no content candidate reason=" + result.optString("reason", "unknown"));
+                    return null;
+                }
                 if (!notified) accepted = handler.onCandidate();
                 if (!accepted) return null;
                 source = result.getString("package");

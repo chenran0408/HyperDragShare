@@ -60,8 +60,11 @@
     仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
     `AicrCopyHooks` 和 `BackTapFrameworkHooks`；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
-14. 无障碍节点树只允许在一次长按超时后读取。不得在 `onAccessibilityEvent()` 中持续遍历、
-    截图或记录文字；密码节点、锁屏和无障碍覆盖层必须被忽略，图片只截取已选择的节点区域。
+14. 节点树只在一次明确请求后读取：无障碍长按超时、有效面积确认或用户主动点取。
+    准备点取时只连接 Root，不提前遍历；不得在 `onAccessibilityEvent()` 中持续遍历、
+    截图或记录文字。密码节点、锁屏、黑名单和无障碍覆盖层必须忽略，图片只截取所选节点区域。
+    UiAutomation 只有一个注册位，Root 取词连接存活时不能同时运行 `uiautomator dump`；
+    用截图观察，取词完成并确认释放后才 dump。占用失败要明确报告，不能断开别的会话或自动重试。
 15. 设备操作和截图需要用户授权，包括 `adb shell am start`、`input`、GUI 自动化和
     `screencap`。用户已在当前开发对话明确授权持续测试与更新，并要求无需重复申请；
     本对话后续轮次沿用该授权，不再按轮询问。其他对话不能仅凭此记录推定已授权。
@@ -90,6 +93,7 @@
 - `DragShareAccessibilityService.java`、`AccessibilityContentCaptureSource.java`：无障碍生命周期、长按协调和来源隔离。
 - `OcrFallbackRegion.java`：无障碍无候选节点时的有限区域截取几何与密码节点重叠检查。
 - `LongPressGestureDetector.java`、`AccessibilityNodeClassifier.java`、`AccessibilityCandidateSelector.java`：可单测的长按、节点分类和命中优先级。
+- `PointCaptureOverlay.kt`、`PointCaptureActivity.kt`、`PointCaptureTileService.java`：控制中心主动点取，透明桥结束后在原页选点，再复用 Root 语义取词/所选图片 OCR。与面积触发分开验收，不能把点取通过写成面积或普通长按修复。范围见 `docs/POINT_CAPTURE.md`。
 - `AccessibilityScreenshotter.java`、`RootScreenshotter.java`、`ScreenshotRectMapper.java`：安全的一次性区域截图与 API 28/29 回退。
 - `ShareTargetRepository.java`：查询可处理对应 MIME 的导出 Activity，并克隆/着色内置目标的旧矢量图标。
 - `BitmapEncoder.java`、`ImageStagingClient.java`、`ShareImageProvider.java`：图片压缩、

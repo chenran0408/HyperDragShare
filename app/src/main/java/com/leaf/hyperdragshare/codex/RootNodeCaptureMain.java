@@ -53,27 +53,49 @@ public final class RootNodeCaptureMain {
         int[] eventVersion = {0};
         boolean connected = false;
         try (BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
-            connect.invoke(automation, UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES, 2000L);
-            connected = true;
-            automation.setOnAccessibilityEventListener(event -> {
-                synchronized (eventLock) {
-                    eventVersion[0]++;
-                    eventLock.notifyAll();
+            try {
+                connect.invoke(automation, UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES, 2000L);
+                connected = true;
+            } catch (ReflectiveOperationException | SecurityException error) {
+                if (!serve) throw error;
+                Throwable cause = error instanceof java.lang.reflect.InvocationTargetException
+                        && error.getCause() != null ? error.getCause() : error;
+                String reason;
+                if (cause instanceof IllegalStateException && cause.getMessage() != null
+                        && cause.getMessage().contains("already registered")) {
+                    reason = "界面取词服务正被其他自动化会话占用，请结束该会话后重试";
+                } else if (cause instanceof SecurityException) {
+                    reason = "系统拒绝界面取词连接，请检查 Root 授权";
+                } else {
+                    reason = "无法连接界面取词服务：" + cause.getClass().getSimpleName()
+                            + (cause.getMessage() == null ? "" : "（" + cause.getMessage() + "）");
                 }
-            });
-            if (serve) {
-                System.out.println(new JSONObject().put("ready", true).put("pid", android.os.Process.myPid()));
+                System.err.println("Root node connection failed");
+                error.printStackTrace(System.err);
+                System.out.println(new JSONObject().put("ready", false).put("error", reason));
                 System.out.flush();
             }
-            String line;
-            while ((line = input.readLine()) != null) {
-                long started = SystemClock.uptimeMillis();
-                JSONObject result = captureRequest(new JSONObject(line), automation,
-                        eventLock, eventVersion, watchdog);
-                result.put("elapsed_ms", SystemClock.uptimeMillis() - started);
-                System.out.println(result);
-                System.out.flush();
-                if (!serve) break;
+            if (connected) {
+                automation.setOnAccessibilityEventListener(event -> {
+                    synchronized (eventLock) {
+                        eventVersion[0]++;
+                        eventLock.notifyAll();
+                    }
+                });
+                if (serve) {
+                    System.out.println(new JSONObject().put("ready", true).put("pid", android.os.Process.myPid()));
+                    System.out.flush();
+                }
+                String line;
+                while ((line = input.readLine()) != null) {
+                    long started = SystemClock.uptimeMillis();
+                    JSONObject result = captureRequest(new JSONObject(line), automation,
+                            eventLock, eventVersion, watchdog);
+                    result.put("elapsed_ms", SystemClock.uptimeMillis() - started);
+                    System.out.println(result);
+                    System.out.flush();
+                    if (!serve) break;
+                }
             }
         } finally {
             // A serving process releases its Binder client by exiting below. Calling disconnect

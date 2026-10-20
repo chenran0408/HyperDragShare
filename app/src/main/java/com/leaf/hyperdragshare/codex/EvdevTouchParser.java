@@ -30,6 +30,11 @@ final class EvdevTouchParser {
     static final int ABS_MT_TRACKING_ID = 57;
 
     private static final int MAX_SLOTS = 16;
+    private static final int UPDATED_X = 1;
+    private static final int UPDATED_Y = 2;
+    private static final int UPDATED_TOUCH_MAJOR = 4;
+    private static final int UPDATED_TOUCH_MINOR = 8;
+    private static final int UPDATED_WIDTH_MAJOR = 16;
 
     private final Listener listener;
     private final float[] slotX = new float[MAX_SLOTS];
@@ -38,6 +43,7 @@ final class EvdevTouchParser {
     private final int[] slotTouchMinor = new int[MAX_SLOTS];
     private final int[] slotWidthMajor = new int[MAX_SLOTS];
     private final int[] trackingId = new int[MAX_SLOTS];
+    private final int[] updatedAxes = new int[MAX_SLOTS];
 
     private int currentSlot;
     private int primarySlot = -1;
@@ -68,7 +74,7 @@ final class EvdevTouchParser {
             buttonTouchSeen = true;
             if (value != 0 && !buttonTouchDown) {
                 buttonDownEdge = true;
-                clearCoordinates();
+                clearStaleCoordinates();
             }
             buttonTouchDown = value != 0;
             frameChanged = true;
@@ -103,16 +109,20 @@ final class EvdevTouchParser {
                     primaryLifted = true;
                 }
                 trackingId[currentSlot] = -1;
+                updatedAxes[currentSlot] = 0;
             } else {
                 if (gestureActive && currentSlot != primarySlot) {
                     multiTouchDetected = true;
                 }
                 trackingId[currentSlot] = value;
-                slotX[currentSlot] = Float.NaN;
-                slotY[currentSlot] = Float.NaN;
-                slotTouchMajor[currentSlot] = 0;
-                slotTouchMinor[currentSlot] = 0;
-                slotWidthMajor[currentSlot] = 0;
+                // Drivers can report the new contact's axes before its tracking/button edge.
+                // Retain only values explicitly updated in this frame, never a prior contact.
+                int updated = updatedAxes[currentSlot];
+                if ((updated & UPDATED_X) == 0) slotX[currentSlot] = Float.NaN;
+                if ((updated & UPDATED_Y) == 0) slotY[currentSlot] = Float.NaN;
+                if ((updated & UPDATED_TOUCH_MAJOR) == 0) slotTouchMajor[currentSlot] = 0;
+                if ((updated & UPDATED_TOUCH_MINOR) == 0) slotTouchMinor[currentSlot] = 0;
+                if ((updated & UPDATED_WIDTH_MAJOR) == 0) slotWidthMajor[currentSlot] = 0;
                 sawTrackingStart = true;
             }
             frameChanged = true;
@@ -120,18 +130,23 @@ final class EvdevTouchParser {
         }
         if (code == ABS_MT_POSITION_X) {
             slotX[currentSlot] = value;
+            updatedAxes[currentSlot] |= UPDATED_X;
             frameChanged = true;
         } else if (code == ABS_MT_POSITION_Y) {
             slotY[currentSlot] = value;
+            updatedAxes[currentSlot] |= UPDATED_Y;
             frameChanged = true;
         } else if (code == ABS_MT_TOUCH_MAJOR) {
             slotTouchMajor[currentSlot] = value;
+            updatedAxes[currentSlot] |= UPDATED_TOUCH_MAJOR;
             frameChanged = true;
         } else if (code == ABS_MT_WIDTH_MAJOR) {
             slotWidthMajor[currentSlot] = value;
+            updatedAxes[currentSlot] |= UPDATED_WIDTH_MAJOR;
             frameChanged = true;
         } else if (code == ABS_MT_TOUCH_MINOR) {
             slotTouchMinor[currentSlot] = value;
+            updatedAxes[currentSlot] |= UPDATED_TOUCH_MINOR;
             frameChanged = true;
         }
     }
@@ -288,6 +303,7 @@ final class EvdevTouchParser {
     }
 
     private void finishFrame() {
+        Arrays.fill(updatedAxes, 0);
         frameChanged = false;
         primaryLifted = false;
         multiTouchDetected = false;
@@ -313,10 +329,10 @@ final class EvdevTouchParser {
         clearTouchSizes();
     }
 
-    private void clearCoordinates() {
+    private void clearStaleCoordinates() {
         for (int index = 0; index < MAX_SLOTS; index++) {
-            slotX[index] = Float.NaN;
-            slotY[index] = Float.NaN;
+            if ((updatedAxes[index] & UPDATED_X) == 0) slotX[index] = Float.NaN;
+            if ((updatedAxes[index] & UPDATED_Y) == 0) slotY[index] = Float.NaN;
         }
     }
 
@@ -337,6 +353,7 @@ final class EvdevTouchParser {
             slotTouchMajor[index] = 0;
             slotTouchMinor[index] = 0;
             slotWidthMajor[index] = 0;
+            updatedAxes[index] = 0;
         }
         currentSlot = 0;
         buttonTouchSeen = false;

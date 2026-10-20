@@ -2,6 +2,7 @@ package com.leaf.hyperdragshare.codex;
 
 import android.app.KeyguardManager;
 import android.content.Context;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -10,6 +11,7 @@ import android.net.Uri;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import java.io.IOException;
@@ -88,9 +90,16 @@ final class PortalThumbCaptureSource {
                 blocker.stop();
                 return;
             }
+            boolean wasConfirmed = detector.isConfirmedContactValid();
             detector.onPointerEvent(action, px, py, time,
                     (float) input.normalizedContactSize(major, width));
+            if (action == MotionEvent.ACTION_MOVE && wasConfirmed && !detector.isConfirmedContactValid()) {
+                // A late Root candidate must not take over a gesture the user has already moved away from.
+                generation++;
+                blocker.stop();
+            }
             if (action == MotionEvent.ACTION_UP) {
+                // Once takeover succeeded, release may precede the complete text/image result.
                 pointerDown = false;
                 blocker.stop();
                 return;
@@ -126,6 +135,7 @@ final class PortalThumbCaptureSource {
         long request = generation;
         float px = x, py = y;
         long deadline = captureDeadline;
+        Rect sourceDisplay = context.getSystemService(WindowManager.class).getMaximumWindowMetrics().getBounds();
         Set<String> excluded = new LinkedHashSet<>(settings.accessibilityBlacklistedPackages);
         excluded.addAll(AccessibilityBlacklist.builtInPackages(context));
         worker.execute(() -> {
@@ -175,6 +185,13 @@ final class PortalThumbCaptureSource {
                     text.putString("text", content.text);
                     text.putString("before_text", content.beforeText);
                     text.putString("after_text", content.afterText);
+                    if (content.sourceBounds != null && !content.sourceBounds.isEmpty()) {
+                        Bundle area = new Bundle();
+                        area.putParcelable("bounds", content.sourceBounds);
+                        area.putInt("width", sourceDisplay.width());
+                        area.putInt("height", sourceDisplay.height());
+                        text.putBundle("source_area", area);
+                    }
                     text.putInt("x", Math.round(px));
                     text.putInt("y", Math.round(py));
                     try {

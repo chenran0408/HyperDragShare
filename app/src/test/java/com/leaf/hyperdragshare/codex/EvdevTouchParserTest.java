@@ -17,6 +17,28 @@ import java.util.List;
 @Config(manifest = Config.NONE)
 public final class EvdevTouchParserTest {
     @Test
+    public void currentFrameAxesSurviveLaterTrackingAndButtonEdges() {
+        List<Frame> frames = new ArrayList<>();
+        List<Integer> widths = new ArrayList<>();
+        EvdevTouchParser parser = new EvdevTouchParser((action, x, y, major, minor, widthMajor) -> {
+            frames.add(new Frame(action, x, y, major, minor));
+            widths.add(widthMajor);
+        });
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_SLOT, 0);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_POSITION_X, 10);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_POSITION_Y, 20);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_TOUCH_MAJOR, 35);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_TOUCH_MINOR, 22);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_WIDTH_MAJOR, 40);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_TRACKING_ID, 42);
+        parser.consume(EvdevTouchParser.EV_KEY, EvdevTouchParser.BTN_TOUCH, 1);
+        parser.consume(EvdevTouchParser.EV_SYN, EvdevTouchParser.SYN_REPORT, 0);
+
+        assertEquals(Arrays.asList(new Frame(MotionEvent.ACTION_DOWN, 10, 20, 35, 22)), frames);
+        assertEquals(Arrays.asList(40), widths);
+    }
+
+    @Test
     public void widthOnlyFramesAreIndependentOfTouchMinorAndResetForNextContact() {
         List<Integer> widths = new ArrayList<>();
         List<Integer> minors = new ArrayList<>();

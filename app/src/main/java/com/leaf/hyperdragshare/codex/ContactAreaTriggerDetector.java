@@ -96,9 +96,15 @@ final class ContactAreaTriggerDetector {
         return true;
     }
 
+    /** The confirmed contact must still hold while its asynchronous candidate is being read. */
+    boolean isConfirmedContactValid() {
+        return gestureActive && fired && !rejected && thresholdSince >= 0L;
+    }
+
     private void updateContactSize(float contactSize, long eventTime) {
         if (contactSize < threshold) {
             thresholdSince = -1L;
+            if (fired) rejected = true;
         } else if (thresholdSince < 0L) {
             thresholdSince = eventTime;
         }

@@ -126,6 +126,14 @@
             android:theme="@style/Theme.DragShare.BigBangOverlay" />
 
         <activity
+            android:name=".PointCaptureActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.DragShare.BigBangOverlay" />
+
+        <activity
             android:name=".ImageOcrActivity"
             android:taskAffinity=""
             android:theme="@style/Theme.DragShare.BigBangOverlay"
@@ -198,6 +206,18 @@
             <meta-data
                 android:name="android.service.quicksettings.ACTIVE_TILE"
                 android:value="true" />
+        </service>
+
+        <service
+            android:name=".PointCaptureTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_point_capture_tile"
+            android:label="@string/point_capture_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
         </service>
 
         <!--

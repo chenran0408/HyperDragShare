@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.120 / versionCode 144。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 144。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.121 / versionCode 145。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 145。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.120 / 144；182 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.121 / 145；186 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -636,3 +636,16 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - Portal注入与Root握手144，root_granted=true；只重载传送门，未重启android/AICR。诊断应用、临时APK/DEX已清理，侧条收起，原bilipai任务2183置前，未发送播放操作。持续设备授权仍有效。
 - 未验：拖拽菜单图片复制实际入口、真机JPEG/WebP等格式、具体应用粘贴、其他用户/虚拟设备、Root撤销。首轮权限失败保留原图已实际观察。复制编辑浮层仍会出现，窗口归属/遮挡未修；真实面积、bilipai普通长按与115旧ANR未解决。
 - 最终APK outputs/HyperDragShare-1.7.120-debug.apk，SHA256 1726BF24CF3C14C61736E6749E413671BDA65339503D317E9DBC149F86A83DD2；包名、debug签名沿用，原位升级保留数据。
+
+## 2026-10-21：1.7.121 主动点取与输入状态修正
+
+- 最终构建233执行testDebugUnitTest、lintDebug、assembleDebug通过，186项测试0失败；145原位安装，包名/签名保持。设备安装base.apk与交付APK SHA256严格一致：A3E4E5D4F22957BA70CFDEA7431FE15454D554B8201B0509CDBE112646F89958。Portal注入和Root握手145；最终233只改变配置禁用时的按钮，未再次重启其它作用域。
+- 控制中心实际磁贴入口→生成COPY-119→8字原页分词，来源仍诊断Activity；生成900×500 ImageView屏幕区域1392×773→Root裁图→AICR→83字原页分词。文字Root读取15ms，首轮图片6ms；这些是节点读取耗时，不是端到端OCR时间。证据work/hds121-point-text-result.png/xml、hds121-point-image-final.png、hds121-point-image-result.xml。
+- 构建232最终紧凑底部提示条不再遮挡顶部内容，同一图片再次完成83字分词，Root11ms。返回取消后无RootNodeCaptureMain或UiAutomation残留，来源Activity保持。证据work/hds121-final-bottom-picker.png、hds121-final-image-result.png/xml、hds121-final-cancel-before.png、hds121-final-canceled.png。
+- 实际占用实验：独立控制helper先连接并保持stdin，模块点取显示“界面取词服务正被其他自动化会话占用”，控制helper仍存活且连接未被抢断；控制管道EOF后exit0、无残留。证据work/point-conflict-check.py、hds121-root-busy.png/xml。首轮测试误同时运行uiautomator dump造成占用，该次不计通过；后续活动Root期间仅截图，连接释放后才dump。
+- 设置“添加点取内容磁贴”在磁贴已存在时返回“已在控制中心，可直接使用”，hds121-settings-tile-result.xml。临时磁贴完整列表与hds121-tiles-before.txt、tiles-restored.txt、tiles-final.txt严格相同，未留下新增磁贴。
+- bilipai原任务2183仍显示休息提醒；未关闭提醒、未恢复播放。主动点选提醒标题，8字“给眼睛一个小休息”原页分词、Root10ms；hds121-bili-point-ready.png、hds121-bili-point-result.png/xml。只证明当前提醒文字，评论区和普通长按仍未解决。
+- 最终233实测文字/图片两开关均关时，只显示配置原因和关闭，无重选、无Root连接，hds121-disabled-entry.xml。随后经UI恢复两开关，真实偏好核验均true。最终交付是233；正向点取路径与232相同，本次不重复跑相同OCR样本。
+- 输入状态4个新增回归用例通过；真实手指面积、迟到候选接管未验。旧事件复核34个DOWN帧均有X/Y而无尺寸，不支持“本帧顺序导致旧零尺寸”的判断；只读能力表hds121-input-capabilities.txt仍不能代替真实轴值。参考APK无文字300ms分支也不能当成面积生效证据。
+- 测试清理：诊断应用及/data/local/tmp/hds-stash-probe.apk已删除，无helper/UiAutomation残留；原中转站7项未改；临时磁贴全表恢复；文字/图片开关均true；bilipai原任务置前、休息提醒保留。截图仅留本机，不提交私人画面。
+- 尚未验收：评论区点取、普通长按/真实面积、面积开启与点取连接共享、识别中取消、息屏/旋转、完整深色切换、最新其它菜单方向、115旧ANR与复制编辑浮层遮挡。
