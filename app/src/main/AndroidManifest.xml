@@ -150,6 +150,20 @@
                 android:value="true" />
         </service>
 
+        <service
+            android:name=".RegionOcrTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/region_ocr_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
         <!--
           Image staging and grant management accept calls only from this app or
           Taplus. Read URIs use unguessable UUID tokens and expire from cache.

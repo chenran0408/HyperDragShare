@@ -128,7 +128,11 @@ class ScreenOcrActivity : ComponentActivity() {
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) screenshot.recycle()
-                else recognizeScreenshot(screenshot, retainScreenshotForRegion = true)
+                else if (intent.getBooleanExtra(EXTRA_SELECT_REGION, false)) {
+                    screenshotForRegion = screenshot
+                    isRecognizing = false
+                    showRegionSelector()
+                } else recognizeScreenshot(screenshot, retainScreenshotForRegion = true)
             }
         }
     }
@@ -155,7 +159,7 @@ class ScreenOcrActivity : ComponentActivity() {
                     else {
                         resultText = lines
                         isRecognizing = false
-                        renderResults()
+                        presentRecognitionResult()
                     }
                 }
             }
@@ -192,7 +196,7 @@ class ScreenOcrActivity : ComponentActivity() {
                                     } else {
                                         resultText = lines
                                         isRecognizing = false
-                                        renderResults()
+                                        presentRecognitionResult()
                                     }
                                 } else {
                                     if (bitmap !== screenshotForRegion) bitmap.recycle()
@@ -221,9 +225,20 @@ class ScreenOcrActivity : ComponentActivity() {
     private fun reportFailure(message: Int, error: Throwable) {
         DragShareLog.w(
             TAG,
-            "screen recognition failed: ${error.javaClass.simpleName}",
+            "screen recognition failed",
+            error,
         )
-        runOnUiThread { showFailure(message) }
+        runOnUiThread {
+            failureDetail = error.message
+            showFailure(message)
+        }
+    }
+
+    private fun presentRecognitionResult() {
+        if (intent.getBooleanExtra(EXTRA_SELECT_REGION, false) &&
+            BigBangOverlayLauncher.showText(this, resultText.joinToString("\n"), -1, -1, null)) {
+            finish()
+        } else renderResults()
     }
 
     private fun showFailure(message: Int) {
@@ -284,7 +299,10 @@ class ScreenOcrActivity : ComponentActivity() {
                 RegionSelectionPage(
                     screenshot = screenshot,
                     message = regionSelectionMessage,
-                    onCancel = ::renderResults,
+                    onCancel = {
+                        if (intent.getBooleanExtra(EXTRA_SELECT_REGION, false) && resultText.isEmpty()) finish()
+                        else renderResults()
+                    },
                     onRecognize = ::recognizeRegion,
                 )
             }
@@ -708,6 +726,7 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     companion object {
+        const val EXTRA_SELECT_REGION = "select_region"
         private const val TAG = "DragShare/ScreenOCR"
         private const val CAPTURE_FRAME_DELAY_MILLIS = 120L
     }

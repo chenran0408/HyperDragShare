@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="region_ocr_tile_label">区域识字</string>
     <string name="ocr_action">识别图片文字</string>
     <string name="ocr_recognizing">正在识别图片文字…</string>
     <string name="ocr_retry">重试</string>
