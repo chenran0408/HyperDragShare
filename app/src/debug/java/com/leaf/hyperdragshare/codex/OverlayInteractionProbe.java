@@ -2,19 +2,31 @@ package com.leaf.hyperdragshare.codex;
 
 import android.app.Activity;
 import android.app.Instrumentation;
+import android.net.Uri;
 import android.os.Bundle;
+import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-/** Debug-only synthetic text for inspecting the real overlay without reading user content. */
+/** Debug-only overlay inspection; Root image mode is for the generated receiver sample only. */
 public final class OverlayInteractionProbe extends Instrumentation {
     private boolean longText;
+    private Bundle arguments;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        this.arguments = arguments;
         longText = arguments != null && "long".equals(arguments.getString("sample"));
         start();
     }
 
     @Override public void onStart() {
+        if (arguments != null && "root_image".equals(arguments.getString("mode"))) {
+            Bundle report = new Bundle();
+            boolean accepted = captureRootImage(report);
+            finishAfterInspection(accepted, report);
+            return;
+        }
         String sample = "传送门文字识别\n小米15 Pro HyperOS 4\n复制 搜索 分享 12345";
         if (longText) {
             StringBuilder paragraphs = new StringBuilder();
@@ -28,6 +40,72 @@ public final class OverlayInteractionProbe extends Instrumentation {
         report.putBoolean("accepted", accepted);
         report.putBoolean("longText", longText);
         report.putInt("syntheticLength", sample.length());
+        finishAfterInspection(accepted, report);
+    }
+
+    private boolean captureRootImage(Bundle report) {
+        try {
+            float x = Float.parseFloat(arguments.getString("x", "NaN"));
+            float y = Float.parseFloat(arguments.getString("y", "NaN"));
+            if (!Float.isFinite(x) || !Float.isFinite(y) || x < 0 || y < 0) {
+                throw new IllegalArgumentException("root_image requires explicit nonnegative x and y");
+            }
+            CapturedContent content;
+            try (RootNodeCaptureClient.Session session = RootNodeCaptureClient.open(getTargetContext())) {
+                content = session.capture(x, y, AccessibilityBlacklist.builtInPackages(getTargetContext()),
+                        true, true, () -> true);
+            }
+            if (content == null || !content.isImage()) {
+                throw new IOException("Root capture did not return an image; target the generated ImageView");
+            }
+            report.putInt("imageWidth", content.bitmap.getWidth());
+            report.putInt("imageHeight", content.bitmap.getHeight());
+            CountDownLatch staged = new CountDownLatch(1);
+            ImageStagingClient.stage(getTargetContext(), content.bitmap, new ImageStagingClient.Callback() {
+                @Override public void onStaged(Uri uri) {
+                    try {
+                        Bundle extras = new Bundle();
+                        extras.putParcelable("image", uri);
+                        getTargetContext().getContentResolver().call(ImageStagingClient.BASE_URI,
+                                ImageOcrOverlay.METHOD_RECOGNIZE, null, extras);
+                        // Accepted is submission to the real window, not an OCR accuracy assertion.
+                        report.putBoolean("accepted", true);
+                    } catch (RuntimeException error) {
+                        report.putString("error", error.toString());
+                    } finally {
+                        recycle(content);
+                        staged.countDown();
+                    }
+                }
+
+                @Override public void onFailure(Throwable error) {
+                    report.putString("error", error.toString());
+                    recycle(content);
+                    staged.countDown();
+                }
+            });
+            if (!staged.await(65, TimeUnit.SECONDS)) {
+                // The callback retains ownership until the encoder stops reading the bitmap.
+                report.putString("error", "Image staging did not finish within 65 seconds");
+                return false;
+            }
+            return report.getBoolean("accepted");
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            report.putString("error", "Root image inspection interrupted");
+            return false;
+        } catch (IOException | RuntimeException error) {
+            report.putString("error", error.toString());
+            return false;
+        }
+    }
+
+    private static void recycle(CapturedContent content) {
+        if (content.bitmapOwnedByDragShare && !content.bitmap.isRecycled()) content.bitmap.recycle();
+    }
+
+    private void finishAfterInspection(boolean accepted, Bundle report) {
+        report.putBoolean("accepted", accepted);
         if (accepted) {
             try {
                 Thread.sleep(90000L); // Keep the target process alive for bounded, manual UI inspection.

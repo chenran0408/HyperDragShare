@@ -15,6 +15,7 @@ import android.view.DragAndDropPermissions;
 import android.view.DragEvent;
 import android.view.Gravity;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.File;
@@ -29,6 +30,10 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        showReceiver();
+    }
+
+    private void showReceiver() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(24, 50, 24, 30);
@@ -39,6 +44,7 @@ public final class MainActivity extends Activity {
         addButton(root, "存入 STASH-115-A", () -> shareText("STASH-115-A"));
         addButton(root, "存入 STASH-115-B", () -> shareText("STASH-115-B"));
         addButton(root, "存入生成图片", this::shareImage);
+        addButton(root, "显示识字样本", this::showRecognitionSample);
         TextView drop = new TextView(this);
         drop.setText("拖到这里松手\n支持文字 / 图片 / 多项\n结果显示在顶部");
         drop.setTextSize(24);
@@ -58,6 +64,36 @@ public final class MainActivity extends Activity {
             }
         });
         root.addView(drop, new LinearLayout.LayoutParams(-1, 0, 1));
+        setContentView(root);
+    }
+
+    private void showRecognitionSample() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 50, 24, 30);
+        addButton(root, "返回拖拽接收器", this::showReceiver);
+        TextView comparison = new TextView(this);
+        comparison.setText("普通文字对照：只采集下方生成图片。");
+        comparison.setTextSize(18);
+        root.addView(comparison);
+
+        Bitmap bitmap = Bitmap.createBitmap(900, 500, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.WHITE);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.BLACK);
+        paint.setTextSize(46);
+        canvas.drawText("传送门图片文字识别", 40, 85, paint);
+        canvas.drawText("小米15 Pro · HyperOS 4", 40, 170, paint);
+        canvas.drawText("IMAGE OCR SAMPLE 217", 40, 255, paint);
+        canvas.drawText("Copy Search Share 12345", 40, 340, paint);
+        canvas.drawText("只使用程序生成内容", 40, 425, paint);
+        ImageView image = new ImageView(this);
+        image.setContentDescription("图片");
+        image.setImageBitmap(bitmap);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int imageWidth = getResources().getDisplayMetrics().widthPixels - 48;
+        root.addView(image, new LinearLayout.LayoutParams(-1, imageWidth * 500 / 900));
         setContentView(root);
     }
 

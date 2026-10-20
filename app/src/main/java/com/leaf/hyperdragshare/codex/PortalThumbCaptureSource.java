@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.net.Uri;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
@@ -101,7 +102,8 @@ final class PortalThumbCaptureSource {
 
     private boolean allowed() {
         return !stopped && input.isReady() && input.hasContactSize()
-                && settings.isPortalCaptureMode() && settings.isSharingEnabled(false)
+                && settings.isPortalCaptureMode()
+                && (settings.isSharingEnabled(false) || settings.isSharingEnabled(true))
                 && !controller.isActive()
                 && settings.isAccessibilityRecognitionEnabledForOrientation(
                         context.getResources().getConfiguration().orientation)
@@ -130,7 +132,8 @@ final class PortalThumbCaptureSource {
             try {
                 if (request != generation || !pointerDown) return;
                 boolean[] cancelledOriginal = {false};
-                CapturedContent content = session.capture(px, py, excluded, () -> {
+                CapturedContent content = session.capture(px, py, excluded,
+                        settings.isSharingEnabled(false), settings.isSharingEnabled(true), () -> {
                     if (request != generation || !pointerDown || !allowed()) return false;
                     if (SystemClock.uptimeMillis() >= deadline) {
                         DragShareLog.w(TAG, "candidate arrived after long-press deadline; preserving original gesture");
@@ -141,8 +144,8 @@ final class PortalThumbCaptureSource {
                         });
                         return false;
                     }
-                    // Confirm a safe text leaf before cancelling; then let the helper finish
-                    // nearby-text collection without racing the original app's long-press menu.
+                    // Text leaves may confirm early; images wait for the full password scan.
+                    // Cancel only before the original app's long-press deadline.
                     if (!blocker.start()) {
                         main.post(() -> {
                             if (request == generation && allowed()) {
@@ -156,9 +159,16 @@ final class PortalThumbCaptureSource {
                 });
                 if (!cancelledOriginal[0]) return;
                 main.post(() -> {
-                    if (request != generation || !allowed()) return;
+                    if (request != generation || !allowed()) {
+                        if (content != null && content.isImage()) content.bitmap.recycle();
+                        return;
+                    }
                     if (content == null) {
-                        showFailure("页面内容已变化，未显示分词，请重试");
+                        showFailure("页面内容已变化，请重新按压");
+                        return;
+                    }
+                    if (content.isImage()) {
+                        openImage(request, content);
                         return;
                     }
                     Bundle text = new Bundle();
@@ -179,13 +189,42 @@ final class PortalThumbCaptureSource {
             } catch (IOException | SecurityException error) {
                 DragShareLog.w(TAG, "area capture failed", error);
                 main.post(() -> {
-                    if (request == generation && !stopped) showFailure("面积取词服务已中断，请重载传送门后重试");
+                    if (request == generation && !stopped) showFailure("按压识别失败：" + error.getMessage());
                 });
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
                 DragShareLog.i(TAG, "area capture stopped");
             } finally {
                 main.post(() -> busy = false);
+            }
+        });
+    }
+
+    private void openImage(long request, CapturedContent content) {
+        ImageStagingClient.stage(context, content.bitmap, new ImageStagingClient.Callback() {
+            @Override public void onStaged(Uri uri) {
+                content.bitmap.recycle();
+                main.post(() -> {
+                    if (request != generation || !allowed()) return;
+                    Bundle image = new Bundle();
+                    image.putParcelable("image", uri);
+                    try {
+                        context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                                ImageOcrOverlay.METHOD_RECOGNIZE, null, image);
+                        DragShareLog.i(TAG, "area image window requested package=" + content.sourcePackage);
+                    } catch (SecurityException | IllegalStateException error) {
+                        DragShareLog.w(TAG, "cannot open area image window", error);
+                        showFailure("无法打开图片识字窗口：" + error.getMessage());
+                    }
+                });
+            }
+
+            @Override public void onFailure(Throwable error) {
+                content.bitmap.recycle();
+                DragShareLog.w(TAG, "cannot stage area image", error);
+                main.post(() -> {
+                    if (request == generation && !stopped) showFailure("无法暂存识字图片，请重试");
+                });
             }
         });
     }

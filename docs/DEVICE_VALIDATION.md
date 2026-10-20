@@ -590,3 +590,13 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 本批开始，旧侧条token32b72c6的实时通道已为responsive=true。执行“侧条→设置→原页面→展开”成功，work/hds116-control-open.xml、hds116-control-input.txt；116执行“原生内容拖出→设置→接收应用→展开”成功，work/hds116-variant-open.xml、hds116-variant-input.txt。卸载接收器后，又将既有LSPosed任务置前，WindowManager确认mIsForceHiddenNonSystemOverlayWindow=true；返回bilipai后侧条可再次展开7项，work/hds116-secure-windows.txt、hds116-secure-reopen.xml、hds116-secure-input.txt。没有修改安全页的隐藏悬浮窗策略。
 
 最终活动侧条token82d5b31通道响应正常；lastanr仍为05:28:26旧事件，没有新增同类记录。dumpsys input尾部会附旧ANR快照，其中仍有旧token responsive=false，不能把它误读成当前通道状态。以上缩小了已复现范围，但没有找到旧事件根因，不写成“已修复”，不添加自动重建、重启、空catch或ROM猜测处理。后续若再次出现，应先保存当下输入队列、进程/cgroup状态与线程栈；不要仅重复本批已通过的几个用例来宣称稳定。
+
+## 2026-10-21：1.7.117 Root图片节点到原页识字
+
+- 新增Root明确图片节点分支，文本/图片内容开关分离；图片等完整密码重叠检查后确认，不提前通知。截图后再次核对来源窗口ID/包名、锁屏和整屏尺寸，再裁剪；不捕获普通空白View作为图片，不修改系统保护策略。
+- 首轮真实实验返回“画面尺寸已变化”，没有打开错误图片。根因为资源DisplayMetrics不是整屏截图尺寸；改用WindowManager完整显示边界，并将其用于节点分类与截图比较。未增加猜测比例或缩放兜底。
+- 最终178项单测、0失败/错误，Lint、assembleDebug通过，1.7.117/141原位安装，包名及debug签名保持原值。最终传送门注入/Root握手均141、Root=true；未重启android/AICR作用域，本批未修改其Hook。
+- 独立诊断应用生成900×500五行中英Canvas图片，屏幕ImageView边界[24,490][1416,1263]；外部普通文字对照独立存在。OverlayInteractionProbe直接调用生产RootSession，真实截得1392×773，PNG暂存572689字节，经现有OCR请求打开83字符分词窗；结果含图片五行，未包含对照TextView。work/hds117-root-image-final.txt、hds117-root-image-log.txt、hds117-image-sample.xml、hds117-image-result.xml/png。topResumedActivity仍为诊断MainActivity，无模块Activity切换；关闭分词后回到原样本，work/hds117-image-closed.xml。
+- 识别引擎保留AICR=true，没有静默切换；“·”被识成“-”，其余样本文字肉眼可读，不将单样本写成准确率通过。Instrumentation的accepted只证明请求提交，识别成功依据实际83字符窗口和节点内容。
+- 实验绕过面积确认与原触摸接管，不模拟面积：Portal UID暂存、180ms确认、完整密码扫描耗时是否能赶在300ms原生长按前、真实手指流程仍未验。Root语义样本本次4ms，不作为复杂页面性能基准。面积输入无有效新样本，继续关闭。bilipai普通长按与115旧侧条ANR继续未解决。
+- 诊断应用/临时安装APK已移除，未写入中转站；恢复原bilipai任务2183，保留休息提醒，不恢复播放。引擎/直接复制/主题偏好未改。最终APK outputs/HyperDragShare-1.7.117-debug.apk，SHA256 5F7C09632CB95C94D9078C7E15DEF793AA7E8FA02CC077F81727AA515EFDFF15。

@@ -88,6 +88,17 @@ public final class RootNodeCaptureMain {
     private static JSONObject captureRequest(JSONObject request, UiAutomation automation,
                                             Object eventLock, int[] eventVersion, Handler watchdog)
             throws Exception {
+        if ("verify_window".equals(request.optString("operation"))) {
+            automation.clearCache();
+            AccessibilityNodeInfo current = automation.getRootInActiveWindow();
+            try {
+                return new JSONObject().put("same_window", current != null
+                        && current.getWindowId() == request.getInt("window_id")
+                        && request.getString("package").equals(string(current.getPackageName())));
+            } finally {
+                if (current != null) current.recycle();
+            }
+        }
         Runnable timeout = () -> {
             System.err.println("Root node capture exceeded deadline");
             System.exit(2);
@@ -110,7 +121,7 @@ public final class RootNodeCaptureMain {
                 } finally {
                     if (current != null) current.recycle();
                 }
-                return result.put("root_ms", rootAt - started)
+                return result.put("window_id", root.getWindowId()).put("root_ms", rootAt - started)
                         .put("capture_ms", capturedAt - rootAt)
                         .put("verify_ms", SystemClock.uptimeMillis() - capturedAt);
             } finally {
@@ -176,13 +187,13 @@ public final class RootNodeCaptureMain {
         float x = (float) request.getDouble("x"), y = (float) request.getDouble("y");
         AccessibilityNodeClassifier classifier = new AccessibilityNodeClassifier(
                 (float) request.getDouble("density"), request.getInt("width"), request.getInt("height"));
-        if (request.optBoolean("early_candidate", false)) {
+        if (request.optBoolean("early_candidate", false) && request.optBoolean("allow_text", true)) {
             long started = SystemClock.uptimeMillis();
             List<AccessibilityNodeSnapshot> pointNodes = new ArrayList<>();
             List<Rect> pointPasswords = new ArrayList<>();
             traverse(root, 0, false, pointNodes, pointPasswords, started, true, x, y);
-            AccessibilityCandidateSelector.Selection point = selectText(
-                    classifier, pointNodes, pointPasswords, x, y, source);
+            AccessibilityCandidateSelector.Selection point = selectContent(
+                    classifier, pointNodes, pointPasswords, x, y, source, true, false);
             // Rich TextViews can have clickable-span children. Their whole subtree is checked
             // below, while unrelated branches stay deferred until the complete lookup.
             if (point != null && (point.candidate.leaf || point.candidate.editable
@@ -197,20 +208,23 @@ public final class RootNodeCaptureMain {
         List<AccessibilityNodeSnapshot> snapshots = new ArrayList<>();
         List<Rect> passwords = new ArrayList<>();
         traverse(root, 0, false, snapshots, passwords, SystemClock.uptimeMillis(), false, x, y);
-        AccessibilityCandidateSelector.Selection selection = selectText(
-                classifier, snapshots, passwords, x, y, source);
+        AccessibilityCandidateSelector.Selection selection = selectContent(
+                classifier, snapshots, passwords, x, y, source,
+                request.optBoolean("allow_text", true), request.optBoolean("allow_images", false));
         absent.put("node_count", snapshots.size());
         if (selection == null) return absent;
         AccessibilityCandidate candidate = selection.candidate;
         return new JSONObject().put("found", true).put("package", source)
+                .put("kind", selection.isImage() ? "image" : "text")
                 .put("node_count", snapshots.size()).put("text", candidate.text).put("before", selection.beforeText)
                 .put("after", selection.afterText)
                 .put("left", candidate.bounds.left).put("top", candidate.bounds.top)
                 .put("right", candidate.bounds.right).put("bottom", candidate.bounds.bottom);
     }
 
-    private static AccessibilityCandidateSelector.Selection selectText(AccessibilityNodeClassifier classifier,
-            List<AccessibilityNodeSnapshot> snapshots, List<Rect> passwords, float x, float y, String source) {
+    static AccessibilityCandidateSelector.Selection selectContent(AccessibilityNodeClassifier classifier,
+            List<AccessibilityNodeSnapshot> snapshots, List<Rect> passwords, float x, float y, String source,
+            boolean allowText, boolean allowImages) {
         for (Rect password : passwords) {
             if (password.contains((int) x, (int) y)) return null;
             // An ancestor can expose combined text, so it must not be a candidate either.
@@ -218,8 +232,10 @@ public final class RootNodeCaptureMain {
         }
         AccessibilityCandidateSelector.Selection selection = AccessibilityCandidateSelector.select(
                 classifier.classify(snapshots), x, y);
-        return selection != null && !selection.isImage()
-                && source.equals(selection.candidate.sourcePackage) ? selection : null;
+        if (selection == null || !source.equals(selection.candidate.sourcePackage)) return null;
+        // Images wait for the complete password scan. A generic blank View is not an image request.
+        if (selection.isImage()) return allowImages && selection.candidate.strongImage ? selection : null;
+        return allowText ? selection : null;
     }
 
     private static void traverse(AccessibilityNodeInfo node, int depth, boolean web,

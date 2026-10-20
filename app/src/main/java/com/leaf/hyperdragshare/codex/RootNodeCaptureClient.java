@@ -4,7 +4,9 @@ import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Rect;
+import android.graphics.Bitmap;
 import android.util.DisplayMetrics;
+import android.view.WindowManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -73,17 +75,25 @@ final class RootNodeCaptureClient {
         }
 
         synchronized CapturedContent capture(float x, float y, Set<String> blockedPackages,
+                                             boolean allowText, boolean allowImages,
                                              CandidateHandler handler)
                 throws IOException, InterruptedException {
             if (closed) throw new IOException("Root node process has stopped; reload the Portal scope");
             KeyguardManager keyguard = context.getSystemService(KeyguardManager.class);
             if (keyguard.isKeyguardLocked()) return null;
             DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+            Rect display = context.getSystemService(WindowManager.class).getMaximumWindowMetrics().getBounds();
+            int expectedWidth = display.width(), expectedHeight = display.height();
+            String source, text, before, after;
+            Rect bounds;
+            int windowId;
+            boolean image;
             try {
                 JSONObject request = new JSONObject().put("x", x).put("y", y)
-                        .put("density", metrics.density).put("width", metrics.widthPixels)
-                        .put("height", metrics.heightPixels).put("blocked", new JSONArray(blockedPackages))
-                        .put("early_candidate", true);
+                        .put("density", metrics.density).put("width", expectedWidth)
+                        .put("height", expectedHeight).put("blocked", new JSONArray(blockedPackages))
+                        .put("early_candidate", true).put("allow_text", allowText)
+                        .put("allow_images", allowImages);
                 process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
                 process.getOutputStream().flush();
                 JSONObject result = awaitResponse();
@@ -94,15 +104,61 @@ final class RootNodeCaptureClient {
                 if (keyguard.isKeyguardLocked() || !result.getBoolean("found")) return null;
                 if (!notified) accepted = handler.onCandidate();
                 if (!accepted) return null;
-                String source = result.getString("package");
+                source = result.getString("package");
                 if (blockedPackages.contains(source)) return null;
-                return CapturedContent.text(result.getString("text"), source,
-                        new Rect(result.getInt("left"), result.getInt("top"),
-                                result.getInt("right"), result.getInt("bottom")),
-                        result.optString("before", null), result.optString("after", null));
+                String kind = result.getString("kind");
+                if (!"text".equals(kind) && !"image".equals(kind)) throw new JSONException("Unknown node kind");
+                image = "image".equals(kind);
+                text = image ? null : result.getString("text");
+                before = result.optString("before", null);
+                after = result.optString("after", null);
+                bounds = new Rect(result.getInt("left"), result.getInt("top"),
+                        result.getInt("right"), result.getInt("bottom"));
+                windowId = result.getInt("window_id");
             } catch (JSONException error) {
                 close();
                 throw new IOException("Invalid Root node response", error);
+            } catch (IOException | InterruptedException error) {
+                close();
+                throw error;
+            }
+            return image ? captureImage(source, windowId, bounds, expectedWidth, expectedHeight)
+                    : CapturedContent.text(text, source, bounds, before, after);
+        }
+
+        private CapturedContent captureImage(String source, int windowId, Rect bounds,
+                                             int expectedWidth, int expectedHeight)
+                throws IOException, InterruptedException {
+            Bitmap screen = new RootScreenshotter().capture();
+            try {
+                if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()
+                        || !isCurrentWindow(source, windowId)) return null;
+                if (screen.getWidth() != expectedWidth || screen.getHeight() != expectedHeight) {
+                    throw new IOException("画面尺寸已变化，请重新按压（" + expectedWidth + "×" + expectedHeight
+                            + "→" + screen.getWidth() + "×" + screen.getHeight() + "）");
+                }
+                Rect crop = new Rect(bounds);
+                if (!crop.intersect(0, 0, screen.getWidth(), screen.getHeight())) {
+                    throw new IOException("图片区域已移出屏幕");
+                }
+                Bitmap image = Bitmap.createBitmap(screen, crop.left, crop.top, crop.width(), crop.height());
+                if (image == screen) screen = null;
+                return CapturedContent.image(image, source, crop, true);
+            } finally {
+                if (screen != null) screen.recycle();
+            }
+        }
+
+        private boolean isCurrentWindow(String source, int windowId) throws IOException, InterruptedException {
+            try {
+                JSONObject request = new JSONObject().put("operation", "verify_window")
+                        .put("package", source).put("window_id", windowId);
+                process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
+                process.getOutputStream().flush();
+                return awaitResponse().getBoolean("same_window");
+            } catch (JSONException error) {
+                close();
+                throw new IOException("Invalid Root window response", error);
             } catch (IOException | InterruptedException error) {
                 close();
                 throw error;

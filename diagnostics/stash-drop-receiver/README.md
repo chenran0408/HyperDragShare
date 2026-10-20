@@ -31,3 +31,9 @@ adb shell am start -W -n com.leaf.dragdrop.probe/.MainActivity
 ```powershell
 adb uninstall com.leaf.dragdrop.probe
 ```
+
+## 生成图片识字样本
+
+“显示识字样本”在同一Activity显示900×500五行中英Canvas图片，ImageView描述为“图片”，上方普通TextView用作对照。用于主工程debug OverlayInteractionProbe的mode=root_image；先读取实际ImageView边界，再明确传入x/y，不默认采集屏幕。
+
+1.7.117目标机实验取到1392×773节点截图，实际AICR原页分词83字符；“·”误识“-”。accepted只表示OCR请求提交，不能替代检查最终窗口。此入口不模拟触摸面积，也不证明面积校准、Portal UID或原手势接管。
