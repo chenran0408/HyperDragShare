@@ -18,12 +18,17 @@ import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
@@ -78,7 +85,7 @@ object StashOverlayPanel {
 
     private class Shelf(private val app: Context) {
         private val position = app.getSharedPreferences("stash_window_position", Context.MODE_PRIVATE)
-        private var onLeft = position.getBoolean("left", false)
+        private var onLeft by mutableStateOf(position.getBoolean("left", false))
         private var centerY = position.getFloat("center_y", .5f)
         private var dragLeft: Float? = null
         private val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
@@ -130,9 +137,9 @@ object StashOverlayPanel {
             val density = context.resources.displayMetrics.density
             overlay.window.attributes = overlay.window.attributes.apply {
                 width = if (expanded) minOf((340 * density).toInt(), metrics.width() - (16 * density).toInt())
-                    else (60 * density).toInt()
+                    else (24 * density).toInt()
                 height = if (expanded) minOf((640 * density).toInt(), (metrics.height() * .78f).toInt())
-                    else (88 * density).toInt()
+                    else (96 * density).toInt()
                 gravity = Gravity.LEFT or Gravity.TOP
                 x = (dragLeft?.toInt() ?: if (onLeft) 0 else metrics.width() - width)
                     .coerceIn(0, (metrics.width() - width).coerceAtLeast(0))
@@ -174,6 +181,35 @@ object StashOverlayPanel {
             )
         }
 
+        @Composable private fun CollapsedHandle() {
+            Box(
+                Modifier.fillMaxSize()
+                    .semantics { contentDescription = "展开中转站，${entries.size} 项；可拖动调整位置" }
+                    .clickable(onClick = ::expand)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { dragLeft = overlay.window.attributes.x.toFloat() },
+                            onDragEnd = ::finishMove,
+                            onDragCancel = ::finishMove,
+                        ) { change, delta ->
+                            change.consume()
+                            val height = context.getSystemService(WindowManager::class.java)
+                                .currentWindowMetrics.bounds.height()
+                            dragLeft = (dragLeft ?: overlay.window.attributes.x.toFloat()) + delta.x
+                            centerY = (centerY + delta.y / height).coerceIn(0f, 1f)
+                            resize()
+                        }
+                    },
+                contentAlignment = if (onLeft) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                Box(
+                    Modifier.width(5.dp).height(64.dp)
+                        .background(MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            RoundedCornerShape(3.dp))
+                )
+            }
+        }
+
         private fun reload() {
             if (loading) return
             scope.launch {
@@ -211,6 +247,7 @@ object StashOverlayPanel {
                 } else ClipData.newUri(app.contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
                 app.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
                 Toast.makeText(app, "已复制", Toast.LENGTH_SHORT).show()
+                collapse()
             } catch (error: SecurityException) {
                 report("复制失败", error)
             }
@@ -304,15 +341,10 @@ object StashOverlayPanel {
                         else -> collapse()
                     }
                 }
-                Scaffold {
-                    if (!expanded) {
-                        Card(modifier = Modifier.fillMaxSize()) {
-                            Column {
-                                MoveHandle()
-                                TextButton(text = "中转 ${entries.size}", onClick = ::expand, modifier = Modifier.fillMaxSize())
-                            }
-                        }
-                    } else {
+                if (!expanded) {
+                    CollapsedHandle()
+                } else {
+                    Scaffold {
                         Column(Modifier.fillMaxSize()) {
                             MoveHandle()
                             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),

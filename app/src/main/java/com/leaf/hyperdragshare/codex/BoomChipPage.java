@@ -531,10 +531,8 @@ public class BoomChipPage {
             final int start = mLayout.getRowStart(i);
             final int count = mLayout.getColumnCount(i);
             if (mLayout.isGapRow(i)) {
-                final int rowHeight = mContext.getResources().getDimensionPixelOffset(R.dimen.chip_row_height);
-                final int gapHeight = Math.round(
-                        rowHeight * BigBangSettings.get(mContext).getGapRowHeightPercent() / 100f
-                );
+                final int gapHeight = mContext.getResources()
+                        .getDimensionPixelSize(R.dimen.chip_paragraph_gap);
                 View spacer = new View(mContext);
                 spacer.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,

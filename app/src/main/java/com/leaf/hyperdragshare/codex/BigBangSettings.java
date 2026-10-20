@@ -29,10 +29,6 @@ final class BigBangSettings {
         return INSTANCE;
     }
 
-    int getGapRowHeightPercent() {
-        return 100;
-    }
-
     int getWebSearchType() {
         return BoomActionHandler.SEARCH_WEB;
     }
