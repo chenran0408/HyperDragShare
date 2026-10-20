@@ -649,39 +649,7 @@ internal fun StashEntryCard(
                     TextButton(text = "分享", onClick = { onShare(entry) }, modifier = Modifier.weight(1f))
                     TextButton(text = "删除", onClick = { onDelete(entry) }, modifier = Modifier.weight(1f))
                 }
-                val dragColor = MiuixTheme.colorScheme.primary
-                AndroidView(
-                    modifier = Modifier.fillMaxWidth().height(32.dp),
-                    factory = { viewContext ->
-                        TextView(viewContext).apply {
-                            text = "按住拖出"
-                            textSize = 12f
-                            gravity = android.view.Gravity.CENTER
-                            setOnLongClickListener { view ->
-                                val clip = if (entry.kind == StashStore.KIND_TEXT) {
-                                    ClipData.newPlainText("中转站文字", entry.text.orEmpty())
-                                } else {
-                                    ClipData.newUri(context.contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
-                                }
-                                val dragFlags = View.DRAG_FLAG_GLOBAL or if (entry.kind == StashStore.KIND_IMAGE) {
-                                    View.DRAG_FLAG_GLOBAL_URI_READ
-                                } else {
-                                    0
-                                }
-                                val started = view.startDragAndDrop(
-                                    clip,
-                                    View.DragShadowBuilder(view),
-                                    null,
-                                    dragFlags,
-                                )
-                                if (!started) Toast.makeText(context, "无法开始拖出", Toast.LENGTH_SHORT).show()
-                                else onDragStarted()
-                                started
-                            }
-                        }
-                    },
-                    update = { it.setTextColor(dragColor.toArgb()) },
-                )
+                StashDragHandle(listOf(entry), onDragStarted)
             }
         }
     }

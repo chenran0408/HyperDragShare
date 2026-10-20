@@ -340,6 +340,7 @@ object StashOverlayPanel {
                                     })
                                     TextButton("分享", ::shareSelected, enabled = selectedIds.isNotEmpty())
                                 }
+                                StashDragHandle(entries.filter { it.id in selectedIds }, ::collapse)
                             }
                             message?.let {
                                 Text(it, Modifier.padding(12.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
