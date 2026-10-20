@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,6 +88,7 @@ class SearchOverlayActivity : ComponentActivity() {
     private var canNavigateForward by mutableStateOf(false)
     private var pageError by mutableStateOf<String?>(null)
     private var webView: WebView? = null
+    private var restoredWebState: Bundle? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,18 +102,21 @@ class SearchOverlayActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = !dark
         }
 
-        query = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-        selectedEngine = SearchEngineCatalog.defaultForType(
+        query = savedInstanceState?.getString("query") ?: intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+        selectedEngine = SearchEngineCatalog.engines.firstOrNull {
+            it.id == savedInstanceState?.getString("engine")
+        } ?: SearchEngineCatalog.defaultForType(
             intent.getIntExtra(EXTRA_SEARCH_TYPE, BoomActionHandler.SEARCH_WEB),
         )
         panelFraction = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
             .getFloat(PANEL_HEIGHT_KEY, DEFAULT_PANEL_FRACTION)
             .coerceIn(MIN_PANEL_FRACTION, MAX_PANEL_FRACTION)
         navigationTarget = SearchEngineCatalog.destination(selectedEngine, query)
+        restoredWebState = savedInstanceState?.getBundle("web")
 
         setContent {
             MiuixTheme(
-                controller = ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light),
+                controller = remember(dark) { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
             ) {
                 SearchPanel(
                     query = query,
@@ -147,11 +152,21 @@ class SearchOverlayActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        restoredWebState = null
         query = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
         selectedEngine = SearchEngineCatalog.defaultForType(
             intent.getIntExtra(EXTRA_SEARCH_TYPE, BoomActionHandler.SEARCH_WEB),
         )
         submitSearch()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("query", query)
+        outState.putString("engine", selectedEngine.id)
+        val history = Bundle()
+        if (webView?.saveState(history) != null) outState.putBundle("web", history)
+        else restoredWebState?.let { outState.putBundle("web", it) }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {
@@ -223,7 +238,11 @@ class SearchOverlayActivity : ComponentActivity() {
         }
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl)))
-        } catch (_: Throwable) {
+        } catch (error: android.content.ActivityNotFoundException) {
+            DragShareLog.w("DragShare/Search", "browser unavailable", error)
+            Toast.makeText(this, R.string.search_browser_unavailable, Toast.LENGTH_SHORT).show()
+        } catch (error: SecurityException) {
+            DragShareLog.w("DragShare/Search", "browser launch denied", error)
             Toast.makeText(this, R.string.search_browser_unavailable, Toast.LENGTH_SHORT).show()
         }
     }
@@ -269,6 +288,16 @@ class SearchOverlayActivity : ComponentActivity() {
             }
         }
         webView = this
+        restoredWebState?.let { history ->
+            if (restoreState(history) != null) {
+                tag = navigationRequest
+                updateNavigationState(this)
+            } else {
+                DragShareLog.w("DragShare/Search", "WebView could not restore saved history")
+                Toast.makeText(context, "浏览记录无法恢复，已重新搜索", Toast.LENGTH_SHORT).show()
+            }
+        }
+        restoredWebState = null
     }
 
     private fun updateNavigationState(view: WebView) {
