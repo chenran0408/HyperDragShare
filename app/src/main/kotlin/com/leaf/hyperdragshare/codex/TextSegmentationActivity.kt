@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
@@ -52,6 +53,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -109,6 +112,18 @@ class TextSegmentationActivity : ComponentActivity() {
     private var legacyActionColor = AndroidColor.DKGRAY
     private var animatedDismissRequester: (() -> Unit)? = null
     private val requests = LatestRequest()
+    private var totalCharacterCount by mutableIntStateOf(0)
+    private var selectedCharacterCount by mutableIntStateOf(0)
+    private var hasTextSelection by mutableStateOf(false)
+
+    private fun updateSelectionSummary() {
+        val page = boomChipPage ?: return
+        val original = page.originalText.orEmpty()
+        hasTextSelection = page.hasSelection()
+        totalCharacterCount = original.codePointCount(0, original.length)
+        val selected = if (hasTextSelection) page.selectedTextOrOriginal() else ""
+        selectedCharacterCount = selected.codePointCount(0, selected.length)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,6 +139,7 @@ class TextSegmentationActivity : ComponentActivity() {
         }
         boomChipPage = BoomChipPage(this, legacyContentView, false).also { page ->
             page.setOnChipsChangedListener(::refreshLegacyTheme)
+            page.setOnSelectionChangedListener(::updateSelectionSummary)
             page.restoreSelectedState(savedInstanceState?.getSerializable(SELECTED_STATE))
         }
         textSizeSp = BigBangSettings.getTextSizeSp(this)
@@ -161,6 +177,10 @@ class TextSegmentationActivity : ComponentActivity() {
                             segmentLocally(text)
                         },
                         onSelectAll = { selectAll() },
+                        totalCharacterCount = totalCharacterCount,
+                        selectedCharacterCount = selectedCharacterCount,
+                        hasTextSelection = hasTextSelection,
+                        onClearSelection = { boomChipPage?.handleClick() },
                         onMoreAction = ::handleMoreAction,
                         onPanelPositionChanged = ::savePanelPosition,
                         onOcr = ::reopenOcr,
@@ -491,6 +511,10 @@ private fun BigBangOverlayContent(
     originalText: () -> String,
     onEditText: (String) -> Unit,
     onSelectAll: () -> Unit,
+    totalCharacterCount: Int,
+    selectedCharacterCount: Int,
+    hasTextSelection: Boolean,
+    onClearSelection: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
     onPanelPositionChanged: (Float, Float) -> Unit,
     onOcr: () -> Unit,
@@ -549,15 +573,18 @@ private fun BigBangOverlayContent(
         }
     }
     val panelScale = 0.84f + (0.16f * enterProgress)
-    val requestDismiss = {
-        if (!dismissing && onDismissRequest()) {
+    val closePanel: () -> Unit = {
+        if (!dismissing) {
             dismissing = true
             panelVisible = false
         }
     }
+    val requestDismiss: () -> Unit = {
+        if (!dismissing && onDismissRequest()) closePanel()
+    }
 
-    DisposableEffect(requestDismiss) {
-        onDismissRequesterChanged(requestDismiss)
+    DisposableEffect(closePanel) {
+        onDismissRequesterChanged(closePanel)
         onDispose { onDismissRequesterChanged(null) }
     }
     LaunchedEffect(Unit) { panelVisible = true }
@@ -636,12 +663,21 @@ private fun BigBangOverlayContent(
                             )
                         },
                         center = {
-                            Text(
-                                text = stringResource(R.string.bigbang_overlay_title),
-                                color = MiuixTheme.colorScheme.onSurface,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(R.string.bigbang_overlay_title),
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = if (hasTextSelection) "已选 $selectedCharacterCount / $totalCharacterCount"
+                                        else "共 $totalCharacterCount 字符",
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                )
+                            }
                         },
                         trailing = {
                             OverlayIconAction(
@@ -671,9 +707,24 @@ private fun BigBangOverlayContent(
                             OverlayIconAction(
                                 iconRes = R.drawable.boom_cancel,
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                onClick = requestDismiss,
+                                onClick = closePanel,
                                 contentDescription = stringResource(R.string.search_overlay_close),
                             )
+                        },
+                        trailing = {
+                            if (hasTextSelection) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize()
+                                        .clickable(role = Role.Button, onClick = onClearSelection),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "取消选择",
+                                        color = MiuixTheme.colorScheme.primary,
+                                        fontSize = 14.sp,
+                                    )
+                                }
+                            }
                         },
                     )
                 },

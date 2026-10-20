@@ -164,6 +164,19 @@ public class BoomChipPage {
     }
 
     private Runnable mOnChipsChanged;
+    private Runnable mOnSelectionChanged;
+
+    public void setOnSelectionChangedListener(Runnable listener) {
+        mOnSelectionChanged = listener;
+    }
+
+    void notifySelectionChanged() {
+        if (mOnSelectionChanged != null) mOnSelectionChanged.run();
+    }
+
+    public boolean hasSelection() {
+        return mBoomActionHandler != null && mBoomActionHandler.hasSelection();
+    }
 
     public void setOnChipsChangedListener(Runnable listener) {
         mOnChipsChanged = listener;
@@ -536,6 +549,7 @@ public class BoomChipPage {
         if (mOnChipsChanged != null) {
             mOnChipsChanged.run();
         }
+        notifySelectionChanged();
         mBoomConent.requestLayout();
         mScroller.post(new Runnable() {
             @Override

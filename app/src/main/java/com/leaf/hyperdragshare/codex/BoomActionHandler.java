@@ -106,6 +106,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
 
         moveChipRows();
 
+        mBoomPage.notifySelectionChanged();
         mSelectBar.post(new Runnable() {
             @Override
             public void run() {
@@ -138,6 +139,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
             mBoomPage.resetChips();
         }
         moveChipRows();
+        mBoomPage.notifySelectionChanged();
     }
 
     public boolean handleClick() {
@@ -145,6 +147,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
             mSelectedId.clear();
             mBoomPage.resetChips();
             hideSelectBarAndRect();
+            mBoomPage.notifySelectionChanged();
             return true;
         }
         return false;
@@ -166,6 +169,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
         if (mFakeSelectBar != null && mFakeSelectBar.getVisibility() == View.VISIBLE) {
             mFakeSelectBar.setVisibility(View.INVISIBLE);
         }
+        mBoomPage.notifySelectionChanged();
     }
 
     private boolean isChineseWord(char c) {
