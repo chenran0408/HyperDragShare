@@ -36,7 +36,9 @@ object BigBangOverlayLauncher {
         val sourceImage = input.getParcelable("source_image", Uri::class.java)
         val before = input.getString("before_text")
         val after = input.getString("after_text")
-        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after) }
+        val sourceArea = input.getBundle("source_area")
+        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after,
+            sourceArea = sourceArea) }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
@@ -56,7 +58,7 @@ object BigBangOverlayLauncher {
     }
 
     private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null,
-        before: String? = null, after: String? = null) {
+        before: String? = null, after: String? = null, sourceArea: Bundle? = null) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
@@ -94,7 +96,7 @@ object BigBangOverlayLauncher {
                     val state = Bundle()
                     session.saveState(state)
                     overlay.dismiss()
-                    showReturnTab(app) { open(app, text, x, y, sourceImage, state) }
+                    showReturnTab(app) { open(app, text, x, y, sourceImage, state, sourceArea = sourceArea) }
                 } catch (error: android.content.ActivityNotFoundException) {
                     report(app, error)
                 } catch (error: SecurityException) {
@@ -123,7 +125,7 @@ object BigBangOverlayLauncher {
                     if (generation != windowGeneration) return
                     val extra = resultData?.getString("text")
                     if (resultCode != android.app.Activity.RESULT_OK || extra.isNullOrBlank()) {
-                        open(app, text, x, y, sourceImage, state)
+                        open(app, text, x, y, sourceImage, state, sourceArea = sourceArea)
                         return
                     }
                     Thread({
@@ -137,7 +139,8 @@ object BigBangOverlayLauncher {
                             main.post { report(app, error) }
                         } finally {
                             main.post {
-                                if (generation == windowGeneration) open(app, text, x, y, sourceImage, state)
+                                if (generation == windowGeneration) open(app, text, x, y, sourceImage, state,
+                                    sourceArea = sourceArea)
                             }
                         }
                     }, "bigbang-append-screen").start()
@@ -147,6 +150,7 @@ object BigBangOverlayLauncher {
                 context.startActivity(Intent(context, ScreenOcrActivity::class.java)
                     .putExtra(ScreenOcrActivity.EXTRA_SELECT_REGION, true)
                     .putExtra(ScreenOcrActivity.EXTRA_RESULT_RECEIVER, receiver)
+                    .putExtra("source_area", sourceArea)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
                 overlay.dismiss()
             } catch (error: android.content.ActivityNotFoundException) {

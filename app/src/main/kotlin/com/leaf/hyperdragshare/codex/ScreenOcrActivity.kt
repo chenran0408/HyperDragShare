@@ -590,6 +590,17 @@ class ScreenOcrActivity : ComponentActivity() {
         var start by remember(screenshot) { mutableStateOf<Offset?>(null) }
         var end by remember(screenshot) { mutableStateOf<Offset?>(null) }
         var viewSize by remember(screenshot) { mutableStateOf(IntSize.Zero) }
+        val sourceBounds = remember(screenshot) {
+            intent.getBundleExtra("source_area")?.let { area ->
+                if (area.getInt("width") == screenshot.width && area.getInt("height") == screenshot.height) {
+                    area.getParcelable("bounds", android.graphics.Rect::class.java)?.let { original ->
+                        android.graphics.Rect(original).takeIf {
+                            it.intersect(0, 0, screenshot.width, screenshot.height) && !it.isEmpty
+                        }
+                    }
+                } else null
+            }
+        }
         val selection = if (start != null && end != null) {
             Rect(
                 left = minOf(start!!.x, end!!.x),
@@ -658,6 +669,18 @@ class ScreenOcrActivity : ComponentActivity() {
                         style = Stroke(width = 3.dp.toPx()),
                     )
                 }
+                sourceBounds?.let { bounds ->
+                    drawRect(
+                        color = Color(0xFF5AA9FF),
+                        topLeft = Offset(bounds.left * size.width / screenshot.width,
+                            bounds.top * size.height / screenshot.height),
+                        size = Size(bounds.width() * size.width / screenshot.width,
+                            bounds.height() * size.height / screenshot.height),
+                        style = Stroke(width = 2.dp.toPx(),
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                                floatArrayOf(10.dp.toPx(), 6.dp.toPx()))),
+                    )
+                }
             }
             Column(
                 modifier = Modifier
@@ -685,7 +708,8 @@ class ScreenOcrActivity : ComponentActivity() {
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = stringResource(R.string.screen_ocr_region_hint),
+                                text = if (sourceBounds != null) "蓝色虚线是原文参考位置，页面可能已变化；请框选要追加的文字"
+                                    else stringResource(R.string.screen_ocr_region_hint),
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 fontSize = 13.sp,
                             )
