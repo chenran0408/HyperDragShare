@@ -580,14 +580,19 @@ private fun MainPage(
             item(key = "text-panel-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     ArrowPreference(
-                        title = "原页分词悬浮窗",
-                        summary = "允许在其他应用上层显示，拖拽文字到分词后直接操作，不切换页面",
+                        title = "悬浮窗权限",
+                        summary = "用于原页分词和侧边中转站，允许在其他应用上层操作",
                         onClick = {
                             context.startActivity(Intent(
                                 android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                 android.net.Uri.parse("package:${context.packageName}"),
                             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         },
+                    )
+                    ArrowPreference(
+                        title = "打开侧边中转站",
+                        summary = "在当前界面旁取用暂存内容，可收起、复制、分享或拖出",
+                        onClick = { StashOverlayPanel.show(context) },
                     )
                     ArrowPreference(
                         title = "中转站",

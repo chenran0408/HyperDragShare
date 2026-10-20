@@ -67,9 +67,12 @@ final class ThumbCaptureSource {
                 AccessibilityCandidateSelector.Selection selection = service.selectCandidateAt(x, y, request);
                 if (!accepts(request, sourcePackage)) return;
                 if (selection != null && !selection.isImage()) {
-                    Intent intent = TextSegmentationActivity.createIntent(
-                            selection.candidate.text, Math.round(x), Math.round(y));
-                    main.post(() -> open(request, sourcePackage, intent));
+                    main.post(() -> {
+                        if (accepts(request, sourcePackage)) {
+                            BigBangOverlayLauncher.showText(service, selection.candidate.text,
+                                    Math.round(x), Math.round(y), null);
+                        }
+                    });
                     return;
                 }
                 Rect bounds;

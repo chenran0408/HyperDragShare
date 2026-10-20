@@ -2,6 +2,8 @@ package com.leaf.hyperdragshare.codex
 
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Bundle
@@ -21,19 +23,37 @@ object BigBangOverlayLauncher {
     @JvmStatic fun request(context: Context, input: Bundle?): Bundle {
         val text = input?.getString("text")
         require(!text.isNullOrBlank()) { "没有可分词的文字" }
-        check(Settings.canDrawOverlays(context)) { "请先在模块设置中允许“原页分词悬浮窗”权限" }
+        check(Settings.canDrawOverlays(context)) { "请先在模块设置中允许悬浮窗权限" }
         val x = input.getInt("x", -1)
         val y = input.getInt("y", -1)
-        main.post { open(context.applicationContext, text, x, y) }
+        val sourceImage = input.getParcelable("source_image", Uri::class.java)
+        main.post { open(context.applicationContext, text, x, y, sourceImage) }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
-    private fun open(app: Context, text: String, x: Int, y: Int) {
+    @JvmStatic fun showText(context: Context, text: String, x: Int, y: Int, sourceImage: Uri?): Boolean {
+        if (!Settings.canDrawOverlays(context)) {
+            Toast.makeText(context, "请先在模块设置中允许悬浮窗权限", Toast.LENGTH_LONG).show()
+            return false
+        }
+        if (text.isBlank()) return false
+        main.post { open(context.applicationContext, text, x, y, sourceImage) }
+        return true
+    }
+
+    private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?) {
+        if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
+            Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
+            return
+        }
         active?.dismiss()
         val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
         val context = app.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         lateinit var overlay: InteractiveOverlayWindow
+        val screenOff = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = overlay.dismiss()
+        }
         val session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
             override fun dismiss() = overlay.dismiss()
             override fun search(text: String, type: Int) {
@@ -83,12 +103,14 @@ object BigBangOverlayLauncher {
         overlay = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
             onDismissed = {
                 session.close()
+                app.unregisterReceiver(screenOff)
                 if (active === overlay) active = null
             },
             onFailure = { report(app, it) },
         ) { session.Content() }
+        app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
-        if (overlay.show()) session.open(text, x, y, null)
+        if (overlay.show()) session.open(text, x, y, sourceImage)
     }
 
     private fun report(context: Context, error: Exception) {

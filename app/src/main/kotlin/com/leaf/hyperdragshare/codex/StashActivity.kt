@@ -131,7 +131,7 @@ class StashActivity : ComponentActivity() {
                         }
                     },
                     onOpenText = { entry ->
-                        startActivity(TextSegmentationActivity.createIntent(entry.text.orEmpty()))
+                        BigBangOverlayLauncher.showText(this, entry.text.orEmpty(), -1, -1, null)
                     },
                     onPreviewImage = { previewEntry = it },
                     onCopy = ::copyEntry,
@@ -577,7 +577,7 @@ private fun StashMessageCard(message: String, loading: Boolean = false, onRetry:
 }
 
 @Composable
-private fun StashEntryCard(
+internal fun StashEntryCard(
     entry: StashStore.Entry,
     selectionMode: Boolean,
     selected: Boolean,
@@ -587,6 +587,7 @@ private fun StashEntryCard(
     onCopy: (StashStore.Entry) -> Unit,
     onShare: (StashStore.Entry) -> Unit,
     onDelete: (StashStore.Entry) -> Unit,
+    onDragStarted: () -> Unit = {},
 ) {
     val context = LocalContext.current
     Card(
@@ -674,6 +675,7 @@ private fun StashEntryCard(
                                     dragFlags,
                                 )
                                 if (!started) Toast.makeText(context, "无法开始拖出", Toast.LENGTH_SHORT).show()
+                                else onDragStarted()
                                 started
                             }
                         }
@@ -686,7 +688,7 @@ private fun StashEntryCard(
 }
 
 @Composable
-private fun StashImage(
+internal fun StashImage(
     entry: StashStore.Entry,
     edgeLimit: Int,
     modifier: Modifier = Modifier,

@@ -336,8 +336,7 @@ class ScreenOcrActivity : ComponentActivity() {
 
     private fun openSegmentation(text: String) {
         if (text.isBlank()) return
-        startActivity(TextSegmentationActivity.createIntent(text, -1, -1))
-        finish()
+        if (BigBangOverlayLauncher.showText(this, text, -1, -1, null)) finish()
     }
 
     private fun copyText(text: String) {

@@ -217,16 +217,13 @@ class ImageOcrActivity : ComponentActivity() {
     private fun openTextWhenResumed() {
         if (resumed && pendingText != null && !isFinishing) {
             val text = pendingText ?: return
-            pendingText = null
-            startActivity(
-                TextSegmentationActivity.createIntent(
-                    text = text,
-                    touchX = -1,
-                    touchY = -1,
-                    sourceImage = sourceImageUri,
-                ),
-            )
-            finish()
+            if (BigBangOverlayLauncher.showText(this, text, -1, -1, sourceImageUri)) {
+                pendingText = null
+                finish()
+            } else {
+                isRecognizing = false
+                failureDetail = "请在模块设置中允许原页分词悬浮窗，然后返回重试"
+            }
         }
     }
 
