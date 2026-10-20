@@ -1,6 +1,8 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.ContentValues;
+import android.content.ContentResolver;
+import android.net.Uri;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.SQLException;
@@ -115,6 +117,39 @@ public final class StashStore implements AutoCloseable {
             throw databaseFailure("list stash entries", error);
         }
         return entries;
+    }
+
+    /** One share batch: a failed image rolls back its rows and removes newly copied files. */
+    public int addImages(ContentResolver resolver, List<Uri> uris) throws IOException {
+        if (uris.isEmpty()) throw new IOException("分享内容没有图片文件");
+        List<Entry> added = new ArrayList<>();
+        try {
+            SQLiteDatabase db = database.getWritableDatabase();
+            db.beginTransaction();
+            try {
+                for (Uri uri : uris) {
+                    String mime = resolver.getType(uri);
+                    if (mime != null && !mime.toLowerCase(Locale.ROOT).startsWith("image/")) {
+                        throw new IOException("分享内容包含非图片文件");
+                    }
+                    try (InputStream source = resolver.openInputStream(uri)) {
+                        if (source == null) throw new IOException("无法读取分享的图片");
+                        added.add(addImage(source, mime));
+                    }
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+            return added.size();
+        } catch (IOException error) {
+            for (Entry entry : added) removeGeneratedFile(imageFile(entry.id), error);
+            throw error;
+        } catch (SQLiteException | SecurityException error) {
+            IOException failure = new IOException("无法保存本次图片：" + error.getMessage(), error);
+            for (Entry entry : added) removeGeneratedFile(imageFile(entry.id), failure);
+            throw failure;
+        }
     }
 
     public Entry getEntry(String id) throws IOException {

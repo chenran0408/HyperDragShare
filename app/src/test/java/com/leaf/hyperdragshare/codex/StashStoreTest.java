@@ -233,6 +233,43 @@ public final class StashStoreTest {
         }
     }
 
+    @Test
+    public void imageBatchPersistsBothFiles() throws IOException {
+        File first = new File(context.getCacheDir(), "batch-first.png");
+        File second = new File(context.getCacheDir(), "batch-second.png");
+        java.nio.file.Files.write(first.toPath(), new byte[]{1, 2});
+        java.nio.file.Files.write(second.toPath(), new byte[]{3, 4});
+        try (StashStore store = new StashStore(context)) {
+            assertEquals(2, store.addImages(context.getContentResolver(), java.util.Arrays.asList(
+                    android.net.Uri.fromFile(first), android.net.Uri.fromFile(second))));
+            assertEquals(2, store.listEntries().size());
+            for (StashStore.Entry entry : store.listEntries()) {
+                assertEquals(2, store.openImage(entry.id).length());
+            }
+        } finally {
+            java.nio.file.Files.deleteIfExists(first.toPath());
+            java.nio.file.Files.deleteIfExists(second.toPath());
+        }
+    }
+
+    @Test
+    public void failedSecondImageRollsBackBatchButKeepsExistingContent() throws IOException {
+        File first = new File(context.getCacheDir(), "batch-first.png");
+        java.nio.file.Files.write(first.toPath(), new byte[]{1, 2});
+        File missing = new File(context.getCacheDir(), "missing-" + java.util.UUID.randomUUID());
+        try (StashStore store = new StashStore(context)) {
+            String existing = store.addText("keep").id;
+            assertThrows(IOException.class, () -> store.addImages(context.getContentResolver(),
+                    java.util.Arrays.asList(android.net.Uri.fromFile(first),
+                            android.net.Uri.fromFile(missing))));
+            assertEquals(1, store.listEntries().size());
+            assertNotNull(store.getEntry(existing));
+            assertEquals(0, new File(context.getFilesDir(), "stash").list().length);
+        } finally {
+            java.nio.file.Files.deleteIfExists(first.toPath());
+        }
+    }
+
     private static void deleteTree(File file) throws IOException {
         if (!file.exists()) {
             return;

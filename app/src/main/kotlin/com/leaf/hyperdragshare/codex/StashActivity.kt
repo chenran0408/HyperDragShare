@@ -171,7 +171,7 @@ class StashActivity : ComponentActivity() {
         val incoming = pendingImport ?: return@withLock
         message = null
         try {
-            withContext(Dispatchers.IO) {
+            val savedCount = withContext(Dispatchers.IO) {
                 StashStore(this@StashActivity).use { store ->
                     when {
                         incoming.type == "text/plain" -> {
@@ -179,13 +179,10 @@ class StashActivity : ComponentActivity() {
                                 ?: throw IOException("分享内容没有文字")
                             if (text.isBlank()) throw IOException("分享的文字为空")
                             store.addText(text)
+                            1
                         }
                         incoming.type?.startsWith("image/") == true -> {
-                            val uri = incoming.streamUri()
-                                ?: throw IOException("分享内容没有图片文件")
-                            val source = contentResolver.openInputStream(uri)
-                                ?: throw IOException("无法读取分享的图片")
-                            source.use { store.addImage(it, incoming.type) }
+                            store.addImages(contentResolver, incoming.imageUris())
                         }
                         else -> throw IOException("不支持这种分享内容")
                     }
@@ -195,7 +192,7 @@ class StashActivity : ComponentActivity() {
                 pendingImport = null
                 shareImported = true
             }
-            Toast.makeText(this, "已保存到中转站", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "已保存 $savedCount 项到中转站", Toast.LENGTH_SHORT).show()
         } catch (error: IOException) {
             DragShareLog.w("DragShare/Stash", "unable to import shared content", error)
             message = "保存失败：${error.message ?: "无法读取分享内容"}"
@@ -357,11 +354,20 @@ class StashActivity : ComponentActivity() {
     }
 
     private fun isSupportedShare(intent: Intent): Boolean =
-        intent.action == Intent.ACTION_SEND &&
-            (intent.type == "text/plain" || intent.type?.startsWith("image/") == true)
+        (intent.action == Intent.ACTION_SEND &&
+            (intent.type == "text/plain" || intent.type?.startsWith("image/") == true)) ||
+            (intent.action == Intent.ACTION_SEND_MULTIPLE && intent.type?.startsWith("image/") == true)
 
-    private fun Intent.streamUri(): Uri? =
-        getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java) ?: clipData?.getItemAt(0)?.uri
+    private fun Intent.imageUris(): List<Uri> {
+        val streams = if (action == Intent.ACTION_SEND_MULTIPLE) {
+            getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+        } else {
+            listOfNotNull(getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
+        }
+        if (streams.isNotEmpty()) return streams.distinct()
+        val clip = clipData ?: return emptyList()
+        return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }.distinct()
+    }
 }
 
 @Composable
