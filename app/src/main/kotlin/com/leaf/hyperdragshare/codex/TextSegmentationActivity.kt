@@ -1,10 +1,8 @@
 package com.leaf.hyperdragshare.codex
 
-import android.app.SearchManager
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color as AndroidColor
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
@@ -124,24 +122,14 @@ class TextSegmentationActivity : ComponentActivity() {
         if (text.isBlank()) {
             return
         }
-        val query = if (type == BoomActionHandler.SEARCH_DICTIONARY) "$text 词典" else text
         try {
             startActivity(
-                Intent(Intent.ACTION_WEB_SEARCH)
-                    .putExtra(SearchManager.QUERY, query),
+                Intent(this, SearchOverlayActivity::class.java)
+                    .putExtra(Intent.EXTRA_TEXT, text.trim())
+                    .putExtra(SearchOverlayActivity.EXTRA_SEARCH_TYPE, type),
             )
         } catch (_: Throwable) {
-            try {
-                val uri = Uri.Builder()
-                    .scheme("https")
-                    .authority("www.google.com")
-                    .appendPath("search")
-                    .appendQueryParameter("q", query)
-                    .build()
-                startActivity(Intent(Intent.ACTION_VIEW, uri))
-            } catch (_: Throwable) {
-                Toast.makeText(this, "无法打开搜索", Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(this, R.string.search_open_failed, Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -5,7 +5,7 @@
 无需抬起即可继续拖动；简洁和现代样式可按设置出现在上、下、左、右或近手侧，流光样式在底部显示横向分享菜单，环形样式可从左右边缘展开半圆
 菜单；停留在可滚动热区时自动滚动；松手落在目标上时直接分享。
 
-当前分支 1.7.51（versionCode 75）增加了图片 OCR 到既有分词页的入口、无文字节点时的限定区域截图后备，并隔离旧异步结果；完整增量说明见 [IMAGE_OCR.md](IMAGE_OCR.md)。对目标宿主 5.1.5 的静态核对与修正见 [HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)。下列宿主 4.2.1 的“已验证”记录来自上游，不能视为本分支已在目标 5.1.5 上验证。
+当前分支 1.7.52（versionCode 76）增加了可切换搜索引擎的应用内搜索面板；完整增量说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md)。图片 OCR 到既有分词页、无文字节点时的限定区域截图后备与异步结果隔离见 [IMAGE_OCR.md](IMAGE_OCR.md)。对目标宿主 5.1.5 的静态核对与修正见 [HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)。下列宿主 4.2.1 的“已验证”记录来自上游，不能视为本分支已在目标 5.1.5 上验证。
 
 ## 1. 运行边界
 
@@ -756,7 +756,7 @@ APK 输出：
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-当前 75 个单元测试覆盖：当前版本注入握手与限定服务启动命令、传送门原浮窗在模块预览挂窗前的
+当前 91 个单元测试覆盖：当前版本注入握手与限定服务启动命令、传送门原浮窗在模块预览挂窗前的
 抑制、底部触发边界、左右滚动方向、边缘深度速度渐变、
 预览位置夹取、流光进度与项目缩放、近手方向映射、环形菜单左右触发/贴边半圆/自然项目顺序、
 新增外观设置和现代原生局部模糊参数的默认值/范围裁剪、原生 Window 局部模糊的圆角背景/降级判定、现代预览按文字与图片尺寸自适应并限制为屏宽三分之一、独立 Compose 悬浮窗的 ViewTree owner 传递、原始坐标与旋转映射、
@@ -764,7 +764,7 @@ app/build/outputs/apk/debug/app-debug.apk
 新增测试还覆盖内容获取模式迁移、evdev DOWN/MOVE/UP/CANCEL、长按异步失效、节点文字/图片
 候选优先级、截图区域的扩边/缩放/夹取、日志等级/保存位置的 Provider Bundle 同步，以及背景锁开关的 Provider Bundle 同步、root 服务返回
 解析、当前 ROM DEX 的动态 Binder 事务解析与 `InputMonitor` 释放。传送门私有 Hook、WindowManager、root evdev、InputMonitor 权限、Miuix
-页面视觉效果和第三方应用分享仍必须实机验证。
+页面视觉效果和第三方应用分享仍必须实机验证；搜索面板测试覆盖默认引擎、UTF-8 查询编码、HTTPS 地址识别与 scheme 拒绝。
 
 系统日志位置下建议使用：
 

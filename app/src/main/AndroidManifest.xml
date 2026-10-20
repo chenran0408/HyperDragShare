@@ -5,6 +5,7 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- The accessibility blacklist enumerates installed apps, including IMEs without launchers. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -57,6 +58,14 @@
             android:name=".TextSegmentationActivity"
             android:excludeFromRecents="true"
             android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.leaf.hyperdragshare.codex.overlay"
+            android:theme="@style/Theme.DragShare.BigBangOverlay" />
+
+        <activity
+            android:name=".SearchOverlayActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
             android:launchMode="singleTop"
             android:taskAffinity="com.leaf.hyperdragshare.codex.overlay"
             android:theme="@style/Theme.DragShare.BigBangOverlay" />

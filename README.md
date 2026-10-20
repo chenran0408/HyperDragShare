@@ -50,4 +50,4 @@ HyperDragShare 以 [GNU General Public License v3.0](LICENSE)（`GPL-3.0-only`�
 
 实现边界、输入源仲裁和兼容性约束记录在 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)。
 
-本分支 1.7.51 的 OCR 实现与验证边界见 [docs/IMAGE_OCR.md](docs/IMAGE_OCR.md)。传送门 5.1.5 的适配核对见 [docs/HYPEROS4_ADAPTATION.md](docs/HYPEROS4_ADAPTATION.md)；尚未通过本分支实机验收。
+本分支 1.7.52 增加了可切换搜索引擎的应用内搜索面板，细节与验证边界见 [docs/SEARCH_OVERLAY.md](docs/SEARCH_OVERLAY.md)；图片 OCR 见 [docs/IMAGE_OCR.md](docs/IMAGE_OCR.md)。传送门 5.1.5 的适配核对见 [docs/HYPEROS4_ADAPTATION.md](docs/HYPEROS4_ADAPTATION.md)；尚未通过本分支实机验收。
