@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation
+        android:name=".AicrOcrProbe"
+        android:targetPackage="com.leaf.hyperdragshare.codex"
+        android:label="AICR synthetic OCR probe" />
+</manifest>

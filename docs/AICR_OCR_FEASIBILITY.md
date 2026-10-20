@@ -56,3 +56,17 @@ OCRResult Parcelable 按顺序写入 paragraphs typed array、total_text String�
 本地 4 项 Robolectric 测试使用手工构造的合成 Parcel，验证嵌套结果后的尾部哨兵位置、null 结果区别于空字符串、异常长度、未知类型拒绝。全部 140 项测试、Lint、assembleDebug 通过。合成测试证明读取器与当前协议描述一致，不证明已匹配真实厂商输出；正式接入前仍需真实返回包与 Creator/DEX 对照。段落、行、字符、实体、位置 5 个类的单类读取此次均正常退出。
 
 本轮未改变用户可安装行为，保留版本 1.7.72；此前 outputs 中归档的 1.7.72 不覆盖，最新本地构建多了未调用的 debug 读取器。设备仍为 1.7.71。下一步准备带连接清理的普通 UID 实验客户端，用合成图片验证完整链路，不能把本地 140 项测试当作 OCR 已通过。
+
+## 1.7.73 调试实验入口（待真机运行）
+
+新增 debug-only Instrumentation `com.leaf.hyperdragshare.codex.AicrOcrProbe`，以目标应用普通 UID 运行，不请求 root。生成 640×160 黑白图片“HyperDragShare 123”，按核心绑定 → 插件与 Status → V2 → setImage → detect → recognize 执行；返回阶段、UID、耗时、全文及连接释放结果。成功条件暂为全文含测试标记 123，只证明基础链路，不代表中文、版面或性能验收。
+
+使用前确认当前设备测试窗口和安装版本，再运行：
+
+```text
+adb shell am instrument -w com.leaf.hyperdragshare.codex/.AicrOcrProbe
+```
+
+该入口不启动页面、不截屏、不读取相册；Instrumentation 会影响模块自身进程，不能与其他模块操作测试并行。15 秒仅限制等待 service connection；同步 Binder transact 无可取消超时，不宣称全链路有时间上限。发生阻塞时记录最后阶段，结束本模块实验进程，不强停 AICR。退出正常/异常路径尝试 releaseConnect 与 unbind，释放失败单独报告。不会自动重试下载或变更系统权限。
+
+代码来自协议描述的独立实现，仅位于 src/debug；release 不含入口或读取器。暂未调用设备服务，也没有将其接入正式 OCR 设置。实际服务行为与结果 Parcel 仍待本机验证。

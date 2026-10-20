@@ -40,3 +40,5 @@
 迁移阶段、静态证据和后续验收点见 [MI Big Bang 功能迁移计划](docs/MIBIGBANG_MIGRATION_PLAN.md)。拖拽输入、悬浮窗和传送门兼容细节见 [实现说明](docs/IMPLEMENTATION.md)。图片识字流程见 [OCR 说明](docs/IMAGE_OCR.md)，应用内搜索见 [搜索面板说明](docs/SEARCH_OVERLAY.md)，目标版本的静态适配记录见 [HyperOS 4 适配记录](docs/HYPEROS4_ADAPTATION.md)。
 
 本分支保留原项目 GPL-3.0-only 许可。参考第三方应用时仅做独立行为分析；引入第三方代码或组件时，按其许可单独确认并注明来源。
+
+1.7.73（97）加入仅调试版可调用的 AICR 合成图片实验入口，140 项单测、Lint 和构建通过；未安装、未验证实际 OCR，不作为可选引擎发布。协议与实验说明见 docs/AICR_OCR_FEASIBILITY.md。

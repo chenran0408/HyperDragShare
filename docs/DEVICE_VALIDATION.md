@@ -160,3 +160,7 @@
 - `testDebugUnitTest lintDebug assembleDebug` 通过，136 项测试、0 失败。此小幅 Compose 条件修改没有新增重复实现的测试；保留列表、错误重试与暗色视觉尚未真机验证。
 - 本轮未操作设备 UI，仅只读确认 AICR 当前包信息。Service Resolver 列出 AiCrCoreService/AiCrCognitionService，不足以证明视觉服务导出或调用方可通过 Binder 校验；可选小爱 OCR 仍未接入。
 - 设备仍为 1.7.71，Hook 95 加载、菜单细节、关闭及复制退出继续待验收。此次源码改动不解决这些项目。
+
+### 1.7.73：AICR 调试实验准备
+
+140 项测试、Lint、assembleDebug 通过。debug Instrumentation 使用普通应用 UID 和生成图片，记录各阶段与连接清理；未安装或运行，不声称实际 OCR 通过。新测试时间已询问用户，未收到回复前不开始设备操作。
