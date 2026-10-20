@@ -60,7 +60,8 @@ public final class DragShareSettings {
     public static final int SIMPLE_MENU_POSITION_LEFT = 2;
     public static final int SIMPLE_MENU_POSITION_RIGHT = 3;
     public static final int SIMPLE_MENU_POSITION_NEAR_HAND = 4;
-    public static final int DEFAULT_SIMPLE_MENU_POSITION = SIMPLE_MENU_POSITION_BOTTOM;
+    public static final int SIMPLE_MENU_POSITION_DRAG_EDGE = 5;
+    public static final int DEFAULT_SIMPLE_MENU_POSITION = SIMPLE_MENU_POSITION_DRAG_EDGE;
 
     public static final int MIN_SIMPLE_MENU_OPACITY_PERCENT = 20;
     public static final int DEFAULT_SIMPLE_MENU_OPACITY_PERCENT = 100;
@@ -1104,10 +1105,7 @@ public final class DragShareSettings {
     }
 
     private static int normalizeSimpleMenuPosition(int position) {
-        return position >= SIMPLE_MENU_POSITION_TOP
-                && position <= SIMPLE_MENU_POSITION_NEAR_HAND
-                ? position
-                : DEFAULT_SIMPLE_MENU_POSITION;
+        return SIMPLE_MENU_POSITION_DRAG_EDGE;
     }
 
     private static int normalizeContentCaptureMode(int mode) {

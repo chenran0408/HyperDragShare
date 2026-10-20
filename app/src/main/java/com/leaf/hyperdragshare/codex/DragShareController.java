@@ -12,10 +12,6 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.Drawable;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -62,7 +58,7 @@ final class DragShareController {
     private static final int CIRCLE_EDGE_SOFT_DISTANCE_DP = 180;
     private static final long CIRCLE_EDGE_OPEN_DELAY_MS = 200L;
     private static final long DUPLICATE_EVENT_WINDOW_MS = 2;
-    private static final float NEAR_HAND_TILT_THRESHOLD = 0.14f;
+
 
     private final Context context;
     private final WindowManager windowManager;
@@ -166,9 +162,9 @@ final class DragShareController {
     private int menuLeft;
     private int menuWidth;
     private int simpleMenuPosition = DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM;
-    private int configuredSimpleMenuPosition = DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM;
-    private int nearHandSide = DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
-    private boolean nearHandSideLocked;
+
+
+
 
     private View previewView;
     private ModernPreviewOverlayView modernPreviewView;
@@ -203,38 +199,6 @@ final class DragShareController {
     private List<ShareTarget> shareTargets = new ArrayList<>();
     private ShareTarget selectedTarget;
     private boolean menuShown;
-
-    private SensorManager sensorManager;
-    private Sensor nearHandSensor;
-    private boolean nearHandSensorRegistered;
-    private final SensorEventListener nearHandSensorListener = new SensorEventListener() {
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            if (nearHandSideLocked || event == null
-                    || event.values == null || event.values.length == 0) {
-                return;
-            }
-            float tilt = event.sensor != null
-                    && event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR
-                    ? rotationVectorRoll(event.values)
-                    : event.values[0] / SensorManager.GRAVITY_EARTH;
-            if (!Float.isFinite(tilt) || Math.abs(tilt) < NEAR_HAND_TILT_THRESHOLD) {
-                return;
-            }
-            int side = GestureMath.nearHandMenuOnRight(tilt)
-                    ? DragShareSettings.SIMPLE_MENU_POSITION_RIGHT
-                    : DragShareSettings.SIMPLE_MENU_POSITION_LEFT;
-            if (side != nearHandSide) {
-                nearHandSide = side;
-                mainHandler.post(() -> updateNearHandMenuPosition());
-            }
-        }
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {
-            // No calibration state is needed for the coarse left/right decision.
-        }
-    };
 
     private Session session;
     private DragShareSettings settings = DragShareSettings.defaults();
@@ -413,10 +377,10 @@ final class DragShareController {
         lastHandledEventTime = Long.MIN_VALUE;
         lastHandledAction = -1;
         settings = loadedSettings == null ? DragShareSettings.defaults() : loadedSettings;
-        configuredSimpleMenuPosition = settings.simpleMenuPosition;
-        nearHandSide = DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
-        nearHandSideLocked = false;
-        simpleMenuPosition = effectiveSimpleMenuPosition();
+
+
+
+
         palette = OverlayColors.from(settings);
         stopEdgeScroll();
         backgroundTouchBlocker.stop();
@@ -443,7 +407,7 @@ final class DragShareController {
             showPreviewOverlay(payload);
             active = true;
             pendingPortalHostFloatWindowSuppression = false;
-            registerNearHandSensorIfNeeded();
+
             traceAccessibility("overlay added kind=" + payload.kind);
         } catch (RuntimeException error) {
             pendingPortalHostFloatWindowSuppression = false;
@@ -464,9 +428,6 @@ final class DragShareController {
         lastY = initialY;
         menuAnchorX = initialX;
         menuAnchorY = initialY;
-        nearHandSide = initialX < screenWidth / 2f
-                ? DragShareSettings.SIMPLE_MENU_POSITION_LEFT
-                : DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
         updateMenuGeometry();
         updatePreviewPosition(initialX, initialY);
         updatePortalPullEffect(initialX, initialY);
@@ -961,6 +922,7 @@ final class DragShareController {
         lastX = x;
         lastY = y;
         updatePreviewPosition(x, y);
+        updateDragEdgeMenuPosition(x, y);
         updatePortalPullEffect(x, y);
         if (isCircleStyle()) {
             updateCirclePointer(x, y);
@@ -1084,17 +1046,7 @@ final class DragShareController {
         return isVerticalSimpleMenu() ? y / Math.max(1f, screenHeight) : x / Math.max(1f, screenWidth);
     }
 
-    private int effectiveSimpleMenuPosition() {
-        if (configuredSimpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND) {
-            return nearHandSide == DragShareSettings.SIMPLE_MENU_POSITION_LEFT
-                    ? DragShareSettings.SIMPLE_MENU_POSITION_LEFT
-                    : DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
-        }
-        return configuredSimpleMenuPosition >= DragShareSettings.SIMPLE_MENU_POSITION_TOP
-                && configuredSimpleMenuPosition <= DragShareSettings.SIMPLE_MENU_POSITION_RIGHT
-                ? configuredSimpleMenuPosition
-                : DragShareSettings.DEFAULT_SIMPLE_MENU_POSITION;
-    }
+
 
     private boolean isVerticalSimpleMenu() {
         return (simpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_LEFT
@@ -1122,14 +1074,7 @@ final class DragShareController {
 
     private boolean shouldShowSimpleMenu(float x, float y) {
         int trigger = Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP));
-        return GestureMath.shouldShowEdgeMenu(
-                simpleMenuPosition,
-                x,
-                y,
-                screenWidth,
-                trigger,
-                menuTop,
-                menuTriggerTop);
+        return distanceFromMenuEdge(x, y) <= trigger;
     }
 
     private boolean isPointerInsideSimpleMenu(float x, float y) {
@@ -1181,13 +1126,18 @@ final class DragShareController {
         updatePreviewPosition(lastX, lastY);
     }
 
-    private void updateNearHandMenuPosition() {
-        if (!active
-                || nearHandSideLocked
-                || configuredSimpleMenuPosition != DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND) {
-            return;
-        }
-        int nextPosition = effectiveSimpleMenuPosition();
+
+
+    private void updateDragEdgeMenuPosition(float x, float y) {
+        int edge = GestureMath.nearestMenuEdge(x, y, screenWidth, topInset,
+                screenHeight - bottomInset, Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP)),
+                simpleMenuPosition);
+        if (edge < 0 || edge == simpleMenuPosition) return;
+        if (isCircleStyle()) hideCircleMenu();
+        repositionMenu(edge);
+    }
+
+    private void repositionMenu(int nextPosition) {
         if (nextPosition == simpleMenuPosition) {
             return;
         }
@@ -1226,59 +1176,11 @@ final class DragShareController {
         updatePreviewPosition(lastX, lastY);
     }
 
-    private void registerNearHandSensorIfNeeded() {
-        if (!active
-                || configuredSimpleMenuPosition != DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND
-                || nearHandSensorRegistered) {
-            return;
-        }
-        try {
-            sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-            if (sensorManager == null) {
-                return;
-            }
-            nearHandSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-            if (nearHandSensor == null) {
-                nearHandSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            }
-            if (nearHandSensor != null
-                    && sensorManager.registerListener(
-                            nearHandSensorListener,
-                    nearHandSensor,
-                    SensorManager.SENSOR_DELAY_GAME)) {
-                nearHandSensorRegistered = true;
-                log("near-hand sensor registered type=" + nearHandSensor.getType());
-            }
-        } catch (Throwable error) {
-            log("near-hand sensor unavailable", error);
-            nearHandSensorRegistered = false;
-        }
-    }
 
-    private void unregisterNearHandSensor() {
-        if (sensorManager != null && nearHandSensorRegistered) {
-            try {
-                sensorManager.unregisterListener(nearHandSensorListener);
-            } catch (Throwable ignored) {
-                // Sensor service may already be shutting down.
-            }
-        }
-        nearHandSensorRegistered = false;
-        nearHandSensor = null;
-        sensorManager = null;
-    }
 
-    private static float rotationVectorRoll(float[] values) {
-        try {
-            float[] rotationMatrix = new float[9];
-            float[] orientation = new float[3];
-            SensorManager.getRotationMatrixFromVector(rotationMatrix, values);
-            SensorManager.getOrientation(rotationMatrix, orientation);
-            return orientation[2];
-        } catch (Throwable ignored) {
-            return Float.NaN;
-        }
-    }
+
+
+
 
     private long circleScrollIntervalMs() {
         float speed = Math.max(1f, settings.scrollSpeedDpPerSecond);
@@ -1294,7 +1196,7 @@ final class DragShareController {
                 return;
             }
             menuShown = true;
-            lockNearHandMenuSide();
+
             circleEdge = circlePendingEdge;
             circleScrollDirection = 0;
             circleMenuView.expand(circleEdge, lastX, lastY);
@@ -1317,7 +1219,7 @@ final class DragShareController {
         if (menuView == null) {
             return;
         }
-        lockNearHandMenuSide();
+
         if (!isModernStyle() && menuView.isAttachedToWindow()) {
             cancelLinearMenuFadeOut(menuView);
             menuView.animate().cancel();
@@ -1353,7 +1255,7 @@ final class DragShareController {
             }
             menuShown = true;
             updatePreviewPosition(lastX, lastY);
-            log("menu shown style=" + settings.uiStyle + " configuredPosition=" + configuredSimpleMenuPosition
+            log("menu shown style=" + settings.uiStyle + " followsDragEdge=true"
                     + " effectivePosition=" + simpleMenuPosition + " bounds=" + menuLeft + "," + menuTop
                     + "," + menuWidth + "," + menuHeight + " pointer=" + Math.round(lastX) + "," + Math.round(lastY));
             if (isPortalStyle()) {
@@ -1423,15 +1325,7 @@ final class DragShareController {
         menuView = modernMenuView;
     }
 
-    private void lockNearHandMenuSide() {
-        if (configuredSimpleMenuPosition != DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND
-                || nearHandSideLocked) {
-            return;
-        }
-        nearHandSideLocked = true;
-        unregisterNearHandSensor();
-        log("near-hand menu side locked=" + simpleMenuPosition);
-    }
+
 
     private void startPortalMenuEnterAnimation() {
         menuView.setAlpha(1f);
@@ -1855,7 +1749,7 @@ final class DragShareController {
     }
 
     private void updateMenuGeometry() {
-        simpleMenuPosition = effectiveSimpleMenuPosition();
+
         if (isCircleStyle()) {
             menuWidth = screenWidth;
             menuHeight = dp(CircleMenuOverlayView.CONTAINER_SIZE_DP);
@@ -1903,7 +1797,7 @@ final class DragShareController {
     }
 
     private void removeGestureViews(boolean animatePreviewExit) {
-        unregisterNearHandSensor();
+
         cancelModernMenuDispose();
         cancelLinearMenuFadeOut();
         if (!animatePreviewExit) {

@@ -644,19 +644,6 @@ private fun MainPage(
                 }
             }
 
-            item(key = "menu-position") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    OverlayDropdownPreference(
-                        title = "菜单位置",
-                        summary = "四种样式通用。近手方向参考拖拽起点和手机倾斜，展开后固定",
-                        items = listOf("上", "下", "左", "右", "近手方向"),
-                        selectedIndex = settings.simpleMenuPosition.coerceIn(0, 4),
-                        onSelectedIndexChange = { selected ->
-                            persist(copySettings(settings, simpleMenuPosition = selected.coerceIn(0, 4)))
-                        },
-                    )
-                }
-            }
             if (settings.uiStyle == DragShareSettings.STYLE_SIMPLE
                 || settings.uiStyle == DragShareSettings.STYLE_MODERN
             ) {

@@ -144,6 +144,18 @@ final class GestureMath {
         }
     }
 
+    /** Select the closest touched edge; retain the current edge on exact corner ties. */
+    static int nearestMenuEdge(float x, float y, int width, int top, int bottom,
+            int trigger, int current) {
+        float[] distances = {Math.max(0f, y - top), Math.max(0f, bottom - y),
+                Math.max(0f, x), Math.max(0f, width - x)};
+        int edge = current >= 0 && current < 4 ? current : 0;
+        for (int i = 0; i < distances.length; i++) {
+            if (distances[i] < distances[edge]) edge = i;
+        }
+        return distances[edge] <= trigger ? edge : -1;
+    }
+
     static float clamp01(float value) {
         return Math.max(0f, Math.min(1f, value));
     }

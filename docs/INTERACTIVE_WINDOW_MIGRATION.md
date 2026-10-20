@@ -30,3 +30,5 @@ StashStore 属于模块私有存储；StashClient 目前仅提供受限 stash_pu
 BoomChipPage 已改为 Context + Actions，提供 dismiss/afterCopy/search/share；视图使用 LayoutInflater.from(Context)，BoomActionHandler 不再强转 TextSegmentationActivity 或自行启动分享 Activity。现有 TextSegmentationActivity 实现回调并维持原有入口。未改变实际窗口类型，没有启用独立系统覆盖窗口。
 
 设置仍由当前 Context 读取；后续 Taplus 宿主必须显式提供模块配置与词典资源，不能直接拿此组件连接宿主后忽略跨 UID 边界。下一批处理可交互窗口 owner 和可复用面板内容；当前动作回调的真机回归待测试窗口。
+
+1.7.80：BigBangOverlayContent 与 BigBangMoreAction 已提取为内部可复用组件，Activity 继续调用同一内容；独立窗口 owner/权限/生命周期和真机验收仍未完成。

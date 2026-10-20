@@ -8,6 +8,15 @@ import static org.junit.Assert.assertArrayEquals;
 import org.junit.Test;
 
 public final class GestureMathTest {
+    @Test public void dragEdgeFollowsAllFourSidesAndKeepsCornerTiesStable() {
+        assertEquals(0, GestureMath.nearestMenuEdge(500, 50, 1000, 40, 1900, 80, 3));
+        assertEquals(1, GestureMath.nearestMenuEdge(500, 1880, 1000, 40, 1900, 80, 0));
+        assertEquals(2, GestureMath.nearestMenuEdge(10, 1000, 1000, 40, 1900, 80, 1));
+        assertEquals(3, GestureMath.nearestMenuEdge(990, 1000, 1000, 40, 1900, 80, 2));
+        assertEquals(-1, GestureMath.nearestMenuEdge(500, 1000, 1000, 40, 1900, 80, 3));
+        assertEquals(2, GestureMath.nearestMenuEdge(10, 50, 1000, 40, 1900, 80, 2));
+        assertEquals(0, GestureMath.nearestMenuEdge(10, 50, 1000, 40, 1900, 80, 0));
+    }
     @Test
     public void menuTriggersForEachConfiguredEdgeWithoutDirectionQualification() {
         assertFalse(GestureMath.shouldShowMenu(799, 800));

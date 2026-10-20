@@ -19,6 +19,14 @@ import java.util.List;
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public final class DragShareSettingsTest {
+    @Test public void legacyMenuDirectionsAllBecomeDragEdgeFollowing() {
+        for (int oldPosition = 0; oldPosition <= 4; oldPosition++) {
+            Bundle stored = new Bundle();
+            stored.putInt("simple_menu_position", oldPosition);
+            assertEquals(DragShareSettings.SIMPLE_MENU_POSITION_DRAG_EDGE,
+                    DragShareSettings.fromBundle(stored).simpleMenuPosition);
+        }
+    }
     @Test
     public void defaultsUseModernStyleAndFullIconOpacity() {
         DragShareSettings settings = DragShareSettings.defaults();
