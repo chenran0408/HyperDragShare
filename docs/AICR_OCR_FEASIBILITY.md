@@ -48,3 +48,11 @@ IAiCrCoreService、ICoreServiceCallback 和 OCRRes$OCRResult 三个已定位类�
 OCRResult Parcelable 按顺序写入 paragraphs typed array、total_text String、entities typed array。这说明不能从 Parcel 首部直接 readString 获取全文，也不能扫描字节寻找文字冒充协议解码。需要继续核对段落、行、字符、实体的 Parcelable 布局及对应 Creator，再独立实现受版本限定的读取方式，或使用合法可获取且匹配 V2 的接口库。
 
 当前没有实现或运行实验客户端；没有新增应用权限、引擎入口或构建产物。下一步优先补全结果结构的确切布局，再准备一次可释放连接、使用合成图片且带阶段错误的普通 UID 实验。
+
+## 调试结果读取器（未连接服务）
+
+已按观察到的字段协议独立编写 `app/src/debug/java/.../AicrV2ResultReader.java`，不复制厂商 Parcelable 类、不加载厂商类，也不加入 release 源集。读取 typed result 存在标记，完整消费段落/行/字符/实体后返回 total_text；未知位置类型、异常存在标记和不可能的数组长度明确报错。没有引擎调用或产品入口。
+
+本地 4 项 Robolectric 测试使用手工构造的合成 Parcel，验证嵌套结果后的尾部哨兵位置、null 结果区别于空字符串、异常长度、未知类型拒绝。全部 140 项测试、Lint、assembleDebug 通过。合成测试证明读取器与当前协议描述一致，不证明已匹配真实厂商输出；正式接入前仍需真实返回包与 Creator/DEX 对照。段落、行、字符、实体、位置 5 个类的单类读取此次均正常退出。
+
+本轮未改变用户可安装行为，保留版本 1.7.72；此前 outputs 中归档的 1.7.72 不覆盖，最新本地构建多了未调用的 debug 读取器。设备仍为 1.7.71。下一步准备带连接清理的普通 UID 实验客户端，用合成图片验证完整链路，不能把本地 140 项测试当作 OCR 已通过。
