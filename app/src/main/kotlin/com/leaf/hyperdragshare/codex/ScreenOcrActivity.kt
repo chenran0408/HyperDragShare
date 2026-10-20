@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,7 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -70,6 +72,7 @@ import java.util.concurrent.Executors
 class ScreenOcrActivity : ComponentActivity() {
     private val captureExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var resultText by mutableStateOf<List<String>>(emptyList())
+    private var selectedLines by mutableStateOf<Set<Int>>(emptySet())
     private var statusMessage by mutableIntStateOf(R.string.screen_ocr_capturing)
     private var isRecognizing by mutableStateOf(true)
     @Volatile private var screenshotForRegion: Bitmap? = null
@@ -239,6 +242,7 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     private fun presentRecognitionResult() {
+        selectedLines = resultText.indices.toSet()
         if (resultReceiver == null && intent.getBooleanExtra(EXTRA_SELECT_REGION, false) &&
             BigBangOverlayLauncher.showText(this, resultText.joinToString("\n"), -1, -1, null)) {
             finish()
@@ -411,6 +415,7 @@ class ScreenOcrActivity : ComponentActivity() {
         onShare: (String) -> Unit,
     ) {
         val allText = lines.joinToString("\n")
+        val selectedText = lines.filterIndexed { index, _ -> index in selectedLines }.joinToString("\n")
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -501,16 +506,27 @@ class ScreenOcrActivity : ComponentActivity() {
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = stringResource(R.string.screen_ocr_result_count, lines.size),
+                                text = if (resultReceiver != null) "已选 ${selectedLines.size} / ${lines.size} 行"
+                                    else stringResource(R.string.screen_ocr_result_count, lines.size),
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(
-                                    text = if (resultReceiver != null) "追加到分词"
+                                    text = if (resultReceiver != null) "追加已选"
                                         else stringResource(R.string.screen_ocr_segment_all),
-                                    onClick = { onSegment(allText) },
+                                    onClick = { onSegment(if (resultReceiver != null) selectedText else allText) },
+                                    enabled = resultReceiver == null || selectedLines.isNotEmpty(),
                                     colors = ButtonDefaults.textButtonColorsPrimary(),
                                 )
+                                if (resultReceiver != null) {
+                                    TextButton(
+                                        text = if (selectedLines.size == lines.size) "取消全选" else "全选",
+                                        onClick = {
+                                            selectedLines = if (selectedLines.size == lines.size) emptySet()
+                                                else lines.indices.toSet()
+                                        },
+                                    )
+                                } else {
                                 TextButton(
                                     text = stringResource(R.string.screen_ocr_copy_all),
                                     onClick = { onCopy(allText) },
@@ -519,6 +535,7 @@ class ScreenOcrActivity : ComponentActivity() {
                                     text = stringResource(R.string.screen_ocr_share_all),
                                     onClick = { onShare(allText) },
                                 )
+                                }
                             }
                             if (canSelectRegion) {
                                 TextButton(
@@ -529,7 +546,10 @@ class ScreenOcrActivity : ComponentActivity() {
                         }
                     }
                 }
-                itemsIndexed(lines, key = { index, _ -> index }) { _, line ->
+                itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
+                    val toggleLine = {
+                        selectedLines = if (index in selectedLines) selectedLines - index else selectedLines + index
+                    }
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.defaultColors(
@@ -537,15 +557,30 @@ class ScreenOcrActivity : ComponentActivity() {
                         ),
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            Text(
-                                text = line,
-                                color = MiuixTheme.colorScheme.onSurface,
-                                fontSize = 16.sp,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().then(
+                                    if (resultReceiver != null) Modifier.clickable(onClick = toggleLine) else Modifier),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (resultReceiver != null) {
+                                    Checkbox(
+                                        state = if (index in selectedLines) androidx.compose.ui.state.ToggleableState.On
+                                            else androidx.compose.ui.state.ToggleableState.Off,
+                                        onClick = toggleLine,
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                }
+                                Text(
+                                    text = line,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            if (resultReceiver == null) {
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(
-                                    text = if (resultReceiver != null) "追加此行"
-                                        else stringResource(R.string.screen_ocr_segment_line),
+                                    text = stringResource(R.string.screen_ocr_segment_line),
                                     onClick = { onSegment(line) },
                                     colors = ButtonDefaults.textButtonColorsPrimary(),
                                 )
@@ -557,6 +592,7 @@ class ScreenOcrActivity : ComponentActivity() {
                                     text = stringResource(R.string.screen_ocr_share_all),
                                     onClick = { onShare(line) },
                                 )
+                            }
                             }
                         }
                     }
