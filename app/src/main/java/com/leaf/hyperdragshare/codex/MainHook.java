@@ -5,11 +5,17 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public final class MainHook implements IXposedHookLoadPackage {
     static final String TAPLUS_PACKAGE = "com.miui.contentextension";
+    static final String AICR_PACKAGE = "com.xiaomi.aicr";
+    static final String ANDROID_PACKAGE = "android";
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
         if (TAPLUS_PACKAGE.equals(lpparam.packageName)) {
             PortalHooks.install(lpparam.classLoader);
+        } else if (AICR_PACKAGE.equals(lpparam.packageName)) {
+            AicrCopyHooks.install(lpparam.classLoader);
+        } else if (ANDROID_PACKAGE.equals(lpparam.packageName)) {
+            BackTapFrameworkHooks.install(lpparam);
         }
     }
 }

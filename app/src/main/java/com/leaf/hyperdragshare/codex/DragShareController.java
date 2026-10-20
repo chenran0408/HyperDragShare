@@ -56,7 +56,6 @@ final class DragShareController {
     private static final int SIMPLE_SIDE_MENU_WIDTH_DP = 112;
     private static final int PORTAL_MENU_HEIGHT_DP = 152;
     private static final int MENU_TRIGGER_DP = 72;
-    private static final int SIMPLE_MENU_ACTIVATION_SLOP_DP = 16;
     private static final int EDGE_SCROLL_FULL_SPEED_INSET_DP = 8;
     private static final int PORTAL_TRIGGER_FROM_BOTTOM_DP = 96;
     private static final int PORTAL_ITEM_ENTER_OFFSET_DP = 168;
@@ -150,10 +149,6 @@ final class DragShareController {
 
     private float lastX;
     private float lastY;
-    private float simpleMenuStartX;
-    private float simpleMenuStartY;
-    private boolean simpleMenuStartPointCaptured;
-    private boolean simpleMenuActivationQualified;
     private long lastHandledEventTime = Long.MIN_VALUE;
     private int lastHandledAction = -1;
     private int edgeDirection;
@@ -422,8 +417,6 @@ final class DragShareController {
         backgroundBlockAttempted = false;
         portalGlowStartedLogged = false;
         portalGlowExpandedLogged = false;
-        simpleMenuStartPointCaptured = false;
-        simpleMenuActivationQualified = false;
         lastHandledEventTime = Long.MIN_VALUE;
         lastHandledAction = -1;
         settings = loadedSettings == null ? DragShareSettings.defaults() : loadedSettings;
@@ -451,11 +444,7 @@ final class DragShareController {
                 windowManager.addView(glowView, glowParams);
                 glowView.start();
             }
-            if (modernPreviewWindow != null) {
-                modernPreviewWindow.show();
-            } else {
-                windowManager.addView(previewView, previewParams);
-            }
+            showPreviewOverlay(payload);
             active = true;
             pendingPortalHostFloatWindowSuppression = false;
             registerNearHandSensorIfNeeded();
@@ -469,10 +458,6 @@ final class DragShareController {
             return;
         }
 
-        boolean hasRequestedInitialPoint = Float.isFinite(requestedInitialX)
-                && requestedInitialX >= 0f
-                && Float.isFinite(requestedInitialY)
-                && requestedInitialY >= 0f;
         float initialX = Float.isFinite(requestedInitialX) && requestedInitialX >= 0f
                 ? requestedInitialX
                 : screenWidth / 2f;
@@ -481,9 +466,6 @@ final class DragShareController {
                 : Math.max(topInset + dp(80), screenHeight * 0.32f);
         lastX = initialX;
         lastY = initialY;
-        simpleMenuStartX = initialX;
-        simpleMenuStartY = initialY;
-        simpleMenuStartPointCaptured = hasRequestedInitialPoint;
         updatePreviewPosition(initialX, initialY);
         updatePortalPullEffect(initialX, initialY);
         startPreviewEnterAnimation();
@@ -651,6 +633,22 @@ final class DragShareController {
         }
 
         previewParams = overlayParams(previewWidth, previewHeight, "DragShare preview");
+    }
+
+    private void showPreviewOverlay(CapturedContent payload) {
+        if (modernPreviewWindow != null) {
+            try {
+                modernPreviewWindow.show();
+                return;
+            } catch (Throwable error) {
+                log("unable to show modern preview dialog; using passive overlay window", error);
+                modernPreviewWindow.dispose();
+                modernPreviewWindow = null;
+                modernPreviewView = new ModernPreviewOverlayView(context, payload, settings);
+                previewView = modernPreviewView;
+            }
+        }
+        windowManager.addView(previewView, previewParams);
     }
 
     private void createGlow() {
@@ -974,8 +972,7 @@ final class DragShareController {
             return;
         }
         boolean menuOpenedNow = false;
-        if (!menuShown && shouldShowSimpleMenu(x, y)
-                && hasQualifiedSimpleMenuActivation(x, y)) {
+        if (!menuShown && shouldShowSimpleMenu(x, y)) {
             showMenuOnMain();
             menuOpenedNow = menuShown;
         }
@@ -1110,37 +1107,14 @@ final class DragShareController {
             return GestureMath.shouldShowMenu(y, menuTriggerTop);
         }
         int trigger = Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP));
-        switch (simpleMenuPosition) {
-            case DragShareSettings.SIMPLE_MENU_POSITION_TOP:
-                return y <= menuTop + trigger;
-            case DragShareSettings.SIMPLE_MENU_POSITION_LEFT:
-                return x <= trigger;
-            case DragShareSettings.SIMPLE_MENU_POSITION_RIGHT:
-                return x >= screenWidth - trigger;
-            case DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM:
-            default:
-                return y >= menuTriggerTop;
-        }
-    }
-
-    private boolean hasQualifiedSimpleMenuActivation(float x, float y) {
-        if (isPortalStyle() || isCircleStyle() || simpleMenuActivationQualified) {
-            return true;
-        }
-        if (!simpleMenuStartPointCaptured) {
-            simpleMenuStartX = x;
-            simpleMenuStartY = y;
-            simpleMenuStartPointCaptured = true;
-            return false;
-        }
-        simpleMenuActivationQualified = GestureMath.hasMovedTowardMenu(
+        return GestureMath.shouldShowEdgeMenu(
                 simpleMenuPosition,
-                simpleMenuStartX,
-                simpleMenuStartY,
                 x,
                 y,
-                dp(SIMPLE_MENU_ACTIVATION_SLOP_DP));
-        return simpleMenuActivationQualified;
+                screenWidth,
+                trigger,
+                menuTop,
+                menuTriggerTop);
     }
 
     private boolean isPointerInsideSimpleMenu(float x, float y) {
@@ -1342,19 +1316,15 @@ final class DragShareController {
                 && ((modernMenuWindow != null && modernMenuWindow.isShowing())
                 || menuView.isAttachedToWindow())) {
             menuShown = true;
-            if (modernMenuWindow != null) {
-                modernMenuWindow.showAnimated();
-            } else {
-                modernMenuView.showAnimated();
-            }
+            showModernMenuOverlay();
             updatePreviewPosition(lastX, lastY);
             log("modern menu shown pointerY=" + Math.round(lastY) + " menuTop=" + menuTop);
             menuView.post(() -> updateSelectedTarget(lastX, lastY));
             return;
         }
         try {
-            if (isModernStyle() && modernMenuWindow != null) {
-                modernMenuWindow.showAnimated();
+            if (isModernStyle()) {
+                showModernMenuOverlay();
             } else {
                 windowManager.addView(menuView, menuParams);
             }
@@ -1371,10 +1341,6 @@ final class DragShareController {
                     log("portal glow expanded with share tray");
                 }
                 startPortalMenuEnterAnimation();
-            } else if (isModernStyle() && modernMenuView != null) {
-                if (modernMenuWindow == null) {
-                    modernMenuView.showAnimated();
-                }
             } else {
                 menuView.setAlpha(0f);
                 menuView.setTranslationX(isVerticalSimpleMenu()
@@ -1396,6 +1362,40 @@ final class DragShareController {
         } catch (Throwable error) {
             log("unable to add share menu", error);
         }
+    }
+
+    private void showModernMenuOverlay() {
+        if (modernMenuWindow != null) {
+            try {
+                modernMenuWindow.showAnimated();
+                return;
+            } catch (Throwable error) {
+                log("unable to show modern menu dialog; using passive overlay window", error);
+                modernMenuWindow.dispose();
+                modernMenuWindow = null;
+                recreateModernMenuView();
+            }
+        }
+        if (menuView != null && !menuView.isAttachedToWindow()) {
+            windowManager.addView(menuView, menuParams);
+        }
+        if (modernMenuView != null) {
+            modernMenuView.showAnimated();
+        }
+    }
+
+    private void recreateModernMenuView() {
+        Map<ShareTarget, Drawable> icons = new LinkedHashMap<>();
+        for (ShareTarget target : shareTargets) {
+            icons.put(target, iconForTarget(target));
+        }
+        modernMenuView = new ModernMenuOverlayView(
+                context,
+                new ArrayList<>(shareTargets),
+                icons,
+                settings,
+                isVerticalSimpleMenu());
+        menuView = modernMenuView;
     }
 
     private void lockNearHandMenuSide() {

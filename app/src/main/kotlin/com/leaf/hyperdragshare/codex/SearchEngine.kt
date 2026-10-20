@@ -21,6 +21,11 @@ internal object SearchEngineCatalog {
         "有道词典",
         "https://dict.youdao.com/result?word=",
     )
+    private val youdaoTranslate = SearchEngine(
+        "youdao-translate",
+        "有道翻译",
+        "https://fanyi.youdao.com/?keyfrom=dict2.index&i=",
+    )
 
     val engines = listOf(
         baidu,
@@ -30,12 +35,16 @@ internal object SearchEngineCatalog {
         youdaoDictionary,
         SearchEngine("bing-dictionary", "必应词典", "https://www.bing.com/dict/search?q="),
         SearchEngine("iciba", "金山词霸", "https://www.iciba.com/word?w="),
-        SearchEngine("youdao-translate", "有道翻译", "https://fanyi.youdao.com/?keyfrom=dict2.index&i="),
+        youdaoTranslate,
         SearchEngine("baidu-encyclopedia", "百度百科", "https://baike.baidu.com/item/"),
     )
 
     fun defaultForType(type: Int): SearchEngine =
-        if (type == BoomActionHandler.SEARCH_DICTIONARY) youdaoDictionary else baidu
+        when (type) {
+            BoomActionHandler.SEARCH_DICTIONARY -> youdaoDictionary
+            BoomActionHandler.SEARCH_TRANSLATE -> youdaoTranslate
+            else -> baidu
+        }
 
     fun destination(engine: SearchEngine, input: String): String? {
         val value = input.trim()

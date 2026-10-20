@@ -237,6 +237,12 @@ private fun MainPage(
 ) {
     var showAccessibilityDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    var copyDirectEnabled by remember(context) {
+        mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
+    }
+    var backTapMode by remember(context) {
+        mutableIntStateOf(IntegrationSettings.getBackTapMode(context))
+    }
     val exportLogLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain"),
     ) { destination ->
@@ -457,6 +463,49 @@ private fun MainPage(
                         checked = settings.imageSharingEnabled,
                         onCheckedChange = { checked ->
                             persist(copySettings(settings, imageSharingEnabled = checked))
+                        },
+                    )
+                }
+            }
+
+            item(key = "system-integration-title") {
+                SmallTitle(text = "系统集成")
+            }
+            item(key = "system-integration-preferences") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    SwitchPreference(
+                        title = "AICR 文本直取",
+                        summary = "在 LSPosed 启用 com.xiaomi.aicr 后，将 AICR 的复制操作接入本模块分词页；默认关闭",
+                        checked = copyDirectEnabled,
+                        onCheckedChange = { enabled ->
+                            IntegrationSettings.setCopyDirectEnabled(context, enabled)
+                            copyDirectEnabled = enabled
+                        },
+                    )
+                    OverlayDropdownPreference(
+                        title = "背部轻敲启动屏幕识字",
+                        summary = "需要 LSPosed 启用 android 进程和 Root。关闭时保留系统原动作",
+                        items = listOf("关闭", "双击", "三击", "双击和三击"),
+                        selectedIndex = backTapMode,
+                        onSelectedIndexChange = { selected ->
+                            val previousMode = backTapMode
+                            val requestedMode = BackTapMode.normalize(selected)
+                            IntegrationSettings.setBackTapMode(context, requestedMode)
+                            backTapMode = requestedMode
+                            coroutineScope.launch {
+                                val applied = withContext(Dispatchers.IO) {
+                                    IntegrationSettings.syncBackTapModeAsRoot(context)
+                                }
+                                if (!applied) {
+                                    IntegrationSettings.setBackTapMode(context, previousMode)
+                                    backTapMode = previousMode
+                                    Toast.makeText(
+                                        context,
+                                        "写入系统设置失败，请确认 Root 已授权",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
                         },
                     )
                 }

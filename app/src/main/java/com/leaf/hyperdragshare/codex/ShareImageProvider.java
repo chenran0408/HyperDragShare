@@ -50,6 +50,14 @@ public final class ShareImageProvider extends ContentProvider {
             enforcePortalCaller();
             return DragShareSettings.readLocal(contextOrThrow()).toBundle();
         }
+        if (IntegrationSettings.METHOD_GET_AICR_SETTINGS.equals(method)) {
+            enforceAicrCallerOrModule();
+            Bundle result = new Bundle();
+            result.putBoolean(
+                    IntegrationSettings.EXTRA_COPY_DIRECT_ENABLED,
+                    IntegrationSettings.isCopyDirectEnabled(contextOrThrow()));
+            return result;
+        }
         if (ImageStagingClient.METHOD_GRANT.equals(method)) {
             enforcePortalCaller();
             return grantImage(extras);
@@ -295,6 +303,22 @@ public final class ShareImageProvider extends ContentProvider {
             }
         }
         throw new SecurityException("Only Taplus can stage share images");
+    }
+
+    private void enforceAicrCallerOrModule() {
+        int callingUid = Binder.getCallingUid();
+        if (callingUid == Process.myUid()) {
+            return;
+        }
+        String[] packages = contextOrThrow().getPackageManager().getPackagesForUid(callingUid);
+        if (packages != null) {
+            for (String packageName : packages) {
+                if (MainHook.AICR_PACKAGE.equals(packageName)) {
+                    return;
+                }
+            }
+        }
+        throw new SecurityException("Only Xiaomi AICR can read its integration setting");
     }
 
     private File resolveFile(Uri uri) {

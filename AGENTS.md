@@ -9,7 +9,7 @@
 ## 工程基线
 
 - 工程类型：Android LSPosed 模块，Java/Kotlin 17，minSdk 33，targetSdk 34，compileSdk 37。
-- 当前分支版本：`1.7.52`，`versionCode 76`；使用 AGP 9.1.1 / Gradle 9.3.1。
+- 当前分支版本：`1.7.54`，`versionCode 78`；使用 AGP 9.1.1 / Gradle 9.3.1。
 - 已验证宿主：传送门 `4.2.1`，包名 `com.miui.contentextension`。
 - LSPosed API：82，入口为 `com.leaf.hyperdragshare.codex.MainHook`。
 - 可靠的同手势跟手依赖 root 读取 Linux evdev；MIUI 输入监听仅作回退。
@@ -18,7 +18,8 @@
 
 ## 不可破坏的约束
 
-1. LSPosed 作用域只能包含 `com.miui.contentextension`。不要加入
+1. LSPosed 作用域只包含 `com.miui.contentextension`、`com.xiaomi.aicr` 和 `android`，
+   分别用于传送门拖拽、AICR 文本直取和可选背部轻敲 Hook。不要加入
    `com.miui.contentcatcher`（Application Extension Service），也不要在部署脚本中强停它；
    已知部分系统上强停它会连带结束其他应用。
 2. root 输入源一旦 `isReady()`，它就是一次拖拽的唯一权威输入源。不得把 MIUI
@@ -55,9 +56,10 @@
     `ModuleActivation.reportInjected()` 上报其编译时 `BuildConfig.VERSION_CODE`；不要把普通的
     `get_settings` 调用当作注入证明，否则 APK 更新后仍运行旧代码的传送门进程会被误报为已激活。
 13. 内容获取方式默认是传送门。无障碍模式只由 `DragShareAccessibilityService` 在模块进程中
-    工作，仍依赖 Root evdev，并且绝不能扩大 LSPosed 作用域或静默启用无障碍服务。公共运行时
-    不得导入 Xposed API；只允许 `PortalHooks`、`PortalContentCaptureSource` 和
-    `MiuiMotionSource` 使用传送门私有/Xposed 接口。
+    工作，仍依赖 Root evdev，不得因此新增 LSPosed 作用域或静默启用无障碍服务。Xposed API
+    仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
+    `AicrCopyHooks` 和 `BackTapFrameworkHooks`；AICR 与框架 Hook 必须保持包名、目标类和方法
+    的精确限制，普通运行时不得导入 Xposed API。
 14. 无障碍节点树只允许在一次长按超时后读取。不得在 `onAccessibilityEvent()` 中持续遍历、
     截图或记录文字；密码节点、锁屏和无障碍覆盖层必须被忽略，图片只截取已选择的节点区域。
 15. 未经用户在当前轮明确授权，自动化代理不得自行启动、切换或操控任何设备/桌面应用（包括

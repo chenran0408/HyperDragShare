@@ -5,20 +5,21 @@
 无需抬起即可继续拖动；简洁和现代样式可按设置出现在上、下、左、右或近手侧，流光样式在底部显示横向分享菜单，环形样式可从左右边缘展开半圆
 菜单；停留在可滚动热区时自动滚动；松手落在目标上时直接分享。
 
-当前分支 1.7.52（versionCode 76）增加了可切换搜索引擎的应用内搜索面板；完整增量说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md)。图片 OCR 到既有分词页、无文字节点时的限定区域截图后备与异步结果隔离见 [IMAGE_OCR.md](IMAGE_OCR.md)。对目标宿主 5.1.5 的静态核对与修正见 [HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)。下列宿主 4.2.1 的“已验证”记录来自上游，不能视为本分支已在目标 5.1.5 上验证。
+当前 HyperOS 4 fork 为 1.7.54（versionCode 78）。本分支继续以 DragShare 源码为基线独立维护；搜索、OCR、分词和设置页使用 Miuix 主题，拖拽菜单保留专用绘制组件。应用内搜索面板细节见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md)，图片 OCR 与原图重识字见 [IMAGE_OCR.md](IMAGE_OCR.md)，功能迁移顺序见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。目标宿主静态核对见 [HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)；设备运行结果以独立验收记录为准。
 
 ## 1. 运行边界
 
 - 传送门版本：`4.2.1`
-- 注入包：`com.miui.contentextension`
+- 注入包：`com.miui.contentextension`、`com.xiaomi.aicr`、`android`
 - 不注入：`com.miui.contentcatcher`（Application Extension Service `4.1.9`）
 - Android：minSdk 33，targetSdk 34，compileSdk 37
 - LSPosed API：82
 - 可靠输入：root + Linux evdev
 
-LSPosed 默认作用域由 `res/values/arrays.xml` 声明，且 `MainHook` 在运行时再次检查包名。
-因此即使用户误选其他应用，Hook 逻辑也只会在传送门中安装。不要强行停止 Application
-Extension Service；部分 HyperOS 版本会因此连带强停其他应用。
+LSPosed 作用域由 `res/values/arrays.xml` 声明，且 `MainHook` 在运行时再次检查包名。传送门
+Hook、AICR 文本直取 Hook 与背部轻敲框架 Hook 分别限制在这三个进程；不加入
+`com.miui.contentcatcher`。不要强行停止 Application Extension Service；部分 HyperOS 版本会
+因此连带强停其他应用。
 
 ## 2. 总体数据流
 
@@ -80,8 +81,16 @@ Root/MIUI 输入源；已连接的无障碍服务收到无障碍模式时才启�
 
 ## 3. 传送门 Hook 与内容抓取
 
-入口 `MainHook.handleLoadPackage()` 只接受 `com.miui.contentextension`，然后由
-`PortalHooks.install()` 安装以下 Hook：
+入口 `MainHook.handleLoadPackage()` 根据包名分发到各自限定的适配层：
+
+- `com.miui.contentextension`：由 `PortalHooks.install()` 安装下列传送门 Hook。
+- `com.xiaomi.aicr`：由 `AicrCopyHooks.install()` 仅处理 `TextDirectProvider.call("processText", …)`；开关默认关闭，读取设置时只能通过受限 Provider 获取单个开关值。
+- `android`：由 `BackTapFrameworkHooks.install()` 仅处理 `MiuiBackTapGestureService.postShortcutFunction()` 及其双击/三击回调；模式默认关闭，失败时保留 ROM 原动作，不重注册传感器。
+
+AICR 与系统框架入口的静态依据、未验证项和目标设备记录见
+[HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)。
+
+传送门 Hook 安装以下入口：
 
 1. `TextContentExtensionService.onCreate()`：先向模块 Provider 上报当前 Hook 的
    `BuildConfig.VERSION_CODE`，注册设置 observer；只有当前模式为传送门时才创建控制器、启动
@@ -253,9 +262,9 @@ DecorView。入场和退场动画直接作用于 DecorView，因此 Card 内容�
 保留光效、分段展开、错峰弹入和距离缩放，暂不复制整屏倾斜；这不影响分享命中和跟手坐标。
 
 底部菜单高 `96 dp`（流光样式为 `152 dp`）。简洁样式根据“菜单位置”在对应边缘的触发区
-显示；左右位置使用 `ScrollView`，上下位置使用 `HorizontalScrollView`。简洁和现代样式在一次
-手势的首次展开前，还必须从长按起点朝菜单方向移动至少 `16 dp`：下/上/左/右分别要求下滑、上滑、
-左滑、右滑。这样初始长按位置落在热区内不会直接展开；资格一旦获得会保持到本次手势结束，菜单
+显示；左右位置使用 `ScrollView`，上下位置使用 `HorizontalScrollView`。简洁和现代样式在本分支中
+与流光、环形一样，指针进入配置的触发区后直接展开，不再要求先从长按起点朝菜单方向移动至少
+`16 dp`。此修正避免缺失起点坐标或快速越过热区时菜单不展开；触发边界有单元测试覆盖，仍需在目标设备确认。菜单
 暂时收起后重新进入热区仍可再次展开。背景不透明度、
 背景圆角和菜单到边缘距离只作用于简洁样式；背景不透明度使用绝对 alpha，`100%` 一定是
 完全不透明，不会与主题色自身的 alpha 相乘。简洁菜单将背景作为独立图层绘制，使传送门和无障碍
@@ -760,7 +769,7 @@ app/build/outputs/apk/debug/app-debug.apk
 抑制、底部触发边界、左右滚动方向、边缘深度速度渐变、
 预览位置夹取、流光进度与项目缩放、近手方向映射、环形菜单左右触发/贴边半圆/自然项目顺序、
 新增外观设置和现代原生局部模糊参数的默认值/范围裁剪、原生 Window 局部模糊的圆角背景/降级判定、现代预览按文字与图片尺寸自适应并限制为屏宽三分之一、独立 Compose 悬浮窗的 ViewTree owner 传递、原始坐标与旋转映射、
-触摸设备发现、UUID URI 解析、设置默认值/范围/内容开关/目标规则以及本地图片时间文件名；
+简洁菜单四边触发区边界、触摸设备发现、UUID URI 解析、设置默认值/范围/内容开关/目标规则以及本地图片时间文件名；
 新增测试还覆盖内容获取模式迁移、evdev DOWN/MOVE/UP/CANCEL、长按异步失效、节点文字/图片
 候选优先级、截图区域的扩边/缩放/夹取、日志等级/保存位置的 Provider Bundle 同步，以及背景锁开关的 Provider Bundle 同步、root 服务返回
 解析、当前 ROM DEX 的动态 Binder 事务解析与 `InputMonitor` 释放。传送门私有 Hook、WindowManager、root evdev、InputMonitor 权限、Miuix

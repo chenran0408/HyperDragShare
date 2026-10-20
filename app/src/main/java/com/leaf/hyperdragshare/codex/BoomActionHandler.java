@@ -20,6 +20,7 @@ import java.util.TreeSet;
 public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     public static final int SEARCH_WEB = 0;
     public static final int SEARCH_DICTIONARY = 1;
+    public static final int SEARCH_TRANSLATE = 2;
 
     private final BoomChipPage mBoomPage;
     private final Toast mToast;

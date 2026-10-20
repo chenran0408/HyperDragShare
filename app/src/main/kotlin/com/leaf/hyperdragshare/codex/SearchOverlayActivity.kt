@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -44,12 +46,6 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,11 +60,22 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.ThemeController
 
 class SearchOverlayActivity : ComponentActivity() {
     private var query by mutableStateOf("")
@@ -87,6 +94,11 @@ class SearchOverlayActivity : ComponentActivity() {
         window.statusBarColor = AndroidColor.TRANSPARENT
         window.navigationBarColor = AndroidColor.TRANSPARENT
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
 
         query = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
         selectedEngine = SearchEngineCatalog.defaultForType(
@@ -98,33 +110,37 @@ class SearchOverlayActivity : ComponentActivity() {
         navigationTarget = SearchEngineCatalog.destination(selectedEngine, query)
 
         setContent {
-            SearchPanel(
-                query = query,
-                selectedEngine = selectedEngine,
-                panelFraction = panelFraction,
-                screenHeightPx = with(LocalDensity.current) {
-                    LocalConfiguration.current.screenHeightDp.dp.toPx()
-                },
-                engines = SearchEngineCatalog.engines,
-                navigationTarget = navigationTarget,
-                navigationRequest = navigationRequest,
-                canNavigateBack = canNavigateBack,
-                canNavigateForward = canNavigateForward,
-                pageError = pageError,
-                onQueryChange = { query = it },
-                onSubmit = { submitSearch() },
-                onEngineSelected = {
-                    selectedEngine = it
-                    submitSearch()
-                },
-                onHeightDrag = ::adjustPanelHeight,
-                onClose = ::finish,
-                onBack = ::navigateBack,
-                onForward = ::navigateForward,
-                onRefresh = { webView?.reload() },
-                onOpenInBrowser = ::openInBrowser,
-                createWebView = ::createWebView,
-            )
+            MiuixTheme(
+                controller = ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light),
+            ) {
+                SearchPanel(
+                    query = query,
+                    selectedEngine = selectedEngine,
+                    panelFraction = panelFraction,
+                    screenHeightPx = with(LocalDensity.current) {
+                        LocalConfiguration.current.screenHeightDp.dp.toPx()
+                    },
+                    engines = SearchEngineCatalog.engines,
+                    navigationTarget = navigationTarget,
+                    navigationRequest = navigationRequest,
+                    canNavigateBack = canNavigateBack,
+                    canNavigateForward = canNavigateForward,
+                    pageError = pageError,
+                    onQueryChange = { query = it },
+                    onSubmit = { submitSearch() },
+                    onEngineSelected = {
+                        selectedEngine = it
+                        submitSearch()
+                    },
+                    onHeightDrag = ::adjustPanelHeight,
+                    onClose = ::finish,
+                    onBack = ::navigateBack,
+                    onForward = ::navigateForward,
+                    onRefresh = { webView?.reload() },
+                    onOpenInBrowser = ::openInBrowser,
+                    createWebView = ::createWebView,
+                )
+            }
         }
     }
 
@@ -152,6 +168,7 @@ class SearchOverlayActivity : ComponentActivity() {
         webView?.apply {
             stopLoading()
             webChromeClient = null
+            (parent as? ViewGroup)?.removeView(this)
             destroy()
         }
         webView = null
@@ -309,7 +326,7 @@ private fun SearchPanel(
                 .fillMaxWidth()
                 .fillMaxHeight(panelFraction)
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
-                .background(Color(0xFFF6F7F9))
+                .background(MiuixTheme.colorScheme.background)
                 .clickable(onClick = {})
                 .navigationBarsPadding()
                 .imePadding(),
@@ -330,7 +347,7 @@ private fun SearchPanel(
                         .width(38.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFB8BEC7)),
+                        .background(MiuixTheme.colorScheme.onSurfaceVariantActions.copy(alpha = 0.38f)),
                 )
             }
 
@@ -341,34 +358,58 @@ private fun SearchPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.search_close))
+                    MiuixIcon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.search_close),
+                        tint = MiuixTheme.colorScheme.onSurface,
+                    )
                 }
-                TextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    placeholder = { Text(stringResource(R.string.search_query_hint)) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = {
-                        focusManager.clearFocus()
-                        onSubmit()
-                    }),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        disabledContainerColor = Color.White,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = Color(0xFF2675E8),
-                    ),
-                    shape = RoundedCornerShape(20.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = MiuixTheme.colorScheme.onSurface,
+                            fontSize = 16.sp,
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            focusManager.clearFocus()
+                            onSubmit()
+                        }),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MiuixTheme.colorScheme.primary),
+                        decorationBox = { innerTextField ->
+                            Box {
+                                if (query.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.search_query_hint),
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                    )
+                }
                 IconButton(onClick = {
                     focusManager.clearFocus()
                     onSubmit()
                 }) {
-                    Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.search_submit))
+                    MiuixIcon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = stringResource(R.string.search_submit),
+                        tint = MiuixTheme.colorScheme.primary,
+                    )
                 }
             }
 
@@ -381,11 +422,34 @@ private fun SearchPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 engines.forEach { engine ->
-                    FilterChip(
-                        selected = engine.id == selectedEngine.id,
+                    val selected = engine.id == selectedEngine.id
+                    Card(
+                        modifier = Modifier.height(36.dp),
+                        colors = CardDefaults.defaultColors(
+                            color = if (selected) {
+                                MiuixTheme.colorScheme.primaryContainer
+                            } else {
+                                MiuixTheme.colorScheme.surfaceContainer
+                            },
+                        ),
                         onClick = { onEngineSelected(engine) },
-                        label = { Text(engine.label, fontSize = 13.sp) },
-                    )
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = engine.label,
+                                fontSize = 13.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) {
+                                    MiuixTheme.colorScheme.primary
+                                } else {
+                                    MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                },
+                            )
+                        }
+                    }
                 }
             }
 
@@ -394,7 +458,7 @@ private fun SearchPanel(
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(top = 6.dp, bottom = 2.dp)
-                    .background(Color.White),
+                    .background(MiuixTheme.colorScheme.surfaceContainer),
             ) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
@@ -409,11 +473,14 @@ private fun SearchPanel(
                 if (pageError != null) {
                     Text(
                         text = pageError,
-                        color = Color(0xFF667080),
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(16.dp)
-                            .background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
+                            .background(
+                                MiuixTheme.colorScheme.background.copy(alpha = 0.96f),
+                                RoundedCornerShape(12.dp),
+                            )
                             .padding(horizontal = 14.dp, vertical = 9.dp),
                     )
                 }
@@ -427,16 +494,32 @@ private fun SearchPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack, enabled = canNavigateBack) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.search_back))
+                    MiuixIcon(
+                        imageVector = Icons.Outlined.ArrowBack,
+                        contentDescription = stringResource(R.string.search_back),
+                        tint = MiuixTheme.colorScheme.onSurface,
+                    )
                 }
                 IconButton(onClick = onForward, enabled = canNavigateForward) {
-                    Icon(Icons.Outlined.ArrowForward, contentDescription = stringResource(R.string.search_forward))
+                    MiuixIcon(
+                        imageVector = Icons.Outlined.ArrowForward,
+                        contentDescription = stringResource(R.string.search_forward),
+                        tint = MiuixTheme.colorScheme.onSurface,
+                    )
                 }
                 IconButton(onClick = onRefresh) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.search_refresh))
+                    MiuixIcon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = stringResource(R.string.search_refresh),
+                        tint = MiuixTheme.colorScheme.onSurface,
+                    )
                 }
                 IconButton(onClick = onOpenInBrowser) {
-                    Icon(Icons.Outlined.OpenInBrowser, contentDescription = stringResource(R.string.search_open_browser))
+                    MiuixIcon(
+                        imageVector = Icons.Outlined.OpenInBrowser,
+                        contentDescription = stringResource(R.string.search_open_browser),
+                        tint = MiuixTheme.colorScheme.onSurface,
+                    )
                 }
             }
         }

@@ -74,6 +74,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.squircle.squircleBackground
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -265,7 +266,7 @@ internal class ModernPreviewOverlayView(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else {
-                            androidx.compose.material3.Text(
+                            Text(
                                 text = payload.text.orEmpty(),
                                 color = MiuixTheme.colorScheme.onSurfaceContainer,
                                 fontSize = 14.sp,
@@ -315,7 +316,7 @@ internal class ModernMenuOverlayView(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            androidx.compose.material3.Text(
+                            Text(
                                 text = "没有可用的分享应用",
                                 color = MiuixTheme.colorScheme.onSurfaceContainer,
                                 fontSize = 13.sp,
@@ -564,7 +565,7 @@ private fun ModernShareTarget(
                             scaleY = selectedScale
                         },
                 )
-                androidx.compose.material3.Text(
+                Text(
                     text = target.label?.toString().orEmpty(),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -604,7 +605,7 @@ private fun ModernTargetIcon(
             modifier = modifier,
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Text(
+            Text(
                 text = target.label?.firstOrNull()?.toString() ?: "?",
                 color = MiuixTheme.colorScheme.onSurfaceContainer.copy(alpha = opacity),
                 fontSize = 18.sp,

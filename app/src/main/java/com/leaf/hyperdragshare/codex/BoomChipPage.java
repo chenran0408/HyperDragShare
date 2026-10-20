@@ -282,6 +282,12 @@ public class BoomChipPage {
         return mLayout.getOriText();
     }
 
+    public String selectedTextOrOriginal() {
+        return mBoomActionHandler != null && mBoomActionHandler.hasSelection()
+                ? mBoomActionHandler.getSelectedText()
+                : mLayout.getOriText();
+    }
+
     public void selectAll() {
         final int wordCount = mLayout.getWordCount();
         if (wordCount <= 0) {

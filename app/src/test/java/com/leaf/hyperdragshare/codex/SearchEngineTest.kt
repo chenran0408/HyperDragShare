@@ -16,6 +16,17 @@ class SearchEngineTest {
     }
 
     @Test
+    fun translationActionDefaultsToTranslationEngine() {
+        val engine = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_TRANSLATE)
+
+        assertEquals("youdao-translate", engine.id)
+        assertEquals(
+            "https://fanyi.youdao.com/?keyfrom=dict2.index&i=hello%20world",
+            SearchEngineCatalog.destination(engine, "hello world"),
+        )
+    }
+
+    @Test
     fun queryIsUtf8EncodedWithoutChangingTheSelectedEngine() {
         val engine = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_WEB)
 

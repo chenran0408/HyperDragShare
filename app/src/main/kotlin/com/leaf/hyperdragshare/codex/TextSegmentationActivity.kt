@@ -1,10 +1,16 @@
 package com.leaf.hyperdragshare.codex
 
 import android.content.ComponentName
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color as AndroidColor
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -12,7 +18,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +35,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -47,6 +55,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 /**
  * DragShare's text-only BigBang surface. The selectable word-chip implementation is retained
@@ -59,6 +73,13 @@ class TextSegmentationActivity : ComponentActivity() {
     private var launchTouchY by mutableIntStateOf(-1)
     private var currentText = ""
     private var currentSegment: IntArray? = null
+    private var sourceImageUri by mutableStateOf<Uri?>(null)
+    private var legacyBackgroundColor = AndroidColor.WHITE
+    private var legacyTextColor = AndroidColor.DKGRAY
+    private var legacySummaryColor = AndroidColor.GRAY
+    private var legacySurfaceColor = AndroidColor.LTGRAY
+    private var legacySelectionColor = 0x223F7CFF
+    private var legacyActionColor = AndroidColor.DKGRAY
     private var animatedDismissRequester: (() -> Unit)? = null
     private val requests = LatestRequest()
 
@@ -78,19 +99,28 @@ class TextSegmentationActivity : ComponentActivity() {
             page.restoreSelectedState(savedInstanceState?.getSerializable(SELECTED_STATE))
         }
 
+        val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
         setContent {
-            BigBangOverlayContent(
-                contentView = legacyContentView,
-                touchX = launchTouchX,
-                touchY = launchTouchY,
-                onDismissRequesterChanged = { animatedDismissRequester = it },
-                onDismissRequest = { shouldDismissPage() },
-                onDismissFinished = { finish() },
-                onEditMode = { showUnsupportedAction() },
-                onSelectAll = { selectAll() },
-                onShareAll = { shareAll() },
-                onMore = { showUnsupportedAction() },
-            )
+            MiuixTheme(
+                controller = ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light),
+            ) {
+                BigBangOverlayContent(
+                    contentView = legacyContentView,
+                    touchX = launchTouchX,
+                    touchY = launchTouchY,
+                    sourceImageAvailable = sourceImageUri != null,
+                    onLegacyThemeChanged = ::updateLegacyTheme,
+                    onDismissRequesterChanged = { animatedDismissRequester = it },
+                    onDismissRequest = { shouldDismissPage() },
+                    onDismissFinished = { finish() },
+                    onEditMode = { splitSelectedWords() },
+                    onSelectAll = { selectAll() },
+                    onShareAll = { shareAll() },
+                    onMoreAction = ::handleMoreAction,
+                    onOcr = ::reopenOcr,
+                    onTranslate = { openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_TRANSLATE) },
+                )
+            }
         }
 
         val savedText = savedInstanceState?.getString(SAVED_TEXT)
@@ -136,6 +166,7 @@ class TextSegmentationActivity : ComponentActivity() {
     private fun updateLaunchPosition() {
         launchTouchX = intent.getIntExtra(EXTRA_TOUCH_X, -1)
         launchTouchY = intent.getIntExtra(EXTRA_TOUCH_Y, -1)
+        sourceImageUri = intent.getParcelableExtra(EXTRA_SOURCE_IMAGE_URI, Uri::class.java)
     }
 
     private fun reinitializeFromIntent() {
@@ -196,6 +227,7 @@ class TextSegmentationActivity : ComponentActivity() {
         }
         currentText = text
         currentSegment = result
+        refreshLegacyTheme()
         if (fromSavedState) {
             // The chip core restores the serialised selection during its first layout pass.
         }
@@ -218,8 +250,83 @@ class TextSegmentationActivity : ComponentActivity() {
         })
     }
 
-    private fun showUnsupportedAction() {
-        Toast.makeText(this, R.string.bigbang_action_placeholder, Toast.LENGTH_SHORT).show()
+    private fun splitSelectedWords() {
+        if (boomChipPage?.splitSelectedWordsToChars() != true) {
+            Toast.makeText(this, R.string.bigbang_select_words_first, Toast.LENGTH_SHORT).show()
+        } else {
+            refreshLegacyTheme()
+        }
+    }
+
+    private fun updateLegacyTheme(
+        backgroundColor: Int,
+        textColor: Int,
+        summaryColor: Int,
+        surfaceColor: Int,
+        selectionColor: Int,
+        actionColor: Int,
+    ) {
+        legacyBackgroundColor = backgroundColor
+        legacyTextColor = textColor
+        legacySummaryColor = summaryColor
+        legacySurfaceColor = surfaceColor
+        legacySelectionColor = selectionColor
+        legacyActionColor = actionColor
+        refreshLegacyTheme()
+    }
+
+    private fun refreshLegacyTheme() {
+        applyLegacySegmentationTheme(
+            legacyContentView,
+            legacyBackgroundColor,
+            legacyTextColor,
+            legacySummaryColor,
+            legacySurfaceColor,
+            legacySelectionColor,
+            legacyActionColor,
+        )
+    }
+
+    private fun selectedTextOrOriginal(): String =
+        boomChipPage?.selectedTextOrOriginal().orEmpty()
+
+    private fun handleMoreAction(action: BigBangMoreAction) {
+        val text = selectedTextOrOriginal()
+        when (action) {
+            BigBangMoreAction.Copy -> {
+                if (text.isNotBlank()) {
+                    getSystemService(Context.CLIPBOARD_SERVICE).let { service ->
+                        (service as ClipboardManager).setPrimaryClip(ClipData.newPlainText(null, text))
+                    }
+                    Toast.makeText(this, R.string.copy_tips, Toast.LENGTH_SHORT).show()
+                }
+            }
+            BigBangMoreAction.Search -> openSearch(text, BoomActionHandler.SEARCH_WEB)
+            BigBangMoreAction.Dictionary -> openSearch(text, BoomActionHandler.SEARCH_DICTIONARY)
+            BigBangMoreAction.Translate -> openSearch(text, BoomActionHandler.SEARCH_TRANSLATE)
+            BigBangMoreAction.Share -> shareText(text)
+            BigBangMoreAction.Split -> splitSelectedWords()
+        }
+    }
+
+    private fun reopenOcr() {
+        val uri = sourceImageUri
+        if (uri == null) {
+            Toast.makeText(this, R.string.bigbang_ocr_source_missing, Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(ImageOcrActivity.createRecheckIntent(this, uri))
+    }
+
+    private fun shareText(text: String) {
+        if (text.isBlank()) return
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        startActivity(Intent.createChooser(send, null).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+        })
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -241,12 +348,18 @@ class TextSegmentationActivity : ComponentActivity() {
         private const val SELECTED_STATE = "selected_state"
         private const val SAVED_TEXT = "saved_text"
         private const val SAVED_SEGMENT = "saved_segment"
+        private const val EXTRA_SOURCE_IMAGE_URI = "dragshare_source_image_uri"
 
         @JvmStatic
         fun createIntent(text: String): Intent = createIntent(text, -1, -1)
 
         @JvmStatic
         fun createIntent(text: String, touchX: Int, touchY: Int): Intent {
+            return createIntent(text, touchX, touchY, null)
+        }
+
+        @JvmStatic
+        fun createIntent(text: String, touchX: Int, touchY: Int, sourceImage: Uri?): Intent {
             return Intent(Intent.ACTION_SEND).apply {
                 component = ComponentName(
                     BuildConfig.APPLICATION_ID,
@@ -256,6 +369,11 @@ class TextSegmentationActivity : ComponentActivity() {
                 putExtra(Intent.EXTRA_TEXT, text)
                 putExtra(EXTRA_TOUCH_X, touchX)
                 putExtra(EXTRA_TOUCH_Y, touchY)
+                if (sourceImage != null) {
+                    putExtra(EXTRA_SOURCE_IMAGE_URI, sourceImage)
+                    clipData = ClipData.newRawUri("source image", sourceImage)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
                 addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
@@ -265,29 +383,49 @@ class TextSegmentationActivity : ComponentActivity() {
     }
 }
 
+private enum class BigBangMoreAction {
+    Copy,
+    Search,
+    Dictionary,
+    Translate,
+    Share,
+    Split,
+}
+
 @Composable
 private fun BigBangOverlayContent(
     contentView: View,
     touchX: Int,
     touchY: Int,
+    sourceImageAvailable: Boolean,
+    onLegacyThemeChanged: (Int, Int, Int, Int, Int, Int) -> Unit,
     onDismissRequesterChanged: ((() -> Unit)?) -> Unit,
     onDismissRequest: () -> Boolean,
     onDismissFinished: () -> Unit,
     onEditMode: () -> Unit,
     onSelectAll: () -> Unit,
     onShareAll: () -> Unit,
-    onMore: () -> Unit,
+    onMoreAction: (BigBangMoreAction) -> Unit,
+    onOcr: () -> Unit,
+    onTranslate: () -> Unit,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = MiuixTheme.colorScheme.background.luminance() < 0.5f
     val panelMetrics = rememberOverlayPanelMetrics()
-    val panelBackground = if (dark) Color(0xFF171B20) else Color(0xFFF3F3F4)
-    val panelBorder = if (dark) Color(0xFF2E353E) else Color(0xFFD7D7DA)
-    val topBarColor = if (dark) Color(0xFF1D2126) else Color.White
-    val bottomBarColor = if (dark) Color(0xFF1D2126) else Color.White
-    val scrimColor = if (dark) Color.Black.copy(alpha = 0.62f) else Color.Black.copy(alpha = 0.48f)
+    val panelBackground = MiuixTheme.colorScheme.background
+    val panelBorder = MiuixTheme.colorScheme.onSurfaceVariantActions.copy(alpha = 0.22f)
+    val topBarColor = MiuixTheme.colorScheme.surfaceContainer
+    val bottomBarColor = MiuixTheme.colorScheme.surfaceContainer
+    val legacyBackgroundColor = MiuixTheme.colorScheme.background.toArgb()
+    val legacyTextColor = MiuixTheme.colorScheme.onSurface.toArgb()
+    val legacySummaryColor = MiuixTheme.colorScheme.onSurfaceVariantSummary.toArgb()
+    val legacySurfaceColor = MiuixTheme.colorScheme.surfaceContainer.toArgb()
+    val legacySelectionColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.16f).toArgb()
+    val legacyActionColor = MiuixTheme.colorScheme.onSurfaceVariantActions.toArgb()
+    val scrimColor = Color.Black.copy(alpha = if (dark) 0.62f else 0.48f)
     val shadowColor = Color.Black.copy(alpha = 0.5f)
     val panelShape = androidx.compose.foundation.shape.RoundedCornerShape(panelMetrics.cornerRadius)
     var panelVisible by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var dismissing by remember { mutableStateOf(false) }
     var panelBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val enterProgress by animateFloatAsState(
@@ -329,6 +467,16 @@ private fun BigBangOverlayContent(
         onDispose { onDismissRequesterChanged(null) }
     }
     LaunchedEffect(Unit) { panelVisible = true }
+    SideEffect {
+        onLegacyThemeChanged(
+            legacyBackgroundColor,
+            legacyTextColor,
+            legacySummaryColor,
+            legacySurfaceColor,
+            legacySelectionColor,
+            legacyActionColor,
+        )
+    }
 
     BackHandler(onBack = requestDismiss)
     ApplyOverlaySystemBars(
@@ -367,21 +515,21 @@ private fun BigBangOverlayContent(
                         leading = {
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.Edit,
-                                tint = if (dark) Color(0xFFD7DEE7) else Color(0xFF6F6962),
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = onEditMode,
                                 contentDescription = stringResource(R.string.bigbang_action_edit),
                             )
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.SelectAll,
-                                tint = if (dark) Color(0xFFF2F5F8) else Color(0xFF6C6760),
+                                tint = MiuixTheme.colorScheme.onSurface,
                                 onClick = onSelectAll,
                                 contentDescription = stringResource(R.string.bigbang_action_select_all),
                             )
                         },
                         center = {
-                            androidx.compose.material3.Text(
+                            Text(
                                 text = stringResource(R.string.bigbang_overlay_title),
-                                color = if (dark) Color(0xFFF2F5F8) else Color(0xFFD1CCC6),
+                                color = MiuixTheme.colorScheme.onSurface,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -389,14 +537,14 @@ private fun BigBangOverlayContent(
                         trailing = {
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.Share,
-                                tint = if (dark) Color(0xFFF2F5F8) else Color(0xFF6C6760),
+                                tint = MiuixTheme.colorScheme.onSurface,
                                 onClick = onShareAll,
                                 contentDescription = stringResource(R.string.bigbang_action_share_all),
                             )
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.MoreHoriz,
-                                tint = if (dark) Color(0xFFD7DEE7) else Color(0xFF6F6962),
-                                onClick = onMore,
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                onClick = { showMoreMenu = true },
                                 contentDescription = stringResource(R.string.bigbang_action_more),
                             )
                         },
@@ -411,16 +559,18 @@ private fun BigBangOverlayContent(
                         leading = {
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.DocumentScanner,
-                                tint = if (dark) Color(0x66F2F5F8) else Color(0x668D8983),
-                                enabled = false,
-                                onClick = {},
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions.copy(
+                                    alpha = if (sourceImageAvailable) 1f else 0.4f,
+                                ),
+                                enabled = sourceImageAvailable,
+                                onClick = onOcr,
                                 contentDescription = stringResource(R.string.bigbang_action_ocr),
                             )
                         },
                         center = {
                             OverlayIconAction(
                                 iconRes = R.drawable.boom_cancel,
-                                tint = if (dark) Color(0xFFF2F5F8) else Color(0xFF8D8983),
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = requestDismiss,
                                 contentDescription = stringResource(R.string.search_overlay_close),
                             )
@@ -428,9 +578,8 @@ private fun BigBangOverlayContent(
                         trailing = {
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.Language,
-                                tint = if (dark) Color(0x66F2F5F8) else Color(0x668D8983),
-                                enabled = false,
-                                onClick = {},
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                onClick = onTranslate,
                                 contentDescription = stringResource(R.string.bigbang_action_language),
                             )
                         },
@@ -448,6 +597,86 @@ private fun BigBangOverlayContent(
                     )
                 }
             }
+        }
+    }
+
+    OverlayDialog(
+        show = showMoreMenu,
+        title = stringResource(R.string.bigbang_action_more),
+        summary = stringResource(R.string.bigbang_more_summary),
+        onDismissRequest = { showMoreMenu = false },
+    ) {
+        Column {
+            listOf(
+                BigBangMoreAction.Copy to R.string.bigbang_more_copy,
+                BigBangMoreAction.Search to R.string.bigbang_more_search,
+                BigBangMoreAction.Dictionary to R.string.bigbang_more_dictionary,
+                BigBangMoreAction.Translate to R.string.bigbang_more_translate,
+                BigBangMoreAction.Share to R.string.bigbang_more_share,
+                BigBangMoreAction.Split to R.string.bigbang_more_split,
+            ).forEach { (action, label) ->
+                TextButton(
+                    text = stringResource(label),
+                    onClick = {
+                        showMoreMenu = false
+                        onMoreAction(action)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+private fun applyLegacySegmentationTheme(
+    contentView: View,
+    backgroundColor: Int,
+    textColor: Int,
+    summaryColor: Int,
+    surfaceColor: Int,
+    selectionColor: Int,
+    actionColor: Int,
+) {
+    val chipColors = ColorStateList(
+        arrayOf(intArrayOf(android.R.attr.state_selected), intArrayOf()),
+        intArrayOf(selectionColor, surfaceColor),
+    )
+    contentView.setBackgroundColor(backgroundColor)
+    contentView.findViewById<ViewGroup>(R.id.boom_content)?.let { content ->
+        fun tintText(view: View) {
+            if (view is android.widget.TextView) {
+                view.setTextColor(textColor)
+                view.backgroundTintList = chipColors
+            } else if (view is android.widget.ImageView) {
+                view.imageTintList = ColorStateList.valueOf(actionColor)
+            } else if (view is ViewGroup) {
+                for (index in 0 until view.childCount) tintText(view.getChildAt(index))
+            }
+        }
+        tintText(content)
+    }
+    contentView.findViewById<View>(R.id.boom_multi_selected_bg)
+        ?.backgroundTintList = ColorStateList.valueOf(selectionColor)
+    contentView.findViewById<android.widget.TextView>(R.id.boom_adjacent_top_hint)
+        ?.apply {
+            setTextColor(summaryColor)
+            backgroundTintList = ColorStateList.valueOf(surfaceColor)
+        }
+    contentView.findViewById<android.widget.TextView>(R.id.boom_adjacent_bottom_hint)
+        ?.apply {
+            setTextColor(summaryColor)
+            backgroundTintList = ColorStateList.valueOf(surfaceColor)
+        }
+    listOf(R.id.multi_selected_bar, R.id.fake_multi_selected_bar).forEach { actionBarId ->
+        contentView.findViewById<ViewGroup>(actionBarId)?.let { actions ->
+            fun tintActions(view: View) {
+                if (view is android.widget.ImageView) {
+                    view.imageTintList = ColorStateList.valueOf(actionColor)
+                } else if (view is ViewGroup) {
+                    for (index in 0 until view.childCount) tintActions(view.getChildAt(index))
+                }
+            }
+            tintActions(actions)
         }
     }
 }

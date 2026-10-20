@@ -8,6 +8,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.widget.ImageView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -25,13 +26,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -53,6 +53,7 @@ import androidx.activity.compose.LocalActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import top.yukonga.miuix.kmp.basic.Icon
 import kotlin.math.ceil
 
 private val OverlayBottomBarContentOffset = (-2).dp
@@ -112,19 +113,17 @@ internal fun FloatingPanel(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
+                .clip(shape)
+                .background(backgroundColor)
+                .border(1.dp, borderColor, shape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {},
                 ),
-            shape = shape,
-            color = backgroundColor,
-            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
         ) {
             Box(modifier = Modifier.fillMaxSize(), content = content)
         }

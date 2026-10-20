@@ -9,24 +9,25 @@ final class GestureMath {
         return pointerY >= triggerTop;
     }
 
-    static boolean hasMovedTowardMenu(
+    static boolean shouldShowEdgeMenu(
             int menuPosition,
-            float startX,
-            float startY,
             float pointerX,
             float pointerY,
-            float minimumDistance) {
-        float distance = Math.max(0f, minimumDistance);
+            int screenWidth,
+            int triggerWidth,
+            int menuTop,
+            int menuTriggerTop) {
+        int trigger = Math.max(0, triggerWidth);
         switch (menuPosition) {
             case DragShareSettings.SIMPLE_MENU_POSITION_TOP:
-                return startY - pointerY >= distance;
+                return pointerY <= menuTop + trigger;
             case DragShareSettings.SIMPLE_MENU_POSITION_LEFT:
-                return startX - pointerX >= distance;
+                return pointerX <= trigger;
             case DragShareSettings.SIMPLE_MENU_POSITION_RIGHT:
-                return pointerX - startX >= distance;
+                return pointerX >= screenWidth - trigger;
             case DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM:
             default:
-                return pointerY - startY >= distance;
+                return pointerY >= menuTriggerTop;
         }
     }
 
