@@ -42,6 +42,15 @@ public final class ShareImageProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (BigBangOverlayLauncher.METHOD_OPEN.equals(method)) {
+            enforcePortalCaller();
+            long identity = Binder.clearCallingIdentity();
+            try {
+                return BigBangOverlayLauncher.request(contextOrThrow(), extras);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
         if (StashClient.METHOD_PUT.equals(method)) {
             enforcePortalCaller();
             return putInStash(extras);

@@ -26,4 +26,8 @@ final class OverlayWindowPolicy {
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 "accessibility");
     }
+
+    static OverlayWindowPolicy application() {
+        return new OverlayWindowPolicy(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, "module");
+    }
 }

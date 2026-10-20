@@ -1598,16 +1598,19 @@ final class DragShareController {
             return;
         }
         try {
-            Intent intent = TextSegmentationActivity.createIntent(
-                    text,
-                    Math.round(lastX),
-                    Math.round(lastY));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
-            log("opened text segmentation");
-        } catch (Throwable error) {
+            android.os.Bundle input = new android.os.Bundle();
+            input.putString("text", text);
+            input.putInt("x", Math.round(lastX));
+            input.putInt("y", Math.round(lastY));
+            android.os.Bundle result = context.getContentResolver().call(
+                    ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN, null, input);
+            if (result == null || !result.getBoolean("accepted")) {
+                throw new IllegalStateException("分词窗口未接受请求");
+            }
+            log("requested text segmentation window");
+        } catch (RuntimeException error) {
             log("open text segmentation failed", error);
-            showToast("无法打开文本分词");
+            showToast("无法打开分词窗口：" + error.getMessage());
         }
     }
 

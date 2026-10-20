@@ -34,3 +34,5 @@ BoomChipPage 已改为 Context + Actions，提供 dismiss/afterCopy/search/share
 1.7.80：BigBangOverlayContent 与 BigBangMoreAction 已提取为内部可复用组件，Activity 继续调用同一内容；独立窗口 owner/权限/生命周期和真机验收仍未完成。
 
 独立交互宿主基础已新增 InteractiveOverlayWindow（ComponentDialog + ComposeView）；提供 show/dismiss、失败回调与销毁通知，复用 AndroidX 原有返回和生命周期 owner。两项测试已通过，尚无产品入口调用；不代表原页弹窗完成。
+
+1.7.81 实际入口已接线：模块 Provider 校验调用 UID 后，在模块本进程 WindowContext 创建 TYPE_APPLICATION_OVERLAY；新增标准悬浮权限入口，不在传送门内加载词典/设置。BigBangPanelSession 已同时服务 Activity 和独立窗口。此前优先宿主进程的方案改为模块进程方案。真机窗口、IME、锁屏和返回/恢复行为未验收。
