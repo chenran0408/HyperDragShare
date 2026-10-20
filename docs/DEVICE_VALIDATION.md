@@ -446,3 +446,10 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 关闭菜单后获取UI节点，目标评论完整文本存在于android.widget.TextView，边界[210,2109][1395,2267]。故不能归因为评论没有文字节点，OCR不是此例首要修复方向。证据位于任务work/bilipai-current.png、bilipai-longpress.png、bilipai-comments.xml。私有评论不复制进仓库。
 
 1.7.105/129通过adb install -r成功原位安装，包版本复核通过。未重启作用域，不能宣称最新Hook已加载；面积校准和新中转站仍待操作验收。下一步核对传送门实际取词入口与Compose评论的触发缺口，保持普通长按冲突问题和面积触发需求分别验收。
+
+### 1.7.105后续：当前Hook与小窗证据
+
+- 重启传送门进程后，首次后台startservice被系统拒绝；打开已知传送门设置Activity后启动同一服务成功。异步握手完成后module_activation的injected_version与portal_root_version均为129，portal_root_granted=true；日志portal hooks installed、runtime started、RootInput ready均存在。没有重启整机或系统框架。
+- 发送合成文本HDS_stash_validation_105到分享接收入口成功保存。窗口实测576×1200，屏幕1440×3200，占15%，满足小于1/6。测试条目保留供后续拖出验收。
+- 切到bilipai后灰色细条可见；点击细条展开6项内容，前台仍com.android.purebilibili/.MainActivity。截图work/hds105-stash-bilipai.png，支持独立浮窗与跨应用展开，不证明跨应用拖放已完成。
+- 原始握手104是历史值，不能把首次即时读值当作重启失败；等待异步回报后已确认为129。
