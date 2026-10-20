@@ -28,6 +28,7 @@ public final class StashStore implements AutoCloseable {
     private static final String DATABASE_NAME = "stash.db";
     private static final int DATABASE_VERSION = 1;
     private static final String TABLE = "stash_entries";
+    private static final long MAX_IMAGE_BYTES = 32L * 1024L * 1024L;
     private static final Pattern UUID_PATTERN = Pattern.compile(
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
@@ -66,7 +67,12 @@ public final class StashStore implements AutoCloseable {
         try (FileOutputStream output = new FileOutputStream(imageFile)) {
             byte[] buffer = new byte[8192];
             int count;
+            long totalBytes = 0;
             while ((count = source.read(buffer)) != -1) {
+                totalBytes += count;
+                if (totalBytes > MAX_IMAGE_BYTES) {
+                    throw new IOException("图片大小超过 32 MiB 限制");
+                }
                 output.write(buffer, 0, count);
             }
             output.getFD().sync();

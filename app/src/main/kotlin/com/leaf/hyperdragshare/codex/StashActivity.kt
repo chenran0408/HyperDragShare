@@ -51,6 +51,8 @@ import androidx.core.view.WindowCompat
 import androidx.compose.ui.state.ToggleableState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -80,6 +82,7 @@ class StashActivity : ComponentActivity() {
     private var selectedIds by mutableStateOf<Set<String>>(emptySet())
     private var pendingImport: Intent? = null
     private var shareImported = false
+    private val importLock = Mutex()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -164,8 +167,8 @@ class StashActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
     }
 
-    private suspend fun importPendingShare() {
-        val incoming = pendingImport ?: return
+    private suspend fun importPendingShare() = importLock.withLock {
+        val incoming = pendingImport ?: return@withLock
         message = null
         try {
             withContext(Dispatchers.IO) {
@@ -188,8 +191,10 @@ class StashActivity : ComponentActivity() {
                     }
                 }
             }
-            pendingImport = null
-            shareImported = true
+            if (pendingImport === incoming) {
+                pendingImport = null
+                shareImported = true
+            }
             Toast.makeText(this, "已保存到中转站", Toast.LENGTH_SHORT).show()
         } catch (error: IOException) {
             DragShareLog.w("DragShare/Stash", "unable to import shared content", error)

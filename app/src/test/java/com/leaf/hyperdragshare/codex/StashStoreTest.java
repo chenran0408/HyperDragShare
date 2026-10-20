@@ -164,6 +164,43 @@ public final class StashStoreTest {
     }
 
     @Test
+    public void oversizedImageImportLeavesNoEntryOrPartialFile() throws IOException {
+        InputStream input = new InputStream() {
+            private long remaining = 32L * 1024L * 1024L + 1;
+
+            @Override
+            public int read() {
+                if (remaining == 0) {
+                    return -1;
+                }
+                remaining--;
+                return 0x5a;
+            }
+
+            @Override
+            public int read(byte[] buffer, int offset, int length) {
+                if (remaining == 0) {
+                    return -1;
+                }
+                int count = (int) Math.min(length, remaining);
+                for (int index = offset; index < offset + count; index++) {
+                    buffer[index] = 0x5a;
+                }
+                remaining -= count;
+                return count;
+            }
+        };
+
+        IOException failure = assertThrows(IOException.class,
+                () -> store.addImage(input, "image/png"));
+
+        assertEquals("图片大小超过 32 MiB 限制", failure.getMessage());
+        assertTrue(store.listEntries().isEmpty());
+        File stash = new File(context.getFilesDir(), "stash");
+        assertTrue(!stash.exists() || stash.listFiles().length == 0);
+    }
+
+    @Test
     public void databaseInsertFailureRemovesGeneratedImageAndKeepsCause() throws IOException {
         store.listEntries();
         store.close();
