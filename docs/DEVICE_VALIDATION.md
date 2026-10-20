@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.114 / versionCode 138。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 138。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.115 / versionCode 139。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 139。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.114 / 138；174 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.115 / 139；175 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -555,3 +555,22 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 质量问题：ML Kit区域样本仅识别标题后5字，整屏读到8字但“眼睛”误成“眼晴”；没有保存相同裁剪位图作引擎基准，因此不推断具体模型根因。AICR同页面标题返回8字。引擎失败不静默切换；测试结束已通过设置恢复原AICR=true。模块浅色0、系统夜间auto保持原设置，视频未恢复播放，原应用连续观看提醒未关闭。
 - 关闭取消待截图任务、保留引擎正在读取的Bitmap直到回调结束，迟到结果不呼出窗口。生命周期单测覆盖关闭后待任务再执行不提交到已关闭线程池、取消只回传一次；不是识别中真实取消或Binder中断的设备证明。
 - 未验：快捷磁贴/背敲实际入口、息屏、旋转、大字体、重试、原图临时授权接收、识别中取消、ML Kit附近推荐及其他模块窗口共存。实际拇指面积、bilipai普通长按、Root图片分支、中转站跨应用接收仍未解决；不把本批原页入口完成等同于触发修复。所有截图仅留本机工作目录，不提交原应用画面。
+
+## 2026-10-21：1.7.115 中转站直接拖出与跨UID验收（开发节点）
+
+- 175项单测、0失败/错误，Lint、assembleDebug通过；最终139已安装，包名和debug签名不变，传送门injected_version/portal_root_version均139、Root=true。APK为开发验证产物；本批收尾发现的ANR仍未解决，不标为稳定版。
+- 紧凑侧窗改为点内容分词/预览、按住内容直接拖出，移除各条40dp拖出提示行；多选时点内容选择，底部统一拖出。原生影子显示摘要或图片/项目数。默认窗口尺寸限制未变，面积仍小于1/6。
+- 独立包com.leaf.dragdrop.probe，真实UID10228，调用Activity.requestDragAndDropPermissions后以接收UID读取图片。文字STASH-115-A、PNG640×240/8167字节和混合三项先通过；最终MIME修改后图片和混合六项（两PNG、四条文字）再次通过。work/hds115-drop-text.xml、hds115-drop-image.xml、hds115-drop-mixed.xml、hds115-final-drop.xml、hds115-final-mixed.xml。
+- 原ClipDescription只声明image/*，现保留存储的实际图片MIME及text/plain，新增协议测试验证PNG/JPEG具体与通配匹配、混合项目顺序。不以诊断接收器通过代替聊天/笔记/浏览器等应用接收验收。
+- 真机连续存入暴露列表按旧首项键保持位置，新内容被藏到上方。首次scrollToItem(0)仍复现；改为requestScrollToItem(0)随新列表布局生效。最终先滚到旧记录，再由接收器存入新图片，计数12→13且新图片立即在首项。work/hds115-scrolled.xml、hds115-reveal-fixed.xml。新内容到达会退出旧搜索、多选及预览，避免仍被旧筛选隐藏。
+- 六条生成测试记录经过实际六项拖出核对后，通过界面确认删除，计数13→7，原有7条记录保留。work/hds115-cleaned.xml。诊断应用及临时安装APK已从手机移除，可复现源码在diagnostics/stash-drop-receiver；该独立目录assembleDebug通过，未接入正式主构建。
+- 本批灰条ADB左右往返拖动成功，未唤起系统侧边栏；仅是注入手势证据，真实手指与视频类应用的系统侧栏共存仍未全面通过。恢复左侧、接近原高度。
+- Root直接启动非导出StashWindowActivity时，系统额外启动LSPosed模块作用域页；ActivityTaskManager明确记录LAUNCH_MANAGER及realCallingUid=0，并有设备自定义HiddenAppsHooks调用栈，不据此判断用户在操作。普通应用分享入口不受此次重定向影响。最新系统小窗按钮未复测，不能沿用106证明本批Root入口始终正常。
+
+### 未解决：侧条输入ANR
+
+05:28:26系统报告输入超时：窗口32b72c6，最老未确认DOWN seq202208。实时dumpsys input曾显示侧条channel responsive=false、排队超过120秒，侧条可见但触摸无反应。不是仅凭截图判断卡顿。主线程kill -3抓取位于InputEventMonitorImpl.monitorDispatchInputEvent / MessageQueue.nativePollOnce，native抓取也在Looper.pollOnce，暂没有应用锁、IO或Compose死循环的证据。work/hds115-java-trace.txt、hds115-main-native.txt保存在本机，不提交完整设备追踪。
+
+同PID23811重新打开MainActivity，设置页能滚动；随后侧条原channel恢复responsive=true。将原bilipai任务2183置前、等界面就绪后点侧条，再次展开7项通过，work/hds115-anr-reopen.xml、hds115-input-current.txt。没有重启模块来宣称修复，也没有添加重建窗口/吞错等兜底。恢复现象不证明根因解决；下一批先区分“侧条→设置→后台”和“原生拖出→设置→后台”的复现条件，再针对输入通道/进程调度状态修正。此前笼统判断主线程阻塞不成立，当前准确结论为侧条输入未确认、原因未明。
+
+原bilipai90分钟休息提醒保留，未恢复播放；引擎AICR、模块浅色/系统夜间auto未改。拇指面积输入、普通长按冲突、Root图片分支等原有待办继续保留。

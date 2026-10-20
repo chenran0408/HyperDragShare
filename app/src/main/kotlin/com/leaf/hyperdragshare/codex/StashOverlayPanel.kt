@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -130,6 +131,7 @@ object StashOverlayPanel {
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         private var entries by mutableStateOf<List<StashStore.Entry>>(emptyList())
+        private val listState = LazyListState()
         private var loading by mutableStateOf(false)
         private var message by mutableStateOf<String?>(null)
         private var expanded by mutableStateOf(true)
@@ -302,7 +304,18 @@ object StashOverlayPanel {
                 loading = true
                 message = null
                 try {
-                    entries = withContext(Dispatchers.IO) { StashStore(app).use { it.listEntries() } }
+                    val updated = withContext(Dispatchers.IO) { StashStore(app).use { it.listEntries() } }
+                    val newestChanged = updated.firstOrNull()?.id != entries.firstOrNull()?.id
+                    entries = updated
+                    if (newestChanged) {
+                        searching = false
+                        query = ""
+                        preview = null
+                        confirmDelete = false
+                        cancelSelection()
+                        // Apply with the new item provider, rather than keeping the old first key.
+                        listState.requestScrollToItem(0)
+                    }
                     selectedIds = selectedIds.intersect(entries.map { it.id }.toSet())
                 } catch (error: IOException) {
                     report("读取中转站失败", error)
@@ -373,7 +386,9 @@ object StashOverlayPanel {
             Card(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                 Column(Modifier.padding(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f).clickable(enabled = !deleting, onClick = open)) {
+                        StashDraggableContent(listOf(entry), Modifier.weight(1f),
+                            enabled = !deleting, draggable = !selectionMode,
+                            onStarted = ::collapse, onClick = open) {
                             if (entry.kind == StashStore.KIND_IMAGE) {
                                 StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp))
                             } else {
@@ -394,7 +409,6 @@ object StashOverlayPanel {
                             } else "复制这条内容",
                         )
                     }
-                    if (!selectionMode) StashDragHandle(listOf(entry), ::collapse)
                 }
             }
         }
@@ -526,7 +540,7 @@ object StashOverlayPanel {
                                         else "拖拽或分享内容存入这里",
                                         fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
-                                else -> LazyColumn(Modifier.weight(1f),
+                                else -> LazyColumn(Modifier.weight(1f), state = listState,
                                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     items(visibleEntries, key = { it.id }) { ShelfItem(it) }
                                 }
