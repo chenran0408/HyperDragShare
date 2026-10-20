@@ -417,9 +417,10 @@ private fun StashScreen(
                 item(key = "error") {
                     StashMessageCard(message = message, loading = loading, onRetry = onRetry)
                 }
-            } else if (loading) {
+            }
+            if (loading && entries.isEmpty()) {
                 item(key = "loading") { StashMessageCard(message = "正在读取中转站…", loading = true) }
-            } else if (entries.isEmpty()) {
+            } else if (entries.isEmpty() && message == null) {
                 item(key = "empty") {
                     StashMessageCard(message = "中转站还是空的。可从分享菜单发送文字或图片到这里。")
                 }
