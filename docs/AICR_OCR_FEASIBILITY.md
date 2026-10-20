@@ -30,3 +30,21 @@ REA 接口缺少调用者提供的 jadx-headless-mcp JAR，未能执行；使用
 - 所读普通 Core/插件取用/视觉方法路径没有发现调用 UID 的授权拒绝，但这不是所有底层模型入口和运行时策略无权限限制的证明。需在模块普通 UID 上验证绑定、V2、合成图片与返回结果；root 调用成功不能代替该证据。
 
 分析工具限制：w87、fr0、VisionPlugIn 单类读取仍各有非零总退出状态，输出可用于定位但不作为完整还原保证；IVisionService 单类读取正常完成。没有复制输出代码进应用，也没有据这些静态结果新增“可用小爱 OCR”选项。下一实验应先用自建合成图片，记录每阶段状态与耗时，再决定是否进入正式 OCR 引擎选择。
+
+## 核心连接协议与结果格式补充
+
+IAiCrCoreService、ICoreServiceCallback 和 OCRRes$OCRResult 三个已定位类均由 JADX 单类读取正常完成；这里只记录协议观察，不移植其实现。
+
+| 核心事务 | 输入顺序（接口令牌之后） | 输出（异常头之后） |
+|---|---|---|
+| 1：getPluginBinder | callback Binder、address 字符串、desc 字符串、minVersion 字符串 | 插件 Binder、Bundle 存在标记与 Bundle 内容 |
+| 2：releaseConnect | address 字符串 | 无结果值 |
+| 3：isSupport | desc 字符串 | int 表示布尔 |
+
+核心接口令牌为 `com.xiaomi.aicr.IAiCrCoreService`。回调令牌为 `com.xiaomi.aicr.ICoreServiceCallback`：事务 1 onDownload 携带 Binder，事务 2 speed 携带 String/long，两者为 oneway。实验回调应明确记录事件，不把下载完成回调等同于 OCR 已完成。实验结束要按自己创建的 address 释放连接并 unbind，不操作其他客户端连接。
+
+返回 Bundle 的 Status 静态枚举顺序：0 OK、1 DOWNLOADING_FIRST_USE、2 NEED_UPGRADE、3 SERVICE_NOT_CONNECTED、4 SERVICE_ERROR、5 NOT_FOUND、6 SET_IMAGE_FAIL、7 UNSUPPORTED_CAPABILITY、8 PERMISSION_DENIED。枚举反编译存在恢复警告，后续须以 DEX 构造参数复核；不能用无依据的默认值把缺失 Status 当成功。
+
+OCRResult Parcelable 按顺序写入 paragraphs typed array、total_text String、entities typed array。这说明不能从 Parcel 首部直接 readString 获取全文，也不能扫描字节寻找文字冒充协议解码。需要继续核对段落、行、字符、实体的 Parcelable 布局及对应 Creator，再独立实现受版本限定的读取方式，或使用合法可获取且匹配 V2 的接口库。
+
+当前没有实现或运行实验客户端；没有新增应用权限、引擎入口或构建产物。下一步优先补全结果结构的确切布局，再准备一次可释放连接、使用合成图片且带阶段错误的普通 UID 实验。
