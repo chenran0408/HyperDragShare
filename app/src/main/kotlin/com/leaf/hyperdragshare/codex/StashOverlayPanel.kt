@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -158,12 +159,19 @@ object StashOverlayPanel {
             resize()
         }
 
+        private fun switchSide() {
+            onLeft = !onLeft
+            dragLeft = null
+            position.edit().putBoolean("left", onLeft).apply()
+            resize()
+        }
+
         @Composable private fun MoveHandle() {
             Text(
                 "— 拖动 —",
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 fontSize = 10.sp,
-                modifier = Modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
+                modifier = Modifier.fillMaxWidth().height(28.dp).systemGestureExclusion().pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { dragLeft = overlay.window.attributes.x.toFloat() },
                         onDragEnd = ::finishMove,
@@ -184,6 +192,7 @@ object StashOverlayPanel {
         @Composable private fun CollapsedHandle() {
             Box(
                 Modifier.fillMaxSize()
+                    .systemGestureExclusion()
                     .semantics { contentDescription = "展开中转站，${entries.size} 项；可拖动调整位置" }
                     .clickable(onClick = ::expand)
                     .pointerInput(Unit) {
@@ -355,7 +364,7 @@ object StashOverlayPanel {
                                 TextButton("关闭", overlay::dismiss)
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                TextButton("刷新", ::reload, enabled = !loading)
+                                TextButton(if (onLeft) "移到右侧" else "移到左侧", ::switchSide)
                                 TextButton(if (selectionMode) "取消多选" else "多选", {
                                     if (selectionMode) cancelSelection() else selectionMode = true
                                 }, enabled = selectionMode || entries.isNotEmpty())
