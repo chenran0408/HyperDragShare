@@ -332,7 +332,11 @@ internal fun BigBangOverlayContent(
     OverlayDialog(
         show = showEditor,
         title = stringResource(R.string.bigbang_action_edit),
-        onDismissRequest = { showEditor = false },
+        onDismissRequest = {
+            focusManager.clearFocus()
+            keyboard?.hide()
+            showEditor = false
+        },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             BasicTextField(
@@ -359,7 +363,7 @@ internal fun BigBangOverlayContent(
                 TextButton(
                     text = stringResource(R.string.bigbang_edit_apply),
                     modifier = Modifier.weight(1f),
-                    enabled = editorText.isNotBlank(),
+                    enabled = editorText.isNotBlank() && editorText != originalText(),
                     colors = ButtonDefaults.textButtonColorsPrimary(),
                     onClick = {
                         focusManager.clearFocus()
