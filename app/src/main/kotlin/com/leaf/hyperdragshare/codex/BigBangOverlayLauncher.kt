@@ -25,6 +25,7 @@ object BigBangOverlayLauncher {
     const val METHOD_OPEN = "open_bigbang_window"
     private val main = Handler(Looper.getMainLooper())
     private var active: InteractiveOverlayWindow? = null
+    private var generation = 0L
 
     @JvmStatic fun request(context: Context, input: Bundle?): Bundle {
         val text = input?.getString("text")
@@ -61,6 +62,7 @@ object BigBangOverlayLauncher {
             return
         }
         active?.dismiss()
+        val windowGeneration = ++generation
         val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
         val context = app.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
@@ -112,6 +114,45 @@ object BigBangOverlayLauncher {
                         main.post { report(app, error) }
                     }
                 }, "bigbang-stash").start()
+            }
+        }, captureMoreText = {
+            val state = Bundle()
+            session.saveState(state)
+            val receiver = object : android.os.ResultReceiver(main) {
+                override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                    if (generation != windowGeneration) return
+                    val extra = resultData?.getString("text")
+                    if (resultCode != android.app.Activity.RESULT_OK || extra.isNullOrBlank()) {
+                        open(app, text, x, y, sourceImage, state)
+                        return
+                    }
+                    Thread({
+                        try {
+                            BigBangPanelSession.appendToSavedState(app, state, extra)
+                        } catch (error: IllegalStateException) {
+                            main.post { report(app, error) }
+                        } catch (error: UnsatisfiedLinkError) {
+                            main.post { report(app, IllegalStateException("分词库不可用", error)) }
+                        } catch (error: SecurityException) {
+                            main.post { report(app, error) }
+                        } finally {
+                            main.post {
+                                if (generation == windowGeneration) open(app, text, x, y, sourceImage, state)
+                            }
+                        }
+                    }, "bigbang-append-screen").start()
+                }
+            }
+            try {
+                context.startActivity(Intent(context, ScreenOcrActivity::class.java)
+                    .putExtra(ScreenOcrActivity.EXTRA_SELECT_REGION, true)
+                    .putExtra(ScreenOcrActivity.EXTRA_RESULT_RECEIVER, receiver)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
+                overlay.dismiss()
+            } catch (error: android.content.ActivityNotFoundException) {
+                report(app, error)
+            } catch (error: SecurityException) {
+                report(app, error)
             }
         })
         overlay = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),

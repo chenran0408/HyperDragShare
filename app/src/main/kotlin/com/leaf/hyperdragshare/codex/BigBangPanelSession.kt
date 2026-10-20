@@ -27,7 +27,8 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.basic.Scaffold
 
 /** A module-UID panel session shared by Activity and interactive overlay hosts. */
-internal class BigBangPanelSession(private val context: Context, private val actions: Actions) {
+internal class BigBangPanelSession(private val context: Context, private val actions: Actions,
+    private val captureMoreText: (() -> Unit)? = null) {
     interface Actions {
         fun dismiss()
         fun search(text: String, type: Int)
@@ -138,6 +139,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                             }
                         },
                         canUndoEdit = undoEditState != null,
+                        canCaptureMoreText = captureMoreText != null && totalCharacterCount > 0,
                         onSelectAll = { selectAll() },
                         totalCharacterCount = totalCharacterCount,
                         selectedCharacterCount = selectedCharacterCount,
@@ -320,6 +322,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     private fun handleMoreAction(action: BigBangMoreAction) {
         when (action) {
+            BigBangMoreAction.CaptureMore -> captureMoreText?.invoke()
             BigBangMoreAction.UndoEdit -> {
                 val state = undoEditState ?: return
                 open(state.getString(SAVED_TEXT).orEmpty(), launchTouchX, launchTouchY, sourceImageUri, state)
@@ -393,6 +396,16 @@ internal class BigBangPanelSession(private val context: Context, private val act
         }
     }
     companion object {
+        /** Called off the UI thread; append without re-segmenting the user's existing chips. */
+        fun appendToSavedState(context: Context, state: Bundle, extraText: String) {
+            val original = requireNotNull(state.getString(SAVED_TEXT))
+            val originalSegments = requireNotNull(state.getIntArray(SAVED_SEGMENT))
+            val newSegments = TextSegmenter.get(context).segment(extraText)
+            val combinedSegments = BoomWordsLayout.concatenateSegments(
+                originalSegments, newSegments, original.length + 1)
+            state.putString(SAVED_TEXT, "$original\n$extraText")
+            state.putIntArray(SAVED_SEGMENT, combinedSegments)
+        }
         private const val UNDO_EDIT = "undo_edit"
         private const val TAG = "DragShare/BigBang"
         private const val SELECTED_STATE = "selected_state"

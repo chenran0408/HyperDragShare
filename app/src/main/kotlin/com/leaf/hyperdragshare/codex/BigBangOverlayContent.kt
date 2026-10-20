@@ -69,6 +69,7 @@ internal enum class BigBangMoreAction {
     Translate,
     SaveToStash,
     UndoEdit,
+    CaptureMore,
     TextSize,
     PanelHeight,
     PanelOpacity,
@@ -94,6 +95,7 @@ internal fun BigBangOverlayContent(
     originalText: () -> String,
     onEditText: (String) -> Unit,
     canUndoEdit: Boolean,
+    canCaptureMoreText: Boolean,
     onSelectAll: () -> Unit,
     totalCharacterCount: Int,
     selectedCharacterCount: Int,
@@ -398,8 +400,11 @@ internal fun BigBangOverlayContent(
                     else R.string.bigbang_more_panel_adjustment_off,
                 ),
             )
-            val availableActions = if (canUndoEdit)
-                listOf(BigBangMoreAction.UndoEdit to "撤销编辑") + actions else actions
+            val availableActions = buildList {
+                if (canUndoEdit) add(BigBangMoreAction.UndoEdit to "撤销编辑")
+                if (canCaptureMoreText) add(BigBangMoreAction.CaptureMore to "追加屏幕文字")
+                addAll(actions)
+            }
             availableActions.forEach { (action, label) ->
                 TextButton(
                     text = label,

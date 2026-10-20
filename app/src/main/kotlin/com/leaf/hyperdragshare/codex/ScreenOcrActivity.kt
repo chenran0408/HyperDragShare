@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.os.ResultReceiver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
@@ -78,9 +79,12 @@ class ScreenOcrActivity : ComponentActivity() {
     @Volatile private var aicrBitmap: Bitmap? = null
     private var failureDetail by mutableStateOf<String?>(null)
     private val pendingCapture = Runnable { captureAndRecognize() }
+    private var resultReceiver: ResultReceiver? = null
+    private var resultSent = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        resultReceiver = intent.getParcelableExtra(EXTRA_RESULT_RECEIVER, ResultReceiver::class.java)
         darkTheme = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.setBackgroundDrawableResource(android.R.color.transparent)
@@ -235,7 +239,7 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     private fun presentRecognitionResult() {
-        if (intent.getBooleanExtra(EXTRA_SELECT_REGION, false) &&
+        if (resultReceiver == null && intent.getBooleanExtra(EXTRA_SELECT_REGION, false) &&
             BigBangOverlayLauncher.showText(this, resultText.joinToString("\n"), -1, -1, null)) {
             finish()
         } else renderResults()
@@ -354,6 +358,14 @@ class ScreenOcrActivity : ComponentActivity() {
 
     private fun openSegmentation(text: String) {
         if (text.isBlank()) return
+        resultReceiver?.let { receiver ->
+            if (!resultSent) {
+                resultSent = true
+                receiver.send(RESULT_OK, Bundle().apply { putString("text", text) })
+                finish()
+            }
+            return
+        }
         if (BigBangOverlayLauncher.showText(this, text, -1, -1, null)) finish()
     }
 
@@ -373,6 +385,10 @@ class ScreenOcrActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (isFinishing && !resultSent) {
+            resultSent = true
+            resultReceiver?.send(RESULT_CANCELED, Bundle.EMPTY)
+        }
         window.decorView.removeCallbacks(pendingCapture)
         captureExecutor.shutdownNow()
         aicrRequest?.cancel()
@@ -490,7 +506,8 @@ class ScreenOcrActivity : ComponentActivity() {
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(
-                                    text = stringResource(R.string.screen_ocr_segment_all),
+                                    text = if (resultReceiver != null) "追加到分词"
+                                        else stringResource(R.string.screen_ocr_segment_all),
                                     onClick = { onSegment(allText) },
                                     colors = ButtonDefaults.textButtonColorsPrimary(),
                                 )
@@ -527,7 +544,8 @@ class ScreenOcrActivity : ComponentActivity() {
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(
-                                    text = stringResource(R.string.screen_ocr_segment_line),
+                                    text = if (resultReceiver != null) "追加此行"
+                                        else stringResource(R.string.screen_ocr_segment_line),
                                     onClick = { onSegment(line) },
                                     colors = ButtonDefaults.textButtonColorsPrimary(),
                                 )
@@ -727,6 +745,7 @@ class ScreenOcrActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SELECT_REGION = "select_region"
+        const val EXTRA_RESULT_RECEIVER = "result_receiver"
         private const val TAG = "DragShare/ScreenOCR"
         private const val CAPTURE_FRAME_DELAY_MILLIS = 120L
     }
