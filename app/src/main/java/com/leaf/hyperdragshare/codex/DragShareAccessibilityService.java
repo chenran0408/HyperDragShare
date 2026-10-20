@@ -183,10 +183,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
     }
 
     private boolean isAccessibilityRuntimeEnabled(DragShareSettings settings) {
-        ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
         return screenInteractive
                 && !isDeviceLocked()
-                && (settings.isAccessibilityCaptureMode() || (thumb.enabled && thumb.calibrated));
+                && settings.isAccessibilityCaptureMode();
     }
 
     AccessibilityCandidateSelector.Selection selectCandidateAt(float x, float y, long gestureId) {

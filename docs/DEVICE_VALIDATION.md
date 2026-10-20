@@ -491,3 +491,13 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 持续授权：用户再次明确本对话内的测试与更新已正式授权，无需重复申请。
 
 最终108已通过166项单测、lintDebug、assembleDebug；去除自动长按接线的最终APK已重新覆盖安装，传送门进程已重启并成功启动服务。输出outputs/HyperDragShare-1.7.108-debug.apk。这里只交付取词引擎基础，不把未接入的触发能力写作可用功能。
+
+## 2026-10-21：1.7.109面积配置与运行时接线
+
+170项测试（0失败）、lintDebug、assembleDebug通过，APK已覆盖安装，最新injected_version和portal_root_version均133且Root=true；RootInput ready存在。无有效面积校准配置，保持默认关闭，因此这些证据不证明面积触发到弹窗的交互已通过。
+
+补齐传送门Provider面积配置、独立Root面积入口和180ms静止确认计时；传送门模式不再要求启用无障碍服务。无障碍模式的运行时所有权同时收窄，防止重复触发。Root图片识字尚未接入此入口，普通长按评论冲突仍未修好。
+
+本机单次Root取词子进程耗时0.88秒（设备端time real，不含主机ADB统计）。它不足以抢在普通长按菜单前获取原内容；当前结果超时会记录并保留原操作。下一批必须优化进程冷启动，不能把接线版本作为体验验收。证据任务work/root-node-probe，APK outputs/HyperDragShare-1.7.109-debug.apk。
+
+观察到测试启动的传送门进程20496约一分钟后死亡，ActivityManager记录prcp FGS、isCrashing=false；未查明终止原因，不推断是内存或系统限制。重新启动后握手133成功。面积入口长期持有者的存活仍需观察。

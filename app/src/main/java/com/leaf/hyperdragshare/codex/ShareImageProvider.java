@@ -75,7 +75,9 @@ public final class ShareImageProvider extends ContentProvider {
         }
         if (DragShareSettings.METHOD_GET_SETTINGS.equals(method)) {
             enforcePortalCaller();
-            return DragShareSettings.readLocal(contextOrThrow()).toBundle();
+            Bundle result = DragShareSettings.readLocal(contextOrThrow()).toBundle();
+            ThumbTriggerSettings.appendToBundle(contextOrThrow(), result);
+            return result;
         }
         if (IntegrationSettings.METHOD_GET_AICR_SETTINGS.equals(method)) {
             enforceAicrCallerOrModule();

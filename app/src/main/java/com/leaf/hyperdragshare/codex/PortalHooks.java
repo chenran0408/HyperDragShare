@@ -42,6 +42,8 @@ final class PortalHooks {
     private static volatile DragShareController controller;
     private static volatile MiuiMotionSource motionSource;
     private static volatile RootTouchSource rootTouchSource;
+    private static volatile PortalThumbCaptureSource thumbCaptureSource;
+    private static float thumbThreshold;
     private static volatile boolean rootAuthorityLogged;
     private static volatile boolean hostCancelIgnoredLogged;
     private static volatile boolean controlIgnoredLogged;
@@ -344,6 +346,7 @@ final class PortalHooks {
             return;
         }
         if (controller != null) {
+            configureThumbCapture(context, settings);
             return;
         }
         rootAuthorityLogged = false;
@@ -354,11 +357,15 @@ final class PortalHooks {
         motionSource = new MiuiMotionSource(classLoader, PortalHooks::dispatchMotion);
         motionSource.start();
         rootTouchSource = new RootTouchSource(context, PortalHooks::dispatchRootPointer);
+        configureThumbCapture(context, settings);
         rootTouchSource.start();
         log("portal runtime started");
     }
 
     private static synchronized void stopPortalRuntime(boolean replayDeferredCalls) {
+        PortalThumbCaptureSource thumb = thumbCaptureSource;
+        thumbCaptureSource = null;
+        if (thumb != null) thumb.stop();
         if (replayDeferredCalls) {
             replayDeferredHostCalls();
         }
@@ -385,6 +392,9 @@ final class PortalHooks {
         ContentObserver observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange) {
+                PortalThumbCaptureSource thumb = thumbCaptureSource;
+                thumbCaptureSource = null;
+                if (thumb != null) thumb.stop();
                 applyPortalRuntime();
             }
         };
@@ -415,6 +425,8 @@ final class PortalHooks {
 
     private static void dispatchRootPointer(
             int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
+        PortalThumbCaptureSource thumb = thumbCaptureSource;
+        if (thumb != null) thumb.onPointerEvent(action, x, y, eventTime, rawTouchMajor, rawWidthMajor);
         DragShareLog.d(TAG, "root pointer action=" + MotionEvent.actionToString(action)
                 + " point=" + Math.round(x) + "," + Math.round(y)
                 + " time=" + eventTime);
@@ -429,6 +441,24 @@ final class PortalHooks {
                     action == MotionEvent.ACTION_UP
                             ? PortalHooks::replayDeferredHostCalls
                             : null);
+        }
+    }
+
+    private static void configureThumbCapture(Context context, DragShareSettings settings) {
+        try {
+            ThumbTriggerSettings thumb = ThumbTriggerSettings.readFromProvider(context);
+            if (thumbCaptureSource != null && thumb.enabled && thumb.calibrated
+                    && Float.compare(thumbThreshold, thumb.threshold) == 0) return;
+            PortalThumbCaptureSource previous = thumbCaptureSource;
+            thumbCaptureSource = null;
+            if (previous != null) previous.stop();
+            if (thumb.enabled && thumb.calibrated) {
+                thumbThreshold = thumb.threshold;
+                thumbCaptureSource = new PortalThumbCaptureSource(
+                        context, rootTouchSource, controller, settings, thumb.threshold);
+            }
+        } catch (SecurityException | IllegalStateException error) {
+            log("cannot load calibrated area trigger settings", error);
         }
     }
 

@@ -574,7 +574,7 @@ private fun MainPage(
             }
             item(key = "thumb-trigger-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ThumbTriggerPreference(context, onOpenBlacklist)
+                    ThumbTriggerPreference(context, onOpenBlacklist, settings.isPortalCaptureMode)
                 }
             }
             item(key = "text-panel-preferences") {

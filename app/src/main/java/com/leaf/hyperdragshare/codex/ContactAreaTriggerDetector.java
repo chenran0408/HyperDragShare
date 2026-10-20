@@ -10,6 +10,7 @@ final class ContactAreaTriggerDetector {
 
     private boolean gestureActive;
     private boolean rejected;
+    private boolean fired;
     private float downX;
     private float downY;
     private long thresholdSince = -1L;
@@ -78,9 +79,21 @@ final class ContactAreaTriggerDetector {
             thresholdSince = eventTime;
         }
 
-        boolean confirmed = isConfirmed(eventTime);
+        boolean confirmed = !fired && isConfirmed(eventTime);
         reset();
         return confirmed;
+    }
+
+    /** Allows the owner to confirm a stationary contact without waiting for another MOVE or UP. */
+    long confirmationDeadline() {
+        return gestureActive && !rejected && !fired && thresholdSince >= 0L
+                ? thresholdSince + confirmationMillis : -1L;
+    }
+
+    boolean confirmWhileDown(long eventTime) {
+        if (confirmationDeadline() < 0L || !isConfirmed(eventTime)) return false;
+        fired = true;
+        return true;
     }
 
     private void updateContactSize(float contactSize, long eventTime) {
@@ -104,6 +117,7 @@ final class ContactAreaTriggerDetector {
     private void reset() {
         gestureActive = false;
         rejected = false;
+        fired = false;
         thresholdSince = -1L;
     }
 }

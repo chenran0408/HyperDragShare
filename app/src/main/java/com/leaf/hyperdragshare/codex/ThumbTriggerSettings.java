@@ -3,6 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Bundle;
 
 /** Settings shared by the app and the injected process for the optional thumb trigger. */
 public final class ThumbTriggerSettings {
@@ -27,11 +28,35 @@ public final class ThumbTriggerSettings {
 
     public static ThumbTriggerSettings read(Context context) {
         SharedPreferences preferences = preferences(context);
-        float threshold = preferences.getFloat(KEY_THRESHOLD, 0f);
-        boolean currentMetric = preferences.getInt(KEY_METRIC_VERSION, 0) == METRIC_VERSION;
+        return fromValues(preferences.getBoolean(KEY_ENABLED, false),
+                preferences.getFloat(KEY_THRESHOLD, 0f),
+                preferences.getInt(KEY_METRIC_VERSION, 0));
+    }
+
+    public static ThumbTriggerSettings readFromProvider(Context portalContext) {
+        Bundle result = portalContext.getContentResolver().call(
+                ImageStagingClient.BASE_URI, DragShareSettings.METHOD_GET_SETTINGS, null, null);
+        if (result == null) throw new IllegalStateException("模块未返回拇指触发设置");
+        return fromBundle(result);
+    }
+
+    static void appendToBundle(Context context, Bundle result) {
+        SharedPreferences preferences = preferences(context);
+        result.putBoolean(KEY_ENABLED, preferences.getBoolean(KEY_ENABLED, false));
+        result.putFloat(KEY_THRESHOLD, preferences.getFloat(KEY_THRESHOLD, 0f));
+        result.putInt(KEY_METRIC_VERSION, preferences.getInt(KEY_METRIC_VERSION, 0));
+    }
+
+    static ThumbTriggerSettings fromBundle(Bundle bundle) {
+        return fromValues(bundle.getBoolean(KEY_ENABLED, false),
+                bundle.getFloat(KEY_THRESHOLD, 0f), bundle.getInt(KEY_METRIC_VERSION, 0));
+    }
+
+    private static ThumbTriggerSettings fromValues(boolean enabled, float threshold, int metricVersion) {
+        boolean currentMetric = metricVersion == METRIC_VERSION;
         boolean calibrated = currentMetric && threshold > 0f && threshold <= 1f;
         return new ThumbTriggerSettings(
-                preferences.getBoolean(KEY_ENABLED, false) && calibrated,
+                enabled && calibrated,
                 calibrated, calibrated ? threshold : 0f, threshold > 0f && !currentMetric);
     }
 

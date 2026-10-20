@@ -117,6 +117,30 @@ public final class ContactAreaTriggerDetectorTest {
         return new ContactAreaTriggerDetector(THRESHOLD, 10f, confirmationMillis);
     }
 
+    @Test
+    public void heldContactConfirmsWithoutMoveAndOnlyOnce() {
+        ContactAreaTriggerDetector detector = detector(180L);
+        event(detector, MotionEvent.ACTION_DOWN, 100L, .6f);
+        org.junit.Assert.assertEquals(280L, detector.confirmationDeadline());
+        assertFalse(detector.confirmWhileDown(279L));
+        assertTrue(detector.confirmWhileDown(280L));
+        assertFalse(detector.confirmWhileDown(281L));
+        assertFalse(event(detector, MotionEvent.ACTION_UP, 300L, 0f));
+    }
+
+    @Test
+    public void moveAndSizeDropRemovePendingConfirmation() {
+        ContactAreaTriggerDetector detector = detector(180L);
+        event(detector, MotionEvent.ACTION_DOWN, 100L, .6f);
+        event(detector, MotionEvent.ACTION_MOVE, 200L, .1f);
+        org.junit.Assert.assertEquals(-1L, detector.confirmationDeadline());
+        assertFalse(detector.confirmWhileDown(500L));
+        event(detector, MotionEvent.ACTION_MOVE, 510L, .6f);
+        detector.onPointerEvent(MotionEvent.ACTION_MOVE, 20f, 0f, 520L, .6f);
+        org.junit.Assert.assertEquals(-1L, detector.confirmationDeadline());
+        assertFalse(detector.confirmWhileDown(900L));
+    }
+
     private static boolean event(
             ContactAreaTriggerDetector detector,
             int action,

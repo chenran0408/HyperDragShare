@@ -15,12 +15,16 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 
 @Composable
-internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Unit) {
+internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Unit, portalMode: Boolean) {
     var thumb by remember { mutableStateOf(ThumbTriggerSettings.read(context)) }
     var serviceEnabled by remember { mutableStateOf(AccessibilityRuntimeStatus.isServiceEnabled(context)) }
+    var portalInjected by remember { mutableStateOf(ModuleActivation.isCurrentBuildInjected(context)) }
+    var portalRootGranted by remember { mutableStateOf(ModuleActivation.isCurrentBuildPortalRootGranted(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         thumb = ThumbTriggerSettings.read(context)
         serviceEnabled = AccessibilityRuntimeStatus.isServiceEnabled(context)
+        portalInjected = ModuleActivation.isCurrentBuildInjected(context)
+        portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
     }
     val openCalibration = {
         context.startActivity(Intent(context, ThumbCalibrationActivity::class.java)
@@ -31,6 +35,9 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         summary = when {
             thumb.requiresRecalibration -> "采集方式已更新，请重新校准指尖与拇指"
             !thumb.calibrated -> "先校准指尖与拇指的接触大小"
+            portalMode && !portalInjected -> "请先重载传送门，让当前版本的设置生效"
+            portalMode && !portalRootGranted -> "请先为传送门授予 Root 权限"
+            portalMode -> "由传送门读取 Root 接触尺寸，在当前页面打开分词"
             !serviceEnabled -> "需要 Root 与无障碍服务；按压确认后松手打开分词或识字"
             else -> "按压确认后松手打开分词或识字；启用后取代无障碍长按触发"
         },
@@ -39,10 +46,14 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
             if (enabled && !thumb.calibrated) {
                 Toast.makeText(context, "请先完成拇指面积校准", Toast.LENGTH_SHORT).show()
                 openCalibration()
+            } else if (enabled && portalMode && (!portalInjected || !portalRootGranted)) {
+                Toast.makeText(context,
+                    if (!portalInjected) "请先重载传送门" else "请先为传送门授予 Root 权限",
+                    Toast.LENGTH_LONG).show()
             } else {
                 ThumbTriggerSettings.setEnabled(context, enabled)
                 thumb = ThumbTriggerSettings.read(context)
-                if (enabled && !serviceEnabled) {
+                if (enabled && !portalMode && !serviceEnabled) {
                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
