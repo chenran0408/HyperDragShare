@@ -32,3 +32,5 @@ BoomChipPage 已改为 Context + Actions，提供 dismiss/afterCopy/search/share
 设置仍由当前 Context 读取；后续 Taplus 宿主必须显式提供模块配置与词典资源，不能直接拿此组件连接宿主后忽略跨 UID 边界。下一批处理可交互窗口 owner 和可复用面板内容；当前动作回调的真机回归待测试窗口。
 
 1.7.80：BigBangOverlayContent 与 BigBangMoreAction 已提取为内部可复用组件，Activity 继续调用同一内容；独立窗口 owner/权限/生命周期和真机验收仍未完成。
+
+独立交互宿主基础已新增 InteractiveOverlayWindow（ComponentDialog + ComposeView）；提供 show/dismiss、失败回调与销毁通知，复用 AndroidX 原有返回和生命周期 owner。两项测试已通过，尚无产品入口调用；不代表原页弹窗完成。

@@ -212,3 +212,11 @@
 本批另将 BigBangOverlayContent 和动作枚举从 Activity 提取到独立文件，保留原有 Compose 内容和回调，为独立窗口复用准备；没有因此声称原页弹窗完成。
 
 1.7.80 回归补充：新增 DragMenuDirectionTest，直接调用 Controller 的真实 refreshDisplayGeometry，覆盖四种样式×四方向，断言所选侧保持。临时重新加入刷新重置到底部的故障后测试失败（style=0 edge=0 expected 0 but was 1）；恢复源码后 149 项测试、Lint、构建通过。临时故障已移除，未操作设备，APK 行为版本不变。
+
+### 1.7.80 真机复测与独立窗口基础
+
+用户新授权三分钟测试，01:26:41 开始。同包安装 104 成功；重启传送门后 injected_version/portal_root_version 均为 104，Root 可用。现代样式右侧截图 menu180-modern-right.png 与日志 effectivePosition=3 bounds=1118,633,293,1275 对应；底部 menu180-3-1.png 可见正确底部菜单。
+
+其他批量截图不作为通过证据：部分手势未触发模块，切换样式后浏览器进入地址栏/键盘，测试前台前提已失效。已停止脚本并显式释放触点，恢复现代样式。上/左、其他三种样式、同手势连续换边与落点分享仍待重测。后续自动化必须在每次手势前确认前台页面及捕获会话，不能仅凭脚本完成或文件存在报告通过。
+
+新增未接入产品的 InteractiveOverlayWindow：复用 ComponentDialog 的生命周期、SavedState、返回分发，补 ViewModelStore；独立可聚焦/触摸窗口，不改原拖拽预览。窗口权限/token失败明确记录并回调，不降级 Activity。两项本地测试覆盖 owner、窗口 flags、返回分发和销毁清理。151 项测试、Lint、构建通过。它仍缺少产品接线、跨 UID 资源与设置处理、键盘及返回手势真机验证。新增基础类未改变用户可安装行为，版本保持 1.7.80，已安装 APK 是新增此类之前的构建。
