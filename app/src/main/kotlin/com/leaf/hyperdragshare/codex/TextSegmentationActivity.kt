@@ -138,7 +138,20 @@ class TextSegmentationActivity : ComponentActivity() {
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             BoomAnimator.makeFadeIn(this, BoomAnimator.BOOM_DURATION)
         }
-        boomChipPage = BoomChipPage(this, legacyContentView, false).also { page ->
+        boomChipPage = BoomChipPage(this, legacyContentView, false, object : BoomChipPage.Actions {
+            override fun dismiss() = requestAnimatedDismissFromLegacy()
+            override fun afterCopy() = closeAfterCopyIfEnabled()
+            override fun search(text: String, type: Int) = openSearch(text, type)
+            override fun share(text: String) {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    this.type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                startActivity(Intent.createChooser(send, null).apply {
+                    flags = Intent.FLAG_ACTIVITY_NO_HISTORY
+                })
+            }
+        }).also { page ->
             page.setOnChipsChangedListener(::refreshLegacyTheme)
             page.setOnSelectionChangedListener(::updateSelectionSummary)
             page.restoreSelectedState(savedInstanceState?.getSerializable(SELECTED_STATE))

@@ -70,3 +70,9 @@ adb shell am instrument -w com.leaf.hyperdragshare.codex/.AicrOcrProbe
 该入口不启动页面、不截屏、不读取相册；Instrumentation 会影响模块自身进程，不能与其他模块操作测试并行。15 秒仅限制等待 service connection；同步 Binder transact 无可取消超时，不宣称全链路有时间上限。发生阻塞时记录最后阶段，结束本模块实验进程，不强停 AICR。退出正常/异常路径尝试 releaseConnect 与 unbind，释放失败单独报告。不会自动重试下载或变更系统权限。
 
 代码来自协议描述的独立实现，仅位于 src/debug；release 不含入口或读取器。暂未调用设备服务，也没有将其接入正式 OCR 设置。实际服务行为与结果 Parcel 仍待本机验证。
+
+## 真机基础实验通过（1.7.76 / 100）
+
+经用户明确授权后，两次普通模块 UID 10270 Instrumentation 成功：核心 Status=0、OCR V2，生成图片全文均返回 HyperDragShare 123；总耗时 1493ms / 280ms，releaseConnect 成功，正常 unbind 完成。没有 root 调用、没有小爱进程转发、没有改权限。由此可选择直接绑定 AICR 作为下一步可选引擎实现路线。
+
+该结果只覆盖合成英文/数字图片，两次调用不代表长期稳定或基准性能。中文与复杂版面、同其他客户端并发导致的缓存覆盖、Binder 阻塞与产品取消流程仍待验证。正式引擎 UI 尚未接入；现有其他 OCR 路径继续保留。

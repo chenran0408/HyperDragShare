@@ -177,3 +177,11 @@
 - StashStore 在一批数据库事务中逐张复制，每张沿用 32 MiB 上限；读取失败或权限/数据库异常时回滚本批记录并清理本批已复制图片，保留原有条目，清理失败作为附加异常保留。不会自动跳过坏图后误报整批成功。
 - 新增两项存储测试：两文件成功存入；第二文件不存在时第一文件和本批记录撤销、既有文字保留。142 项测试、Lint、assembleDebug 通过。测试字节只验证存储，不证明图像解码、相册分享授权或接收界面通过。
 - 未安装，设备仍 1.7.71。需验证相册选择两张图→分享至中转站→预览→重开保留，以及失效 URI 错误提示。事务和清理仅覆盖已处理异常，不声称数据库/文件系统跨介质原子性或进程突然终止后的完整恢复。
+
+### 1.7.76：词块宿主解耦与 AICR 实验通过
+
+- BoomChipPage 使用 Context + dismiss/afterCopy/search/share 回调，BoomActionHandler 不再强转 Activity；现有 Activity 仍是显示入口，独立覆盖窗口尚未实现。142 项测试、Lint、assembleDebug 通过。
+- 用户重新授权三分钟测试窗口；同包原位安装 1.7.76 / 100 成功。APK SHA-256：8477a00e2a14c546ae6d56e099339eb6c3444c5331f1a0592d09069bc8d198a6。
+- 两次运行 debug Instrumentation，uid=10270（模块普通应用 UID），status=0、version=V2、stage=recognize、connectionReleased=true，结果均为 `HyperDragShare 123`。总耗时分别 1493ms、280ms，Instrumentation code=-1 对应 RESULT_OK。
+- 使用程序生成的 640×160 图片，没有截图、读取相册、切换 root 身份或修改权限。这证明目标机直接绑定 AICR 的基础 OCR 链路可行；不证明中文、复杂版面、与小爱并发、长时稳定性或正式产品接入完成。
+- 本轮未验证菜单 Hook 新版加载、关闭动作回归或多图分享 UI。设备安装版本不等于传送门已注入版本。

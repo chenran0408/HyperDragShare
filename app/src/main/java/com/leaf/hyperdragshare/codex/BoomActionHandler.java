@@ -3,7 +3,6 @@ package com.leaf.hyperdragshare.codex;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Rect;
 import android.util.TypedValue;
@@ -42,9 +41,9 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     public BoomActionHandler(BoomChipPage boomPage, boolean enableFakeSelectBar) {
         mBoomPage = boomPage;
         mEnableFakeSelectBar = enableFakeSelectBar;
-        mToast = Toast.makeText(boomPage.mActivity, "", Toast.LENGTH_SHORT);
+        mToast = Toast.makeText(boomPage.mContext, "", Toast.LENGTH_SHORT);
 
-        final Resources res = boomPage.mActivity.getResources();
+        final Resources res = boomPage.mContext.getResources();
         mRowMoveUpOffset = res.getDimensionPixelOffset(R.dimen.chip_row_move_up_offset);
         mRowMoveDownOffset = res.getDimensionPixelOffset(R.dimen.chip_row_move_down_offset);
         if (mEnableFakeSelectBar) {
@@ -199,29 +198,19 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     }
 
     private void copy(String text) {
-        ClipboardManager clipboard = (ClipboardManager) mBoomPage.mActivity.getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipboardManager clipboard = (ClipboardManager) mBoomPage.mContext.getSystemService(Context.CLIPBOARD_SERVICE);
         clipboard.setPrimaryClip(ClipData.newPlainText(null, text));
-        mToast.setText(mBoomPage.mActivity.getResources().getString(R.string.copy_tips));
+        mToast.setText(mBoomPage.mContext.getResources().getString(R.string.copy_tips));
         mToast.show();
-        if (mBoomPage.mActivity instanceof TextSegmentationActivity) {
-            ((TextSegmentationActivity) mBoomPage.mActivity).closeAfterCopyIfEnabled();
-        }
+        mBoomPage.mActions.afterCopy();
     }
 
     public void search(String text, int type) {
-        if (mBoomPage.mActivity instanceof TextSegmentationActivity) {
-            ((TextSegmentationActivity) mBoomPage.mActivity).openSearch(text, type);
-        }
+        mBoomPage.mActions.search(text, type);
     }
 
     private void share() {
-        final String shareText = getSelectedText();
-        Intent send = new Intent(Intent.ACTION_SEND);
-        send.setType("text/plain");
-        send.putExtra(Intent.EXTRA_TEXT, shareText);
-        Intent i = Intent.createChooser(send, null);
-        i.setFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-        mBoomPage.mActivity.startActivity(i);
+        mBoomPage.mActions.share(getSelectedText());
     }
 
     private void initViews(View contentView) {
@@ -359,7 +348,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     private int getSelectBarY(int row) {
         int gap = (int) TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 4,
-                mBoomPage.mActivity.getResources().getDisplayMetrics());
+                mBoomPage.mContext.getResources().getDisplayMetrics());
         return mBoomPage.getRowTop(row)
                 - (mEnableFakeSelectBar ? 0 : mSelectBar.getHeight() + gap);
     }

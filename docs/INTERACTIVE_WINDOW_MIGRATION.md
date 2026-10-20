@@ -24,3 +24,9 @@ StashStore 属于模块私有存储；StashClient 目前仅提供受限 stash_pu
 侧边窗口应复用条目内容与操作，同时与完整管理列表区分：收起只留最近内容与数量，展开支持取用，管理按钮放次要位置。当前尚无该窗口、跨 UID 列表接口或唤回机制；不把完整 StashActivity 当侧边中转站完成。
 
 审计补充：上述方案是不切换 Activity 的独立系统覆盖窗口，不是原应用 token 下的子窗口；后者当前三作用域并不具备。首批解耦限定于 BoomChipPage/BoomActionHandler/TextSegmentationActivity，把 dismiss/afterCopy/search/share 四个宿主动作变成显式回调。TextSegmenter 还会把 Context 转为 applicationContext 后读取 assets/filesDir，窗口接入时必须分别处理模块词典资源与宿主缓存，不能仅覆盖 getResources。尚未修改这些代码。
+
+## 1.7.76 第一批解耦
+
+BoomChipPage 已改为 Context + Actions，提供 dismiss/afterCopy/search/share；视图使用 LayoutInflater.from(Context)，BoomActionHandler 不再强转 TextSegmentationActivity 或自行启动分享 Activity。现有 TextSegmentationActivity 实现回调并维持原有入口。未改变实际窗口类型，没有启用独立系统覆盖窗口。
+
+设置仍由当前 Context 读取；后续 Taplus 宿主必须显式提供模块配置与词典资源，不能直接拿此组件连接宿主后忽略跨 UID 边界。下一批处理可交互窗口 owner 和可复用面板内容；当前动作回调的真机回归待测试窗口。
