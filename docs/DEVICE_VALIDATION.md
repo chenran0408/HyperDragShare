@@ -436,3 +436,13 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 - 本批尚未安装；最后安装仍是1.7.99/123。旧测试窗口已结束，没有执行设备UI操作。搜索与截图选区等历史Activity路径尚待继续收敛，不能宣称全部功能已满足仅设置进入应用。
 
 源码验证：1.7.105 的 testDebugUnitTest、lintDebug、assembleDebug 全部通过，166 项单测。APK已归档 outputs/HyperDragShare-1.7.105-debug.apk；本批真机结果仍为空。
+
+## 2026-10-21：bilipai 评论区与1.7.105安装
+
+用户明确反馈普通长按不触发，并授权本轮及后续测试无需逐次申请。只读确认 bilipai 包为com.android.purebilibili、版本0.5.1/495。测试前模块为1.7.99/123，enabled_accessibility_services为空。
+
+启动恢复到视频评论页，ADB在(500,2150)注入1000ms长按，弹出bilipai原生评论菜单，没有模块分词窗。日志看到传送门MIUI输入DOWN/UP，没有本次startPick证据。ADB注入不经过物理evdev，不能据此证明真实手指Root链路失效。
+
+关闭菜单后获取UI节点，目标评论完整文本存在于android.widget.TextView，边界[210,2109][1395,2267]。故不能归因为评论没有文字节点，OCR不是此例首要修复方向。证据位于任务work/bilipai-current.png、bilipai-longpress.png、bilipai-comments.xml。私有评论不复制进仓库。
+
+1.7.105/129通过adb install -r成功原位安装，包版本复核通过。未重启作用域，不能宣称最新Hook已加载；面积校准和新中转站仍待操作验收。下一步核对传送门实际取词入口与Compose评论的触发缺口，保持普通长按冲突问题和面积触发需求分别验收。
