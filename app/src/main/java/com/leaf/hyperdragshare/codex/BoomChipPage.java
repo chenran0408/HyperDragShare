@@ -41,6 +41,7 @@ public class BoomChipPage {
     private OnAdjacentRequestListener mOnAdjacentRequestListener;
     private boolean mAdjacentLoading;
     private float mAdjacentOffset;
+    private float mTextSizeSp = BigBangSettings.DEFAULT_TEXT_SIZE_SP;
 
     private int mTouchedX;
     private int mTouchedY;
@@ -217,6 +218,34 @@ public class BoomChipPage {
             mBoomActionHandler.clearSelectionStateForRelayout();
         }
         mBoomConent.removeAllViews();
+    }
+
+    public void setTextSizeSp(float textSizeSp) {
+        if (Float.compare(mTextSizeSp, textSizeSp) == 0) {
+            return;
+        }
+        Serializable savedSelection = captureSelectedState();
+        mTextSizeSp = textSizeSp;
+        mLayout.setTextSizeSp(textSizeSp);
+        if (mLayout.getWordCount() == 0) {
+            return;
+        }
+        if (mBoomActionHandler != null) {
+            mBoomActionHandler.clearSelectionStateForRelayout();
+        }
+        mSavedData = savedSelection;
+        mBoomConent.removeAllViews();
+        initChips(false);
+        if (savedSelection != null) {
+            mBoomConent.getViewTreeObserver().addOnGlobalLayoutListener(new OnGlobalLayoutListener() {
+                @Override
+                public void onGlobalLayout() {
+                    mBoomConent.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                    updateScrollerInsetsForContent();
+                    restoreSelectedState();
+                }
+            });
+        }
     }
 
     public void resetChips() {
@@ -690,6 +719,7 @@ public class BoomChipPage {
                 word = (TextView) chipView.findViewById(R.id.word);
             }
             word.setText(mLayout.getWord(id));
+            word.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSizeSp);
         }
 
         public void setSelected(boolean selected) {

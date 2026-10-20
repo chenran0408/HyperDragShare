@@ -29,6 +29,16 @@
     <string name="bigbang_more_translate">翻译</string>
     <string name="bigbang_more_share">分享所选文字</string>
     <string name="bigbang_more_split">拆分所选词语</string>
+    <string name="bigbang_more_text_size">字号（%1$.0f sp）</string>
+    <string name="bigbang_more_panel_height">面板高度（%1$d%%）</string>
+    <string name="bigbang_more_panel_opacity">面板透明度（%1$d%%）</string>
+    <string name="bigbang_more_panel_adjustment_on">拖动调整位置：已开启</string>
+    <string name="bigbang_more_panel_adjustment_off">拖动调整位置：已关闭</string>
+    <string name="bigbang_text_size_changed">字号已调整为 %1$.0f sp</string>
+    <string name="bigbang_panel_height_changed">面板高度已调整为 %1$d%%</string>
+    <string name="bigbang_panel_opacity_changed">面板透明度已调整为 %1$d%%</string>
+    <string name="bigbang_panel_adjustment_on">可以拖动文本面板中间的标题调整位置</string>
+    <string name="bigbang_panel_adjustment_off">文本面板位置已锁定</string>
     <string name="search_overlay_close">关闭</string>
     <string name="search_close">关闭搜索</string>
     <string name="search_query_hint">搜索词或 HTTPS 网址</string>

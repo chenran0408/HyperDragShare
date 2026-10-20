@@ -144,7 +144,10 @@ internal data class OverlayPanelMetrics(
 )
 
 @Composable
-internal fun rememberOverlayPanelMetrics(forceFullscreen: Boolean = false): OverlayPanelMetrics {
+internal fun rememberOverlayPanelMetrics(
+    forceFullscreen: Boolean = false,
+    panelHeightFraction: Float = BigBangSettings.DEFAULT_PANEL_HEIGHT_FRACTION,
+): OverlayPanelMetrics {
     val configuration = LocalConfiguration.current
     val activity = LocalActivity.current
     val view = LocalView.current
@@ -182,7 +185,11 @@ internal fun rememberOverlayPanelMetrics(forceFullscreen: Boolean = false): Over
     val bottomInset = if (fullScreen) 0.dp else 56.dp
     return OverlayPanelMetrics(
         width = screenWidth,
-        height = screenHeight - topInset - bottomInset,
+        height = if (fullScreen) {
+            screenHeight
+        } else {
+            minOf(screenHeight * panelHeightFraction, screenHeight - topInset - bottomInset)
+        },
         offsetY = if (fullScreen) 0.dp else 10.dp,
         cornerRadius = if (fullScreen) 0.dp else 30.dp,
         multiWindow = inMultiWindow,
@@ -214,10 +221,12 @@ internal fun ApplyOverlaySystemBars(
 
 internal fun BoxScope.overlayPanelPlacement(
     metrics: OverlayPanelMetrics,
+    offsetX: Dp = 0.dp,
+    offsetY: Dp = 0.dp,
 ): Modifier {
     return Modifier
         .align(Alignment.Center)
-        .offset(y = metrics.offsetY)
+        .offset(x = offsetX, y = metrics.offsetY + offsetY)
 }
 
 @Composable

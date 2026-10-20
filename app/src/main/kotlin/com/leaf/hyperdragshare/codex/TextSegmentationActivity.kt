@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Edit
@@ -38,10 +39,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.toArgb
@@ -71,6 +76,12 @@ class TextSegmentationActivity : ComponentActivity() {
     private lateinit var legacyContentView: View
     private var launchTouchX by mutableIntStateOf(-1)
     private var launchTouchY by mutableIntStateOf(-1)
+    private var textSizeSp by mutableFloatStateOf(BigBangSettings.DEFAULT_TEXT_SIZE_SP)
+    private var panelHeightFraction by mutableFloatStateOf(BigBangSettings.DEFAULT_PANEL_HEIGHT_FRACTION)
+    private var panelOpacity by mutableFloatStateOf(BigBangSettings.DEFAULT_PANEL_OPACITY)
+    private var panelAdjustmentEnabled by mutableStateOf(false)
+    private var panelOffsetXdp by mutableFloatStateOf(0f)
+    private var panelOffsetYdp by mutableFloatStateOf(0f)
     private var currentText = ""
     private var currentSegment: IntArray? = null
     private var sourceImageUri by mutableStateOf<Uri?>(null)
@@ -98,6 +109,13 @@ class TextSegmentationActivity : ComponentActivity() {
         boomChipPage = BoomChipPage(this, legacyContentView, false).also { page ->
             page.restoreSelectedState(savedInstanceState?.getSerializable(SELECTED_STATE))
         }
+        textSizeSp = BigBangSettings.getTextSizeSp(this)
+        panelHeightFraction = BigBangSettings.getPanelHeightFraction(this)
+        panelOpacity = BigBangSettings.getPanelOpacity(this)
+        panelAdjustmentEnabled = BigBangSettings.isPanelAdjustmentEnabled(this)
+        panelOffsetXdp = BigBangSettings.getPanelOffsetXDp(this)
+        panelOffsetYdp = BigBangSettings.getPanelOffsetYDp(this)
+        boomChipPage?.setTextSizeSp(textSizeSp)
 
         val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
         setContent {
@@ -109,6 +127,12 @@ class TextSegmentationActivity : ComponentActivity() {
                     touchX = launchTouchX,
                     touchY = launchTouchY,
                     sourceImageAvailable = sourceImageUri != null,
+                    textSizeSp = textSizeSp,
+                    panelHeightFraction = panelHeightFraction,
+                    panelOpacity = panelOpacity,
+                    panelAdjustmentEnabled = panelAdjustmentEnabled,
+                    panelOffsetXdp = panelOffsetXdp,
+                    panelOffsetYdp = panelOffsetYdp,
                     onLegacyThemeChanged = ::updateLegacyTheme,
                     onDismissRequesterChanged = { animatedDismissRequester = it },
                     onDismissRequest = { shouldDismissPage() },
@@ -117,6 +141,7 @@ class TextSegmentationActivity : ComponentActivity() {
                     onSelectAll = { selectAll() },
                     onShareAll = { shareAll() },
                     onMoreAction = ::handleMoreAction,
+                    onPanelPositionChanged = ::savePanelPosition,
                     onOcr = ::reopenOcr,
                     onTranslate = { openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_TRANSLATE) },
                 )
@@ -297,9 +322,45 @@ class TextSegmentationActivity : ComponentActivity() {
         boomChipPage?.selectedTextOrOriginal().orEmpty()
 
     private fun handleMoreAction(action: BigBangMoreAction) {
-        val text = selectedTextOrOriginal()
         when (action) {
+            BigBangMoreAction.TextSize -> {
+                textSizeSp = BigBangSettings.nextTextSizeSp(textSizeSp)
+                BigBangSettings.setTextSizeSp(this, textSizeSp)
+                boomChipPage?.setTextSizeSp(textSizeSp)
+                Toast.makeText(this, getString(R.string.bigbang_text_size_changed, textSizeSp), Toast.LENGTH_SHORT).show()
+                return
+            }
+            BigBangMoreAction.PanelHeight -> {
+                panelHeightFraction = BigBangSettings.nextPanelHeightFraction(panelHeightFraction)
+                BigBangSettings.setPanelHeightFraction(this, panelHeightFraction)
+                Toast.makeText(
+                    this,
+                    getString(R.string.bigbang_panel_height_changed, (panelHeightFraction * 100).toInt()),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return
+            }
+            BigBangMoreAction.PanelOpacity -> {
+                panelOpacity = BigBangSettings.nextPanelOpacity(panelOpacity)
+                BigBangSettings.setPanelOpacity(this, panelOpacity)
+                Toast.makeText(
+                    this,
+                    getString(R.string.bigbang_panel_opacity_changed, (panelOpacity * 100).toInt()),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return
+            }
+            BigBangMoreAction.PanelAdjustment -> {
+                panelAdjustmentEnabled = !panelAdjustmentEnabled
+                BigBangSettings.setPanelAdjustmentEnabled(this, panelAdjustmentEnabled)
+                Toast.makeText(
+                    this,
+                    if (panelAdjustmentEnabled) R.string.bigbang_panel_adjustment_on else R.string.bigbang_panel_adjustment_off,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
             BigBangMoreAction.Copy -> {
+                val text = selectedTextOrOriginal()
                 if (text.isNotBlank()) {
                     getSystemService(Context.CLIPBOARD_SERVICE).let { service ->
                         (service as ClipboardManager).setPrimaryClip(ClipData.newPlainText(null, text))
@@ -308,12 +369,18 @@ class TextSegmentationActivity : ComponentActivity() {
                     closeAfterCopyIfEnabled()
                 }
             }
-            BigBangMoreAction.Search -> openSearch(text, BoomActionHandler.SEARCH_WEB)
-            BigBangMoreAction.Dictionary -> openSearch(text, BoomActionHandler.SEARCH_DICTIONARY)
-            BigBangMoreAction.Translate -> openSearch(text, BoomActionHandler.SEARCH_TRANSLATE)
-            BigBangMoreAction.Share -> shareText(text)
+            BigBangMoreAction.Search -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_WEB)
+            BigBangMoreAction.Dictionary -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_DICTIONARY)
+            BigBangMoreAction.Translate -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_TRANSLATE)
+            BigBangMoreAction.Share -> shareText(selectedTextOrOriginal())
             BigBangMoreAction.Split -> splitSelectedWords()
         }
+    }
+
+    private fun savePanelPosition(xDp: Float, yDp: Float) {
+        panelOffsetXdp = xDp
+        panelOffsetYdp = yDp
+        BigBangSettings.setPanelPositionDp(this, xDp, yDp)
     }
 
     private fun reopenOcr() {
@@ -397,6 +464,10 @@ private enum class BigBangMoreAction {
     Translate,
     Share,
     Split,
+    TextSize,
+    PanelHeight,
+    PanelOpacity,
+    PanelAdjustment,
 }
 
 @Composable
@@ -405,6 +476,12 @@ private fun BigBangOverlayContent(
     touchX: Int,
     touchY: Int,
     sourceImageAvailable: Boolean,
+    textSizeSp: Float,
+    panelHeightFraction: Float,
+    panelOpacity: Float,
+    panelAdjustmentEnabled: Boolean,
+    panelOffsetXdp: Float,
+    panelOffsetYdp: Float,
     onLegacyThemeChanged: (Int, Int, Int, Int, Int, Int) -> Unit,
     onDismissRequesterChanged: ((() -> Unit)?) -> Unit,
     onDismissRequest: () -> Boolean,
@@ -413,19 +490,24 @@ private fun BigBangOverlayContent(
     onSelectAll: () -> Unit,
     onShareAll: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
+    onPanelPositionChanged: (Float, Float) -> Unit,
     onOcr: () -> Unit,
     onTranslate: () -> Unit,
 ) {
     val dark = MiuixTheme.colorScheme.background.luminance() < 0.5f
-    val panelMetrics = rememberOverlayPanelMetrics()
+    val panelMetrics = rememberOverlayPanelMetrics(panelHeightFraction = panelHeightFraction)
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current.density
+    var dragOffsetXdp by remember(panelOffsetXdp) { mutableFloatStateOf(panelOffsetXdp) }
+    var dragOffsetYdp by remember(panelOffsetYdp) { mutableFloatStateOf(panelOffsetYdp) }
     val panelBackground = MiuixTheme.colorScheme.background
     val panelBorder = MiuixTheme.colorScheme.onSurfaceVariantActions.copy(alpha = 0.22f)
     val topBarColor = MiuixTheme.colorScheme.surfaceContainer
     val bottomBarColor = MiuixTheme.colorScheme.surfaceContainer
-    val legacyBackgroundColor = MiuixTheme.colorScheme.background.toArgb()
+    val legacyBackgroundColor = MiuixTheme.colorScheme.background.copy(alpha = panelOpacity).toArgb()
     val legacyTextColor = MiuixTheme.colorScheme.onSurface.toArgb()
     val legacySummaryColor = MiuixTheme.colorScheme.onSurfaceVariantSummary.toArgb()
-    val legacySurfaceColor = MiuixTheme.colorScheme.surfaceContainer.toArgb()
+    val legacySurfaceColor = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = panelOpacity).toArgb()
     val legacySelectionColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.16f).toArgb()
     val legacyActionColor = MiuixTheme.colorScheme.onSurfaceVariantActions.toArgb()
     val scrimColor = Color.Black.copy(alpha = if (dark) 0.62f else 0.48f)
@@ -499,7 +581,7 @@ private fun BigBangOverlayContent(
             width = panelMetrics.width,
             height = panelMetrics.height,
             fillMax = panelMetrics.fullScreen,
-            modifier = overlayPanelPlacement(panelMetrics)
+            modifier = overlayPanelPlacement(panelMetrics, dragOffsetXdp.dp, dragOffsetYdp.dp)
                 .onGloballyPositioned { coordinates -> panelBounds = coordinates.boundsInWindow() }
                 .graphicsLayer {
                     alpha = enterProgress
@@ -508,14 +590,14 @@ private fun BigBangOverlayContent(
                     this.transformOrigin = transformOrigin
                 },
             shape = panelShape,
-            backgroundColor = panelBackground,
-            borderColor = panelBorder,
+            backgroundColor = panelBackground.copy(alpha = panelOpacity),
+            borderColor = panelBorder.copy(alpha = panelOpacity),
             shadowColor = if (panelMetrics.multiWindow) null else shadowColor,
         ) {
             OverlayPanelScaffold(
                 topBar = {
                     OverlayHeaderBar(
-                        backgroundColor = topBarColor,
+                        backgroundColor = topBarColor.copy(alpha = panelOpacity),
                         topInset = panelMetrics.topSystemInset,
                         leftInset = panelMetrics.leftSystemInset,
                         rightInset = panelMetrics.rightSystemInset,
@@ -534,12 +616,30 @@ private fun BigBangOverlayContent(
                             )
                         },
                         center = {
-                            Text(
-                                text = stringResource(R.string.bigbang_overlay_title),
-                                color = MiuixTheme.colorScheme.onSurface,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(panelAdjustmentEnabled, density) {
+                                        if (!panelAdjustmentEnabled) return@pointerInput
+                                        detectDragGestures(
+                                            onDragEnd = { onPanelPositionChanged(dragOffsetXdp, dragOffsetYdp) },
+                                        ) { change, dragAmount ->
+                                            change.consume()
+                                            dragOffsetXdp = (dragOffsetXdp + dragAmount.x / density)
+                                                .coerceIn(-configuration.screenWidthDp * 0.35f, configuration.screenWidthDp * 0.35f)
+                                            dragOffsetYdp = (dragOffsetYdp + dragAmount.y / density)
+                                                .coerceIn(-configuration.screenHeightDp * 0.35f, configuration.screenHeightDp * 0.35f)
+                                        }
+                                    },
+                                contentAlignment = androidx.compose.ui.Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.bigbang_overlay_title),
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
                         },
                         trailing = {
                             OverlayIconAction(
@@ -559,7 +659,7 @@ private fun BigBangOverlayContent(
                 },
                 bottomBar = {
                     OverlayBottomBar(
-                        backgroundColor = bottomBarColor,
+                        backgroundColor = bottomBarColor.copy(alpha = panelOpacity),
                         bottomInset = panelMetrics.bottomSystemInset,
                         leftInset = panelMetrics.leftSystemInset,
                         rightInset = panelMetrics.rightSystemInset,
@@ -614,16 +714,30 @@ private fun BigBangOverlayContent(
         onDismissRequest = { showMoreMenu = false },
     ) {
         Column {
-            listOf(
-                BigBangMoreAction.Copy to R.string.bigbang_more_copy,
-                BigBangMoreAction.Search to R.string.bigbang_more_search,
-                BigBangMoreAction.Dictionary to R.string.bigbang_more_dictionary,
-                BigBangMoreAction.Translate to R.string.bigbang_more_translate,
-                BigBangMoreAction.Share to R.string.bigbang_more_share,
-                BigBangMoreAction.Split to R.string.bigbang_more_split,
-            ).forEach { (action, label) ->
+            val actions = listOf(
+                BigBangMoreAction.Copy to stringResource(R.string.bigbang_more_copy),
+                BigBangMoreAction.Search to stringResource(R.string.bigbang_more_search),
+                BigBangMoreAction.Dictionary to stringResource(R.string.bigbang_more_dictionary),
+                BigBangMoreAction.Translate to stringResource(R.string.bigbang_more_translate),
+                BigBangMoreAction.Share to stringResource(R.string.bigbang_more_share),
+                BigBangMoreAction.Split to stringResource(R.string.bigbang_more_split),
+                BigBangMoreAction.TextSize to stringResource(R.string.bigbang_more_text_size, textSizeSp),
+                BigBangMoreAction.PanelHeight to stringResource(
+                    R.string.bigbang_more_panel_height,
+                    (panelHeightFraction * 100).toInt(),
+                ),
+                BigBangMoreAction.PanelOpacity to stringResource(
+                    R.string.bigbang_more_panel_opacity,
+                    (panelOpacity * 100).toInt(),
+                ),
+                BigBangMoreAction.PanelAdjustment to stringResource(
+                    if (panelAdjustmentEnabled) R.string.bigbang_more_panel_adjustment_on
+                    else R.string.bigbang_more_panel_adjustment_off,
+                ),
+            )
+            actions.forEach { (action, label) ->
                 TextButton(
-                    text = stringResource(label),
+                    text = label,
                     onClick = {
                         showMoreMenu = false
                         onMoreAction(action)

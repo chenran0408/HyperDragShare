@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.text.TextPaint;
 import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.TextView;
 
@@ -22,6 +23,7 @@ public class BoomWordsLayout {
     private final int mPuncBaseWidth;
     private final TextPaint mWordPaint;
     private final TextPaint mPuncPaint;
+    private final Resources mResources;
 
     private RangeList<Word> mWords = new RangeList<Word>();
     private ArrayList<Integer> mRowStart = new ArrayList<Integer>();
@@ -54,6 +56,7 @@ public class BoomWordsLayout {
 
     public BoomWordsLayout(Context context) {
         Resources res = context.getResources();
+        mResources = res;
         final int displayWidth = res.getDisplayMetrics().widthPixels;
         mBoomPageWidth = displayWidth - res.getDimensionPixelSize(R.dimen.page_margin_left)
                 - res.getDimensionPixelSize(R.dimen.page_margin_right);
@@ -67,6 +70,17 @@ public class BoomWordsLayout {
                 .findViewById(R.id.word)).getPaint();
         mPuncPaint = ((TextView) View.inflate(context, R.layout.boom_punc_layout, null)
                 .findViewById(R.id.punc)).getPaint();
+    }
+
+    public void setTextSizeSp(float textSizeSp) {
+        final float sizePx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP,
+                textSizeSp,
+                mResources.getDisplayMetrics()
+        );
+        mWordPaint.setTextSize(sizePx);
+        mPuncPaint.setTextSize(sizePx);
+        generateLayout();
     }
 
     public boolean layoutWords(int[] segment, String text, int touchedIndex) {
