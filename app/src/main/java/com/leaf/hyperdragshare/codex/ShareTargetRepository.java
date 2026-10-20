@@ -44,6 +44,7 @@ final class ShareTargetRepository {
             // These activities already have one configurable built-in action each.
             if (MODULE_PACKAGE.equals(activity.packageName)
                     && ("com.leaf.hyperdragshare.codex.ImageOcrActivity".equals(activity.name)
+                    || "com.leaf.hyperdragshare.codex.TextSegmentationActivity".equals(activity.name)
                     || "com.leaf.hyperdragshare.codex.StashActivity".equals(activity.name))) {
                 continue;
             }

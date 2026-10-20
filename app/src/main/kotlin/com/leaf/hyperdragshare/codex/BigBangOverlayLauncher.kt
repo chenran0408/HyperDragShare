@@ -149,18 +149,8 @@ object BigBangOverlayLauncher {
                     }, "bigbang-append-screen").start()
                 }
             }
-            try {
-                context.startActivity(Intent(context, ScreenOcrActivity::class.java)
-                    .putExtra(ScreenOcrActivity.EXTRA_SELECT_REGION, true)
-                    .putExtra(ScreenOcrActivity.EXTRA_RESULT_RECEIVER, receiver)
-                    .putExtra("source_area", sourceArea)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
-                overlay.dismiss()
-            } catch (error: android.content.ActivityNotFoundException) {
-                report(app, error)
-            } catch (error: SecurityException) {
-                report(app, error)
-            }
+            ScreenOcrOverlay.start(app, selectRegion = true, resultReceiver = receiver,
+                sourceArea = sourceArea, beforeCapture = { overlay.dismiss() })
         })
         overlay = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
             onDismissed = {

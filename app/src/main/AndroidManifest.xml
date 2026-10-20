@@ -65,11 +65,23 @@
 
         <activity
             android:name=".TextSegmentationActivity"
+            android:label="@string/bigbang_share_label"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity="com.leaf.hyperdragshare.codex.overlay"
-            android:theme="@style/Theme.DragShare.BigBangOverlay" />
+            android:taskAffinity=""
+            android:theme="@style/Theme.DragShare.BigBangOverlay">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".ThumbCalibrationActivity"
@@ -110,11 +122,12 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTop"
-            android:taskAffinity="com.leaf.hyperdragshare.codex.overlay"
+            android:taskAffinity=""
             android:theme="@style/Theme.DragShare.BigBangOverlay" />
 
         <activity
             android:name=".ImageOcrActivity"
+            android:taskAffinity=""
             android:theme="@style/Theme.DragShare.BigBangOverlay"
             android:label="@string/ocr_action"
             android:exported="true"

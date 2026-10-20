@@ -3,120 +3,106 @@ package com.leaf.hyperdragshare.codex
 import android.content.ComponentName
 import android.content.ClipData
 import android.content.Intent
-import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.core.view.WindowCompat
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.IOException
 
-/** Activity entry for system shares; the panel itself is shared with overlay hosts. */
+/** Transparent text receiver; all interactive work belongs to the independent overlay. */
 class TextSegmentationActivity : ComponentActivity() {
-    private lateinit var panel: BigBangPanelSession
+    private val requests = LatestRequest()
+    private var worker: Thread? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = AndroidColor.TRANSPARENT
-        window.navigationBarColor = AndroidColor.TRANSPARENT
-        panel = BigBangPanelSession(this, object : BigBangPanelSession.Actions {
-            override fun dismiss() = finish()
-            override fun search(text: String, type: Int) {
-                startActivity(Intent(this@TextSegmentationActivity, SearchOverlayActivity::class.java)
-                    .putExtra(Intent.EXTRA_TEXT, text)
-                    .putExtra(SearchOverlayActivity.EXTRA_SEARCH_TYPE, type))
-            }
-            override fun share(text: String) {
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, text)
-                }
-                startActivity(Intent.createChooser(send, null).apply {
-                    flags = Intent.FLAG_ACTIVITY_NO_HISTORY
-                })
-            }
-            override fun saveToStash(text: String, selectedOnly: Boolean) =
-                this@TextSegmentationActivity.saveToStash(text, selectedOnly)
-            override fun reopenOcr(uri: Uri) {
-                ImageOcrOverlay.start(this@TextSegmentationActivity, uri)
-            }
-        })
-        setContent { panel.Content() }
-        openFromIntent(savedInstanceState)
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+        window.setDimAmount(0f)
+        receiveText()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        openFromIntent(null)
+        receiveText()
     }
 
-    private fun openFromIntent(savedState: Bundle?) {
-        val text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
-            ?: intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-        if (text.isNullOrBlank()) {
+    private fun receiveText() {
+        worker?.interrupt()
+        val request = requests.begin()
+        val text = resolveText(intent)
+        if (text == null || !Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, if (text == null) "没有收到可分词的文字"
+                else "请先在模块设置中允许悬浮窗权限", Toast.LENGTH_LONG).show()
             finish()
             return
         }
-        panel.open(text, intent.getIntExtra(EXTRA_TOUCH_X, -1),
-            intent.getIntExtra(EXTRA_TOUCH_Y, -1),
-            intent.getParcelableExtra(EXTRA_SOURCE_IMAGE_URI, Uri::class.java), savedState)
+        val source = intent.getParcelableExtra(EXTRA_SOURCE_IMAGE_URI, Uri::class.java)
+        if (source == null) {
+            openOverlay(text, null)
+            return
+        }
+        if (source.scheme != "content") {
+            Toast.makeText(this, "来源图片需要可读取的 content URI", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        worker = Thread({
+            try {
+                val owned = IncomingImageCache.copy(this, source)
+                runOnUiThread {
+                    if (requests.accepts(request) && !isFinishing && !isDestroyed) {
+                        openOverlay(text, Uri.fromFile(owned))
+                    } else if (!owned.delete()) DragShareLog.w(TAG, "unable to remove cancelled text source image")
+                }
+            } catch (error: IOException) {
+                sourceFailed(request, error)
+            } catch (error: SecurityException) {
+                sourceFailed(request, error)
+            }
+        }, "receive-text-image").also { it.start() }
+    }
+
+    private fun openOverlay(text: String, source: Uri?) {
+        BigBangOverlayLauncher.showText(applicationContext, text,
+            intent.getIntExtra(EXTRA_TOUCH_X, -1), intent.getIntExtra(EXTRA_TOUCH_Y, -1), source)
+        finish()
+    }
+
+    private fun sourceFailed(request: Long, error: Exception) {
+        DragShareLog.w(TAG, "unable to retain text source image", error)
+        runOnUiThread {
+            if (requests.accepts(request) && !isFinishing && !isDestroyed) {
+                Toast.makeText(this, "保留来源图片失败：${error.message}", Toast.LENGTH_LONG).show()
+                finish()
+            }
+        }
     }
 
     override fun finish() {
-        if (::panel.isInitialized) panel.close()
         super.finish()
         overridePendingTransition(0, 0)
     }
 
     override fun onDestroy() {
-        if (::panel.isInitialized) panel.close()
+        requests.invalidate()
+        worker?.interrupt()
         super.onDestroy()
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        panel.saveState(outState)
-        super.onSaveInstanceState(outState)
-    }
-
-    private fun saveToStash(text: String, savedSelection: Boolean) {
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    StashStore(this@TextSegmentationActivity).use { store ->
-                        store.addText(text)
-                    }
-                }
-                Toast.makeText(
-                    this@TextSegmentationActivity,
-                    if (savedSelection) "所选文字已存入中转站" else "全部文字已存入中转站",
-                    Toast.LENGTH_SHORT,
-                ).show()
-            } catch (error: IOException) {
-                DragShareLog.w(TAG, "unable to save text to stash", error)
-                Toast.makeText(
-                    this@TextSegmentationActivity,
-                    "存入中转站失败：${error.message ?: "本地存储不可用"}",
-                    Toast.LENGTH_LONG,
-                ).show()
-            } catch (error: SecurityException) {
-                DragShareLog.w(TAG, "permission denied while saving text to stash", error)
-                Toast.makeText(
-                    this@TextSegmentationActivity,
-                    "存入中转站失败：系统拒绝访问本地存储",
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
-    }
-
     companion object {
+        @JvmStatic
+        fun resolveText(input: Intent): String? {
+            if (input.type != "text/plain") return null
+            val value = when (input.action) {
+                Intent.ACTION_PROCESS_TEXT -> input.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
+                Intent.ACTION_SEND -> input.getCharSequenceExtra(Intent.EXTRA_TEXT)
+                else -> null
+            }
+            return value?.toString()?.takeIf { it.isNotBlank() }
+        }
+
         @JvmField
         val DBG = true
 

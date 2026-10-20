@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.113 / versionCode 137。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 137。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.114 / versionCode 138。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 138。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.113 / 137；172 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.114 / 138；174 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -544,3 +544,14 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 分词未完成时显示正在分词并禁用空操作；代码已接入，本批没有刻意延迟词典取得单独的加载态截图。样本测试期间bilipai自行出现连续观看提醒；未改提醒设置、未恢复视频播放。测试截图只留本机，不提交原应用画面。
 - 原页搜索、查词、翻译现由独立窗口承载；传统TextSegmentationActivity外部文本入口及ScreenOcrActivity选区/结果仍是Activity，尚未满足所有普通入口均独立窗口。
 - 待验：搜索历史前进/后退完整链、调整高度、搜索动态深浅色、息屏/来源移除资源、明确打开浏览器及返回条、复杂查询/其他引擎；短文编辑增减/字号改变后的尺寸、横屏/大字体、多行合并/拆分。不以本次窄范围结果宣称整体功能已完成。
+
+## 2026-10-21：1.7.114 外部文字入口与独立屏幕 OCR
+
+- 最终174项单测、0失败/错误，Lint、assembleDebug通过，最终138已重新原位安装。包名与debug签名不变；传送门进程重新加载后injected_version=138、portal_root_version=138、Root=true。未重启android/AICR作用域，本批未修改其Hook。
+- 外部ACTION_SEND文字、ACTION_PROCESS_TEXT选中文字两个入口通过透明接收桥打开独立分词窗并退出。设备分别显示18字符、16字符；PackageManager确认PROCESS_TEXT可解析到本模块，前台仍为bilipai。这不代表每个第三方应用都展示系统选词菜单。冷加载“正在分词”反馈已观察到。work/hds114-text-share.png、hds114-share-ready.xml、hds114-process.png。
+- 屏幕OCR选区、进度和结果改为独立窗口；内部追加直接调用ScreenOcrOverlay，不启动ScreenOcrActivity。磁贴/背敲保留透明桥，截图前退出。Root截图在线程执行，先关闭来源窗口，延迟120ms再截图，自己的OCR窗口在截图返回后才出现。
+- 真机选中Process共7/16字→更多→追加屏幕文字，冻结预览没有来源分词窗或更多菜单；返回取消恢复7/16。再次框选当前应用提醒标题，AICR返回一行8字符；确认追加后显示7/25，原选词保留。前台始终为bilipai。work/hds114-region.png、hds114-cancel.xml、hds114-ocrresult.png、hds114-appended.png。
+- AICR整屏路径返回8行，透明桥已退出；ML Kit整屏返回9行。最终UI把每行三个大按钮替换为点文字分词、复制/分享图标；修正单行分享误标“分享全部”。最终设备实际点一行进入8字符分词窗，前台仍是bilipai。work/hds114-whole.png是精简前界面；hds114-final.png、hds114-finalready.xml、hds114-row.xml是最终界面证据。图标显示与文字点击已验，实际复制/外部接收未在本批重复验证。
+- 质量问题：ML Kit区域样本仅识别标题后5字，整屏读到8字但“眼睛”误成“眼晴”；没有保存相同裁剪位图作引擎基准，因此不推断具体模型根因。AICR同页面标题返回8字。引擎失败不静默切换；测试结束已通过设置恢复原AICR=true。模块浅色0、系统夜间auto保持原设置，视频未恢复播放，原应用连续观看提醒未关闭。
+- 关闭取消待截图任务、保留引擎正在读取的Bitmap直到回调结束，迟到结果不呼出窗口。生命周期单测覆盖关闭后待任务再执行不提交到已关闭线程池、取消只回传一次；不是识别中真实取消或Binder中断的设备证明。
+- 未验：快捷磁贴/背敲实际入口、息屏、旋转、大字体、重试、原图临时授权接收、识别中取消、ML Kit附近推荐及其他模块窗口共存。实际拇指面积、bilipai普通长按、Root图片分支、中转站跨应用接收仍未解决；不把本批原页入口完成等同于触发修复。所有截图仅留本机工作目录，不提交原应用画面。
