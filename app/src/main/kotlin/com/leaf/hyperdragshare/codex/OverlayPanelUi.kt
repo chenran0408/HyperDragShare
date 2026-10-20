@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
-import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -48,7 +48,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.compose.LocalActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -333,41 +332,6 @@ internal fun OverlayBottomBar(
 
 @Composable
 internal fun OverlayIconAction(
-    iconRes: Int,
-    tint: Color,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-    contentDescription: String,
-) {
-    Box(
-        modifier = Modifier
-            .requiredWidth(36.dp)
-            .requiredHeight(36.dp)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        AndroidView(
-            factory = { context ->
-                ImageView(context).apply {
-                    scaleType = ImageView.ScaleType.CENTER_INSIDE
-                }
-            },
-            update = { view ->
-                view.setImageResource(iconRes)
-                view.contentDescription = contentDescription
-                view.setColorFilter(tint.toArgb())
-            },
-        )
-    }
-}
-
-@Composable
-internal fun OverlayIconAction(
     imageVector: ImageVector,
     tint: Color,
     enabled: Boolean = true,
@@ -382,6 +346,7 @@ internal fun OverlayIconAction(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 enabled = enabled,
+                role = Role.Button,
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,

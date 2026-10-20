@@ -164,3 +164,9 @@
 ### 1.7.73：AICR 调试实验准备
 
 140 项测试、Lint、assembleDebug 通过。debug Instrumentation 使用普通应用 UID 和生成图片，记录各阶段与连接清理；未安装或运行，不声称实际 OCR 通过。新测试时间已询问用户，未收到回复前不开始设备操作。
+
+### 1.7.74：统一关闭按钮实现（未安装）
+
+- 源码确认关闭按钮是唯一使用 iconRes/AndroidView/ImageView 的 OverlayIconAction，其他顶部与底部动作使用 Compose 图标。已改为同一 Compose Close 图标按钮，删除仅为它使用的重载，所有此类按钮加入 Role.Button，沿用 Miuix 主题色。
+- 这修正了组件与可访问语义不一致，不声称证明固定坐标关闭失败的根因。旧 Activity 任务栈、点击命中、关闭动画完成和复制后退出仍需实际操作确认；没有用重启或兜底 finish 掩盖未知原因。
+- 140 项测试、Lint、assembleDebug 通过。未新增仅镜像图标实现的测试；视觉、按键语义节点和关闭行为未实测。设备仍为 1.7.71，1.7.74（98）已归档，保留 1.7.73 的调试 OCR 实验入口。

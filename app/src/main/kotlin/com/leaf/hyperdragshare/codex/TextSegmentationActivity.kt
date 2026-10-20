@@ -37,6 +37,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Edit
@@ -705,7 +706,7 @@ private fun BigBangOverlayContent(
                         },
                         center = {
                             OverlayIconAction(
-                                iconRes = R.drawable.boom_cancel,
+                                imageVector = Icons.Outlined.Close,
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = closePanel,
                                 contentDescription = stringResource(R.string.search_overlay_close),
