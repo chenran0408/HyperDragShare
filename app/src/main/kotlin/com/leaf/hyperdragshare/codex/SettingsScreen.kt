@@ -368,6 +368,11 @@ private fun MainPage(
                     },
                 )
             }
+            item(key = "scope-restart") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    ScopeRestartPreference(context)
+                }
+            }
             item(key = "content-title") {
                 SmallTitle(text = "分享内容")
             }
@@ -952,7 +957,7 @@ private fun MainPage(
 
             item(key = "footer") {
                 Text(
-                    text = "作用域：传送门 · 版本 ${BuildConfig.VERSION_NAME}",
+                    text = "作用域：系统框架 · 传送门 · AICR · 版本 ${BuildConfig.VERSION_NAME}",
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp),
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     fontSize = 13.sp,
@@ -1102,7 +1107,7 @@ private fun ActivationStatusCard(
         ActivationUiState.Active -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
             "无障碍服务与 Root 输入均已就绪"
         } else {
-            "传送门 4.2.1 已加载当前模块"
+            "传送门已加载当前模块"
         }
     }
     val activationMethod = when (state) {

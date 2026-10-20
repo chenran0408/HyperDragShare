@@ -18,6 +18,13 @@
     <string name="launcher_icon_summary">隐藏后从 LSPosed 模块设置进入</string>
     <string name="launcher_icon_hidden">桌面图标已隐藏，桌面可能需要几秒刷新</string>
     <string name="launcher_icon_restored">桌面图标已恢复</string>
+    <string name="scope_restart_title">重载全部作用域</string>
+    <string name="scope_restart_summary">软重启 Android，重新加载模块</string>
+    <string name="scope_restart_confirmation_title">软重启 Android</string>
+    <string name="scope_restart_confirmation_summary">重新加载系统框架、传送门和 AICR。当前应用会关闭，设备将回到锁屏界面，请先保存正在编辑的内容。无需整机断电重启。</string>
+    <string name="scope_restart_confirm">软重启</string>
+    <string name="scope_restart_running">正在请求 Root 并软重启…</string>
+    <string name="scope_restart_failed">软重启失败：%1$s</string>
     <string name="bigbang_overlay_title">文本分词</string>
     <string name="bigbang_action_edit">编辑</string>
     <string name="bigbang_action_select_all">全选</string>
