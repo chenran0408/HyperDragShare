@@ -67,3 +67,11 @@
 155项单元测试、Lint、assembleDebug通过。新增4项覆盖真实邻段筛选与带标点/换行的前插后加保留原分词边界；未覆盖真实窗口拉动。没有设备操作，设备仍1.7.80，源码1.7.91（115）。传送门、图片OCR、纯分享文本尚不支持该邻段来源，不把补充路径算作默认主路径完成。
 
 主路线仍为传送门＋Root。静态复核5.1.5发现服务解析view_rect/touch_points并提供getContentRect，模块尚未利用；这是进一步定位原文/附近截图的依据，不代表邻段列表已存在，也不证明所有能力都已被排除。后续追踪ClientCatcherResult/内容捕获端并实现主路线，详见PORTAL_515_AUDIT和ADJACENT_TEXT_PLAN。
+
+### 1.7.103：默认引擎的附近行建议已接线
+
+在主动Root截图追加流程，ML Kit保留识别行的boundingBox用于本次筛选：同列、与原区域不重叠、上/下最近行各一条。选区页新增用户主动点击的“查找原文附近文字”，使用同一张截图，不持续截图；预选后仍需核对确认。缺失原区域或选择AICR时不显示此入口，仍可手动框选。没有候选保持零选择。
+
+这一步不是完整自动邻段：不证明原区域在当前画面仍准确，不扩展完整段落，上方候选确认后仍按当前追加流程放到原文末尾，自动前插尚缺。真机未验收。
+
+AICR只读审计：work/reverse/Location.java为poly float[]、box float[]；OCRLine.java为location、line_text、line_id、Character[]、line_confidence；OCRParagraph为lines后paragraph_text；OCRResult为paragraphs、total_text、entities。VisionPlugIn.scaleOCRResult将所有坐标乘mSampleSize，setImage(Bitmap)为1，但无法证明box是LTRB还是XYWH或poly点序。当前测试数组和英文探测只有协议/文本证据，不是几何证据。后续可保留原始结构，先用已知位置合成中文真机验证，不能猜Rect或强制切换引擎。

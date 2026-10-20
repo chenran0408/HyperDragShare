@@ -73,6 +73,7 @@ class ScreenOcrActivity : ComponentActivity() {
     private val captureExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var resultText by mutableStateOf<List<String>>(emptyList())
     private var selectedLines by mutableStateOf<Set<Int>>(emptySet())
+    private var nearbySelection by mutableStateOf(false)
     private var statusMessage by mutableIntStateOf(R.string.screen_ocr_capturing)
     private var isRecognizing by mutableStateOf(true)
     @Volatile private var screenshotForRegion: Bitmap? = null
@@ -158,7 +159,9 @@ class ScreenOcrActivity : ComponentActivity() {
         }
     }
 
-    private fun recognizeScreenshot(bitmap: Bitmap, retainScreenshotForRegion: Boolean) {
+    private fun recognizeScreenshot(bitmap: Bitmap, retainScreenshotForRegion: Boolean,
+        nearbySource: android.graphics.Rect? = null) {
+        nearbySelection = nearbySource != null
         failureDetail = null
         if (IntegrationSettings.isAicrOcrEnabled(this)) {
             aicrBitmap = bitmap
@@ -201,15 +204,19 @@ class ScreenOcrActivity : ComponentActivity() {
                     var retainBitmapForRegion = false
                     try {
                         if (task.isSuccessful) {
-                            val lines = task.result?.textBlocks.orEmpty()
+                            val recognizedLines = task.result?.textBlocks.orEmpty()
                                 .flatMap { block -> block.lines }
+                                .filter { line -> line.text.isNotBlank() }
+                            val lines = recognizedLines
                                 .map { line -> line.text.trim() }
-                                .filter { line -> line.isNotEmpty() }
+                            val suggested = nearbySource?.let { source ->
+                                nearbyOcrLines(recognizedLines.map { it.boundingBox }, source)
+                            }
                             retainBitmapForRegion = retainScreenshotForRegion
                             runOnUiThread {
                                 if (!isFinishing && !isDestroyed) {
                                     if (retainBitmapForRegion) {
-                                        screenshotForRegion?.recycle()
+                                        if (screenshotForRegion !== bitmap) screenshotForRegion?.recycle()
                                         screenshotForRegion = bitmap
                                     }
                                     if (lines.isEmpty()) {
@@ -217,7 +224,7 @@ class ScreenOcrActivity : ComponentActivity() {
                                     } else {
                                         resultText = lines
                                         isRecognizing = false
-                                        presentRecognitionResult()
+                                        presentRecognitionResult(suggested)
                                     }
                                 } else {
                                     if (bitmap !== screenshotForRegion) bitmap.recycle()
@@ -255,8 +262,8 @@ class ScreenOcrActivity : ComponentActivity() {
         }
     }
 
-    private fun presentRecognitionResult() {
-        selectedLines = resultText.indices.toSet()
+    private fun presentRecognitionResult(suggested: Set<Int>? = null) {
+        selectedLines = suggested ?: resultText.indices.toSet()
         if (resultReceiver == null && intent.getBooleanExtra(EXTRA_SELECT_REGION, false) &&
             BigBangOverlayLauncher.showText(this, resultText.joinToString("\n"), -1, -1, null)) {
             finish()
@@ -520,6 +527,13 @@ class ScreenOcrActivity : ComponentActivity() {
                         ),
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
+                            if (nearbySelection) {
+                                Text(
+                                    text = "已按原文位置预选上下最近行；页面可能已变化，请核对后追加。没有合适内容可取消。",
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 13.sp,
+                                )
+                            }
                             Text(
                                 text = if (resultReceiver != null) "已选 ${selectedLines.size} / ${lines.size} 行"
                                     else stringResource(R.string.screen_ocr_result_count, lines.size),
@@ -778,6 +792,19 @@ class ScreenOcrActivity : ComponentActivity() {
                     ),
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        if (sourceBounds != null && resultReceiver != null &&
+                            !IntegrationSettings.isAicrOcrEnabled(this@ScreenOcrActivity)) {
+                            TextButton(
+                                text = "查找原文附近文字",
+                                onClick = {
+                                    resultText = emptyList()
+                                    statusMessage = R.string.screen_ocr_region_recognizing
+                                    isRecognizing = true
+                                    renderResults()
+                                    recognizeScreenshot(screenshot, true, sourceBounds)
+                                },
+                            )
+                        }
                         if (message != 0) {
                             Text(
                                 text = stringResource(message),
