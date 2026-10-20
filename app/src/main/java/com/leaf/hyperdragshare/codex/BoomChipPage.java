@@ -178,6 +178,7 @@ public class BoomChipPage {
     }
 
     void notifySelectionChanged() {
+        if (mBoomActionHandler != null) mBoomActionHandler.updateEditActions();
         if (mOnSelectionChanged != null) mOnSelectionChanged.run();
     }
 

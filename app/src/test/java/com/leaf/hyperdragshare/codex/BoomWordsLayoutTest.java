@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 import java.util.Arrays;
 import java.util.TreeSet;
@@ -24,6 +25,26 @@ public class BoomWordsLayoutTest {
 
     private TreeSet<Integer> selected(Integer... ids) {
         return new TreeSet<>(Arrays.asList(ids));
+    }
+
+    @Test
+    public void editAvailabilityTracksSelectionAndParagraphBoundaries() {
+        BoomWordsLayout layout = layout("甲乙\n丙丁", 0, 0, 1, 1, 3, 3, 4, 4, -1);
+        assertFalse(layout.canMergeSelectedWords(selected(0)));
+        assertFalse(layout.canMergeSelectedWords(selected(0, 2)));
+        assertFalse(layout.canMergeSelectedWords(selected(1, 2)));
+        assertTrue(layout.canMergeSelectedWords(selected(0, 1)));
+        assertFalse(layout.canSplitSelectedWords(selected(0, 1)));
+        TreeSet<Integer> merged = layout.mergeSelectedWords(selected(0, 1));
+        assertTrue(layout.canSplitSelectedWords(merged));
+        assertFalse(layout.canMergeSelectedWords(merged));
+    }
+
+    @Test
+    public void singleSupplementaryCharacterCannotBeSplit() {
+        BoomWordsLayout layout = layout("😀", 0, 1, -1);
+        assertFalse(layout.canSplitSelectedWords(selected(0)));
+        assertFalse(layout.canSplitSelectedWords(selected()));
     }
 
     @Test

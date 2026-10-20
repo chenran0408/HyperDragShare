@@ -393,6 +393,21 @@ public class BoomWordsLayout {
     }
 
     /** Merge each adjacent selected run, preserving spaces and paragraph boundaries. */
+    public boolean canMergeSelectedWords(TreeSet<Integer> selectedIds) {
+        for (int index : selectedIds) {
+            if (selectedIds.contains(index + 1) && !isHardBreakIndex(index + 1)) return true;
+        }
+        return false;
+    }
+
+    public boolean canSplitSelectedWords(TreeSet<Integer> selectedIds) {
+        for (int index : selectedIds) {
+            Word word = mWords.get(index);
+            if (!word.punc && word.word.codePointCount(0, word.word.length()) > 1) return true;
+        }
+        return false;
+    }
+
     public TreeSet<Integer> mergeSelectedWords(TreeSet<Integer> selectedIds) {
         if (selectedIds == null || selectedIds.size() < 2) {
             return null;

@@ -300,6 +300,22 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
         });
     }
 
+    void updateEditActions() {
+        boolean canMerge = mBoomPage.mLayout.canMergeSelectedWords(mSelectedId);
+        boolean canSplit = mBoomPage.mLayout.canSplitSelectedWords(mSelectedId);
+        updateEditActions(mSelectBar, canMerge, canSplit);
+        if (mFakeSelectBar != null) updateEditActions(mFakeSelectBar, canMerge, canSplit);
+    }
+
+    private void updateEditActions(View bar, boolean canMerge, boolean canSplit) {
+        View merge = bar.findViewById(R.id.all_merge);
+        merge.setEnabled(canMerge);
+        merge.setAlpha(canMerge ? 1f : .35f);
+        View split = bar.findViewById(R.id.all_cut);
+        split.setEnabled(canSplit);
+        split.setAlpha(canSplit ? 1f : .35f);
+    }
+
     private void mergeSelectedWords() {
         if (!mBoomPage.mergeSelectedWords()) {
             mToast.setText(R.string.bigbang_merge_select_adjacent);
