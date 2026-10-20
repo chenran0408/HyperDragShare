@@ -6,56 +6,81 @@ import android.graphics.BitmapFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
-/** In-memory Root screenshot fallback for Android 9 and 10. */
+/** One explicit in-memory Root screenshot, with a deadline covering process and output pipes. */
 final class RootScreenshotter {
-    private static final long COMMAND_TIMEOUT_SECONDS = 4L;
+    private static final long COMMAND_TIMEOUT_MILLIS = 4000L;
 
     Bitmap capture() throws IOException {
-        java.lang.Process process = null;
+        Process process = new ProcessBuilder("su", "-c", "/system/bin/screencap -p").start();
+        byte[] bytes = readPng(process, COMMAND_TIMEOUT_MILLIS);
+        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        if (bitmap == null) throw new IOException("Root screencap returned invalid PNG");
+        return bitmap;
+    }
+
+    static byte[] readPng(Process process, long timeoutMillis) throws IOException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        FutureTask<byte[]> output = new FutureTask<>(() -> readAll(process.getInputStream(), Integer.MAX_VALUE));
+        FutureTask<byte[]> errors = new FutureTask<>(() -> readAll(process.getErrorStream(), 8192));
+        startDaemon("screencap-png", output);
+        startDaemon("screencap-stderr", errors);
         try {
-            process = new ProcessBuilder("su", "-c", "/system/bin/screencap -p").start();
-            byte[] bytes;
-            try (InputStream input = process.getInputStream()) {
-                bytes = readAll(input);
+            if (!process.waitFor(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS)) {
+                throw new TimeoutException("process did not exit");
             }
-            if (!process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                throw new IOException("Root screencap timed out");
-            }
+            byte[] bytes = output.get(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            byte[] errorBytes = errors.get(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            String diagnostic = new String(errorBytes, StandardCharsets.UTF_8).trim();
             if (process.exitValue() != 0 || bytes.length == 0) {
-                throw new IOException("Root screencap failed");
+                throw new IOException("Root screencap failed (exit " + process.exitValue() + ")"
+                        + (diagnostic.isEmpty() ? "" : ": " + diagnostic));
             }
-            Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-            if (bitmap == null) {
-                throw new IOException("Root screencap returned invalid PNG");
-            }
-            return bitmap;
+            if (!diagnostic.isEmpty()) DragShareLog.w("DragShare/ScreenCapture", diagnostic);
+            return bytes;
+        } catch (TimeoutException timeout) {
+            throw new IOException("Root screencap timed out", timeout);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("Root screencap interrupted", interrupted);
+        } catch (ExecutionException error) {
+            throw new IOException("Unable to read Root screencap output", error.getCause());
         } finally {
-            if (process != null) {
+            output.cancel(true);
+            errors.cancel(true);
+            // su descendants can retain a pipe after the immediate process exits. Neither pipe
+            // closure nor joining its reader may extend the caller's capture deadline.
+            startDaemon("screencap-cleanup", () -> {
+                process.destroyForcibly();
                 try {
-                    process.getErrorStream().close();
-                } catch (IOException ignored) {
-                    // Process teardown only.
+                    process.getOutputStream().close();
+                } catch (IOException error) {
+                    DragShareLog.w("DragShare/ScreenCapture", "unable to close screencap input", error);
                 }
-                process.destroy();
-            }
+            });
         }
     }
 
-    private static byte[] readAll(InputStream input) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[64 * 1024];
-        int read;
-        while ((read = input.read(buffer)) >= 0) {
-            if (read > 0) {
-                output.write(buffer, 0, read);
+    private static void startDaemon(String name, Runnable task) {
+        Thread thread = new Thread(task, name);
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private static byte[] readAll(InputStream stream, int retainLimit) throws IOException {
+        try (InputStream input = stream) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read > 0) output.write(buffer, 0, Math.min(read, retainLimit - output.size()));
             }
+            return output.toByteArray();
         }
-        return output.toByteArray();
     }
 }

@@ -304,3 +304,12 @@
 155项单元测试、Lint、assembleDebug通过。新增4项覆盖真实邻段筛选与带标点/换行的前插后加保留原分词边界；未覆盖真实窗口拉动。没有设备操作，设备仍1.7.80，源码1.7.91（115）。传送门、图片OCR、纯分享文本尚不支持该邻段来源，不把补充路径算作默认主路径完成。
 
 主路线仍为传送门＋Root。静态复核5.1.5发现服务解析view_rect/touch_points并提供getContentRect，模块尚未利用；这是进一步定位原文/附近截图的依据，不代表邻段列表已存在，也不证明所有能力都已被排除。后续追踪ClientCatcherResult/内容捕获端并实现主路线，详见PORTAL_515_AUDIT和ADJACENT_TEXT_PLAN。
+
+### 1.7.92：传送门上下文保留与Root截图截止时间（未安装）
+
+根据已保存的传送门5.1.5静态证据，PortalContentCaptureSource现在读取getInjectorPackage/getContentRect，随文字或自有图片副本保存到CapturedContent；不再把包名与区域丢弃。读取失败明确记录、提示并返回，让宿主原行为继续；移除文字读取失败后静默尝试图片的混用与空Throwable捕获。初始触点读取也改为明确方法/调用错误日志。尚未把来源区域传入分词面板或完成附近OCR，不宣称主路线已实现。
+
+RootScreenshotter将stdout/stderr分别排空，同一4秒截止时间覆盖进程退出和两路输出；错误流最多保留8KiB，继续排空但不混入PNG。取消保留中断标志；进程清理异步执行，不让管道关闭延长调用者等待。异常包含退出码及错误输出。4秒不覆盖ProcessBuilder.start或图片解码；也不证明设备Root派生进程清理已实测。
+
+新增测试针对进程退出后stdout/stderr仍未结束、取消中断与stderr诊断。没有设备操作，目标机仍1.7.80。后续集中验证真实截图、失败提示、传送门捕获并继续Root主路线附近识字。
+本版159 项测试（失败0）、Lint、assembleDebug通过。版本1.7.92（116），APK已归档，未安装。

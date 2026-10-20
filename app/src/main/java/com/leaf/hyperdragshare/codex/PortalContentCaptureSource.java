@@ -3,6 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.PointF;
+import android.graphics.Rect;
 
 import de.robv.android.xposed.XposedHelpers;
 
@@ -16,18 +17,13 @@ final class PortalContentCaptureSource {
         }
         Class<?> serviceClass = taplusService.getClass();
         try {
+            String sourcePackage = (String) XposedHelpers.callStaticMethod(serviceClass, "getInjectorPackage");
+            Rect sourceBounds = (Rect) XposedHelpers.callMethod(taplusService, "getContentRect");
             Object textMode = XposedHelpers.getStaticObjectField(serviceClass, "sIsTextMode");
             if (Boolean.TRUE.equals(textMode)) {
                 String value = (String) XposedHelpers.getStaticObjectField(serviceClass, "sContent");
-                CapturedContent text = CapturedContent.text(value, null, null);
-                if (text != null) {
-                    return text;
-                }
+                return CapturedContent.text(value, sourcePackage, sourceBounds);
             }
-        } catch (Throwable ignored) {
-            // Taplus internals can vary across versions; try the bitmap path.
-        }
-        try {
             Bitmap value = (Bitmap) XposedHelpers.callStaticMethod(serviceClass, "getBitmap");
             if (value == null || value.isRecycled()) {
                 return null;
@@ -35,8 +31,13 @@ final class PortalContentCaptureSource {
             // HyperOS 4's cancelTask() recycles the service-owned sBitmap. The
             // module stages images asynchronously, so keep an independent snapshot.
             Bitmap snapshot = value.copy(Bitmap.Config.ARGB_8888, false);
-            return CapturedContent.image(snapshot, null, null, true);
-        } catch (Throwable ignored) {
+            return CapturedContent.image(snapshot, sourcePackage, sourceBounds, true);
+        } catch (NoSuchFieldError | NoSuchMethodError | XposedHelpers.InvocationTargetError | RuntimeException error) {
+            DragShareLog.w("DragShare/PortalCapture", "Unable to read portal 5.1.5 content; keeping host behavior", error);
+            if (taplusService instanceof android.content.Context) {
+                android.widget.Toast.makeText((android.content.Context) taplusService,
+                        "无法读取传送门内容，请查看模块日志", android.widget.Toast.LENGTH_LONG).show();
+            }
             return null;
         }
     }
@@ -53,18 +54,14 @@ final class PortalContentCaptureSource {
                 if (point != null) {
                     return new PointF(point.x, point.y);
                 }
-            } catch (Throwable ignored) {
-                // Try the static injector point below.
-            }
-            try {
-                Point point = (Point) XposedHelpers.callStaticMethod(
+                Point injectorPoint = (Point) XposedHelpers.callStaticMethod(
                         taplusService.getClass(),
                         "getInjectorPoint");
-                if (point != null) {
-                    return new PointF(point.x, point.y);
+                if (injectorPoint != null) {
+                    return new PointF(injectorPoint.x, injectorPoint.y);
                 }
-            } catch (Throwable ignored) {
-                // The controller provides the final display-centered fallback.
+            } catch (NoSuchMethodError | XposedHelpers.InvocationTargetError | RuntimeException error) {
+                DragShareLog.w("DragShare/PortalCapture", "Unable to read portal initial point", error);
             }
         }
         return null;
