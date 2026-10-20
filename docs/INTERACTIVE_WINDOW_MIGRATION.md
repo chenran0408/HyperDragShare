@@ -22,3 +22,5 @@
 StashStore 属于模块私有存储；StashClient 目前仅提供受限 stash_put。StashImageProvider 不导出，外部图片读取需要显式 URI grant。因此传送门侧边窗口还需要模块提供受限列表/操作入口和按次读图授权；不能直接访问私有数据库或放宽 Provider 导出绕过。
 
 侧边窗口应复用条目内容与操作，同时与完整管理列表区分：收起只留最近内容与数量，展开支持取用，管理按钮放次要位置。当前尚无该窗口、跨 UID 列表接口或唤回机制；不把完整 StashActivity 当侧边中转站完成。
+
+审计补充：上述方案是不切换 Activity 的独立系统覆盖窗口，不是原应用 token 下的子窗口；后者当前三作用域并不具备。首批解耦限定于 BoomChipPage/BoomActionHandler/TextSegmentationActivity，把 dismiss/afterCopy/search/share 四个宿主动作变成显式回调。TextSegmenter 还会把 Context 转为 applicationContext 后读取 assets/filesDir，窗口接入时必须分别处理模块词典资源与宿主缓存，不能仅覆盖 getResources。尚未修改这些代码。
