@@ -93,6 +93,10 @@ public final class DragShareAccessibilityService extends AccessibilityService {
     private AccessibilityContentCaptureSource captureSource;
     private ExecutorService classifierExecutor;
     private AccessibilityScreenshotter screenshotter;
+    private ThumbCaptureSource thumbCaptureSource;
+    private boolean runtimeThumbEnabled;
+    private float runtimeThumbThreshold;
+    private long allowThumbAfter;
 
     @Override
     protected void onServiceConnected() {
@@ -100,6 +104,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         AccessibilityTrace.reset(this);
         AccessibilityRuntimeStatus.setConnected(true);
         screenInteractive = isScreenInteractive();
+        allowThumbAfter = SystemClock.uptimeMillis() + 800L;
         trace("service connected mode="
                 + DragShareSettings.readLocal(this).contentCaptureMode
                 + " interactive=" + screenInteractive
@@ -128,6 +133,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
+        if (thumbCaptureSource != null) thumbCaptureSource.cancel();
         AccessibilityContentCaptureSource source = captureSource;
         if (source != null) {
             source.cancel();
@@ -149,9 +155,27 @@ public final class DragShareAccessibilityService extends AccessibilityService {
 
     boolean isAccessibilityCaptureEnabled() {
         DragShareSettings settings = DragShareSettings.readLocal(this);
+        return settings.isAccessibilityCaptureMode() && isNodeCaptureEnabled();
+    }
+
+    private boolean isNodeCaptureEnabled() {
+        DragShareSettings settings = DragShareSettings.readLocal(this);
         return isAccessibilityRuntimeEnabled(settings)
                 && settings.isAccessibilityRecognitionEnabledForOrientation(
                 getResources().getConfiguration().orientation);
+    }
+
+    boolean isThumbCaptureAllowed() {
+        ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
+        return thumb.enabled && thumb.calibrated && isNodeCaptureEnabled()
+                && SystemClock.uptimeMillis() >= allowThumbAfter
+                && foregroundPackage != null
+                && !BuildConfig.APPLICATION_ID.equals(foregroundPackage)
+                && !AccessibilityBlacklist.isBlocked(this, DragShareSettings.readLocal(this), foregroundPackage);
+    }
+
+    String foregroundPackage() {
+        return foregroundPackage;
     }
 
     private boolean isAccessibilityRuntimeEnabled() {
@@ -159,13 +183,14 @@ public final class DragShareAccessibilityService extends AccessibilityService {
     }
 
     private boolean isAccessibilityRuntimeEnabled(DragShareSettings settings) {
+        ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
         return screenInteractive
                 && !isDeviceLocked()
-                && settings.isAccessibilityCaptureMode();
+                && (settings.isAccessibilityCaptureMode() || (thumb.enabled && thumb.calibrated));
     }
 
     AccessibilityCandidateSelector.Selection selectCandidateAt(float x, float y, long gestureId) {
-        if (!isAccessibilityCaptureEnabled()) {
+        if (!isNodeCaptureEnabled()) {
             trace("gesture=" + gestureId + " selection skipped disabled");
             return null;
         }
@@ -206,7 +231,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                                 + " bounds=" + selection.candidate.bounds.flattenToString());
                         return selection;
                     }
-                } catch (Throwable error) {
+                } catch (IllegalStateException | SecurityException error) {
                     DragShareLog.w(TAG, "gesture=" + gestureId + " window snapshot failed", error);
                 }
             }
@@ -221,7 +246,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
 
     OcrFallback ocrFallbackAt(float x, float y, long gestureId) {
         DragShareSettings settings = DragShareSettings.readLocal(this);
-        if (!isAccessibilityCaptureEnabled() || !settings.isSharingEnabled(true)
+        if (!isNodeCaptureEnabled() || !settings.isSharingEnabled(true)
                 || AccessibilityBlacklist.isBlocked(this, settings, foregroundPackage)) {
             return null;
         }
@@ -264,7 +289,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                 return new OcrFallback(bounds, packageName);
             }
             return null;
-        } catch (Throwable error) {
+        } catch (IllegalStateException | SecurityException error) {
             DragShareLog.w(TAG, "gesture=" + gestureId + " OCR fallback inspection failed", error);
             return null;
         } finally {
@@ -290,6 +315,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         runtimeStarted = true;
         runtimeLongPressTimeoutMillis = settings.accessibilityLongPressTimeoutMillis;
         runtimeRecognitionSensitivityPercent = settings.accessibilityRecognitionSensitivityPercent;
+        ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
+        runtimeThumbEnabled = thumb.enabled && thumb.calibrated;
+        runtimeThumbThreshold = thumb.threshold;
         rootNotReadySince = 0L;
         rootRestartCount = 0;
         lastReportedRootReady = false;
@@ -304,17 +332,21 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         screenshotter = new AccessibilityScreenshotter(this, classifierExecutor);
         rootTouchSource = new RootTouchSource(
                 getApplicationContext(),
-                (action, x, y, eventTime) -> {
+                (action, x, y, eventTime, major, minor) -> {
                     if (action == android.view.MotionEvent.ACTION_DOWN
                             || action == android.view.MotionEvent.ACTION_UP
                             || action == android.view.MotionEvent.ACTION_CANCEL) {
                         trace("root action=" + android.view.MotionEvent.actionToString(action)
                                 + " point=" + Math.round(x) + "," + Math.round(y));
                     }
-                    AccessibilityContentCaptureSource source = captureSource;
-                    if (source != null) {
-                        source.onPointerEvent(action, x, y, eventTime);
-                    }
+                    mainHandler.post(() -> {
+                        ThumbCaptureSource areaSource = thumbCaptureSource;
+                        if (areaSource != null) {
+                            areaSource.onPointerEvent(action, x, y, eventTime, major, minor);
+                        } else if (captureSource != null) {
+                            captureSource.onPointerEvent(action, x, y, eventTime);
+                        }
+                    });
                 });
         captureSource = new AccessibilityContentCaptureSource(
                 this,
@@ -322,6 +354,10 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                 rootTouchSource,
                 classifierExecutor,
                 screenshotter);
+        if (runtimeThumbEnabled) {
+            thumbCaptureSource = new ThumbCaptureSource(
+                    this, rootTouchSource, classifierExecutor, screenshotter, thumb.threshold);
+        }
         rootTouchSource.start();
         mainHandler.removeCallbacks(rootReadyReporter);
         mainHandler.post(rootReadyReporter);
@@ -343,6 +379,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         mainHandler.removeCallbacks(rootReadyReporter);
         AccessibilityRuntimeStatus.setRootInputReady(false);
         AccessibilityContentCaptureSource source = captureSource;
+        ThumbCaptureSource areaSource = thumbCaptureSource;
+        thumbCaptureSource = null;
+        if (areaSource != null) areaSource.cancel();
         captureSource = null;
         if (source != null) {
             source.cancel();
@@ -538,10 +577,13 @@ public final class DragShareAccessibilityService extends AccessibilityService {
             public void onChange(boolean selfChange) {
                 DragShareSettings settings = DragShareSettings.readLocal(
                         DragShareAccessibilityService.this);
+                ThumbTriggerSettings thumb = ThumbTriggerSettings.read(DragShareAccessibilityService.this);
                 if (runtimeStarted && (settings.accessibilityLongPressTimeoutMillis
                         != runtimeLongPressTimeoutMillis
                         || settings.accessibilityRecognitionSensitivityPercent
-                        != runtimeRecognitionSensitivityPercent)) {
+                        != runtimeRecognitionSensitivityPercent
+                        || (thumb.enabled && thumb.calibrated) != runtimeThumbEnabled
+                        || Float.compare(thumb.threshold, runtimeThumbThreshold) != 0)) {
                     stopRuntime();
                 }
                 applyMode();
@@ -579,6 +621,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                 } else if (Intent.ACTION_USER_PRESENT.equals(action)
                         || Intent.ACTION_SCREEN_ON.equals(action)) {
                     screenInteractive = isScreenInteractive();
+                    allowThumbAfter = SystemClock.uptimeMillis() + 800L;
                     applyMode();
                 }
             }

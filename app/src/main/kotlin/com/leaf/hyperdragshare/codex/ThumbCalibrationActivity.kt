@@ -1,0 +1,293 @@
+package com.leaf.hyperdragshare.codex
+
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.ThemeController
+
+/** Collects contact-size samples in a dedicated region; it does not enable global triggering. */
+class ThumbCalibrationActivity : ComponentActivity() {
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private lateinit var touchSource: RootTouchSource
+    private var isDarkTheme = false
+    private var contactRegion = floatArrayOf(0f, 0f, 0f, 0f)
+    private var sourceReady by mutableStateOf(false)
+    private var sourceHasContactSize by mutableStateOf(false)
+    private var sourceFailure by mutableStateOf<String?>(null)
+    private var sourceStartedAtMillis = 0L
+    private var sampleMessage by mutableStateOf("在下方区域按压后松开；先采集指尖，再采集拇指。")
+    private var liveSize by mutableStateOf("—")
+    private val fingertipSamples = mutableStateListOf<Double>()
+    private val thumbSamples = mutableStateListOf<Double>()
+    private var isCollectingThumb by mutableStateOf(false)
+    private var pressInRegion = false
+    private var pressLeftRegion = false
+    private var peakSize = 0.0
+    private var samplingEnabled = false
+    private var screenOrigin = intArrayOf(0, 0)
+
+    private val updateSourceStatus = object : Runnable {
+        override fun run() {
+            if (isFinishing || isDestroyed) return
+            sourceReady = touchSource.isReady()
+            sourceHasContactSize = touchSource.hasContactSize()
+            sourceFailure = touchSource.failureReason() ?: if (
+                !sourceReady && SystemClock.elapsedRealtime() - sourceStartedAtMillis >= SOURCE_TIMEOUT_MILLIS
+            ) {
+                "等待触摸设备读取超时，请检查 Root 授权和模块日志。"
+            } else {
+                null
+            }
+            mainHandler.postDelayed(this, STATUS_POLL_MILLIS)
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        isDarkTheme = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !isDarkTheme
+            isAppearanceLightNavigationBars = !isDarkTheme
+        }
+        window.decorView.getLocationOnScreen(screenOrigin)
+        touchSource = RootTouchSource(this) { action, x, y, _, major, minor ->
+            runOnUiThread { onRawContact(action, x, y, major, minor) }
+        }
+        setContent {
+            MiuixTheme(
+                controller = ThemeController(
+                    if (isDarkTheme) ColorSchemeMode.Dark else ColorSchemeMode.Light,
+                ),
+            ) {
+                CalibrationPage(
+                    sourceReady = sourceReady,
+                    hasContactSize = sourceHasContactSize,
+                    sourceFailure = sourceFailure,
+                    statusMessage = sampleMessage,
+                    liveSize = liveSize,
+                    fingertipCount = fingertipSamples.size,
+                    thumbCount = thumbSamples.size,
+                    collectingThumb = isCollectingThumb,
+                    onRegionBounds = { bounds ->
+                        contactRegion = floatArrayOf(
+                            bounds.left + screenOrigin[0], bounds.top + screenOrigin[1],
+                            bounds.right + screenOrigin[0], bounds.bottom + screenOrigin[1],
+                        )
+                    },
+                    onStart = { startCalibration() },
+                    onRestart = { resetCalibration() },
+                    onBack = { finish() },
+                )
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        sourceStartedAtMillis = SystemClock.elapsedRealtime()
+        touchSource.start()
+        mainHandler.post(updateSourceStatus)
+    }
+
+    override fun onStop() {
+        mainHandler.removeCallbacks(updateSourceStatus)
+        discardPress()
+        touchSource.stop()
+        super.onStop()
+    }
+
+    private fun startCalibration() {
+        resetCalibration()
+        if (!sourceHasContactSize) {
+            sampleMessage = sourceFailure ?: "当前触摸设备未提供接触面积数据，无法校准。"
+            return
+        }
+        sampleMessage = "请在下方区域用指尖按压并松开，共 3 次。"
+        samplingEnabled = true
+    }
+
+    private fun resetCalibration() {
+        fingertipSamples.clear()
+        thumbSamples.clear()
+        isCollectingThumb = false
+        samplingEnabled = false
+        sampleMessage = "已重置。先按“开始校准”，再按提示采集。"
+        liveSize = "—"
+        discardPress()
+    }
+
+    private fun onRawContact(action: Int, x: Float, y: Float, major: Int, minor: Int) {
+        val inside = x >= contactRegion[0] && x <= contactRegion[2]
+                && y >= contactRegion[1] && y <= contactRegion[3]
+        when (action) {
+            MotionEvent.ACTION_DOWN -> {
+                pressInRegion = inside && samplingEnabled
+                pressLeftRegion = false
+                peakSize = 0.0
+                updatePeak(major, minor)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (pressInRegion && !inside) pressLeftRegion = true
+                if (pressInRegion && !pressLeftRegion) updatePeak(major, minor)
+            }
+            MotionEvent.ACTION_UP -> {
+                if (pressInRegion && !inside) pressLeftRegion = true
+                if (pressInRegion && !pressLeftRegion) {
+                    updatePeak(major, minor)
+                    commitSample()
+                } else if (pressInRegion) {
+                    sampleMessage = "按压移出了采样区域，本次未计入；请在区域内完成按压。"
+                }
+                discardPress()
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                discardPress()
+                sampleMessage = "检测到多指或触摸取消，本次未计入；请单指重试。"
+            }
+        }
+    }
+
+    private fun updatePeak(major: Int, minor: Int) {
+        val size = ThumbCalibration.contactSize(major, minor)
+        if (size > peakSize) peakSize = size
+        liveSize = if (size > 0.0) "%.1f".format(size) else "无有效面积数据"
+    }
+
+    private fun commitSample() {
+        if (peakSize <= 0.0) {
+            sampleMessage = "触摸设备没有提供有效面积值，本次未计入。"
+            return
+        }
+        val samples = if (isCollectingThumb) thumbSamples else fingertipSamples
+        samples.add(peakSize)
+        if (!isCollectingThumb && fingertipSamples.size == SAMPLE_COUNT) {
+            isCollectingThumb = true
+            sampleMessage = "指尖样本已完成。现在用拇指按压并松开，共 3 次。"
+        } else if (isCollectingThumb && thumbSamples.size == SAMPLE_COUNT) {
+            val result = ThumbCalibration.calculate(
+                fingertipSamples.toDoubleArray(),
+                thumbSamples.toDoubleArray(),
+            )
+            if (!result.calibrated) {
+                sampleMessage = "两组接触面积没有可分开的间隔。请重试校准，按压时保持指尖与拇指姿势稳定。"
+                samplingEnabled = false
+                return
+            }
+            ThumbTriggerSettings.saveCalibration(this, result.threshold.toFloat())
+            samplingEnabled = false
+            sampleMessage = "校准成功：设备单位阈值 %.1f（指尖最大 %.1f，拇指最小 %.1f）。".format(
+                result.threshold, result.fingertipMaximum, result.thumbMinimum,
+            )
+        } else {
+            val kind = if (isCollectingThumb) "拇指" else "指尖"
+            sampleMessage = "${kind}样本 ${samples.size}/$SAMPLE_COUNT 已记录，请继续按压采集。"
+        }
+    }
+
+    private fun discardPress() {
+        pressInRegion = false
+        pressLeftRegion = false
+        peakSize = 0.0
+    }
+
+    companion object {
+        private const val SAMPLE_COUNT = 3
+        private const val STATUS_POLL_MILLIS = 300L
+        private const val SOURCE_TIMEOUT_MILLIS = 8_000L
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun CalibrationPage(
+    sourceReady: Boolean,
+    hasContactSize: Boolean,
+    sourceFailure: String?,
+    statusMessage: String,
+    liveSize: String,
+    fingertipCount: Int,
+    thumbCount: Int,
+    collectingThumb: Boolean,
+    onRegionBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onStart: () -> Unit,
+    onRestart: () -> Unit,
+    onBack: () -> Unit,
+) {
+    BackHandler(onBack = onBack)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = "拇指触发校准",
+                navigationIcon = { TextButton(text = "返回", onClick = onBack) },
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("此页采集触摸设备报告的接触尺寸（设备单位），不是压力或平方毫米。校准完成后仍需在设置中手动启用触发。")
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(if (sourceReady) "Root 触摸读取：已连接" else "Root 触摸读取：等待连接")
+                    Text(if (hasContactSize) "设备支持接触尺寸" else sourceFailure ?: "尚未确认接触尺寸能力")
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth().height(190.dp).onGloballyPositioned {
+                    onRegionBounds(it.boundsInWindow())
+                },
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("单指采样区域")
+                        Spacer(Modifier.height(8.dp))
+                        Text("实时接触尺寸：$liveSize")
+                        Text("仅在此区域按下并松开才会计入")
+                    }
+                }
+            }
+            Text(statusMessage)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextButton(text = "开始校准", onClick = onStart, enabled = sourceReady && hasContactSize)
+                TextButton(text = "重试 / 重置", onClick = onRestart)
+            }
+            Text("指尖 $fingertipCount/3    拇指 $thumbCount/3${if (collectingThumb) "（采集中）" else ""}")
+        }
+    }
+}

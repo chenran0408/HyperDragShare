@@ -6,7 +6,7 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.64 / versionCode 88。沿用原包名和 debug 签名，原位升级成功。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.65 / versionCode 89。沿用原包名和 debug 签名，原位升级成功。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
 
 ## 2026-10-20：1.7.62 作用域软重启
@@ -70,6 +70,15 @@
 - 只读 `getevent -lp` 确认目标触摸屏 event7、X/Y max 143999/319999，提供 TOUCH_MAJOR/MINOR（0–255，resolution 0），没有压力轴。原值可用于本机校准，不是物理面积或压力。
 - 主线程复核 `adb shell su -c id` 返回 uid=0 / KernelSU。审查中引用旧的无 su 输出已撤回。
 - 用户同意校准页完成后用指尖/拇指分别按压采样；ADB 注入不能代替真实接触大小样本。先做校准和明确的能力反馈，再接全局触发、解锁防误触与黑名单。
+
+### 1.7.65：校准失败的真实证据
+
+- `testDebugUnitTest lintDebug assembleDebug` 全部通过，123 项单测、0 失败。原位安装后包版本 1.7.65 / 89，校准页正常打开，模块 UID 下 Root cat event7 已运行；页面显示读取连接成功。
+- 用户在指定区域真实按压，页面显示“无有效面积数据”，未保存阈值；全局面积触发默认关闭，未宣称可用。
+- 30 秒只读 `getevent -lt /dev/input/event7` 抓取：367 个 X、300 个 Y 更新，67 个 tracking 边沿（约 33 次完整触摸），TOUCH_MAJOR/MINOR 事件均为 0 个。数据保留在任务临时目录 thumb-raw-events.txt，不写入源码仓库。
+- 全部输入设备清单只有 event7 是触摸屏，其他为按键、音频、触觉和蓝牙按键设备。event7 能力声明仍包含两条尺寸轴，但这不等于真实触摸上报尺寸。UI 把“已声明轴”写成“支持接触尺寸”容易误导，下一版修正文案并对照 App 的 MotionEvent 尺寸。
+- 已接通的候选链路：独立尺寸门槛与稳定确认、真实 UP 后取节点文字或截取图片交给现有 OCR；无障碍服务需手动开启，锁屏、解锁后 800ms、应用黑名单和多指取消会阻止触发。**这些全局行为仍未实机验收**，当前不能绕过缺失的尺寸数据来启用。
+- 接下来只读核对 MI Big Bang 的真实面积触发代码、Android MotionEvent 与小米驱动接口；不把长按时长或坐标移动冒充接触面积，不写 sysfs 或改系统权限来掩盖限制。
 
 ## 下一批
 

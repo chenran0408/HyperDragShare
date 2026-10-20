@@ -559,6 +559,11 @@ private fun MainPage(
             item(key = "text-panel-title") {
                 SmallTitle(text = "文本面板")
             }
+            item(key = "thumb-trigger-preferences") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    ThumbTriggerPreference(context, onOpenBlacklist)
+                }
+            }
             item(key = "text-panel-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     SwitchPreference(

@@ -71,6 +71,11 @@
             android:theme="@style/Theme.DragShare.BigBangOverlay" />
 
         <activity
+            android:name=".ThumbCalibrationActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DragShare" />
+
+        <activity
             android:name=".SearchOverlayActivity"
             android:excludeFromRecents="true"
             android:exported="false"

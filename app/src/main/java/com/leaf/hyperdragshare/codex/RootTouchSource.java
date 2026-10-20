@@ -19,7 +19,8 @@ import java.util.regex.Pattern;
 
 final class RootTouchSource {
     interface Listener {
-        void onPointerEvent(int action, float x, float y, long eventTime);
+        void onPointerEvent(
+                int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor);
     }
 
     private static final String TAG = "DragShare/RootInput";
@@ -28,6 +29,10 @@ final class RootTouchSource {
             "ABS_MT_POSITION_X\\s*:.*?max\\s+(\\d+)");
     private static final Pattern MAX_Y = Pattern.compile(
             "ABS_MT_POSITION_Y\\s*:.*?max\\s+(\\d+)");
+    private static final Pattern MAX_TOUCH_MAJOR = Pattern.compile(
+            "ABS_MT_TOUCH_MAJOR\\s*:.*?max\\s+(\\d+)");
+    private static final Pattern MAX_TOUCH_MINOR = Pattern.compile(
+            "ABS_MT_TOUCH_MINOR\\s*:.*?max\\s+(\\d+)");
 
     private final Context context;
     private final Listener listener;
@@ -35,6 +40,8 @@ final class RootTouchSource {
 
     private volatile boolean running;
     private volatile boolean ready;
+    private volatile boolean hasContactSize;
+    private volatile String failureReason;
     private volatile java.lang.Process process;
     private volatile InputStream inputStream;
     private Thread thread;
@@ -57,6 +64,8 @@ final class RootTouchSource {
             return;
         }
         ready = false;
+        hasContactSize = false;
+        failureReason = null;
         running = true;
         firstEventLogged = false;
         discoveredDevices = "";
@@ -71,6 +80,7 @@ final class RootTouchSource {
     synchronized void stop() {
         running = false;
         ready = false;
+        hasContactSize = false;
         parser.cancel();
         closeQuietly(inputStream);
         inputStream = null;
@@ -90,12 +100,21 @@ final class RootTouchSource {
         return ready;
     }
 
+    boolean hasContactSize() {
+        return hasContactSize;
+    }
+
+    String failureReason() {
+        return failureReason;
+    }
+
     private void runLoop() {
         try {
             DragShareLog.d(TAG, "starting touchscreen discovery");
             String devicePath = findTouchDevice();
             if (devicePath == null) {
                 log("no direct touchscreen device found");
+                failureReason = "未找到可读取的直接触摸屏设备。";
                 DragShareDiagnostics.captureInputFailure(
                         context,
                         "no touchscreen candidate",
@@ -108,12 +127,17 @@ final class RootTouchSource {
             rawMaxY = ranges[1];
             if (rawMaxX <= 0 || rawMaxY <= 0) {
                 log("invalid coordinate range for " + devicePath);
+                failureReason = "触摸设备没有可用的坐标范围。";
                 DragShareDiagnostics.captureInputFailure(
                         context,
                         "invalid coordinate range for " + devicePath,
                         discoveredDevices,
                         null);
                 return;
+            }
+            hasContactSize = ranges[2] > 0 && ranges[3] > 0;
+            if (!hasContactSize) {
+                failureReason = "触摸设备未报告完整的接触尺寸轴，无法进行拇指校准。";
             }
 
             InputStream stream = openDevice(devicePath);
@@ -126,8 +150,20 @@ final class RootTouchSource {
                     + " eventSize=" + inputEventSize());
             DragShareLog.d(TAG, "starting evdev read loop path=" + devicePath);
             readEvents(stream);
-        } catch (Throwable error) {
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
             if (running) {
+                failureReason = "读取触摸设备时被中断。";
+                log("input loop interrupted", interrupted);
+                DragShareDiagnostics.captureInputFailure(
+                        context,
+                        "input loop interrupted",
+                        discoveredDevices,
+                        null);
+            }
+        } catch (IOException | SecurityException error) {
+            if (running) {
+                failureReason = describeInputFailure(error);
                 log("input loop failed", error);
                 DragShareDiagnostics.captureInputFailure(
                         context,
@@ -138,6 +174,9 @@ final class RootTouchSource {
         } finally {
             if (running && !firstEventLogged) {
                 DragShareLog.d(TAG, "input stream ended before a decoded pointer action");
+                if (failureReason == null) {
+                    failureReason = "触摸事件流在产生输入前结束。";
+                }
                 DragShareDiagnostics.captureInputFailure(
                         context,
                         "stream ended without decoded pointer action",
@@ -224,7 +263,12 @@ final class RootTouchSource {
                 "root input range probe " + devicePath,
                 discoveredDevices,
                 output);
-        return new int[]{parseMaximum(MAX_X, output), parseMaximum(MAX_Y, output)};
+        return new int[]{
+                parseMaximum(MAX_X, output),
+                parseMaximum(MAX_Y, output),
+                parseMaximum(MAX_TOUCH_MAJOR, output),
+                parseMaximum(MAX_TOUCH_MINOR, output),
+        };
     }
 
     private int parseMaximum(Pattern pattern, CharSequence value) {
@@ -309,16 +353,17 @@ final class RootTouchSource {
         DragShareLog.d(TAG, "decoded " + MotionEvent.actionToString(action)
                 + " raw=" + Math.round(rawX) + ',' + Math.round(rawY)
                 + " mapped=" + Math.round(screenPoint[0]) + ',' + Math.round(screenPoint[1]));
-        emit(action, screenPoint[0], screenPoint[1]);
+        emit(action, screenPoint[0], screenPoint[1], rawTouchMajor, rawTouchMinor);
     }
 
-    private void emit(int action, float x, float y) {
+    private void emit(int action, float x, float y, int rawTouchMajor, int rawTouchMinor) {
         if (!firstEventLogged) {
             firstEventLogged = true;
             log("first event action=" + MotionEvent.actionToString(action)
                     + " point=" + Math.round(x) + "," + Math.round(y));
         }
-        listener.onPointerEvent(action, x, y, SystemClock.uptimeMillis());
+        listener.onPointerEvent(
+                action, x, y, SystemClock.uptimeMillis(), rawTouchMajor, rawTouchMinor);
     }
 
     private float[] toScreenCoordinates(float rawX, float rawY) {
@@ -368,6 +413,21 @@ final class RootTouchSource {
             }
         }
         return output.toString();
+    }
+
+    private String describeInputFailure(Exception error) {
+        String detail = error.getMessage();
+        if (error instanceof SecurityException) {
+            return "系统拒绝读取触摸设备：请检查 Root 授权和模块权限。";
+        }
+        if (detail != null && detail.contains("Permission denied")) {
+            return "读取触摸设备被拒绝：请检查 Root 授权和模块权限。";
+        }
+        if (detail != null && detail.contains("su")) {
+            return "无法启动 Root 命令：请确认设备上的 Root 服务可用。";
+        }
+        return "读取触摸设备失败：" + error.getClass().getSimpleName()
+                + (detail == null || detail.isEmpty() ? "" : "（" + detail + "）");
     }
 
     private void closeQuietly(InputStream stream) {
