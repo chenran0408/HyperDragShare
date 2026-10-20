@@ -249,6 +249,9 @@ private fun MainPage(
     var exitAfterCopyEnabled by remember(context) {
         mutableStateOf(BigBangSettings.isExitAfterCopyEnabled(context))
     }
+    var launcherIconEnabled by remember(context) {
+        mutableStateOf(LauncherIconSettings.isEnabled(context))
+    }
     val exportLogLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain"),
     ) { destination ->
@@ -322,6 +325,27 @@ private fun MainPage(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = paddingValues,
         ) {
+            item(key = "app-visibility-title") {
+                SmallTitle(text = "应用显示")
+            }
+            item(key = "launcher-icon") {
+                SwitchPreference(
+                    title = "桌面显示应用图标",
+                    summary = "只影响桌面入口；传送门、AICR 和快捷设置磁贴不受影响",
+                    checked = launcherIconEnabled,
+                    onCheckedChange = { enabled ->
+                        if (LauncherIconSettings.setEnabled(context, enabled)) {
+                            launcherIconEnabled = enabled
+                        } else {
+                            Toast.makeText(
+                                context,
+                                R.string.launcher_icon_change_failed,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
+                )
+            }
             item(key = "activation-status") {
                 ActivationStatusCard(
                     context = context,
