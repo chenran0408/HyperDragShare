@@ -387,9 +387,28 @@ public final class DragShareSettingsTest {
         assertEquals(2, textTargets.size());
         assertTrue(textTargets.get(0).isCopyTextToClipboard());
         assertTrue(textTargets.get(1).isTextSegmentation());
-        assertEquals(2, imageTargets.size());
+        assertEquals(3, imageTargets.size());
         assertTrue(imageTargets.get(0).isCopyImageToClipboard());
         assertTrue(imageTargets.get(1).isSaveToLocal());
+        assertTrue(imageTargets.get(2).isImageOcr());
+    }
+
+    @Test
+    public void hiddenOcrActionStaysHiddenAfterSettingsTransfer() {
+        DragShareSettings settings = new DragShareSettings(
+                DragShareSettings.COLOR_LIGHT,
+                DragShareSettings.STYLE_SIMPLE,
+                DragShareSettings.DEFAULT_EDGE_TRIGGER_DP,
+                DragShareSettings.DEFAULT_SCROLL_SPEED_DP_PER_SECOND,
+                false, true, true,
+                new LinkedHashSet<>(Arrays.asList(DragShareSettings.TARGET_IMAGE_OCR)),
+                Arrays.asList());
+        List<ShareTarget> targets = ShareTargetRepository.applySettings(
+                null, java.util.Collections.emptyList(),
+                DragShareSettings.fromBundle(settings.toBundle()), true);
+        assertEquals(2, targets.size());
+        assertTrue(targets.get(0).isCopyImageToClipboard());
+        assertTrue(targets.get(1).isSaveToLocal());
     }
 
     @Test
@@ -479,9 +498,10 @@ public final class DragShareSettingsTest {
                 true);
         assertEquals(1, textTargets.size());
         assertTrue(textTargets.get(0).isTextSegmentation());
-        assertEquals(2, imageTargets.size());
+        assertEquals(3, imageTargets.size());
         assertTrue(imageTargets.get(0).isCopyImageToClipboard());
         assertTrue(imageTargets.get(1).isSaveToLocal());
+        assertTrue(imageTargets.get(2).isImageOcr());
         assertFalse(DragShareSettings.fromBundle(settings.toBundle()).preloadTextSegmenter);
         assertFalse(DragShareSettings.fromBundle(settings.toBundle())
                 .isTargetVisible(DragShareSettings.TARGET_COPY_TEXT));

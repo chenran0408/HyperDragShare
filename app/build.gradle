@@ -7,13 +7,14 @@ plugins {
 android {
     namespace 'com.leaf.hyperdragshare.codex'
     compileSdk 37
+    buildToolsVersion '36.0.0'
 
     defaultConfig {
         applicationId 'com.leaf.hyperdragshare.codex'
         minSdk 33
         targetSdk 34
-        versionCode 72
-        versionName '1.7.48'
+        versionCode 75
+        versionName '1.7.51'
     }
 
     compileOptions {
@@ -114,6 +115,7 @@ android {
 }
 
 dependencies {
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
     compileOnly 'de.robv.android.xposed:api:82'
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.activity:activity-compose:1.13.0'

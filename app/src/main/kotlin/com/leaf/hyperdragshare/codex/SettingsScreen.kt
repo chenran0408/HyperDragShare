@@ -1790,6 +1790,7 @@ private fun querySettingsTargets(context: Context): List<ShareTarget> {
         ShareTarget.copyImageToClipboard(ShareTargetRepository.loadCopyIcon(context)),
         ShareTarget.saveToLocal(ShareTargetRepository.loadSaveIcon(context)),
         ShareTarget.textSegmentation(ShareTargetRepository.loadTextSegmentationIcon(context)),
+        ShareTarget.imageOcr(ShareTargetRepository.loadTextSegmentationIcon(context)),
     )
 }
 
@@ -1857,6 +1858,7 @@ private fun targetSummary(target: ShareTarget): String {
         target.isCopyImageToClipboard() -> "将图片复制到剪贴板"
         target.isSaveToLocal() -> "仅在图片分享菜单中显示"
         target.isTextSegmentation() -> "仅在文字分享菜单中显示"
+        target.isImageOcr() -> "识别图片文字后进入分词，仅在图片菜单中显示"
         else -> {
         target.component?.let { component ->
             component.className
@@ -1876,6 +1878,7 @@ private fun TargetIcon(
     val builtInAction = target.isCopyToClipboard()
         || target.isSaveToLocal()
         || target.isTextSegmentation()
+        || target.isImageOcr()
     val targetSizePx = with(LocalDensity.current) {
         size.roundToPx().coerceAtLeast(1)
     }

@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
@@ -107,7 +108,14 @@ final class AccessibilityContentCaptureSource {
                                 () -> captureAt(gestureId, stableX, stableY, true),
                                 50L);
                     } else {
-                        mainHandler.post(() -> gestureDetector.captureFailed(gestureId));
+                        DragShareAccessibilityService.OcrFallback fallback =
+                                service.ocrFallbackAt(stableX, stableY, gestureId);
+                        if (fallback != null && gestureDetector.isCapturing(gestureId)) {
+                            captureImageAt(
+                                    gestureId, fallback.bounds, fallback.sourcePackage);
+                        } else {
+                            mainHandler.post(() -> gestureDetector.captureFailed(gestureId));
+                        }
                     }
                     return;
                 }
@@ -128,35 +136,36 @@ final class AccessibilityContentCaptureSource {
                     mainHandler.post(() -> showCapturedContent(gestureId, content));
                     return;
                 }
-                screenshotter.capture(gestureId, candidate.bounds, new AccessibilityScreenshotter.Callback() {
-                    @Override
-                    public void onSuccess(long completedGestureId, Bitmap bitmap) {
-                        service.trace("gesture=" + completedGestureId + " screenshot captured size="
-                                + bitmap.getWidth() + "x" + bitmap.getHeight());
-                        CapturedContent content = CapturedContent.image(
-                                bitmap,
-                                candidate.sourcePackage,
-                                candidate.bounds,
-                                true);
-                        mainHandler.post(() -> showCapturedContent(completedGestureId, content));
-                    }
-
-                    @Override
-                    public void onFailure(long completedGestureId, Throwable error) {
-                        mainHandler.post(() -> {
-                            DragShareLog.w(TAG, "gesture=" + completedGestureId
-                                    + " image capture failed", error);
-                            service.trace("gesture=" + completedGestureId
-                                    + " screenshot failed=" + error.getClass().getSimpleName());
-                            gestureDetector.captureFailed(completedGestureId);
-                        });
-                    }
-                });
+                captureImageAt(gestureId, candidate.bounds, candidate.sourcePackage);
             });
         } catch (RuntimeException error) {
             DragShareLog.w(TAG, "gesture=" + gestureId + " classifier unavailable", error);
             mainHandler.post(() -> gestureDetector.captureFailed(gestureId));
         }
+    }
+
+    private void captureImageAt(long gestureId, Rect bounds, String sourcePackage) {
+        screenshotter.capture(gestureId, bounds, new AccessibilityScreenshotter.Callback() {
+            @Override
+            public void onSuccess(long completedGestureId, Bitmap bitmap) {
+                service.trace("gesture=" + completedGestureId + " screenshot captured size="
+                        + bitmap.getWidth() + "x" + bitmap.getHeight());
+                CapturedContent content = CapturedContent.image(
+                        bitmap, sourcePackage, bounds, true);
+                mainHandler.post(() -> showCapturedContent(completedGestureId, content));
+            }
+
+            @Override
+            public void onFailure(long completedGestureId, Throwable error) {
+                mainHandler.post(() -> {
+                    DragShareLog.w(TAG, "gesture=" + completedGestureId
+                            + " image capture failed", error);
+                    service.trace("gesture=" + completedGestureId
+                            + " screenshot failed=" + error.getClass().getSimpleName());
+                    gestureDetector.captureFailed(completedGestureId);
+                });
+            }
+        });
     }
 
     private void showCapturedContent(long gestureId, CapturedContent content) {

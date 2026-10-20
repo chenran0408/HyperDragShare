@@ -41,6 +41,11 @@ final class ShareTargetRepository {
             if (activity == null || !activity.exported) {
                 continue;
             }
+            // The same image activity is exposed below as one configurable built-in action.
+            if (MODULE_PACKAGE.equals(activity.packageName)
+                    && "com.leaf.hyperdragshare.codex.ImageOcrActivity".equals(activity.name)) {
+                continue;
+            }
             ComponentName component = new ComponentName(activity.packageName, activity.name);
             if (!seen.add(component.flattenToString())) {
                 continue;
@@ -113,6 +118,10 @@ final class ShareTargetRepository {
             visible.put(
                     DragShareSettings.TARGET_TEXT_SEGMENTATION,
                     ShareTarget.textSegmentation(loadTextSegmentationIcon(context)));
+        }
+        if (imagePayload && effective.isTargetVisible(DragShareSettings.TARGET_IMAGE_OCR)) {
+            visible.put(DragShareSettings.TARGET_IMAGE_OCR,
+                    ShareTarget.imageOcr(loadTextSegmentationIcon(context)));
         }
         if (queried != null) {
             for (ShareTarget target : queried) {
@@ -202,7 +211,7 @@ final class ShareTargetRepository {
         if (target.isSaveToLocal()) {
             return new SaveTargetIconDrawable(target.icon, BUILT_IN_ACTION_TILE_COLOR);
         }
-        if (target.isTextSegmentation()) {
+        if (target.isTextSegmentation() || target.isImageOcr()) {
             return new TextSegmentationTargetIconDrawable(
                     target.icon,
                     BUILT_IN_ACTION_TILE_COLOR);

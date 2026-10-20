@@ -6,6 +6,7 @@ HyperDragShare 是一个 Android LSPosed 模块，为 HyperOS 传送门的文字
 
 - 使用 Root evdev 输入，在传送门识别长按后继续跟随当前手指。
 - 支持文字分享、图片分享、保存图片到本地和文本分词。
+- 图片菜单新增“识别图片文字”：在模块进程内识别后进入已有分词页；也可从相册的系统分享菜单发送图片进行识别。
 - 提供简洁、流光和环形三种可配置的分享菜单，以及深浅色外观、目标排序和隐藏设置。
 - 可选无障碍内容获取模式；该模式仍需要 Root 输入，且不会扩大 LSPosed 作用域。
 - 支持可关闭的系统日志或 root 保护的诊断文件导出；调试模式会记录输入节点与运行环境信息。
@@ -29,6 +30,8 @@ HyperDragShare 是一个 Android LSPosed 模块，为 HyperOS 传送门的文字
 
 项目使用 Java/Kotlin 17。Windows 下执行：
 
+本分支使用 AGP 9.1.1 / Gradle 9.3.1、Android SDK 37.0、Build Tools 36.0.0，以及既有 NDK 26.1.10909125 / CMake 3.22.1。中文 OCR 模型随 APK 携带，不需要首次使用时下载模型。
+
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
 ```
@@ -46,3 +49,5 @@ HyperDragShare 以 [GNU General Public License v3.0](LICENSE)（`GPL-3.0-only`�
 ## 说明
 
 实现边界、输入源仲裁和兼容性约束记录在 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)。
+
+本分支 1.7.51 的 OCR 实现与验证边界见 [docs/IMAGE_OCR.md](docs/IMAGE_OCR.md)。传送门 5.1.5 的适配核对见 [docs/HYPEROS4_ADAPTATION.md](docs/HYPEROS4_ADAPTATION.md)；尚未通过本分支实机验收。

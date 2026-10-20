@@ -62,7 +62,7 @@ final class PortalHooks {
             hookServiceLifecycle(serviceClass, classLoader);
             hookShareStart(serviceClass);
             hookKnownCallbackClass(classLoader);
-            log("Taplus 4.2.1 hooks installed");
+            log("portal hooks installed");
         } catch (Throwable error) {
             log("unable to install Taplus hooks", error);
         }
@@ -244,6 +244,12 @@ final class PortalHooks {
             if (isReplayingHostCall()) {
                 return;
             }
+            DragShareController current = controller;
+            // The callback hook remains installed after switching to accessibility
+            // mode. Let the host receive its own events when our runtime is stopped.
+            if (current == null) {
+                return;
+            }
             Map<String, Object> properties = (Map<String, Object>)
                     XposedHelpers.callMethod(param.args[0], "getPropertyMap");
             if (properties == null) {
@@ -263,10 +269,12 @@ final class PortalHooks {
 
             Object control = properties.get(CONTROL_KEY);
             if ("258".equals(control)) {
-                // Taplus normally interprets a move as cancellation.
-                param.setResult(null);
+                // Suppress a move cancellation only for our active drag. If the
+                // host has no module session, it must reset its own task state.
+                if (current.isActive()) {
+                    param.setResult(null);
+                }
             } else if ("257".equals(control)) {
-                DragShareController current = controller;
                 if (deferHostCallIfRootDragActive(param, "control-257")) {
                     if (!controlIgnoredLogged) {
                         controlIgnoredLogged = true;

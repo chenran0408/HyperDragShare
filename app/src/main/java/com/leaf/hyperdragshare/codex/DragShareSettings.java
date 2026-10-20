@@ -110,6 +110,7 @@ public final class DragShareSettings {
     public static final String TARGET_SAVE_LOCAL = "builtin:save_local";
     /** Stable key for the built-in text action. It is kept ahead of app targets. */
     public static final String TARGET_TEXT_SEGMENTATION = "builtin:text_segmentation";
+    public static final String TARGET_IMAGE_OCR = "builtin:image_ocr";
 
     static final String METHOD_GET_SETTINGS = "get_settings";
 

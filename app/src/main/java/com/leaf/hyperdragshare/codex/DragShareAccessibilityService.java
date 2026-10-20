@@ -173,45 +173,105 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         List<WindowRoot> roots = rootsAtPoint(x, y, settings);
         trace("gesture=" + gestureId + " roots=" + roots.size()
                 + " point=" + Math.round(x) + "," + Math.round(y));
-        for (WindowRoot windowRoot : roots) {
-            try {
-                List<AccessibilityNodeSnapshot> snapshots = snapshotTree(
-                        windowRoot.root,
-                        windowRoot.layer);
-                int[] screen = screenSize();
-                AccessibilityNodeClassifier classifier = new AccessibilityNodeClassifier(
-                        getResources().getDisplayMetrics().density,
-                        screen[0],
-                        screen[1]);
-                AccessibilityNodeClassifier.Buckets buckets = classifier.classify(snapshots);
-                AccessibilityCandidateSelector.Selection selection = AccessibilityCandidateSelector.select(
-                        buckets,
-                        x,
-                        y);
-                DragShareLog.i(TAG, "gesture=" + gestureId
-                        + " nodes=" + snapshots.size()
-                        + " candidates=" + buckets.candidateCount());
-                if (selection != null) {
-                    if (AccessibilityBlacklist.isBlocked(
-                            this,
-                            settings,
-                            selection.candidate.sourcePackage)) {
-                        trace("gesture=" + gestureId + " candidate skipped blacklist");
-                        continue;
+        try {
+            for (WindowRoot windowRoot : roots) {
+                try {
+                    TreeSnapshot tree = snapshotTree(
+                            windowRoot.root,
+                            windowRoot.layer);
+                    List<AccessibilityNodeSnapshot> snapshots = tree.nodes;
+                    int[] screen = screenSize();
+                    AccessibilityNodeClassifier classifier = new AccessibilityNodeClassifier(
+                            getResources().getDisplayMetrics().density,
+                            screen[0],
+                            screen[1]);
+                    AccessibilityNodeClassifier.Buckets buckets = classifier.classify(snapshots);
+                    AccessibilityCandidateSelector.Selection selection = AccessibilityCandidateSelector.select(
+                            buckets,
+                            x,
+                            y);
+                    DragShareLog.i(TAG, "gesture=" + gestureId
+                            + " nodes=" + snapshots.size()
+                            + " candidates=" + buckets.candidateCount());
+                    if (selection != null) {
+                        if (AccessibilityBlacklist.isBlocked(
+                                this,
+                                settings,
+                                selection.candidate.sourcePackage)) {
+                            trace("gesture=" + gestureId + " candidate skipped blacklist");
+                            continue;
+                        }
+                        trace("gesture=" + gestureId + " selected="
+                                + selection.candidate.kind
+                                + " bounds=" + selection.candidate.bounds.flattenToString());
+                        return selection;
                     }
-                    trace("gesture=" + gestureId + " selected="
-                            + selection.candidate.kind
-                            + " bounds=" + selection.candidate.bounds.flattenToString());
-                    return selection;
+                } catch (Throwable error) {
+                    DragShareLog.w(TAG, "gesture=" + gestureId + " window snapshot failed", error);
                 }
-            } catch (Throwable error) {
-                DragShareLog.w(TAG, "gesture=" + gestureId + " window snapshot failed", error);
-            } finally {
+            }
+        } finally {
+            for (WindowRoot windowRoot : roots) {
                 recycleNode(windowRoot.root);
             }
         }
         trace("gesture=" + gestureId + " no candidate");
         return null;
+    }
+
+    OcrFallback ocrFallbackAt(float x, float y, long gestureId) {
+        DragShareSettings settings = DragShareSettings.readLocal(this);
+        if (!isAccessibilityCaptureEnabled() || !settings.isSharingEnabled(true)
+                || AccessibilityBlacklist.isBlocked(this, settings, foregroundPackage)) {
+            return null;
+        }
+        List<WindowRoot> roots = rootsAtPoint(x, y, settings);
+        try {
+            for (WindowRoot windowRoot : roots) {
+                AccessibilityNodeInfo root = windowRoot.root;
+                Rect windowBounds = new Rect();
+                root.getBoundsInScreen(windowBounds);
+                String packageName = asString(root.getPackageName());
+                if (packageName == null || packageName.isEmpty()
+                        || AccessibilityBlacklist.isBlocked(this, settings, packageName)) {
+                    continue;
+                }
+                int[] screen = screenSize();
+                Rect bounds = OcrFallbackRegion.around(
+                        x, y, windowBounds, screen[0], screen[1],
+                        getResources().getDisplayMetrics().density);
+                if (bounds == null) {
+                    continue;
+                }
+                // A password field is deliberately excluded from the node selector.
+                // Do not reintroduce it through the screenshot fallback.
+                TreeSnapshot tree = snapshotTree(
+                        root, windowRoot.layer);
+                if (tree.exhausted) {
+                    trace("gesture=" + gestureId + " OCR fallback skipped incomplete tree");
+                    return null;
+                }
+                Rect protectedBounds = new Rect(bounds);
+                int screenshotMargin = Math.max(1,
+                        Math.round(getResources().getDisplayMetrics().density));
+                protectedBounds.inset(-screenshotMargin, -screenshotMargin);
+                if (OcrFallbackRegion.overlapsPassword(protectedBounds, tree.nodes)) {
+                    trace("gesture=" + gestureId + " OCR fallback skipped password");
+                    return null;
+                }
+                trace("gesture=" + gestureId + " OCR fallback bounds="
+                        + bounds.flattenToString());
+                return new OcrFallback(bounds, packageName);
+            }
+            return null;
+        } catch (Throwable error) {
+            DragShareLog.w(TAG, "gesture=" + gestureId + " OCR fallback inspection failed", error);
+            return null;
+        } finally {
+            for (WindowRoot windowRoot : roots) {
+                recycleNode(windowRoot.root);
+            }
+        }
     }
 
     private void applyMode() {
@@ -404,7 +464,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         });
     }
 
-    private List<AccessibilityNodeSnapshot> snapshotTree(
+    private TreeSnapshot snapshotTree(
             AccessibilityNodeInfo root,
             int layer) {
         List<AccessibilityNodeSnapshot> snapshots = new ArrayList<>();
@@ -413,7 +473,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         if (budget.exhausted) {
             DragShareLog.w(TAG, "node traversal budget exhausted nodes=" + budget.nodeCount);
         }
-        return snapshots;
+        return new TreeSnapshot(snapshots, budget.exhausted);
     }
 
     private void traverse(
@@ -590,6 +650,26 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         WindowRoot(AccessibilityNodeInfo root, int layer) {
             this.root = root;
             this.layer = layer;
+        }
+    }
+
+    static final class OcrFallback {
+        final Rect bounds;
+        final String sourcePackage;
+
+        OcrFallback(Rect bounds, String sourcePackage) {
+            this.bounds = new Rect(bounds);
+            this.sourcePackage = sourcePackage;
+        }
+    }
+
+    private static final class TreeSnapshot {
+        final List<AccessibilityNodeSnapshot> nodes;
+        final boolean exhausted;
+
+        TreeSnapshot(List<AccessibilityNodeSnapshot> nodes, boolean exhausted) {
+            this.nodes = nodes;
+            this.exhausted = exhausted;
         }
     }
 

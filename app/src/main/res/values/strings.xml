@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ocr_action">识别图片文字</string>
+    <string name="ocr_recognizing">正在识别图片文字…</string>
+    <string name="ocr_retry">重试</string>
+    <string name="ocr_invalid_image">请从图片分享菜单打开文字识别</string>
+    <string name="ocr_read_failed">无法读取图片，请重新分享</string>
+    <string name="ocr_failed">图片识别失败，可以重试</string>
+    <string name="ocr_no_text">没有识别到文字，请换一张更清晰的图片</string>
     <string name="app_name">HyperDragShare</string>
     <string name="xposed_description">HyperDragShare：为传送门增加跟手预览、可配置分享菜单、文本分词和图片本地保存</string>
     <string name="accessibility_service_label">HyperDragShare</string>

@@ -29,7 +29,13 @@ final class PortalContentCaptureSource {
         }
         try {
             Bitmap value = (Bitmap) XposedHelpers.callStaticMethod(serviceClass, "getBitmap");
-            return CapturedContent.image(value, null, null, false);
+            if (value == null || value.isRecycled()) {
+                return null;
+            }
+            // HyperOS 4's cancelTask() recycles the service-owned sBitmap. The
+            // module stages images asynchronously, so keep an independent snapshot.
+            Bitmap snapshot = value.copy(Bitmap.Config.ARGB_8888, false);
+            return CapturedContent.image(snapshot, null, null, true);
         } catch (Throwable ignored) {
             return null;
         }

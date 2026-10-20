@@ -62,6 +62,7 @@ class TextSegmentationActivity : ComponentActivity() {
     private var currentText = ""
     private var currentSegment: IntArray? = null
     private var animatedDismissRequester: (() -> Unit)? = null
+    private val requests = LatestRequest()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -164,24 +165,30 @@ class TextSegmentationActivity : ComponentActivity() {
     }
 
     private fun segmentLocally(text: String) {
+        val request = requests.begin()
         Thread({
             try {
                 val result = TextSegmenter.get(this).segment(text)
                 runOnUiThread {
-                    if (!isFinishing) {
+                    if (requests.accepts(request) && !isFinishing && !isDestroyed) {
                         handleSegmentResult(text, result)
                     }
                 }
             } catch (error: Throwable) {
                 DragShareLog.w(TAG, "local text segmentation failed", error)
                 runOnUiThread {
-                    if (!isFinishing) {
+                    if (requests.accepts(request) && !isFinishing && !isDestroyed) {
                         Toast.makeText(this, R.string.a_msg_no_words, Toast.LENGTH_SHORT).show()
                         finish()
                     }
                 }
             }
         }, "drag-share-segmenter").start()
+    }
+
+    override fun onDestroy() {
+        requests.invalidate()
+        super.onDestroy()
     }
 
     private fun handleSegmentResult(

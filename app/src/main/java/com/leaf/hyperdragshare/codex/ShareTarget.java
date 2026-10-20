@@ -76,6 +76,17 @@ final class ShareTarget {
                 true);
     }
 
+    static ShareTarget imageOcr(Drawable icon) {
+        return new ShareTarget(
+                new ComponentName(BuildConfig.APPLICATION_ID,
+                        "com.leaf.hyperdragshare.codex.ImageOcrActivity"),
+                "识别图片文字",
+                icon,
+                DragShareSettings.TARGET_IMAGE_OCR,
+                "builtin",
+                true);
+    }
+
     String key() {
         return key;
     }
@@ -106,5 +117,9 @@ final class ShareTarget {
 
     boolean isTextSegmentation() {
         return builtIn && DragShareSettings.TARGET_TEXT_SEGMENTATION.equals(key);
+    }
+
+    boolean isImageOcr() {
+        return builtIn && DragShareSettings.TARGET_IMAGE_OCR.equals(key);
     }
 }

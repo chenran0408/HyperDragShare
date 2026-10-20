@@ -61,6 +61,19 @@
             android:taskAffinity="com.leaf.hyperdragshare.codex.overlay"
             android:theme="@style/Theme.DragShare.BigBangOverlay" />
 
+        <activity
+            android:name=".ImageOcrActivity"
+            android:label="@string/ocr_action"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".DragShareAccessibilityService"
             android:exported="true"
