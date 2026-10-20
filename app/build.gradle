@@ -13,8 +13,8 @@ android {
         applicationId 'com.leaf.hyperdragshare.codex'
         minSdk 33
         targetSdk 34
-        versionCode 145
-        versionName '1.7.121'
+        versionCode 146
+        versionName '1.7.122'
     }
 
     compileOptions {

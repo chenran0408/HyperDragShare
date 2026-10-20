@@ -918,3 +918,9 @@ System UID临时进程没有AMS应用记录，不能通过ContentResolver查询P
 Root helper仅在serve连接的反射/权限边界返回结构化启动错误，保留别的UiAutomation会话。面积与点取跨进程共享尚未实现。另修复evdev本帧轴先于接触开始时被清零、面积确认后移动/缩小未立即作废迟到结果的错误；4个回归用例，186项测试、Lint及构建通过。
 
 145真机通过生成文字8字、图片AICR83字原页分词、bilipai提醒标题8字、返回取消与真实占用错误。最终构建233确认配置禁用不连接且只显示关闭，设置已恢复；其它正向路径在同代码构建232验证。评论区、面积输入、旋转/息屏等不能据此标为完成。详见POINT_CAPTURE.md和DEVICE_VALIDATION.md。
+
+### 1.7.122：现代菜单换边清理
+
+repositionMenu在丢弃旧现代菜单引用前，取消退出回调并直接removeOverlayView/dispose；避免新菜单show取消旧窗口唯一清理机会。保留同边离开/重入动画与原系统手势，不增加兼容分支或回退。debug-only MenuLifecycleProbe用生成文字与模块悬浮窗复现旧对象未disposed，修复后右/上/左换边、离开、底部重开和取消全部通过。它不模拟系统输入、不读取原页面，也不证明传送门触发或真实分享。
+
+186项单测、Lint和构建通过，146安装/Portal与Root握手通过，设置未改。具体失败对照、APK哈希和未验收范围见DEVICE_VALIDATION.md。

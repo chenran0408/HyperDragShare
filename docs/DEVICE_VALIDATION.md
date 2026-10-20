@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.121 / versionCode 145。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 145。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.122 / versionCode 146。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 146。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.121 / 145；186 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.122 / 146；186 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -649,3 +649,14 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 输入状态4个新增回归用例通过；真实手指面积、迟到候选接管未验。旧事件复核34个DOWN帧均有X/Y而无尺寸，不支持“本帧顺序导致旧零尺寸”的判断；只读能力表hds121-input-capabilities.txt仍不能代替真实轴值。参考APK无文字300ms分支也不能当成面积生效证据。
 - 测试清理：诊断应用及/data/local/tmp/hds-stash-probe.apk已删除，无helper/UiAutomation残留；原中转站7项未改；临时磁贴全表恢复；文字/图片开关均true；bilipai原任务置前、休息提醒保留。截图仅留本机，不提交私人画面。
 - 尚未验收：评论区点取、普通长按/真实面积、面积开启与点取连接共享、识别中取消、息屏/旋转、完整深色切换、最新其它菜单方向、115旧ANR与复制编辑浮层遮挡。
+
+## 2026-10-21：1.7.122 现代菜单换边窗口释放
+
+- 根因：repositionMenu在已展开时先安排旧现代菜单退出，随后覆盖modernMenuView/window；下一次show取消原清理回调，旧回调自身也因对象不匹配而不清理，导致旧Dialog和模糊监听失去所有权。现在换边时取消旧回调并立即销毁旧窗口，再创建新菜单。不增加重试或另一种窗口回退。
+- debug-only MenuLifecycleProbe仅向生产Controller送入生成文字和坐标，使用模块TYPE_APPLICATION_OVERLAY；不读取节点、截屏、注入系统手势或使用Root。修复前构建235真机明确失败：oldWindowDisposed=false，Changing edges retained the old modern menu window，work/hds122-before-probe.txt。首轮诊断曾因非显示Context崩溃，修正为DisplayContext后才开始有效复现，不计为产品缺陷。
+- 最终构建236在同机同一检查通过：右→上→左各次替换旧对象均disposed，离开等待退出后disposed，底部重开isShowing，取消后disposed；work/hds122-after-probe.txt。这证明共享Controller窗口生命周期，**不是传送门UID/真实手指触发，也不是四样式视觉16组合验收**。没有执行落点分享，不用该结果替代接收应用测试。
+- testDebugUnitTest、lintDebug、assembleDebug通过；186项单测0失败，Lint 0 errors/139 warnings/2 hints。最终APK原位安装146，debug签名仍b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0；设备base.apk与outputs/HyperDragShare-1.7.122-debug.apk SHA256一致：474C596B92CB42A844E2B9DDA3ED730D6FCFDC6842DB0AC753C7C94220A62333。
+- Portal初次后台startservice返回app is in background，不能计为重载成功。随后通过已有传送门设置Activity启动宿主，再启动原服务；等实际异步报告后injected_version=146、portal_root_version=146、root_granted=true。只重载传送门，未重启android/AICR或整机。
+- 设置XML前后按键值比较完全一致；未增加中转站条目或磁贴。受控探针不截屏，最初Via现状截图仅留本机、不提交。独立探针finally销毁包含缺陷旧对象在内的全部窗口，dumpsys未见DragShare菜单残留；无Root取词helper/UiAutomation。原bilipai任务2183恢复置前，没有播放操作。
+- 一组Via本地页面打开/节点dump/截图命令被自动审批拒绝，未执行，不计为证据；未重试同一路径。临时本机HTTP进程已通过其活跃句柄停止，adb reverse已移除。后续改用不读取页面的受控诊断，安装/运行成功。
+- 仍缺：传送门真实手指四样式四方向、松手分享/滚动、面积数据、bilipai评论入口、115旧侧条ANR。当前修复不证明这些已完成。

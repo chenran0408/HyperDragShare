@@ -1153,8 +1153,11 @@ final class DragShareController {
                 removeLinearMenuImmediately(previousMenuView);
             }
         }
-        if (!wasShown && modernMenuWindow != null) {
-            modernMenuWindow.dispose();
+        if (isModernStyle()) {
+            // The old exit callback belongs to these references. Replacing them would
+            // cancel that callback and strand its window and blur listener.
+            cancelModernMenuDispose();
+            removeOverlayView(previousMenuView, modernMenuView, modernMenuWindow);
         }
         menuView = null;
         modernMenuView = null;
