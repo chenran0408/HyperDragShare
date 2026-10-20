@@ -417,7 +417,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
 
     @Override
     public void onScrollChanged() {
-        if (!hasSelection()) return;
+        if (!mEnableFakeSelectBar || !hasSelection()) return;
         if (mSelectBar != null && mFakeSelectBar != null) {
             final View pinnedBarContainer = (View) mFakeSelectBar.getParent();
             final Rect pinnedBarRect = new Rect();

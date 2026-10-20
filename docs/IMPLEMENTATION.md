@@ -867,3 +867,9 @@ Controller把已有sourceBounds与当前屏幕尺寸经受限Provider传入分�
 DragShareSettings新增COLOR_SYSTEM=2，0/1及默认浅色保持不变。Java按当前uiMode统一解析，Compose通过LocalConfiguration更新并按dark重新创建ThemeController；设置、分词、中转站、OCR、搜索、校准和菜单共用。原生View菜单只保证创建/重绘时读取当前模式，未添加常驻监听。新增主题存储/Provider往返和模式解析测试，合计172项。
 
 debug AicrOcrProbe移除重复Binder协议，调用生产AicrOcrClient，生成中文混排样本、绑定前取消后复用，以及ImageOcrOverlay实际结果入口。目标机普通UID中文成功，原页38字符浮窗和浅深浅即时换色已验；具体耗时、复原设置与剩余范围见DEVICE_VALIDATION.md。生产AICR协议本批未变。短文本居中与旧词块行高问题仍需下一批修正。
+
+### 1.7.112：紧凑词块与选词栏模式修正
+
+去掉BoomChipPage按剩余高度自动添加对称padding的居中逻辑，让正文从滚动区顶部开始；保留28dp滚动内边距和30dp工具栏预留。词块与标点改用无固有高度的圆角shape，分别显式设置9dp/4dp水平padding以匹配现有18dp/8dp宽度计算，最小高度32dp，行外padding由5dp降为2dp；段落间8dp保留。删去不再需要的居中回调和缓存字段。
+
+真机首次选词发现工具栏遮挡：onScrollChanged未判断mEnableFakeSelectBar，仍在现代面板启用旧的33dp顶部固定备用栏。现尊重模式开关，不更改真实工具栏坐标公式，也不增加另一组偏移兜底。设备最终验收见DEVICE_VALIDATION.md。本对话持续测试授权已同步到AGENTS.md，其他对话不继承此授权。

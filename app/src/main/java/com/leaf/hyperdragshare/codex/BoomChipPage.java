@@ -43,8 +43,6 @@ public class BoomChipPage {
     private final TextView mAdjacentTopHint;
     private final TextView mAdjacentBottomHint;
     private final int mScrollerBaseInset;
-    private final int mTableBasePaddingTop;
-    private final int mTableBasePaddingBottom;
 
     Serializable mSavedData;
     private OnAdjacentRequestListener mOnAdjacentRequestListener;
@@ -161,8 +159,6 @@ public class BoomChipPage {
                 releaseAdjacentPull(offset, triggered);
             }
         });
-        mTableBasePaddingTop = mBoomTable.getPaddingTop();
-        mTableBasePaddingBottom = mBoomTable.getPaddingBottom();
     }
 
     public interface OnAdjacentRequestListener {
@@ -268,7 +264,6 @@ public class BoomChipPage {
                 @Override
                 public void onGlobalLayout() {
                     mBoomConent.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                    updateScrollerInsetsForContent();
                     restoreSelectedState();
                 }
             });
@@ -448,7 +443,6 @@ public class BoomChipPage {
             @Override
             public void onGlobalLayout() {
                 mBoomConent.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                updateScrollerInsetsForContent();
                 restoreSelectedState();
             }
         });
@@ -490,7 +484,6 @@ public class BoomChipPage {
                 @Override
                 public void onGlobalLayout() {
                     mBoomConent.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                    updateScrollerInsetsForContent();
                     restoreSelectedState();
                 }
             });
@@ -560,12 +553,6 @@ public class BoomChipPage {
         }
         notifySelectionChanged();
         mBoomConent.requestLayout();
-        mScroller.post(new Runnable() {
-            @Override
-            public void run() {
-                updateScrollerInsetsForContent();
-            }
-        });
         if (animate) {
             mBoomConent.getViewTreeObserver().addOnGlobalLayoutListener(mDoBoomAnimation);
         }
@@ -731,28 +718,6 @@ public class BoomChipPage {
                     }
                 })
                 .start();
-    }
-
-    private void updateScrollerInsetsForContent() {
-        int viewportHeight = mScroller.getHeight();
-        int contentHeight = mBoomConent.getHeight();
-        if (viewportHeight <= 0 || contentHeight <= 0) {
-            return;
-        }
-        int symmetricBaseInset = Math.max(mTableBasePaddingTop, mTableBasePaddingBottom);
-        int availableHeight = viewportHeight - (mScrollerBaseInset * 2) - (symmetricBaseInset * 2);
-        int extraInset = Math.max(0, (availableHeight - contentHeight) / 2);
-        int targetTableTop = symmetricBaseInset + extraInset;
-        int targetTableBottom = symmetricBaseInset + extraInset;
-        if (mBoomTable.getPaddingTop() == targetTableTop && mBoomTable.getPaddingBottom() == targetTableBottom) {
-            return;
-        }
-        mBoomTable.setPadding(
-                mBoomTable.getPaddingLeft(),
-                targetTableTop,
-                mBoomTable.getPaddingRight(),
-                targetTableBottom
-        );
     }
 
     public class BoomChip {

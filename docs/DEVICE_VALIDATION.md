@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.111 / versionCode 135。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 135。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.112 / versionCode 136。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 136。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.111 / 135；172 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.112 / 136；172 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -523,3 +523,13 @@ APK outputs/HyperDragShare-1.7.110-debug.apk。下一批优先做可独立推进
 - 设置页选择系统模式后深色显示正确。存活分词浮窗浅→深→浅，文字、词块、底色及工具栏同步更新；截图work/hds111-overlay-day.png、hds111-overlay-switch-night.png、hds111-overlay-switch-day.png（本机工作目录，不提交用户画面）。测试后系统night模式恢复auto，模块主题恢复原浅色0。
 - 暴露未修复UI问题：短文本整体垂直居中；单行旧nine-patch最小高度与外层padding导致行距大。已定位BoomChipPage.updateScrollerInsetsForContent与词块背景/布局，下一批改。没有把这项标为完成。
 - 未验：真实复杂图片、屏幕/区域AICR、UI取消按钮、系统其他OCR客户端并发；中转站等其余页面跟随切换；面积实手校准与bilipai普通长按仍未通过。
+
+## 2026-10-21：1.7.112 紧凑分词与首行工具栏
+
+最终172项测试、0失败/错误，Lint、assembleDebug通过；原位安装136。移除短文本自动居中与旧nine-patch固有高度，词块最小32dp、外层上下2dp，保留段落8dp与工具栏空间，删除不再使用的居中方法及回调。
+
+设备生成38字符中英三行验证：首行词块范围y1161~1281，下一行y1327~1447，行节奏约44dp（本机density3.75），较旧约62dp紧凑；短文本从预留区顶部起排。首次选词实测暴露旧备用工具栏仍被onScrollChanged唤出覆盖首行，已修正mEnableFakeSelectBar判断。最终重新构建安装后，点“传送门”显示“已选3/38”，文字完整、选中底色清晰，真实工具栏在上方，不再重叠；证据work/hds112-toolbar-fixed.png。本机截图含原应用画面，不提交仓库。
+
+AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms；这不作为性能基准。实验结束恢复原AICR选择true，系统夜间auto及模块浅色0保持原设置。传送门重新加载136；没有因为纯UI变更重启android/AICR作用域，也不声称所有进程已加载本次代码。
+
+边界：本批仅复测首行单词选择和布局；首次旧布局测试第二次点击误触旧备用栏的搜索，未提交搜索内容或向他人分享。修复后没有据此宣称多选、合并、长文滚动/悬停工具栏、横屏与大字体均通过。当前窗口仍按用户已保存高度显示，尚未按短文本自动缩高。真实面积采集、bilipai普通长按、Root图片分支及实际中转站接收继续待完成。

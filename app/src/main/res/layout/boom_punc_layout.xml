@@ -14,7 +14,12 @@
         android:singleLine="true"
         android:ellipsize="end"
         android:maxWidth="260dp"
-        android:background="@drawable/boom_chips_punctuate"
+        android:background="@drawable/boom_chip_surface"
+        android:minWidth="@dimen/punc_min_width"
+        android:minHeight="32dp"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="4dp"
+        android:includeFontPadding="false"
         android:textColor="#ffffff"
         android:textSize="@dimen/chip_text_size" />
 </LinearLayout>
