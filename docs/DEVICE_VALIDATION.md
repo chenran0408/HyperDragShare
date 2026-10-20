@@ -210,3 +210,5 @@
 148 项测试、Lint、assembleDebug 通过；新测试覆盖四边、中央不触发、角落保持，以及旧位置配置归一。下一轮需实测四种外观逐边展开、同手势换边、落点分享和退出。
 
 本批另将 BigBangOverlayContent 和动作枚举从 Activity 提取到独立文件，保留原有 Compose 内容和回调，为独立窗口复用准备；没有因此声称原页弹窗完成。
+
+1.7.80 回归补充：新增 DragMenuDirectionTest，直接调用 Controller 的真实 refreshDisplayGeometry，覆盖四种样式×四方向，断言所选侧保持。临时重新加入刷新重置到底部的故障后测试失败（style=0 edge=0 expected 0 but was 1）；恢复源码后 149 项测试、Lint、构建通过。临时故障已移除，未操作设备，APK 行为版本不变。
