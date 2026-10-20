@@ -6,7 +6,7 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.65 / versionCode 89。沿用原包名和 debug 签名，原位升级成功。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.66 / versionCode 90。沿用原包名和 debug 签名，原位升级成功。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
 
 ## 2026-10-20：1.7.62 作用域软重启
@@ -80,9 +80,17 @@
 - 已接通的候选链路：独立尺寸门槛与稳定确认、真实 UP 后取节点文字或截取图片交给现有 OCR；无障碍服务需手动开启，锁屏、解锁后 800ms、应用黑名单和多指取消会阻止触发。**这些全局行为仍未实机验收**，当前不能绕过缺失的尺寸数据来启用。
 - 接下来只读核对 MI Big Bang 的真实面积触发代码、Android MotionEvent 与小米驱动接口；不把长按时长或坐标移动冒充接触面积，不写 sysfs 或改系统权限来掩盖限制。
 
+### 1.7.66：Android 触摸对照及作用域重启后复测
+
+- 123 项单测、Lint、构建通过；同包名原位安装成功，versionCode 90。
+- 校准页将“支持接触尺寸”修正为“已声明尺寸轴，尚未收到有效值”；合并两个重复重置入口，使用单一“开始/重新校准”按钮。
+- 在本应用 dispatchTouchEvent 中观察 touchMajor、touchMinor、size，仅记录尺寸，不记录被触页面文字。重启前应用进程 9354 的三次按压均为 0.0/0.0/0.000。
+- 用户随后重启 LSPosed 作用域，再次反馈仍无有效尺寸。复核 system_server PID 6560、模块进程 11979；该进程的多次按压日志仍为 0.0/0.0/0.000。实际截图确认新文案、单按钮、原始与 Android 尺寸均无效。**未把重启后结果当作面积触发通过。**
+- MI Big Bang 静态调用链已定位，详细判断、差别和待核验项见 CONTACT_AREA_TRIGGER.md。
+
 ## 下一批
 
-1. 补齐相邻选词合并，改善更多菜单，并验收选区与重排行为。
+1. 中转站持久层、Provider IPC、内置拖拽目标和 Miuix 列表闭环；面积输入继续只读研究，不重复请求无效校准。
 2. 在已激活状态复现简洁/现代菜单，定位触发/窗口/命中的真实故障。
 3. 实现本地持久中转站（当前临时图片 Provider 不等同中转站）。
 4. 验证 AICR 导出 Service 的绑定与 Binder OCR 方法权限，再决定小爱可选引擎接入；保留 ML Kit。
