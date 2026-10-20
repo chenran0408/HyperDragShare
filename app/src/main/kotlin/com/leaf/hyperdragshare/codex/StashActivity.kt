@@ -59,6 +59,8 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SearchBar
+import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
@@ -80,6 +82,8 @@ class StashActivity : ComponentActivity() {
     private var previewEntry by mutableStateOf<StashStore.Entry?>(null)
     private var selectionMode by mutableStateOf(false)
     private var selectedIds by mutableStateOf<Set<String>>(emptySet())
+    private var searchQuery by mutableStateOf("")
+    private var kindFilter by mutableStateOf("all")
     private var pendingImport: Intent? = null
     private var shareImported = false
     private val importLock = Mutex()
@@ -88,6 +92,8 @@ class StashActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         shareImported = savedInstanceState?.getBoolean("share_imported") == true
+        searchQuery = savedInstanceState?.getString("search_query").orEmpty()
+        kindFilter = savedInstanceState?.getString("kind_filter") ?: "all"
         pendingImport = intent.takeIf { !shareImported && isSupportedShare(it) }
         val dark = DragShareSettings.readLocal(this).colorMode == DragShareSettings.COLOR_DARK
 
@@ -100,8 +106,16 @@ class StashActivity : ComponentActivity() {
                     selectionMode = false
                     selectedIds = emptySet()
                 }
+                val visibleEntries = entries.filter {
+                    (kindFilter == "all" || it.kind == kindFilter) &&
+                        (searchQuery.isBlank() || it.text.orEmpty().contains(searchQuery.trim(), ignoreCase = true))
+                }
                 StashScreen(
-                    entries = entries,
+                    entries = visibleEntries,
+                    searchQuery = searchQuery,
+                    kindFilter = kindFilter,
+                    onQueryChange = { searchQuery = it },
+                    onKindChange = { kindFilter = it },
                     loading = loading,
                     message = message,
                     pendingDelete = pendingDelete,
@@ -118,7 +132,8 @@ class StashActivity : ComponentActivity() {
                         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
                     },
                     onToggleSelectAll = {
-                        selectedIds = if (selectedIds.size == entries.size) emptySet() else entries.map { it.id }.toSet()
+                        selectedIds = if (selectedIds.size == visibleEntries.size) emptySet()
+                            else visibleEntries.map { it.id }.toSet()
                     },
                     onBatchShare = ::shareEntries,
                     onBatchDeleteRequest = { confirmBatchDelete = true },
@@ -169,6 +184,8 @@ class StashActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("share_imported", shareImported)
+        outState.putString("search_query", searchQuery)
+        outState.putString("kind_filter", kindFilter)
         super.onSaveInstanceState(outState)
     }
 
@@ -378,6 +395,10 @@ class StashActivity : ComponentActivity() {
 @Composable
 private fun StashScreen(
     entries: List<StashStore.Entry>,
+    searchQuery: String,
+    kindFilter: String,
+    onQueryChange: (String) -> Unit,
+    onKindChange: (String) -> Unit,
     loading: Boolean,
     message: String?,
     pendingDelete: StashStore.Entry?,
@@ -404,6 +425,7 @@ private fun StashScreen(
     onDeleteConfirm: (StashStore.Entry) -> Unit,
     onPreviewDismiss: () -> Unit,
 ) {
+    var searchExpanded by remember { mutableStateOf(false) }
     Scaffold(topBar = {
         TopAppBar(
             title = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
@@ -425,6 +447,36 @@ private fun StashScreen(
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (!selectionMode) {
+                item(key = "filters") {
+                    Column {
+                        SearchBar(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            inputField = {
+                                InputField(
+                                    query = searchQuery,
+                                    onQueryChange = onQueryChange,
+                                    onSearch = { searchExpanded = false },
+                                    expanded = searchExpanded,
+                                    onExpandedChange = { searchExpanded = it },
+                                    label = "搜索已存文字",
+                                )
+                            },
+                            expanded = searchExpanded,
+                            onExpandedChange = { searchExpanded = it },
+                        ) {}
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            listOf("all" to "全部", StashStore.KIND_TEXT to "文字",
+                                StashStore.KIND_IMAGE to "图片").forEach { (kind, label) ->
+                                TextButton(
+                                    text = if (kind == kindFilter) "$label · ${entries.size}" else label,
+                                    onClick = { onKindChange(kind) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             if (message != null) {
                 item(key = "error") {
                     StashMessageCard(message = message, loading = loading, onRetry = onRetry)
@@ -434,7 +486,9 @@ private fun StashScreen(
                 item(key = "loading") { StashMessageCard(message = "正在读取中转站…", loading = true) }
             } else if (entries.isEmpty() && message == null) {
                 item(key = "empty") {
-                    StashMessageCard(message = "中转站还是空的。可从分享菜单发送文字或图片到这里。")
+                    StashMessageCard(message = if (searchQuery.isNotBlank() || kindFilter != "all")
+                        "没有匹配的内容。可清空搜索或切换到全部。"
+                        else "中转站还是空的。可从分享菜单发送文字或图片到这里。")
                 }
             } else {
                 if (selectionMode) {
