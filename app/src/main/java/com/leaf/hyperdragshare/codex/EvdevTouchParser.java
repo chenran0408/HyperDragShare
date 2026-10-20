@@ -2,10 +2,17 @@ package com.leaf.hyperdragshare.codex;
 
 import android.view.MotionEvent;
 
+import java.util.Arrays;
+
 /** Converts multi-touch evdev frames into one stable primary pointer stream. */
 final class EvdevTouchParser {
     interface Listener {
-        void onFrame(int action, float rawX, float rawY);
+        void onFrame(
+                int action,
+                float rawX,
+                float rawY,
+                int rawTouchMajor,
+                int rawTouchMinor);
     }
 
     static final int EV_SYN = 0;
@@ -14,6 +21,8 @@ final class EvdevTouchParser {
     static final int SYN_REPORT = 0;
     static final int BTN_TOUCH = 330;
     static final int ABS_MT_SLOT = 47;
+    static final int ABS_MT_TOUCH_MAJOR = 48;
+    static final int ABS_MT_TOUCH_MINOR = 49;
     static final int ABS_MT_POSITION_X = 53;
     static final int ABS_MT_POSITION_Y = 54;
     static final int ABS_MT_TRACKING_ID = 57;
@@ -23,6 +32,8 @@ final class EvdevTouchParser {
     private final Listener listener;
     private final float[] slotX = new float[MAX_SLOTS];
     private final float[] slotY = new float[MAX_SLOTS];
+    private final int[] slotTouchMajor = new int[MAX_SLOTS];
+    private final int[] slotTouchMinor = new int[MAX_SLOTS];
     private final int[] trackingId = new int[MAX_SLOTS];
 
     private int currentSlot;
@@ -38,6 +49,8 @@ final class EvdevTouchParser {
     private boolean ignoreUntilAllPointersUp;
     private float lastX = Float.NaN;
     private float lastY = Float.NaN;
+    private int lastTouchMajor;
+    private int lastTouchMinor;
 
     EvdevTouchParser(Listener listener) {
         this.listener = listener;
@@ -62,7 +75,12 @@ final class EvdevTouchParser {
 
     void cancel() {
         if (gestureActive && Float.isFinite(lastX) && Float.isFinite(lastY)) {
-            listener.onFrame(MotionEvent.ACTION_CANCEL, lastX, lastY);
+            listener.onFrame(
+                    MotionEvent.ACTION_CANCEL,
+                    lastX,
+                    lastY,
+                    lastTouchMajor,
+                    lastTouchMinor);
         }
         resetGesture();
         ignoreUntilAllPointersUp = false;
@@ -87,6 +105,8 @@ final class EvdevTouchParser {
                 trackingId[currentSlot] = value;
                 slotX[currentSlot] = Float.NaN;
                 slotY[currentSlot] = Float.NaN;
+                slotTouchMajor[currentSlot] = 0;
+                slotTouchMinor[currentSlot] = 0;
                 sawTrackingStart = true;
             }
             frameChanged = true;
@@ -97,6 +117,12 @@ final class EvdevTouchParser {
             frameChanged = true;
         } else if (code == ABS_MT_POSITION_Y) {
             slotY[currentSlot] = value;
+            frameChanged = true;
+        } else if (code == ABS_MT_TOUCH_MAJOR) {
+            slotTouchMajor[currentSlot] = value;
+            frameChanged = true;
+        } else if (code == ABS_MT_TOUCH_MINOR) {
+            slotTouchMinor[currentSlot] = value;
             frameChanged = true;
         }
     }
@@ -110,6 +136,7 @@ final class EvdevTouchParser {
             if (trackedCount == 0 && (!buttonTouchSeen || !buttonTouchDown)) {
                 ignoreUntilAllPointersUp = false;
                 clearGestureSignals();
+                clearTouchSizes();
             }
             finishFrame();
             return;
@@ -127,7 +154,12 @@ final class EvdevTouchParser {
                 primarySlot = candidate;
                 gestureActive = true;
                 setLast(candidate);
-                listener.onFrame(MotionEvent.ACTION_DOWN, lastX, lastY);
+                listener.onFrame(
+                        MotionEvent.ACTION_DOWN,
+                        lastX,
+                        lastY,
+                        lastTouchMajor,
+                        lastTouchMinor);
             }
             finishFrame();
             return;
@@ -153,10 +185,21 @@ final class EvdevTouchParser {
         if (hasCoordinates(primarySlot)) {
             float nextX = slotX[primarySlot];
             float nextY = slotY[primarySlot];
-            if (nextX != lastX || nextY != lastY) {
+            int nextTouchMajor = slotTouchMajor[primarySlot];
+            int nextTouchMinor = slotTouchMinor[primarySlot];
+            if (nextX != lastX || nextY != lastY
+                    || nextTouchMajor != lastTouchMajor
+                    || nextTouchMinor != lastTouchMinor) {
                 lastX = nextX;
                 lastY = nextY;
-                listener.onFrame(MotionEvent.ACTION_MOVE, lastX, lastY);
+                lastTouchMajor = nextTouchMajor;
+                lastTouchMinor = nextTouchMinor;
+                listener.onFrame(
+                        MotionEvent.ACTION_MOVE,
+                        lastX,
+                        lastY,
+                        lastTouchMajor,
+                        lastTouchMinor);
             }
         }
         finishFrame();
@@ -164,14 +207,24 @@ final class EvdevTouchParser {
 
     private void emitUp() {
         if (gestureActive && Float.isFinite(lastX) && Float.isFinite(lastY)) {
-            listener.onFrame(MotionEvent.ACTION_UP, lastX, lastY);
+            listener.onFrame(
+                    MotionEvent.ACTION_UP,
+                    lastX,
+                    lastY,
+                    lastTouchMajor,
+                    lastTouchMinor);
         }
         resetGesture();
     }
 
     private void emitCancelAndIgnore() {
         if (gestureActive && Float.isFinite(lastX) && Float.isFinite(lastY)) {
-            listener.onFrame(MotionEvent.ACTION_CANCEL, lastX, lastY);
+            listener.onFrame(
+                    MotionEvent.ACTION_CANCEL,
+                    lastX,
+                    lastY,
+                    lastTouchMajor,
+                    lastTouchMinor);
         }
         resetGesture();
         ignoreUntilAllPointersUp = true;
@@ -180,6 +233,8 @@ final class EvdevTouchParser {
     private void setLast(int slot) {
         lastX = slotX[slot];
         lastY = slotY[slot];
+        lastTouchMajor = slotTouchMajor[slot];
+        lastTouchMinor = slotTouchMinor[slot];
     }
 
     private int trackedPointerCount() {
@@ -238,6 +293,7 @@ final class EvdevTouchParser {
         primaryLifted = false;
         lastX = Float.NaN;
         lastY = Float.NaN;
+        clearTouchSizes();
     }
 
     private void clearCoordinates() {
@@ -247,11 +303,20 @@ final class EvdevTouchParser {
         }
     }
 
+    private void clearTouchSizes() {
+        Arrays.fill(slotTouchMajor, 0);
+        Arrays.fill(slotTouchMinor, 0);
+        lastTouchMajor = 0;
+        lastTouchMinor = 0;
+    }
+
     private void resetSlots() {
         for (int index = 0; index < MAX_SLOTS; index++) {
             trackingId[index] = -1;
             slotX[index] = Float.NaN;
             slotY[index] = Float.NaN;
+            slotTouchMajor[index] = 0;
+            slotTouchMinor[index] = 0;
         }
         currentSlot = 0;
         buttonTouchSeen = false;

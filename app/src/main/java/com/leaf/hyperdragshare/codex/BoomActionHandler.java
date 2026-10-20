@@ -29,7 +29,6 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     private final int mRowMoveDownOffset;
     private final int mSelectRectMarginTop;
     private final int mSelectRectTopOffset;
-    private final int mSelectBarYOffset;
 
     int mSelectedTopRow = -1;
     int mSelectedBottomRow = -1;
@@ -51,7 +50,6 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
         if (mEnableFakeSelectBar) {
             mSelectRectMarginTop = res.getDimensionPixelOffset(R.dimen.select_rect_margin_top);
             mSelectRectTopOffset = res.getDimensionPixelOffset(R.dimen.select_rect_top_offset);
-            mSelectBarYOffset = 0;
         } else {
             int expand = res.getDimensionPixelOffset(R.dimen.chip_row_padding_top)
                     + (int) TypedValue.applyDimension(
@@ -61,7 +59,6 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
             );
             mSelectRectMarginTop = -expand;
             mSelectRectTopOffset = expand * 2;
-            mSelectBarYOffset = mRowMoveUpOffset;
         }
 
         initViews(mBoomPage.mBoomTable);
@@ -240,6 +237,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
                 mBoomPage.splitSelectedWordsToChars();
             }
         });
+        mSelectBar.findViewById(R.id.all_merge).setOnClickListener(v -> mergeSelectedWords());
         searchView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -278,6 +276,7 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
                 mBoomPage.splitSelectedWordsToChars();
             }
         });
+        mFakeSelectBar.findViewById(R.id.all_merge).setOnClickListener(v -> mergeSelectedWords());
         ImageView topSearchView = (ImageView) mFakeSelectBar.findViewById(R.id.all_search);
         topSearchView.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -306,6 +305,13 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
                 copy(getSelectedText());
             }
         });
+    }
+
+    private void mergeSelectedWords() {
+        if (!mBoomPage.mergeSelectedWords()) {
+            mToast.setText(R.string.bigbang_merge_select_adjacent);
+            mToast.show();
+        }
     }
 
     public boolean hasSelection() {
@@ -347,7 +353,11 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
     }
 
     private int getSelectBarY(int row) {
-        return mBoomPage.getRowTop(row) + mSelectBarYOffset;
+        int gap = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 4,
+                mBoomPage.mActivity.getResources().getDisplayMetrics());
+        return mBoomPage.getRowTop(row)
+                - (mEnableFakeSelectBar ? 0 : mSelectBar.getHeight() + gap);
     }
 
     private void showSelBarAndBgRect(int row) {

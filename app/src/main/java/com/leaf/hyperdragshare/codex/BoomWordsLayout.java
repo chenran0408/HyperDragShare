@@ -355,6 +355,64 @@ public class BoomWordsLayout {
         return mTouchedIndex;
     }
 
+    public int[] getSegments() {
+        int[] segment = new int[mWords.size() * 2 + 1];
+        int output = 0;
+        for (Word word : mWords) {
+            if (!word.punc) {
+                segment[output++] = word.start;
+                segment[output++] = word.start + word.word.length() - 1;
+            }
+        }
+        segment[output++] = -1;
+        for (Word word : mWords) {
+            if (word.punc) {
+                segment[output++] = word.start;
+                segment[output++] = word.start + word.word.length() - 1;
+            }
+        }
+        return segment;
+    }
+
+    /** Merge each adjacent selected run, preserving spaces and paragraph boundaries. */
+    public TreeSet<Integer> mergeSelectedWords(TreeSet<Integer> selectedIds) {
+        if (selectedIds == null || selectedIds.size() < 2) {
+            return null;
+        }
+        RangeList<Word> newWords = new RangeList<Word>();
+        ArrayList<Integer> newHardBreaks = new ArrayList<Integer>();
+        TreeSet<Integer> newSelected = new TreeSet<Integer>();
+        boolean changed = false;
+        for (int i = 0; i < mWords.size(); ++i) {
+            if (isHardBreakIndex(i)) {
+                newHardBreaks.add(newWords.size());
+            }
+            Word word = mWords.get(i);
+            boolean selected = selectedIds.contains(i);
+            int end = i;
+            if (selected) {
+                while (end + 1 < mWords.size() && selectedIds.contains(end + 1)
+                        && !isHardBreakIndex(end + 1)) {
+                    ++end;
+                }
+                newSelected.add(newWords.size());
+            }
+            if (end > i) {
+                word = new Word(mOriText.substring(word.start, getWordEnd(end)), word.start, false);
+                changed = true;
+            }
+            newWords.add(word);
+            i = end;
+        }
+        if (!changed) {
+            return null;
+        }
+        mWords = newWords;
+        mHardBreaks = newHardBreaks;
+        generateLayout();
+        return newSelected;
+    }
+
     public TreeSet<Integer> splitSelectedWordsToChars(TreeSet<Integer> selectedIds) {
         if (selectedIds == null || selectedIds.isEmpty()) {
             return null;
@@ -369,7 +427,7 @@ public class BoomWordsLayout {
             }
             final Word word = mWords.get(i);
             final boolean selected = selectedIds.contains(i);
-            if (!selected || word.punc || word.word.length() <= 1) {
+            if (!selected || word.punc || word.word.codePointCount(0, word.word.length()) <= 1) {
                 newWords.add(word);
                 if (selected) {
                     newSelected.add(newWords.size() - 1);
@@ -380,8 +438,10 @@ public class BoomWordsLayout {
             for (int offset = 0; offset < word.word.length();) {
                 final int codePoint = word.word.codePointAt(offset);
                 final int next = offset + Character.charCount(codePoint);
-                newWords.add(new Word(word.word.substring(offset, next), word.start + offset, false));
-                newSelected.add(newWords.size() - 1);
+                if (!Character.isWhitespace(codePoint) && !Character.isSpaceChar(codePoint)) {
+                    newWords.add(new Word(word.word.substring(offset, next), word.start + offset, false));
+                    newSelected.add(newWords.size() - 1);
+                }
                 offset = next;
             }
         }

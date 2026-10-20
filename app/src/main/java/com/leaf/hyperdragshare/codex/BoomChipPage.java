@@ -317,6 +317,10 @@ public class BoomChipPage {
         return mLayout.getOriText();
     }
 
+    public int[] getCurrentSegments() {
+        return mLayout.getSegments();
+    }
+
     public String selectedTextOrOriginal() {
         return mBoomActionHandler != null && mBoomActionHandler.hasSelection()
                 ? mBoomActionHandler.getSelectedText()
@@ -399,6 +403,19 @@ public class BoomChipPage {
         TreeSet<Integer> newSelection = mLayout.splitSelectedWordsToChars(
                 new TreeSet<Integer>(mBoomActionHandler.mSelectedId)
         );
+        return rebuildWithSelection(newSelection);
+    }
+
+    public boolean mergeSelectedWords() {
+        if (mBoomActionHandler == null || !mBoomActionHandler.hasSelection()) {
+            return false;
+        }
+        return rebuildWithSelection(mLayout.mergeSelectedWords(
+                new TreeSet<Integer>(mBoomActionHandler.mSelectedId)
+        ));
+    }
+
+    private boolean rebuildWithSelection(TreeSet<Integer> newSelection) {
         if (newSelection == null || newSelection.isEmpty()) {
             return false;
         }

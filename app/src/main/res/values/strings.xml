@@ -27,6 +27,7 @@
     <string name="scope_restart_failed">软重启失败：%1$s</string>
     <string name="bigbang_overlay_title">文本分词</string>
     <string name="bigbang_action_edit">编辑</string>
+    <string name="bigbang_edit_apply">重新分词</string>
     <string name="bigbang_action_select_all">全选</string>
     <string name="bigbang_action_share_all">分享全部</string>
     <string name="bigbang_action_more">更多</string>
@@ -35,12 +36,14 @@
     <string name="bigbang_select_words_first">请先选中要拆分的词语</string>
     <string name="bigbang_ocr_source_missing">原图片不可用，请重新分享图片进行识字</string>
     <string name="bigbang_more_copy">复制所选文字</string>
-    <string name="bigbang_more_summary">选择要对当前文字执行的操作</string>
+    <string name="bigbang_more_summary">翻译文字或调整面板显示</string>
     <string name="bigbang_more_search">搜索所选文字</string>
     <string name="bigbang_more_dictionary">查词典</string>
     <string name="bigbang_more_translate">翻译</string>
     <string name="bigbang_more_share">分享所选文字</string>
     <string name="bigbang_more_split">拆分所选词语</string>
+    <string name="bigbang_more_merge">合并相邻选词</string>
+    <string name="bigbang_merge_select_adjacent">请选择同一段中至少两个相邻词语</string>
     <string name="bigbang_more_text_size">字号（%1$.0f sp）</string>
     <string name="bigbang_more_panel_height">面板高度（%1$d%%）</string>
     <string name="bigbang_more_panel_opacity">面板透明度（%1$d%%）</string>

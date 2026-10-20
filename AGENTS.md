@@ -9,12 +9,12 @@
 ## 工程基线
 
 - 工程类型：Android LSPosed 模块，Java/Kotlin 17，minSdk 33，targetSdk 34，compileSdk 37。
-- 当前分支版本：`1.7.54`，`versionCode 78`；使用 AGP 9.1.1 / Gradle 9.3.1。
+- 当前分支版本见 `app/build.gradle`；使用 AGP 9.1.1 / Gradle 9.3.1。
 - 已验证宿主：传送门 `4.2.1`，包名 `com.miui.contentextension`。
 - LSPosed API：82，入口为 `com.leaf.hyperdragshare.codex.MainHook`。
 - 可靠的同手势跟手依赖 root 读取 Linux evdev；MIUI 输入监听仅作回退。
-- 当前设备记录：`Xiaomi_Touch_Input_0`、`/dev/input/event7`、原始范围
-  `121999 x 265599`、屏幕 `1220 x 2656`。代码必须继续动态探测，不能硬编码这些值。
+- 当前目标为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17，设备和测试状态见
+  `docs/DEVICE_VALIDATION.md`。历史设备的 1220×2656 参数不适用于当前设备；代码必须动态探测。
 
 ## 不可破坏的约束
 
@@ -97,7 +97,8 @@
 
 ## 修改流程
 
-修改前先读 `docs/IMPLEMENTATION.md` 及相关源码，不要根据历史聊天或参考工程推断现状。
+修改前先读 `docs/DEVICE_VALIDATION.md`、`docs/MIBIGBANG_MIGRATION_PLAN.md`、
+`docs/IMPLEMENTATION.md` 及相关源码，不要根据历史聊天或参考工程推断现状。
 保持现有小类和直接调用风格，只有共享逻辑确实需要单测时才抽取新工具类。不要把设备专用
 事件节点、分辨率或旋转写死。
 

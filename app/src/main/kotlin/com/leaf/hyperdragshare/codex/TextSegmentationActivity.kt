@@ -2,7 +2,6 @@ package com.leaf.hyperdragshare.codex
 
 import android.content.ComponentName
 import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -21,20 +20,26 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.SelectAll
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,8 +54,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
@@ -58,6 +66,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -67,6 +76,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 /**
@@ -84,8 +95,6 @@ class TextSegmentationActivity : ComponentActivity() {
     private var panelAdjustmentEnabled by mutableStateOf(false)
     private var panelOffsetXdp by mutableFloatStateOf(0f)
     private var panelOffsetYdp by mutableFloatStateOf(0f)
-    private var currentText = ""
-    private var currentSegment: IntArray? = null
     private var sourceImageUri by mutableStateOf<Uri?>(null)
     private var legacyBackgroundColor = AndroidColor.WHITE
     private var legacyTextColor = AndroidColor.DKGRAY
@@ -125,36 +134,40 @@ class TextSegmentationActivity : ComponentActivity() {
             MiuixTheme(
                 controller = ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light),
             ) {
-                BigBangOverlayContent(
-                    contentView = legacyContentView,
-                    touchX = launchTouchX,
-                    touchY = launchTouchY,
-                    sourceImageAvailable = sourceImageUri != null,
-                    textSizeSp = textSizeSp,
-                    panelHeightFraction = panelHeightFraction,
-                    panelOpacity = panelOpacity,
-                    panelAdjustmentEnabled = panelAdjustmentEnabled,
-                    panelOffsetXdp = panelOffsetXdp,
-                    panelOffsetYdp = panelOffsetYdp,
-                    onLegacyThemeChanged = ::updateLegacyTheme,
-                    onDismissRequesterChanged = { animatedDismissRequester = it },
-                    onDismissRequest = { shouldDismissPage() },
-                    onDismissFinished = { finish() },
-                    onEditMode = { splitSelectedWords() },
-                    onSelectAll = { selectAll() },
-                    onShareAll = { shareAll() },
-                    onMoreAction = ::handleMoreAction,
-                    onPanelPositionChanged = ::savePanelPosition,
-                    onOcr = ::reopenOcr,
-                    onTranslate = { openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_TRANSLATE) },
-                )
+                Scaffold(containerColor = Color.Transparent) {
+                    BigBangOverlayContent(
+                        contentView = legacyContentView,
+                        touchX = launchTouchX,
+                        touchY = launchTouchY,
+                        sourceImageAvailable = sourceImageUri != null,
+                        textSizeSp = textSizeSp,
+                        panelHeightFraction = panelHeightFraction,
+                        panelOpacity = panelOpacity,
+                        panelAdjustmentEnabled = panelAdjustmentEnabled,
+                        panelOffsetXdp = panelOffsetXdp,
+                        panelOffsetYdp = panelOffsetYdp,
+                        onLegacyThemeChanged = ::updateLegacyTheme,
+                        onDismissRequesterChanged = { animatedDismissRequester = it },
+                        onDismissRequest = { shouldDismissPage() },
+                        onDismissFinished = { finish() },
+                        originalText = { boomChipPage?.originalText.orEmpty() },
+                        onEditText = { text ->
+                            boomChipPage?.prepareForReinit()
+                            segmentLocally(text)
+                        },
+                        onSelectAll = { selectAll() },
+                        onMoreAction = ::handleMoreAction,
+                        onPanelPositionChanged = ::savePanelPosition,
+                        onOcr = ::reopenOcr,
+                        )
+                }
             }
         }
 
         val savedText = savedInstanceState?.getString(SAVED_TEXT)
         val savedSegment = savedInstanceState?.getIntArray(SAVED_SEGMENT)
         if (savedText != null && savedSegment != null) {
-            handleSegmentResult(savedText, savedSegment, fromSavedState = true)
+            handleSegmentResult(savedText, savedSegment)
         } else {
             reinitializeFromIntent()
         }
@@ -186,15 +199,11 @@ class TextSegmentationActivity : ComponentActivity() {
         if (text.isBlank()) {
             return
         }
-        try {
-            startActivity(
-                Intent(this, SearchOverlayActivity::class.java)
-                    .putExtra(Intent.EXTRA_TEXT, text.trim())
-                    .putExtra(SearchOverlayActivity.EXTRA_SEARCH_TYPE, type),
-            )
-        } catch (_: Throwable) {
-            Toast.makeText(this, R.string.search_open_failed, Toast.LENGTH_SHORT).show()
-        }
+        startActivity(
+            Intent(this, SearchOverlayActivity::class.java)
+                .putExtra(Intent.EXTRA_TEXT, text.trim())
+                .putExtra(SearchOverlayActivity.EXTRA_SEARCH_TYPE, type),
+        )
     }
 
     private fun updateLaunchPosition() {
@@ -211,8 +220,6 @@ class TextSegmentationActivity : ComponentActivity() {
             return
         }
         updateLaunchPosition()
-        currentText = ""
-        currentSegment = null
         boomChipPage?.prepareForReinit()
         segmentLocally(inputText)
     }
@@ -247,7 +254,6 @@ class TextSegmentationActivity : ComponentActivity() {
     private fun handleSegmentResult(
         text: String,
         result: IntArray?,
-        fromSavedState: Boolean = false,
     ) {
         if (result == null || result.isEmpty()) {
             Toast.makeText(this, R.string.a_msg_no_words, Toast.LENGTH_SHORT).show()
@@ -259,34 +265,12 @@ class TextSegmentationActivity : ComponentActivity() {
             finish()
             return
         }
-        currentText = text
-        currentSegment = result
-        if (fromSavedState) {
-            // The chip core restores the serialised selection during its first layout pass.
-        }
     }
 
     private fun shouldDismissPage(): Boolean = boomChipPage?.handleClick() != true
 
     private fun selectAll() {
         boomChipPage?.selectAll()
-    }
-
-    private fun shareAll() {
-        val shareText = boomChipPage?.originalText ?: return
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, shareText)
-        }
-        startActivity(Intent.createChooser(send, null).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-        })
-    }
-
-    private fun splitSelectedWords() {
-        if (boomChipPage?.splitSelectedWordsToChars() != true) {
-            Toast.makeText(this, R.string.bigbang_select_words_first, Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun updateLegacyTheme(
@@ -359,21 +343,7 @@ class TextSegmentationActivity : ComponentActivity() {
                     Toast.LENGTH_SHORT,
                 ).show()
             }
-            BigBangMoreAction.Copy -> {
-                val text = selectedTextOrOriginal()
-                if (text.isNotBlank()) {
-                    getSystemService(Context.CLIPBOARD_SERVICE).let { service ->
-                        (service as ClipboardManager).setPrimaryClip(ClipData.newPlainText(null, text))
-                    }
-                    Toast.makeText(this, R.string.copy_tips, Toast.LENGTH_SHORT).show()
-                    closeAfterCopyIfEnabled()
-                }
-            }
-            BigBangMoreAction.Search -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_WEB)
-            BigBangMoreAction.Dictionary -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_DICTIONARY)
             BigBangMoreAction.Translate -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_TRANSLATE)
-            BigBangMoreAction.Share -> shareText(selectedTextOrOriginal())
-            BigBangMoreAction.Split -> splitSelectedWords()
         }
     }
 
@@ -392,22 +362,13 @@ class TextSegmentationActivity : ComponentActivity() {
         startActivity(ImageOcrActivity.createRecheckIntent(this, uri))
     }
 
-    private fun shareText(text: String) {
-        if (text.isBlank()) return
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-        }
-        startActivity(Intent.createChooser(send, null).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-        })
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
         boomChipPage?.captureSelectedState()?.let { outState.putSerializable(SELECTED_STATE, it) }
-        currentSegment?.let {
-            outState.putString(SAVED_TEXT, currentText)
-            outState.putIntArray(SAVED_SEGMENT, it)
+        boomChipPage?.let { page ->
+            page.originalText?.let { text ->
+                outState.putString(SAVED_TEXT, text)
+                outState.putIntArray(SAVED_SEGMENT, page.currentSegments)
+            }
         }
         super.onSaveInstanceState(outState)
     }
@@ -458,12 +419,7 @@ class TextSegmentationActivity : ComponentActivity() {
 }
 
 private enum class BigBangMoreAction {
-    Copy,
-    Search,
-    Dictionary,
     Translate,
-    Share,
-    Split,
     TextSize,
     PanelHeight,
     PanelOpacity,
@@ -486,13 +442,12 @@ private fun BigBangOverlayContent(
     onDismissRequesterChanged: ((() -> Unit)?) -> Unit,
     onDismissRequest: () -> Boolean,
     onDismissFinished: () -> Unit,
-    onEditMode: () -> Unit,
+    originalText: () -> String,
+    onEditText: (String) -> Unit,
     onSelectAll: () -> Unit,
-    onShareAll: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
     onPanelPositionChanged: (Float, Float) -> Unit,
     onOcr: () -> Unit,
-    onTranslate: () -> Unit,
 ) {
     val dark = MiuixTheme.colorScheme.background.luminance() < 0.5f
     val panelMetrics = rememberOverlayPanelMetrics(panelHeightFraction = panelHeightFraction)
@@ -515,6 +470,10 @@ private fun BigBangOverlayContent(
     val panelShape = androidx.compose.foundation.shape.RoundedCornerShape(panelMetrics.cornerRadius)
     var panelVisible by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showEditor by remember { mutableStateOf(false) }
+    var editorText by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var dismissing by remember { mutableStateOf(false) }
     var panelBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val enterProgress by animateFloatAsState(
@@ -617,7 +576,10 @@ private fun BigBangOverlayContent(
                             OverlayIconAction(
                                 imageVector = Icons.Outlined.Edit,
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                onClick = onEditMode,
+                                onClick = {
+                                    editorText = originalText()
+                                    showEditor = true
+                                },
                                 contentDescription = stringResource(R.string.bigbang_action_edit),
                             )
                             OverlayIconAction(
@@ -637,12 +599,6 @@ private fun BigBangOverlayContent(
                         },
                         trailing = {
                             OverlayIconAction(
-                                imageVector = Icons.Outlined.Share,
-                                tint = MiuixTheme.colorScheme.onSurface,
-                                onClick = onShareAll,
-                                contentDescription = stringResource(R.string.bigbang_action_share_all),
-                            )
-                            OverlayIconAction(
                                 imageVector = Icons.Outlined.MoreHoriz,
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = { showMoreMenu = true },
@@ -658,12 +614,9 @@ private fun BigBangOverlayContent(
                         leftInset = panelMetrics.leftSystemInset,
                         rightInset = panelMetrics.rightSystemInset,
                         leading = {
-                            OverlayIconAction(
+                            if (sourceImageAvailable) OverlayIconAction(
                                 imageVector = Icons.Outlined.DocumentScanner,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions.copy(
-                                    alpha = if (sourceImageAvailable) 1f else 0.4f,
-                                ),
-                                enabled = sourceImageAvailable,
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = onOcr,
                                 contentDescription = stringResource(R.string.bigbang_action_ocr),
                             )
@@ -674,14 +627,6 @@ private fun BigBangOverlayContent(
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = requestDismiss,
                                 contentDescription = stringResource(R.string.search_overlay_close),
-                            )
-                        },
-                        trailing = {
-                            OverlayIconAction(
-                                imageVector = Icons.Outlined.Language,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                onClick = onTranslate,
-                                contentDescription = stringResource(R.string.bigbang_action_language),
                             )
                         },
                     )
@@ -702,19 +647,61 @@ private fun BigBangOverlayContent(
     }
 
     OverlayDialog(
+        show = showEditor,
+        title = stringResource(R.string.bigbang_action_edit),
+        onDismissRequest = { showEditor = false },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            BasicTextField(
+                value = editorText,
+                onValueChange = { editorText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 100.dp, max = 240.dp)
+                    .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                textStyle = TextStyle(color = MiuixTheme.colorScheme.onSurface, fontSize = 16.sp),
+                cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextButton(
+                    text = stringResource(android.R.string.cancel),
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                        showEditor = false
+                    },
+                )
+                TextButton(
+                    text = stringResource(R.string.bigbang_edit_apply),
+                    modifier = Modifier.weight(1f),
+                    enabled = editorText.isNotBlank(),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    onClick = {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                        showEditor = false
+                        onEditText(editorText)
+                    },
+                )
+            }
+        }
+    }
+
+    OverlayDialog(
         show = showMoreMenu,
         title = stringResource(R.string.bigbang_action_more),
         summary = stringResource(R.string.bigbang_more_summary),
         onDismissRequest = { showMoreMenu = false },
     ) {
-        Column {
+        Column(
+            modifier = Modifier
+                .heightIn(max = (configuration.screenHeightDp * 0.55f).dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
             val actions = listOf(
-                BigBangMoreAction.Copy to stringResource(R.string.bigbang_more_copy),
-                BigBangMoreAction.Search to stringResource(R.string.bigbang_more_search),
-                BigBangMoreAction.Dictionary to stringResource(R.string.bigbang_more_dictionary),
                 BigBangMoreAction.Translate to stringResource(R.string.bigbang_more_translate),
-                BigBangMoreAction.Share to stringResource(R.string.bigbang_more_share),
-                BigBangMoreAction.Split to stringResource(R.string.bigbang_more_split),
                 BigBangMoreAction.TextSize to stringResource(R.string.bigbang_more_text_size, textSizeSp),
                 BigBangMoreAction.PanelHeight to stringResource(
                     R.string.bigbang_more_panel_height,

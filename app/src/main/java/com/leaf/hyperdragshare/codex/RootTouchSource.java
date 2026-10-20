@@ -301,7 +301,7 @@ final class RootTouchSource {
         parser.consume(type, code, value);
     }
 
-    private void onRawFrame(int action, float rawX, float rawY) {
+    private void onRawFrame(int action, float rawX, float rawY, int rawTouchMajor, int rawTouchMinor) {
         if (rawMaxX <= 0 || rawMaxY <= 0) {
             return;
         }

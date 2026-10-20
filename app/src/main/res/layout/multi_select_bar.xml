@@ -31,6 +31,13 @@
 
     <ImageView
             style="@style/Widget.DragShare.SelectionAction"
+            android:id="@+id/all_merge"
+            android:layout_toRightOf="@+id/all_cut"
+            android:contentDescription="@string/bigbang_more_merge"
+            android:src="@drawable/ic_text_merge" />
+
+    <ImageView
+            style="@style/Widget.DragShare.SelectionAction"
             android:id="@+id/all_share"
             android:layout_marginRight="4dp"
             android:layout_toLeftOf="@+id/all_copy"
