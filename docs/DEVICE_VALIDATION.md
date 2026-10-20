@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.115 / versionCode 139。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 139。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.116 / versionCode 140。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 140。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.115 / 139；175 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.116 / 140；175 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -574,3 +574,19 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 同PID23811重新打开MainActivity，设置页能滚动；随后侧条原channel恢复responsive=true。将原bilipai任务2183置前、等界面就绪后点侧条，再次展开7项通过，work/hds115-anr-reopen.xml、hds115-input-current.txt。没有重启模块来宣称修复，也没有添加重建窗口/吞错等兜底。恢复现象不证明根因解决；下一批先区分“侧条→设置→后台”和“原生拖出→设置→后台”的复现条件，再针对输入通道/进程调度状态修正。此前笼统判断主线程阻塞不成立，当前准确结论为侧条输入未确认、原因未明。
 
 原bilipai90分钟休息提醒保留，未恢复播放；引擎AICR、模块浅色/系统夜间auto未改。拇指面积输入、普通长按冲突、Root图片分支等原有待办继续保留。
+
+## 2026-10-21：1.7.116 系统小窗直接拖出与ANR复现边界
+
+- 系统小窗与管理列表的文字/图片复用115的StashDraggableContent，直接按内容拖出，点按仍走原分词/预览；移除每条独立拖出行。compact卡片隐藏重复类型/时间，完整管理页仍显示；多选仍点选、底部统一拖出，没有新增手势检测器或重建兜底。
+- 175项单测、Lint、assembleDebug通过；最终1.7.116/140已安装，原包名/签名不变。传送门重新加载后injected_version=140、portal_root_version=140、Root=true；未重启android/AICR，本批未修改Hook。
+- 原侧窗放大按钮在115与116均真正进入freeform，116原生任务2265及后续窗口可见；没有转入LSPosed。115直接Root启动非导出桥的管理页重定向，不代表产品按钮失效。
+- 从原生系统小窗直接按住生成文字STASH-115-A，接收应用UID10348实际收到文本；拖出时源任务让开，前台回到接收器。work/hds116-physical-drop.xml。最终紧凑布局中直接按住生成PNG，接收UID读取并解码640×240/8167字节，work/hds116-final-native.png、hds116-final-native.xml、hds116-final-image-drop.xml。未把测试图片发送给联系人或外部服务。
+- 测试坐标修正：HyperOS缩放小窗后UIAutomator给出未缩放逻辑坐标，首轮误落系统底部缩放区，触发系统MIUIFREEFORM_MAXIMIZE，没有产生有效内容拖出。按实际截图位置重新定位后成功。不能把误操作记成模块拖出失败，也不向产品添加猜测的缩放兼容层。
+- 此轮仅验证单条文字/图片从系统小窗拖给诊断接收器。多选从系统小窗拖出、用户常用接收应用、原生窗口内分词/图片预览层级、横屏/深色仍有缺口。115侧窗混合六项的证据保留，不扩大为本次原生小窗多项通过。
+- 两条生成样本经界面多选确认删除，9→7，原记录保留；独立接收器及临时安装APK已卸载/移除。原bilipai任务2183置前，休息提醒保留、没有重新启动其Activity或恢复播放。AICR=true、模块浅色0/系统夜间auto未改。
+
+### 旧ANR未复现，不宣称修复
+
+本批开始，旧侧条token32b72c6的实时通道已为responsive=true。执行“侧条→设置→原页面→展开”成功，work/hds116-control-open.xml、hds116-control-input.txt；116执行“原生内容拖出→设置→接收应用→展开”成功，work/hds116-variant-open.xml、hds116-variant-input.txt。卸载接收器后，又将既有LSPosed任务置前，WindowManager确认mIsForceHiddenNonSystemOverlayWindow=true；返回bilipai后侧条可再次展开7项，work/hds116-secure-windows.txt、hds116-secure-reopen.xml、hds116-secure-input.txt。没有修改安全页的隐藏悬浮窗策略。
+
+最终活动侧条token82d5b31通道响应正常；lastanr仍为05:28:26旧事件，没有新增同类记录。dumpsys input尾部会附旧ANR快照，其中仍有旧token responsive=false，不能把它误读成当前通道状态。以上缩小了已复现范围，但没有找到旧事件根因，不写成“已修复”，不添加自动重建、重启、空catch或ROM猜测处理。后续若再次出现，应先保存当下输入队列、进程/cgroup状态与线程栈；不要仅重复本批已通过的几个用例来宣称稳定。

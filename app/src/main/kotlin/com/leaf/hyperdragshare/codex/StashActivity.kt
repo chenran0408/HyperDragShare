@@ -717,45 +717,49 @@ internal fun StashEntryCard(
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(if (compact) 12.dp else 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (entry.kind == StashStore.KIND_TEXT) "文字" else "图片",
-                        color = MiuixTheme.colorScheme.primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                            .format(Date(entry.createdAt)),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        fontSize = 11.sp,
-                    )
+            if (!compact || selectionMode) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!compact) Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (entry.kind == StashStore.KIND_TEXT) "文字" else "图片",
+                            color = MiuixTheme.colorScheme.primary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                                .format(Date(entry.createdAt)),
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 11.sp,
+                        )
+                    } else Spacer(Modifier.weight(1f))
+                    if (selectionMode) {
+                        Checkbox(
+                            state = if (selected) ToggleableState.On else ToggleableState.Off,
+                            onClick = onToggleSelection,
+                        )
+                    }
                 }
-                if (selectionMode) {
-                    Checkbox(
-                        state = if (selected) ToggleableState.On else ToggleableState.Off,
-                        onClick = onToggleSelection,
-                    )
-                }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(8.dp))
-            if (entry.kind == StashStore.KIND_TEXT) {
-                Text(
-                    text = entry.text.orEmpty(),
-                    modifier = Modifier.fillMaxWidth().clickable(onClick = openContent),
-                    color = MiuixTheme.colorScheme.onSurface,
-                    fontSize = 15.sp,
-                    maxLines = if (compact) 3 else 5,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            } else {
-                StashImage(
-                    entry = entry,
-                    edgeLimit = 480,
-                    modifier = Modifier.fillMaxWidth().height(if (compact) 72.dp else 120.dp)
-                        .clickable(onClick = openContent),
-                )
+            StashDraggableContent(listOf(entry), Modifier.fillMaxWidth(),
+                draggable = !selectionMode, onStarted = onDragStarted, onClick = openContent) {
+                if (entry.kind == StashStore.KIND_TEXT) {
+                    Text(
+                        text = entry.text.orEmpty(),
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MiuixTheme.colorScheme.onSurface,
+                        fontSize = 15.sp,
+                        maxLines = if (compact) 3 else 5,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    StashImage(
+                        entry = entry,
+                        edgeLimit = 480,
+                        modifier = Modifier.fillMaxWidth().height(if (compact) 72.dp else 120.dp),
+                    )
+                }
             }
             if (!selectionMode) {
                 Spacer(Modifier.height(6.dp))
@@ -790,7 +794,6 @@ internal fun StashEntryCard(
                             onClick = { onDelete(entry) }, contentDescription = "删除内容")
                     }
                 }
-                StashDragHandle(listOf(entry), onDragStarted)
             }
         }
     }
