@@ -68,6 +68,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayDialog
 internal enum class BigBangMoreAction {
     Translate,
     SaveToStash,
+    UndoEdit,
     TextSize,
     PanelHeight,
     PanelOpacity,
@@ -92,6 +93,7 @@ internal fun BigBangOverlayContent(
     onDismissFinished: () -> Unit,
     originalText: () -> String,
     onEditText: (String) -> Unit,
+    canUndoEdit: Boolean,
     onSelectAll: () -> Unit,
     totalCharacterCount: Int,
     selectedCharacterCount: Int,
@@ -396,7 +398,9 @@ internal fun BigBangOverlayContent(
                     else R.string.bigbang_more_panel_adjustment_off,
                 ),
             )
-            actions.forEach { (action, label) ->
+            val availableActions = if (canUndoEdit)
+                listOf(BigBangMoreAction.UndoEdit to "撤销编辑") + actions else actions
+            availableActions.forEach { (action, label) ->
                 TextButton(
                     text = label,
                     onClick = {

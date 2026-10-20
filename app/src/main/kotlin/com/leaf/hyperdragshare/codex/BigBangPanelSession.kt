@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
@@ -59,6 +60,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var totalCharacterCount by mutableIntStateOf(0)
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
+    private var undoEditState by mutableStateOf<Bundle?>(null)
 
     private fun updateSelectionSummary() {
         val page = boomChipPage ?: return
@@ -99,7 +101,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     fun Content() {
 
             MiuixTheme(
-                controller = ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light),
+                controller = remember { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
             ) {
                 Scaffold(containerColor = Color.Transparent) {
                     BigBangOverlayContent(
@@ -119,9 +121,16 @@ internal class BigBangPanelSession(private val context: Context, private val act
                         onDismissFinished = { actions.dismiss() },
                         originalText = { boomChipPage?.originalText.orEmpty() },
                         onEditText = { text ->
-                            boomChipPage?.prepareForReinit()
-                            segmentLocally(text)
+                            if (text != boomChipPage?.originalText) {
+                                undoEditState = Bundle().also {
+                                    saveState(it)
+                                    it.remove(UNDO_EDIT)
+                                }
+                                boomChipPage?.prepareForReinit()
+                                segmentLocally(text)
+                            }
                         },
+                        canUndoEdit = undoEditState != null,
                         onSelectAll = { selectAll() },
                         totalCharacterCount = totalCharacterCount,
                         selectedCharacterCount = selectedCharacterCount,
@@ -138,6 +147,8 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     fun open(text: String, touchX: Int, touchY: Int, sourceImage: Uri?, savedState: Bundle? = null) {
         check(!closed) { "Create a new panel session after close" }
+        requests.invalidate()
+        undoEditState = savedState?.getBundle(UNDO_EDIT)
         launchTouchX = touchX
         launchTouchY = touchY
         sourceImageUri = sourceImage
@@ -252,6 +263,10 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     private fun handleMoreAction(action: BigBangMoreAction) {
         when (action) {
+            BigBangMoreAction.UndoEdit -> {
+                val state = undoEditState ?: return
+                open(state.getString(SAVED_TEXT).orEmpty(), launchTouchX, launchTouchY, sourceImageUri, state)
+            }
             BigBangMoreAction.TextSize -> {
                 textSizeSp = BigBangSettings.nextTextSizeSp(textSizeSp)
                 BigBangSettings.setTextSizeSp(context, textSizeSp)
@@ -309,6 +324,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     }
 
     fun saveState(outState: Bundle) {
+        undoEditState?.let { outState.putBundle(UNDO_EDIT, it) }
         boomChipPage?.captureSelectedState()?.let { outState.putSerializable(SELECTED_STATE, it) }
         boomChipPage?.let { page ->
             page.originalText?.let { text ->
@@ -318,6 +334,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         }
     }
     companion object {
+        private const val UNDO_EDIT = "undo_edit"
         private const val TAG = "DragShare/BigBang"
         private const val SELECTED_STATE = "selected_state"
         private const val SAVED_TEXT = "saved_text"
