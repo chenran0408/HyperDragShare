@@ -471,3 +471,9 @@ AICR静态协议确认Location为poly[]后box[]，但数组的几何约定未证
 上述证据支持Compose虚拟节点遗漏为候选原因，与已读到的评论TextView语义节点一致；尚未取得该评论实际命中View类型的运行时证据，所以不标为最终根因。bilipai APK存在Compose组件，MainActivity单类反编译有6个错误，不复制其代码。未修改/强停/注入ContentCatcher。
 
 下一实施方向是验证Root按需读取语义节点并复用现有节点选择器，避免依赖没有产出内容的传送门text_pick；必须验证连接不压制现有辅助服务、耗时、锁屏/密码/黑名单边界，不把启动uiautomator命令的多秒延迟当作可用产品方案。
+
+### Root 节点读取独立实验（未接入正式触发）
+
+修复探针缺少主 Looper 导致的 AccessibilityInteractionClient NPE 后，Root app_process + UiAutomation 在目标 ROM 成功连接，耗时5–6ms。bilipai评论页读到168节点/36文字节点/448字符，遍历53–71ms；按指定屏幕点成功命中 TextView 语义节点。连接后的首轮可能返回null，不据此判断页面无文字。没有记录评论正文。
+
+探针采用不压制现有辅助服务的连接标志；结束后连接无残留，enabled_accessibility_services仍为空，旋转设置1/0未改变。可复现源码见diagnostics/root-node；产品APK保持1.7.107，没有宣称已修复bilipai普通长按。下一步是按需节点读取与触发仲裁，并处理断开恢复旋转状态的副作用。
