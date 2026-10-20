@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.MatrixCursor;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
@@ -13,6 +14,7 @@ import android.os.ParcelFileDescriptor;
 import android.os.Process;
 import android.provider.OpenableColumns;
 import android.provider.MediaStore;
+import android.webkit.MimeTypeMap;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -24,8 +26,6 @@ import java.util.UUID;
 
 public final class ShareImageProvider extends ContentProvider {
     private static final String TAG = "DragShareProvider";
-    private static final String MIME_PNG = "image/png";
-    private static final String MIME_JPEG = "image/jpeg";
     private static final long MAX_CACHE_AGE_MS = 24L * 60L * 60L * 1000L;
     private static final long MAX_FILE_BYTES = 32L * 1024L * 1024L;
 
@@ -140,16 +140,13 @@ public final class ShareImageProvider extends ContentProvider {
                 ImageStagingClient.EXTRA_STREAM,
                 ParcelFileDescriptor.class);
         byte[] bytes = extras.getByteArray(ImageStagingClient.EXTRA_BYTES);
-        boolean png = stream != null;
-        if (!png && (bytes == null || bytes.length == 0 || bytes.length > MAX_FILE_BYTES)) {
-            throw new IllegalArgumentException("Invalid staged image size");
+        if (stream == null && (bytes == null || bytes.length == 0 || bytes.length > MAX_FILE_BYTES)) {
+            throw new IllegalArgumentException("图片为空或超过32 MiB");
         }
 
         cleanupExpiredFiles();
         String token = UUID.randomUUID().toString();
-        String suffix = png ? ShareUriToken.PNG_SUFFIX : ShareUriToken.JPEG_SUFFIX;
         File temporary = new File(shareDirectory, token + ".tmp");
-        File destination = fileForToken(token, suffix);
         long written;
         try (FileOutputStream output = new FileOutputStream(temporary)) {
             if (stream != null) {
@@ -164,7 +161,7 @@ public final class ShareImageProvider extends ContentProvider {
             output.getFD().sync();
         } catch (IOException error) {
             temporary.delete();
-            throw new IllegalStateException("Unable to stage shared image", error);
+            throw new IllegalStateException("图片暂存失败：" + error.getMessage(), error);
         } finally {
             if (stream != null) {
                 try {
@@ -174,16 +171,32 @@ public final class ShareImageProvider extends ContentProvider {
                 }
             }
         }
-        if (!temporary.renameTo(destination)) {
+        String suffix;
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (FileInputStream image = new FileInputStream(temporary)) {
+                BitmapFactory.decodeStream(image, null, bounds);
+            }
+            String mime = bounds.outMimeType;
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0 || mime == null || !mime.startsWith("image/")) {
+                throw new IOException("系统无法解码此图片格式");
+            }
+            String extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
+            if (extension == null) throw new IOException("系统未提供此图片格式的扩展名");
+            suffix = "." + extension;
+            File destination = fileForToken(token, suffix);
+            if (!temporary.renameTo(destination)) throw new IOException("无法发布图片暂存文件");
+        } catch (IOException error) {
             temporary.delete();
-            throw new IllegalStateException("Unable to publish staged image");
+            throw new IllegalStateException("图片暂存失败：" + error.getMessage(), error);
         }
 
         Uri uri = uriForToken(token, suffix);
         grantReadAccessAsOwner(
                 MainHook.TAPLUS_PACKAGE,
                 uri);
-        DragShareLog.i(TAG, "staged format=" + (png ? "png" : "jpeg")
+        DragShareLog.i(TAG, "staged format=" + suffix.substring(1)
                 + " bytes=" + written);
         Bundle result = new Bundle();
         result.putString(ImageStagingClient.RESULT_URI, uri.toString());
@@ -200,12 +213,12 @@ public final class ShareImageProvider extends ContentProvider {
             }
             total += read;
             if (total > MAX_FILE_BYTES) {
-                throw new IOException("Staged PNG exceeds size limit");
+                throw new IOException("图片超过32 MiB");
             }
             output.write(buffer, 0, read);
         }
         if (total == 0L) {
-            throw new IOException("Staged PNG is empty");
+            throw new IOException("图片内容为空");
         }
         return total;
     }
@@ -452,7 +465,7 @@ public final class ShareImageProvider extends ContentProvider {
     }
 
     private static String mimeTypeForSuffix(String suffix) {
-        return ShareUriToken.JPEG_SUFFIX.equals(suffix) ? MIME_JPEG : MIME_PNG;
+        return suffix == null ? null : MimeTypeMap.getSingleton().getMimeTypeFromExtension(suffix.substring(1));
     }
 
     private void grantReadAccessAsOwner(String packageName, Uri uri) {

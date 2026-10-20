@@ -39,6 +39,19 @@ final class ImageStagingClient {
 
     private ImageStagingClient() {}
 
+    /** Copies an existing image into the share provider; call only from a worker thread. */
+    static Uri stageUri(Context context, Uri source) throws IOException {
+        try (ParcelFileDescriptor input = context.getContentResolver().openFileDescriptor(source, "r")) {
+            if (input == null) throw new IOException("无法打开待复制图片");
+            Bundle extras = new Bundle();
+            extras.putParcelable(EXTRA_STREAM, input);
+            Bundle result = context.getContentResolver().call(BASE_URI, METHOD_STAGE, null, extras);
+            String value = result == null ? null : result.getString(RESULT_URI);
+            if (value == null) throw new IOException("图片暂存未返回可用地址");
+            return Uri.parse(value);
+        }
+    }
+
     static void stage(Context context, Bitmap bitmap, Callback callback) {
         EXECUTOR.execute(() -> {
             try {

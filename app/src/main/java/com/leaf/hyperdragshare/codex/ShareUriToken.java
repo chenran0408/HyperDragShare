@@ -1,10 +1,12 @@
 package com.leaf.hyperdragshare.codex;
 
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 final class ShareUriToken {
     static final String PNG_SUFFIX = ".png";
     static final String JPEG_SUFFIX = ".jpg";
+    private static final Pattern IMAGE_SUFFIX = Pattern.compile("\\.[a-z0-9]{1,8}");
 
     private ShareUriToken() {}
 
@@ -13,10 +15,11 @@ final class ShareUriToken {
     }
 
     static String fileName(String token, String suffix) {
-        if (parse(token) == null) {
+        String parsed = parse(token);
+        if (parsed == null || !parsed.equals(token)) {
             throw new IllegalArgumentException("Invalid share token");
         }
-        if (!PNG_SUFFIX.equals(suffix) && !JPEG_SUFFIX.equals(suffix)) {
+        if (suffix == null || !IMAGE_SUFFIX.matcher(suffix).matches()) {
             throw new IllegalArgumentException("Invalid image suffix");
         }
         return token + suffix;
@@ -27,14 +30,13 @@ final class ShareUriToken {
             return null;
         }
         String token = pathSegment;
-        if (pathSegment.endsWith(PNG_SUFFIX)) {
-            token = pathSegment.substring(0, pathSegment.length() - PNG_SUFFIX.length());
-        } else if (pathSegment.endsWith(JPEG_SUFFIX)) {
-            token = pathSegment.substring(0, pathSegment.length() - JPEG_SUFFIX.length());
+        int dot = pathSegment.lastIndexOf('.');
+        if (dot >= 0) {
+            if (!IMAGE_SUFFIX.matcher(pathSegment.substring(dot)).matches()) return null;
+            token = pathSegment.substring(0, dot);
         }
         try {
-            UUID.fromString(token);
-            return token;
+            return UUID.fromString(token).toString().equalsIgnoreCase(token) ? token : null;
         } catch (IllegalArgumentException ignored) {
             return null;
         }
@@ -44,9 +46,8 @@ final class ShareUriToken {
         if (parse(pathSegment) == null) {
             return null;
         }
-        if (pathSegment.endsWith(PNG_SUFFIX)) {
-            return PNG_SUFFIX;
-        }
+        int dot = pathSegment.lastIndexOf('.');
+        if (dot >= 0) return pathSegment.substring(dot);
         // Versions before the explicit .jpg URI suffix used a bare UUID for JPEG files.
         return JPEG_SUFFIX;
     }

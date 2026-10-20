@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.116 / versionCode 140。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 140。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.120 / versionCode 144。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 144。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.116 / 140；175 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.120 / 144；182 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -624,3 +624,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 临时OCR磁贴已移除，sysui_qs_tiles与测试前完整字符串相同，work/hds119-tiles-before.txt、hds119-tiles-restored.txt。诊断应用及临时APK/DEX已移除，侧条收起，原bilipai任务2183置前，未重新启动页面或恢复播放。AICR、复制直取、主题及退出复制设置均保留。
 - 仍待：文字复制失败/Root撤销实际UI、管理页/原生小窗与拖拽文字复制的实际入口、全部复制；图片复制仍是原普通ClipData/ClipboardManager路径，尚未解决同一后台限制及URI授权，不标为可用。真实面积、bilipai普通长按、115侧条ANR根因继续未解决。本批不新增镜像实现测试，用真实跨UID结果核对。
 - 最终APK outputs/HyperDragShare-1.7.119-debug.apk，SHA256 EB4E70C6B32106303112F36E67F23756996EB4FD317E3AFAADB7FE99CF0D6658。
+
+## 2026-10-21：1.7.120 图片复制、授权与独立副本
+
+- 最终work/build228.log：182项单测、Lint、assembleDebug通过。JPEG流测试核对实际image/jpeg、非PNG后缀及完整原字节；Robolectric MIME shadow需显式提供平台映射。首次decodeFile检查后Windows测试rename失败，改显式FileInputStream/decodeStream并关闭后发布，聚焦及全量通过；没有重试/复制回退。诊断接收器源码独立构建通过，work/build229-diagnostic.log；验收时未更新诊断APK而丢失内存预期值，使用其错误缓存新增前的相同PNG核对逻辑。
+- 首次产品实验失败：图片暂存成功，SystemContext查询Provider时SecurityException；侧窗提示Root复制失败并保留8项，work/hds120-copy-collapsed.xml。独立app_process定位“Unable to find app for caller … when getting content provider”，临时进程没有AMS应用记录。改明确MIME的ClipData后System UID能写并读回URI，但接收UID仍FileNotFoundException，work/hds120-native-verified.xml。ActivityThread找不到Provider；UriGrantsManager明确拒绝System UID作为该URI授权来源。不能把URI读回当图片复制通过。
+- Shell UID2000以实际com.android.shell归属调用目标ROM IClipboard后，接收应用实际打开图片，字节与尺寸匹配true，work/hds120-shell-verified.xml。产品图片路径据此固定Shell，文字继续119已验证System UID。未修改AppOps/权限/Provider读取策略，未添加forceQueryable或接收器queries；不猜多组Binder签名。路径针对主用户/本机剪贴板，其他用户与虚拟设备未支持。
+- 最终安装144，先写不同生成文字IMAGE-BASELINE-120避免旧图片假阳性。原生系统小窗点击图片复制，显示已复制图片；返回接收器读取640×240、9240bytes，与COPY-120 PNG全部字节一致。work/hds120-final-native.png/xml、hds120-final-native-copied.xml、hds120-final-native-verified.xml。小窗系统缩放与UIAutomator逻辑坐标不一致，点击按截图物理位置定位，未为测试改布局。
+- 再写不同生成文字IMAGE-SIDE-BASELINE-120，灰色侧条展开复制同一图片，成功后收起，接收UID10459再次严格匹配true。work/hds120-final-side.xml、hds120-final-side-collapsed.xml、hds120-final-side-verified.xml。Provider记录shell-image分支及接收UID实际open，work/hds120-image-copy.log。
+- 仅选择本次新生成首图，删除确认1项后8→7，原7项保留；删除后再次读剪贴板仍字节一致。work/hds120-delete-confirm.xml、hds120-cleaned.xml、hds120-copy-after-delete.xml/png。副本与持久中转站文件独立，沿用ShareImageProvider24小时机会式清理；系统或用户清缓存也会影响副本，不承诺永久保留。
+- Portal注入与Root握手144，root_granted=true；只重载传送门，未重启android/AICR。诊断应用、临时APK/DEX已清理，侧条收起，原bilipai任务2183置前，未发送播放操作。持续设备授权仍有效。
+- 未验：拖拽菜单图片复制实际入口、真机JPEG/WebP等格式、具体应用粘贴、其他用户/虚拟设备、Root撤销。首轮权限失败保留原图已实际观察。复制编辑浮层仍会出现，窗口归属/遮挡未修；真实面积、bilipai普通长按与115旧ANR未解决。
+- 最终APK outputs/HyperDragShare-1.7.120-debug.apk，SHA256 1726BF24CF3C14C61736E6749E413671BDA65339503D317E9DBC149F86A83DD2；包名、debug签名沿用，原位升级保留数据。

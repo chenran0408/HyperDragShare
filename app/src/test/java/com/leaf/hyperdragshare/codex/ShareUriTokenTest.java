@@ -12,6 +12,7 @@ public final class ShareUriTokenTest {
     public void parsesPngJpegAndLegacyTokenPaths() {
         assertEquals(TOKEN, ShareUriToken.parse(TOKEN + ".png"));
         assertEquals(TOKEN, ShareUriToken.parse(TOKEN + ".jpg"));
+        assertEquals(TOKEN, ShareUriToken.parse(TOKEN + ".webp"));
         assertEquals(TOKEN, ShareUriToken.parse(TOKEN));
     }
 
@@ -21,6 +22,8 @@ public final class ShareUriTokenTest {
         assertEquals(".png", ShareUriToken.suffix(TOKEN + ".png"));
         assertEquals(".jpg", ShareUriToken.suffix(TOKEN + ".jpg"));
         assertEquals(".jpg", ShareUriToken.suffix(TOKEN));
+        assertEquals(".avif", ShareUriToken.suffix(TOKEN + ".avif"));
+        assertEquals(TOKEN + ".webp", ShareUriToken.fileName(TOKEN, ".webp"));
     }
 
     @Test
@@ -28,5 +31,10 @@ public final class ShareUriTokenTest {
         assertNull(ShareUriToken.parse("not-a-token.jpg"));
         assertNull(ShareUriToken.suffix("not-a-token.png"));
         assertNull(ShareUriToken.parse(null));
+        for (String suffix : new String[]{".PNG", ".png/../x", ".%2fpng", ".png.exe", ".123456789", ".x-y"}) {
+            assertNull(ShareUriToken.parse(TOKEN + suffix));
+            assertNull(ShareUriToken.suffix(TOKEN + suffix));
+        }
+        assertNull(ShareUriToken.parse("1-1-1-1-1.png"));
     }
 }

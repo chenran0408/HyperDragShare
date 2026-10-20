@@ -24,15 +24,19 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 
 /** Independent UID, generated samples only; no network or screen capture. */
 public final class MainActivity extends Activity {
     private TextView result;
     private String expectedClipboard = "https://example.com/";
+    private boolean expectedImage;
+    private byte[] expectedImageBytes;
     private static final Uri IMAGE = Uri.parse("content://com.leaf.dragdrop.probe.image/sample");
 
     @Override public void onCreate(Bundle state) {
@@ -55,6 +59,7 @@ public final class MainActivity extends Activity {
         addButton(root, "识别生成二维码", this::recognizeGeneratedQr);
         addButton(root, "分词复制样本", this::shareSegmentationSample);
         addButton(root, "存入复制测试119", () -> shareText("COPY-119-STASH"));
+        addButton(root, "存入复制图片120", this::shareCopyImage);
         addButton(root, "屏幕识字样本", this::showScreenSample);
         addButton(root, "核对测试复制", this::verifyTestCopy);
         TextView drop = new TextView(this);
@@ -84,6 +89,7 @@ public final class MainActivity extends Activity {
     }
 
     private void shareSegmentationSample() {
+        expectedImage = false;
         expectedClipboard = "COPY-119";
         startActivity(new Intent(Intent.ACTION_SEND).setType("text/plain")
                 .setClassName("com.leaf.hyperdragshare.codex", "com.leaf.hyperdragshare.codex.TextSegmentationActivity")
@@ -91,6 +97,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showScreenSample() {
+        expectedImage = false;
         expectedClipboard = "COPY-119";
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -109,6 +116,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showRecognitionSample() {
+        expectedImage = false;
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(24, 50, 24, 30);
@@ -148,11 +156,52 @@ public final class MainActivity extends Activity {
     private void verifyTestCopy() {
         try {
             ClipData clip = getSystemService(ClipboardManager.class).getPrimaryClip();
+            if (expectedImage) {
+                Uri uri = clip != null && clip.getItemCount() > 0 ? clip.getItemAt(0).getUri() : null;
+                if (uri == null || !"content".equals(uri.getScheme()) ||
+                        !"com.leaf.hyperdragshare.codex.share".equals(uri.getAuthority())) {
+                    result.setText("测试图片复制匹配：false");
+                    return;
+                }
+                byte[] actual;
+                try (InputStream input = getContentResolver().openInputStream(uri)) {
+                    if (input == null) throw new IOException("empty image stream");
+                    actual = input.readAllBytes();
+                }
+                Bitmap image = BitmapFactory.decodeByteArray(actual, 0, actual.length);
+                if (image == null) {
+                    result.setText("测试图片复制匹配：false\n图片解码失败，字节数=" + actual.length);
+                    return;
+                }
+                int width = image.getWidth();
+                int height = image.getHeight();
+                image.recycle();
+                boolean matches = expectedImageBytes != null && Arrays.equals(expectedImageBytes, actual)
+                        && width == 640 && height == 240;
+                result.setText("测试图片复制匹配：" + matches + "\n尺寸=" + width + "×" + height
+                        + "，字节数=" + actual.length);
+                return;
+            }
             CharSequence text = clip != null && clip.getItemCount() > 0 ? clip.getItemAt(0).getText() : null;
             boolean matches = text != null && expectedClipboard.contentEquals(text);
             result.setText("测试复制匹配：" + matches);
         } catch (SecurityException error) {
-            result.setText("测试复制读取受限：" + error);
+            result.setText(expectedImage ? "测试图片复制匹配：false\n读取权限被拒绝（SecurityException）"
+                    : "测试复制读取受限：" + error);
+        } catch (IOException error) {
+            java.io.StringWriter details = new java.io.StringWriter();
+            error.printStackTrace(new java.io.PrintWriter(details));
+            boolean diagnosticSaved = true;
+            try (FileOutputStream output = new FileOutputStream(
+                    new File(getCacheDir(), "clipboard-image-read-error.txt"))) {
+                output.write(details.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (IOException writeError) {
+                diagnosticSaved = false;
+            }
+            String safeMessage = String.valueOf(error.getMessage())
+                    .replaceAll("content://[^\\s\"'<>]+", "<generated-image>");
+            result.setText("测试图片复制匹配：false\n读取图片失败（" + error.getClass().getSimpleName()
+                    + "）：" + safeMessage + (diagnosticSaved ? "\n诊断已存入私有缓存" : "\n诊断缓存写入失败"));
         }
     }
 
@@ -162,24 +211,39 @@ public final class MainActivity extends Activity {
     }
 
     private void shareText(String text) {
+        expectedImage = false;
         expectedClipboard = text;
         startActivity(share("text/plain").putExtra(Intent.EXTRA_TEXT, text));
     }
 
     private void shareImage() {
+        shareGeneratedImage("STASH-115 PNG", false);
+    }
+
+    private void shareCopyImage() {
+        shareGeneratedImage("COPY-120 PNG", true);
+    }
+
+    private void shareGeneratedImage(String label, boolean verifyCopy) {
+        expectedImage = false;
         Bitmap bitmap = Bitmap.createBitmap(640, 240, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         canvas.drawColor(Color.WHITE);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(Color.BLACK);
         paint.setTextSize(52);
-        canvas.drawText("STASH-115 PNG", 30, 130, paint);
+        canvas.drawText(label, 30, 130, paint);
+        ByteArrayOutputStream encoded = new ByteArrayOutputStream();
         try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), "sample.png"))) {
-            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) throw new IOException("PNG encoding failed");
+            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, encoded)) throw new IOException("PNG encoding failed");
+            byte[] bytes = encoded.toByteArray();
+            output.write(bytes);
+            expectedImageBytes = verifyCopy ? bytes : null;
         } catch (IOException error) {
             result.setText("生成图片失败：" + error);
             return;
         } finally { bitmap.recycle(); }
+        expectedImage = verifyCopy;
         Intent intent = share("image/png").putExtra(Intent.EXTRA_STREAM, IMAGE)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("sample", IMAGE));
@@ -219,6 +283,7 @@ public final class MainActivity extends Activity {
     }
 
     private void recognizeGeneratedQr() {
+        expectedImage = false;
         expectedClipboard = "https://example.com/";
         Bitmap bitmap = Bitmap.createBitmap(640, 640, Bitmap.Config.ARGB_8888);
         try {

@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -32,30 +33,44 @@ final class ClipboardWriter {
     private ClipboardWriter() {}
 
     static void copy(Context context, String text, Callback callback) {
+        write(context, text, null, callback);
+    }
+
+    static void copyImage(Context context, Uri image, Callback callback) {
+        write(context, null, image, callback);
+    }
+
+    private static void write(Context context, String text, Uri image, Callback callback) {
         Context app = context.getApplicationContext();
         startDaemon("clipboard-copy", () -> {
             Exception failure = null;
             try {
+                Uri stagedImage = image == null ? null
+                        : ImageStagingClient.AUTHORITY.equals(image.getAuthority()) ? image
+                        : ImageStagingClient.stageUri(app, image);
                 // The non-raw check translates FOREGROUND into ALLOWED, even for an overlay UID.
                 int mode = app.getSystemService(AppOpsManager.class).unsafeCheckOpRawNoThrow(
                         OPSTR_WRITE_CLIPBOARD, android.os.Process.myUid(), app.getPackageName());
                 if (mode == AppOpsManager.MODE_ALLOWED || mode == AppOpsManager.MODE_DEFAULT) {
-                    app.getSystemService(ClipboardManager.class)
-                            .setPrimaryClip(ClipData.newPlainText("HyperDragShare", text));
+                    ClipData clip = stagedImage == null ? ClipData.newPlainText("HyperDragShare", text)
+                            : ClipData.newUri(app.getContentResolver(), "HyperDragShare image", stagedImage);
+                    app.getSystemService(ClipboardManager.class).setPrimaryClip(clip);
                 } else {
-                    DragShareLog.i(TAG, "clipboard route=system appOp=" + mode);
-                    copyAsSystem(app, text);
+                    DragShareLog.i(TAG, "clipboard route=" + (stagedImage == null ? "system" : "shell-image")
+                            + " appOp=" + mode);
+                    copyPrivileged(app, stagedImage == null ? text : stagedImage.toString(), stagedImage != null);
                 }
             } catch (IOException | RuntimeException error) {
                 failure = error;
-                DragShareLog.w(TAG, "clipboard write failed", error);
+                if (image == null) DragShareLog.w(TAG, "clipboard write failed", error);
+                else DragShareLog.w(TAG, "image clipboard write failed (" + error.getClass().getSimpleName() + ")");
             }
             Exception result = failure;
             MAIN.post(() -> callback.onComplete(result));
         });
     }
 
-    private static void copyAsSystem(Context context, String text) throws IOException {
+    private static void copyPrivileged(Context context, String inputValue, boolean image) throws IOException {
         AtomicReference<Process> running = new AtomicReference<>();
         FutureTask<Void> command = new FutureTask<>(() -> {
             String apk;
@@ -65,8 +80,10 @@ final class ClipboardWriter {
                 throw new IOException("找不到模块安装文件，无法通过 Root 复制", error);
             }
             String shell = "CLASSPATH='" + apk.replace("'", "'\\''")
-                    + "' /system/bin/app_process /system/bin " + RootClipboardMain.class.getName();
-            Process process = new ProcessBuilder("su", "1000", "-c", shell).start();
+                    + "' /system/bin/app_process /system/bin " + RootClipboardMain.class.getName()
+                    + (image ? " --image" : "");
+            // System UID cannot issue clipboard URI grants; shell UID can preserve image access.
+            Process process = new ProcessBuilder("su", image ? "2000" : "1000", "-c", shell).start();
             running.set(process);
             if (Thread.currentThread().isInterrupted()) {
                 process.destroyForcibly();
@@ -76,7 +93,7 @@ final class ClipboardWriter {
             startDaemon("clipboard-stderr", errors);
             try {
                 try (java.io.OutputStream input = process.getOutputStream()) {
-                    input.write(text.getBytes(StandardCharsets.UTF_8));
+                    input.write(inputValue.getBytes(StandardCharsets.UTF_8));
                 }
                 String output = readOutput(process.getInputStream(), 128).trim();
                 int status = process.waitFor();

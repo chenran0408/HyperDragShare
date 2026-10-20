@@ -2,8 +2,6 @@ package com.leaf.hyperdragshare.codex
 
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -329,30 +327,21 @@ object StashOverlayPanel {
 
         private fun copy(entry: StashStore.Entry) {
             if (copying || !scope.isActive) return
-            if (entry.kind == StashStore.KIND_TEXT) {
-                copying = true
-                message = "正在复制…"
-                ClipboardWriter.copy(app, entry.text.orEmpty()) { error ->
-                    if (scope.isActive) {
-                        copying = false
-                        if (error == null) {
-                            message = "已复制文字"
-                            collapse()
-                        } else {
-                            message = "复制失败：${error.message ?: "无法写入剪贴板"}"
-                        }
+            copying = true
+            message = "正在复制…"
+            val complete = ClipboardWriter.Callback { error ->
+                if (scope.isActive) {
+                    copying = false
+                    if (error == null) {
+                        message = if (entry.kind == StashStore.KIND_TEXT) "已复制文字" else "已复制图片"
+                        collapse()
+                    } else {
+                        message = "复制失败：${error.message ?: "无法写入剪贴板"}"
                     }
                 }
-                return
             }
-            try {
-                val clip = ClipData.newUri(app.contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
-                app.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
-                Toast.makeText(app, "已复制", Toast.LENGTH_SHORT).show()
-                collapse()
-            } catch (error: SecurityException) {
-                report("复制失败", error)
-            }
+            if (entry.kind == StashStore.KIND_TEXT) ClipboardWriter.copy(app, entry.text.orEmpty(), complete)
+            else ClipboardWriter.copyImage(app, StashImageProvider.uriForEntry(entry.id), complete)
         }
 
         private fun deleteSelected() {

@@ -1,7 +1,6 @@
 package com.leaf.hyperdragshare.codex
 
 import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
@@ -305,27 +304,18 @@ class StashActivity : ComponentActivity() {
 
     private fun copyEntry(entry: StashStore.Entry) {
         if (copying || isFinishing || isDestroyed) return
-        if (entry.kind == StashStore.KIND_TEXT) {
-            copying = true
-            copyMessage = "正在复制…"
-            ClipboardWriter.copy(this, entry.text.orEmpty()) { error ->
-                if (!isFinishing && !isDestroyed) {
-                    copying = false
-                    copyMessage = if (error == null) "已复制文字"
-                        else "复制失败：${error.message ?: "无法写入剪贴板"}"
-                }
+        copying = true
+        copyMessage = "正在复制…"
+        val complete = ClipboardWriter.Callback { error ->
+            if (!isFinishing && !isDestroyed) {
+                copying = false
+                copyMessage = if (error == null) {
+                    if (entry.kind == StashStore.KIND_TEXT) "已复制文字" else "已复制图片"
+                } else "复制失败：${error.message ?: "无法写入剪贴板"}"
             }
-            return
         }
-        try {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newUri(contentResolver, "中转站图片", StashImageProvider.uriForEntry(entry.id))
-            clipboard.setPrimaryClip(clip)
-            Toast.makeText(this, "已复制图片", Toast.LENGTH_SHORT).show()
-        } catch (error: SecurityException) {
-            DragShareLog.w("DragShare/Stash", "permission denied while copying stash content", error)
-            Toast.makeText(this, "复制失败：系统拒绝访问剪贴板或图片。", Toast.LENGTH_LONG).show()
-        }
+        if (entry.kind == StashStore.KIND_TEXT) ClipboardWriter.copy(this, entry.text.orEmpty(), complete)
+        else ClipboardWriter.copyImage(this, StashImageProvider.uriForEntry(entry.id), complete)
     }
 
     private fun shareEntry(entry: StashStore.Entry) {

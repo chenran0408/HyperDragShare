@@ -1,7 +1,5 @@
 package com.leaf.hyperdragshare.codex;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -1592,20 +1590,19 @@ final class DragShareController {
             });
             return;
         }
-        try {
-            ClipboardManager clipboard = context.getSystemService(ClipboardManager.class);
-            if (clipboard == null) {
-                throw new IllegalStateException("Clipboard service is unavailable");
-            }
-            if (stagedImage == null) throw new IllegalArgumentException("Image URI is not ready");
-            ClipData clip = ClipData.newUri(context.getContentResolver(), "drag-share-image", stagedImage);
-            clipboard.setPrimaryClip(clip);
-            log("copied image to clipboard");
-            showToast("图片已复制到剪贴板");
-        } catch (RuntimeException error) {
-            log("clipboard copy failed", error);
-            showToast("复制图片失败：" + error.getMessage(), Toast.LENGTH_LONG);
+        if (stagedImage == null) {
+            showToast("图片尚未准备好，无法复制");
+            return;
         }
+        ClipboardWriter.copyImage(context, stagedImage, error -> {
+            if (error == null) {
+                log("copied image to clipboard");
+                showToast("图片已复制到剪贴板");
+            } else {
+                log("clipboard image copy failed", error);
+                showToast("复制图片失败：" + error.getMessage(), Toast.LENGTH_LONG);
+            }
+        });
     }
 
     private void openTextSegmentation(CapturedContent payload) {

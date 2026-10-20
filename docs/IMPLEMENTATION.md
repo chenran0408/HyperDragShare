@@ -902,3 +902,11 @@ ImageOcrOverlay新增明确QR模式，复用解码、窗口、Miuix及生命周�
 BoomActionHandler把复制交给PanelSession，分词可见反馈与成功后退出沿用原偏好；屏幕OCR、中转站管理/侧窗和拖拽文字都使用ClipboardWriter。异步成功后才触发退出/收起，失败保留当前数据，已销毁窗口不处理迟到UI回调。图片分支尚未接共享Writer，不能认为无异常等于成功。
 
 181项单测、Lint、构建及143安装/Portal握手通过。分词全选COPY-119、侧窗COPY-119-STASH、真实磁贴入口Root屏幕OCR单行COPY-119，三个场景均由独立UID严格读回匹配。临时磁贴完整列表恢复；测试记录8→7清理，原数据保留。系统复制编辑浮层覆盖一次关闭区域的共存问题仍待处理，具体误点与未验范围见DEVICE_VALIDATION.md。
+
+### 1.7.120：图片复制与独立快照
+
+ClipboardWriter.copyImage将私有StashImageProvider图片流复制到现有ShareImageProvider，已有分享URI直接使用。stage_image写临时文件后仅解码bounds确定实际MIME，按平台MimeTypeMap取得安全扩展名，不重编码；32MiB上限、24小时机会式清理保持。ShareUriToken支持规范UUID与1–8位小写字母数字后缀，保留裸UUID旧JPEG；格式未知明确报错，不猜PNG。
+
+System UID临时进程没有AMS应用记录，不能通过ContentResolver查询Provider，也不能作为剪贴板URI授权来源。图片Root分支固定启动Shell UID2000，明确MIME构造ClipData，通过目标ROM实测IClipboard签名/com.android.shell归属写入、严格读回URI，让系统正常向接收者授权。文字保留System UID。stdin传内容，后台5秒Root截止，不改权限/可见性策略或堆回退。固定主用户和本机剪贴板，其他用户/虚拟设备未支持。
+
+侧窗、系统小窗、拖拽图片接统一完成回调，失败保留内容，成功才反馈/收起。182项单测、Lint、构建通过；144原生小窗/侧窗产品按钮到独立UID字节一致，删除中转站原图后副本仍一致。JPEG仅单测通过，真机其他格式及拖拽菜单图片入口未验，不能用公共Writer通过替代。具体失败与成功证据见DEVICE_VALIDATION.md。
