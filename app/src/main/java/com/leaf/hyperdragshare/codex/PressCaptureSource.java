@@ -41,6 +41,7 @@ final class PressCaptureSource {
     private volatile long generation;
     private volatile boolean stopped;
     private volatile boolean pointerDown;
+    private volatile long downTime = -1L;
     private boolean lookupRunning;
     private boolean displayQueued;
     private CapturedContent cached;
@@ -83,6 +84,7 @@ final class PressCaptureSource {
         if (stopped) return;
         if (action == MotionEvent.ACTION_DOWN) {
             cancelGesture();
+            downTime = time;
             pointerDown = true;
             downX = x;
             downY = y;
@@ -112,7 +114,7 @@ final class PressCaptureSource {
     private boolean allowed() {
         return !stopped && input.isReady() && hostAllowed.getAsBoolean()
                 && (settings.isSharingEnabled(false) || settings.isSharingEnabled(true))
-                && !controller.isActive()
+                && controller.canContinuePress(downTime)
                 && settings.isAccessibilityRecognitionEnabledForOrientation(
                         context.getResources().getConfiguration().orientation)
                 && context.getSystemService(PowerManager.class).isInteractive()
@@ -272,10 +274,13 @@ final class PressCaptureSource {
         text.putInt("x", Math.round(downX));
         text.putInt("y", Math.round(downY));
         try {
-            context.getContentResolver().call(ImageStagingClient.BASE_URI, "open_bigbang_window", null, text);
+            Bundle result = context.getContentResolver().call(
+                    ImageStagingClient.BASE_URI, "open_bigbang_window", null, text);
+            completeHandoff(result);
         } catch (SecurityException | IllegalStateException error) {
             DragShareLog.w(TAG, "cannot open press text window", error);
             showFailure("无法打开分词窗口：" + error.getMessage());
+            blocker.stop();
         }
     }
 
@@ -288,11 +293,13 @@ final class PressCaptureSource {
                     Bundle image = new Bundle();
                     image.putParcelable("image", uri);
                     try {
-                        context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                        Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
                                 ImageOcrOverlay.METHOD_RECOGNIZE, null, image);
+                        completeHandoff(result);
                     } catch (SecurityException | IllegalStateException error) {
                         DragShareLog.w(TAG, "cannot open press image window", error);
                         showFailure("无法打开图片识字：" + error.getMessage());
+                        blocker.stop();
                     }
                 });
             }
@@ -300,10 +307,22 @@ final class PressCaptureSource {
                 recycle(content);
                 DragShareLog.w(TAG, "cannot stage press image", error);
                 main.post(() -> {
-                    if (request == generation && !stopped) showFailure("无法暂存识字图片：" + error.getMessage());
+                    if (request == generation && !stopped) {
+                        showFailure("无法暂存识字图片：" + error.getMessage());
+                        blocker.stop();
+                    }
                 });
             }
         });
+    }
+
+    private void completeHandoff(Bundle result) {
+        if (result != null && result.getBoolean("accepted")) {
+            controller.handoffToPress(downTime);
+        } else {
+            DragShareLog.w(TAG, "press window request was not accepted");
+            blocker.stop();
+        }
     }
 
     private static boolean isHoldControlText(String text) {

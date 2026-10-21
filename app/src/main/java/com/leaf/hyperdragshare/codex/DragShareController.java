@@ -129,6 +129,8 @@ final class DragShareController {
 
     private volatile boolean active;
     private volatile boolean destroyed;
+    private volatile long rootDownTime = -1L;
+    private volatile long pressHandoffTime = -1L;
     // startPick*Task can create Taplus' full-screen float view before this controller reaches
     // the main thread. Keep its window suppressed during that small handoff.
     private volatile boolean pendingPortalHostFloatWindowSuppression;
@@ -202,7 +204,7 @@ final class DragShareController {
     private ShareTarget selectedTarget;
     private boolean menuShown;
 
-    private Session session;
+    private volatile Session session;
     private DragShareSettings settings = DragShareSettings.defaults();
     private OverlayColors palette = OverlayColors.light();
 
@@ -222,12 +224,40 @@ final class DragShareController {
         return active;
     }
 
+    boolean canContinuePress(long downTime) {
+        long currentDownTime = rootDownTime;
+        if (currentDownTime >= 0L && currentDownTime != downTime) return false;
+        Session current = session;
+        return !active || (downTime >= 0L && current != null
+                && current.rootDownTime == downTime);
+    }
+
+    boolean isAwaitingRootRelease() {
+        return active || (rootDownTime >= 0L && pressHandoffTime == rootDownTime);
+    }
+
+    /** Called on main only after the text/OCR provider has accepted the press. */
+    void handoffToPress(long downTime) {
+        if (downTime < 0L || rootDownTime != downTime) return;
+        pressHandoffTime = downTime;
+        Session current = session;
+        if (active && current != null && current.rootDownTime == downTime) {
+            current.cancelled = true;
+            active = false;
+            stopEdgeScroll();
+            backgroundTouchBlocker.stop();
+            removeGestureViews();
+        }
+        pendingPortalHostFloatWindowSuppression = false;
+        log("press accepted; native preview suppressed until root release");
+    }
+
     void reservePortalHostFloatWindowSuppression() {
         pendingPortalHostFloatWindowSuppression = true;
     }
 
     boolean shouldSuppressPortalHostFloatWindow() {
-        return active || pendingPortalHostFloatWindowSuppression;
+        return isAwaitingRootRelease() || pendingPortalHostFloatWindowSuppression;
     }
 
     void show(
@@ -238,7 +268,8 @@ final class DragShareController {
         if (content == null) {
             return;
         }
-        runOnMain(() -> showOnMain(content, initialX, initialY, loadedSettings));
+        long downTime = rootDownTime;
+        runOnMain(() -> showOnMain(content, initialX, initialY, loadedSettings, downTime));
     }
 
     void cancelActiveSession() {
@@ -285,6 +316,11 @@ final class DragShareController {
             long eventTime,
             String source,
             Runnable beforeFinish) {
+        if ("root".equals(source) && action == MotionEvent.ACTION_DOWN) {
+            rootDownTime = eventTime;
+            pressHandoffTime = -1L;
+        }
+        long downTime = rootDownTime;
         DragShareLog.d(TAG, "pointer received source=" + source
                 + " action=" + MotionEvent.actionToString(action)
                 + " point=" + Math.round(x) + "," + Math.round(y)
@@ -300,7 +336,15 @@ final class DragShareController {
                         + " action=" + MotionEvent.actionToString(action)
                         + " point=" + Math.round(x) + "," + Math.round(y));
             }
-            handleMotionOnMain(action, x, y, eventTime, source, beforeFinish);
+            try {
+                handleMotionOnMain(action, x, y, eventTime, source, beforeFinish);
+            } finally {
+                if ("root".equals(source)
+                        && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
+                    if (rootDownTime == downTime) rootDownTime = -1L;
+                    if (pressHandoffTime == downTime) pressHandoffTime = -1L;
+                }
+            }
         });
     }
 
@@ -340,6 +384,8 @@ final class DragShareController {
 
     void destroy() {
         destroyed = true;
+        rootDownTime = -1L;
+        pressHandoffTime = -1L;
         pendingPortalHostFloatWindowSuppression = false;
         runOnMain(() -> {
             active = false;
@@ -357,7 +403,12 @@ final class DragShareController {
             CapturedContent payload,
             float requestedInitialX,
             float requestedInitialY,
-            DragShareSettings loadedSettings) {
+            DragShareSettings loadedSettings,
+            long downTime) {
+        if (downTime != rootDownTime || (downTime >= 0L && downTime == pressHandoffTime)) {
+            pendingPortalHostFloatWindowSuppression = false;
+            return;
+        }
         if (destroyed) {
             pendingPortalHostFloatWindowSuppression = false;
             return;
@@ -396,7 +447,7 @@ final class DragShareController {
 
         try {
             refreshDisplayGeometry();
-            session = new Session(payload);
+            session = new Session(payload, downTime);
             createPreview(payload);
             createGlow();
             if (glowView != null && glowParams != null) {
@@ -844,7 +895,9 @@ final class DragShareController {
             String source,
             Runnable beforeFinish) {
         if (!active) {
-            if (action == MotionEvent.ACTION_UP) finishGestureOnMain(false, beforeFinish);
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                finishGestureOnMain(false, beforeFinish);
+            }
             return;
         }
         // Only pilfer once the authoritative root stream has produced an
@@ -864,7 +917,7 @@ final class DragShareController {
 
         if (action == MotionEvent.ACTION_CANCEL) {
             log("gesture cancelled source=" + source);
-            cancelGestureOnMain();
+            finishGestureOnMain(false, beforeFinish);
             return;
         }
         if (action == MotionEvent.ACTION_UP) {
@@ -2137,12 +2190,14 @@ final class DragShareController {
 
     private static final class Session {
         final CapturedContent payload;
+        final long rootDownTime;
         Uri stagedUri;
         ShareTarget pendingTarget;
         boolean cancelled;
 
-        Session(CapturedContent payload) {
+        Session(CapturedContent payload, long rootDownTime) {
             this.payload = payload;
+            this.rootDownTime = rootDownTime;
         }
     }
 

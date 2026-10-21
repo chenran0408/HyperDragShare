@@ -28,7 +28,7 @@
 3. root 拖拽期间，真实的 `ABS_MT_TRACKING_ID=-1` / `BTN_TOUCH=0` 才对应最终
    `ACTION_UP`。传送门的 `cancelTask`、控制码 `257/258` 以及重复的
    `startPick*Task` 不能提前结束活动拖拽。`cancelTask` 和 `257` 不能永久吞掉：应暂存
-   原调用并在真实 UP 时回放，以复位传送门的 `sIsTaskFinished` 等内部状态；`258` 才是
+   原调用并在真实 UP（或 Root 多指 CANCEL 终止）时回放，以复位传送门的 `sIsTaskFinished` 等内部状态；`258` 才是
    应持续抑制的移动取消信号。
 4. 预览窗和菜单必须保持 `FLAG_NOT_TOUCHABLE`。它们通过
    `WindowManager.updateViewLayout()` 被动跟随坐标，不接管当前手势。原页面仍可能滚动是
@@ -116,6 +116,8 @@
 144起精确Hook 5.1.5的App.onCreate，仅主进程初始化；无拾取服务时只在按压已启用且来源为传送门时启动Root运行时。Root可query SwitchControlProvider根URI拉进程，不打开原生Activity；其query/getType无业务调用，getControlStatus可能迁移设置，不用于唤醒。content --user需要数字，Root用am get-current-user取得，不把CLI零退出码当成功。168已真机证实无需拾取服务即可Root输入/取词ready。
 
 既有重载弹窗的热重载只结束Portal/AICR，空query重启Portal后核对新PID/版本/Root确认；AICR下次绑定加载。android/system_server的代码更新必须软或整机重启，不宣称应用热重载更新全部作用域。未为了验证重启用户手机。
+
+145以Root DOWN标记同一次按压和预览；被接受的分词/OCR交接后继续抑制迟到预览/原生浮窗并暂存宿主结束调用，到真实UP/CANCEL后回放再清标记。排队show复核标记，旧查询/失败回调不得接管或释放下一手势。此为源码回归通过，实际手指手感未验；面积仍无有效数据。
 
 ## 当前交互验收标准
 

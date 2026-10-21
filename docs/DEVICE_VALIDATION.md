@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.144 / versionCode 168。沿用本 fork 包名和 debug 签名，原位升级成功；本批后台冷启动后注入/Root记录为168/true，PID与新传送门进程一致。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.145 / versionCode 169。沿用debug签名，原位升级成功；本批新Portal PID18079，注入/Root版本169、Root授权true。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装 1.7.144 / 168；203 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
+- 当前已安装1.7.145 / 169；208项单测0失败/0错误，Lint 0错误/151警告/2提示，assembleDebug通过。最新批次见文末；以下历史记录仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -946,3 +946,11 @@ APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null�
 限制与收尾：透明接收桥刚启动后首次截图早于面板绘制，未据空白截图发送坐标；确认本模块窗口后才操作。检查时底层应用从此前微信变成另一应用，后续页面还在变化，无法证明全程无人操作或透明桥对原微信任务的返回；因此只报告选区恢复，不报告“回原微信”通过。发现底层页面变化后停止其余验收，只关闭本次模块窗口，不发送额外Back，不强制恢复旧任务干扰用户。未在底层页面输入、复制或保存内容；没有启动媒体播放或修改任何应用数据。截图仅作临时定位，已按确切文件名删除，不提交图片或私人页面内容。
 
 本轮保留已安装1.7.144/168与原APK，不为验收记录增版。普通长按冲突、物理面积、真实接收、中转站手指拖动与完整返回层级仍待对应证据。
+
+## 2026-10-21：1.7.145 同手势分词与拖拽交接
+
+- 实现：同一Root手势的原生预览不再取消按压候选；文字/OCR请求被接受才交接，迟到预览不复活。移动保留拖拽；拒绝请求保留预览。Root UP与多指CANCEL均清理暂存宿主调用；迟到图片失败与旧查询不影响下一手势。细节见IMPLEMENTATION/CONTACT_AREA_TRIGGER。
+- 检查：最终build300执行testDebugUnitTest、lintDebug、assembleDebug成功；208测试0失败/错误，含5项交接回归，Lint0错误/151警告/2提示。早期build297单测编译因SDK37移除FingerprintManager导致Shadows重载解析失败，已用现有ShadowLooper入口修正，未增加平台stub。
+- 安装：只覆盖安装一次。包名不变、version169/1.7.145，debug证书SHA256 b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0一致。APK位于任务outputs/HyperDragShare-1.7.145-debug.apk；SHA256 6832D25724A6B4C352774070BD1C890614F7FCDED3FC5D1E04D81507A0CBAA02。
+- 后台加载：操作前无输入约145秒；仅结束旧Portal22301、Root空query唤醒，新PID18079。模块activation.xml显示process_id18079、injected_version169、portal_root_version169、portal_root_granted=true。重载前后前台均微信LauncherUI/task2387，未启动Activity、截图、注入触摸、改剪贴板/中转站、停AICR或重启系统。日志筛选未取到本批ready行，故本批不另宣称输入/取词ready；144旧证据保留。
+- 未实测：真实手指面积、普通长按冲突实际手感、应用接收拖拽、中转站新手势、复杂返回层级。未把源码/回归通过称为真机完整验收。android仍未重载，本批不涉及框架代码变化。

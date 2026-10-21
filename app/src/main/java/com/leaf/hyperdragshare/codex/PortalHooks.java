@@ -380,9 +380,8 @@ final class PortalHooks {
 
             Object control = properties.get(CONTROL_KEY);
             if ("258".equals(control)) {
-                // Suppress a move cancellation only for our active drag. If the
-                // host has no module session, it must reset its own task state.
-                if (current.isActive()) {
+                // A confirmed press owns this same root gesture through release too.
+                if (current.isAwaitingRootRelease()) {
                     param.setResult(null);
                 }
             } else if ("257".equals(control)) {
@@ -537,8 +536,6 @@ final class PortalHooks {
 
     private static void dispatchRootPointer(
             int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
-        PressCaptureSource thumb = thumbCaptureSource;
-        if (thumb != null) thumb.onPointerEvent(action, x, y, eventTime, rawTouchMajor, rawWidthMajor);
         DragShareLog.d(TAG, "root pointer action=" + MotionEvent.actionToString(action)
                 + " point=" + Math.round(x) + "," + Math.round(y)
                 + " time=" + eventTime);
@@ -550,10 +547,12 @@ final class PortalHooks {
                     y,
                     eventTime,
                     "root",
-                    action == MotionEvent.ACTION_UP
+                    action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
                             ? PortalHooks::replayDeferredHostCalls
                             : null);
         }
+        PressCaptureSource thumb = thumbCaptureSource;
+        if (thumb != null) thumb.onPointerEvent(action, x, y, eventTime, rawTouchMajor, rawWidthMajor);
     }
 
     private static void configureThumbCapture(Context context, DragShareSettings settings) {
@@ -595,7 +594,7 @@ final class PortalHooks {
             String kind) {
         synchronized (DEFERRED_HOST_LOCK) {
             DragShareController current = controller;
-            if (current == null || !current.isActive() || !hasReadyRootSource()) {
+            if (current == null || !current.isAwaitingRootRelease() || !hasReadyRootSource()) {
                 return false;
             }
             for (DeferredHostCall existing : DEFERRED_HOST_CALLS) {
