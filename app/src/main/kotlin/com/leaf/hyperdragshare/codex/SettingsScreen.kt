@@ -109,6 +109,7 @@ import top.yukonga.miuix.kmp.icon.extended.Blocklist
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Play
+import top.yukonga.miuix.kmp.icon.extended.Update
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
@@ -139,7 +140,7 @@ private sealed interface SettingsRoute : NavKey {
     data object Blacklist : SettingsRoute
     data object Games : SettingsRoute
     data object About : SettingsRoute
-    data object Gestures : SettingsRoute
+    data class Module(val module: SettingModule, val focusId: String? = null) : SettingsRoute
     data object BottomTargets : SettingsRoute
     data object HoneycombLayout : SettingsRoute
     data object HoneycombTargets : SettingsRoute
@@ -151,7 +152,7 @@ private sealed interface SettingsRoute : NavKey {
 fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
     var settings by remember { mutableStateOf(DragShareSettings.readLocal(context)) }
     val backStack = remember { mutableStateListOf<NavKey>(SettingsRoute.Main).apply {
-        if (openGestures) add(SettingsRoute.Gestures)
+        if (openGestures) add(SettingsRoute.Module(SettingModule.GESTURES))
     } }
     val mainListState = rememberLazyListState()
     val mainTopAppBarState = rememberTopAppBarState()
@@ -167,115 +168,125 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
         }
         settings = next
     }
-    val currentSettings = rememberUpdatedState(settings)
-    val currentPersist = rememberUpdatedState(persist)
-    val currentDark = rememberUpdatedState(dark)
-    val settingsEntryProvider = remember(backStack) {
-        entryProvider<NavKey> {
-            entry(SettingsRoute.Main) {
-                MainPage(
-                    context = context,
-                    settings = currentSettings.value,
-                    listState = mainListState,
-                    topAppBarState = mainTopAppBarState,
-                    onOpenVisibility = { backStack.add(SettingsRoute.Visibility) },
-                    onOpenOrder = { backStack.add(SettingsRoute.Order) },
-                    onOpenBlacklist = { backStack.add(SettingsRoute.Blacklist) },
-                    onOpenGames = { backStack.add(SettingsRoute.Games) },
-                    onOpenAbout = { backStack.add(SettingsRoute.About) },
-                    onOpenGestures = { backStack.add(SettingsRoute.Gestures) },
-                    persist = currentPersist.value,
-                )
-            }
-            entry(SettingsRoute.Gestures) {
-                GestureSettingsContent(context,
-                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
-                    onManageTargets = { group ->
-                        backStack.add(when (group) {
-                            "bottom" -> SettingsRoute.BottomTargets
-                            "honeycomb" -> SettingsRoute.HoneycombTargets
-                            "side" -> SettingsRoute.SideTargets
-                            else -> error("Unknown gesture target group: $group")
-                        })
-                    })
-            }
-            entry(SettingsRoute.BottomTargets) {
-                GestureTargetsContent(context, "bottom", onBack = {
-                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                })
-            }
-            entry(SettingsRoute.HoneycombTargets) {
-                GestureTargetsContent(context, "honeycomb", onBack = {
-                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                }, onEditHoneycombLayout = { backStack.add(SettingsRoute.HoneycombLayout) })
-            }
-            entry(SettingsRoute.HoneycombLayout) {
-                val store = remember(context) {
-                    com.leaf.hyperdragshare.gestures.config.ConfigStore(context)
+    MiuixTheme(controller = themeController) {
+        var searchQuery by rememberSaveable { mutableStateOf("") }
+        val searchListState = rememberLazyListState()
+        val searchScope = rememberCoroutineScope()
+        val openTargets: (String) -> Unit = { group ->
+            backStack.add(when (group) {
+                "bottom" -> SettingsRoute.BottomTargets
+                "honeycomb" -> SettingsRoute.HoneycombTargets
+                "side" -> SettingsRoute.SideTargets
+                else -> error("Unknown gesture target group: $group")
+            })
+        }
+        val directory = (portalSettingEntries(context, settings,
+            onOpenVisibility = { backStack.add(SettingsRoute.Visibility) },
+            onOpenOrder = { backStack.add(SettingsRoute.Order) },
+            onOpenBlacklist = { backStack.add(SettingsRoute.Blacklist) },
+            onOpenGames = { backStack.add(SettingsRoute.Games) },
+            onOpenAbout = { backStack.add(SettingsRoute.About) }, persist = persist,
+        ) + gestureSettingEntries(context, onManageTargets = openTargets)).sortedWith(
+            compareBy({ it.module.ordinal }, { it.module.groups.indexOf(it.group) }))
+        val currentDirectory = rememberUpdatedState(directory)
+        val currentQuery = rememberUpdatedState(searchQuery)
+        val currentSettings = rememberUpdatedState(settings)
+        val currentPersist = rememberUpdatedState(persist)
+        val currentDark = rememberUpdatedState(dark)
+        val settingsEntryProvider = remember(backStack) {
+            entryProvider<NavKey> {
+                entry(SettingsRoute.Main) {
+                    SettingsHomePage(
+                        context, currentSettings.value, currentDirectory.value,
+                        currentQuery.value, { searchQuery = it; searchScope.launch { searchListState.scrollToItem(0) } }, mainListState, searchListState,
+                        mainTopAppBarState,
+                        onOpenModule = { backStack.add(SettingsRoute.Module(it)) },
+                        onOpenResult = { entry ->
+                            if (entry.enabled && entry.open != null) entry.open.invoke()
+                            else backStack.add(SettingsRoute.Module(entry.module, entry.id))
+                        },
+                    )
                 }
-                GestureHoneycombLayout(store, onBack = {
-                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                })
-            }
-            entry(SettingsRoute.SideTargets) {
-                GestureTargetsContent(context, "side", onBack = {
-                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                })
-            }
-            entry(SettingsRoute.Visibility) {
-                VisibilityPage(
-                    context = context,
-                    settings = currentSettings.value,
-                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
-                    persist = currentPersist.value,
-                )
-            }
-            entry(SettingsRoute.Order) {
-                OrderPage(
-                    context = context,
-                    settings = currentSettings.value,
-                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
-                    persist = currentPersist.value,
-                )
-            }
-            entry(SettingsRoute.Blacklist) {
-                AccessibilityBlacklistPage(
-                    context = context,
-                    settings = currentSettings.value,
-                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
-                    persist = currentPersist.value,
-                )
-            }
-            entry(SettingsRoute.Games) {
-                GameAppsPage(
-                    context = context,
-                    settings = currentSettings.value,
-                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
-                    persist = currentPersist.value,
-                )
-            }
-            entry(SettingsRoute.About) {
-                DragShareAboutPage(
-                    context = context,
-                    dark = currentDark.value,
-                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
-                    onOpenLicenses = { backStack.add(SettingsRoute.Licenses) },
-                )
-            }
-            entry(SettingsRoute.Licenses) {
-                DragShareOpenSourceLicensePage(
-                    dark = currentDark.value,
-                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
-                )
+                entry<SettingsRoute.Module> { route ->
+                    SettingsModulePage(route.module, currentDirectory.value.filter { it.module == route.module },
+                        route.focusId, onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) })
+                }
+                entry(SettingsRoute.BottomTargets) {
+                    GestureTargetsContent(context, "bottom", onBack = {
+                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                    })
+                }
+                entry(SettingsRoute.HoneycombTargets) {
+                    GestureTargetsContent(context, "honeycomb", onBack = {
+                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                    }, onEditHoneycombLayout = { backStack.add(SettingsRoute.HoneycombLayout) })
+                }
+                entry(SettingsRoute.HoneycombLayout) {
+                    val store = remember(context) {
+                        com.leaf.hyperdragshare.gestures.config.ConfigStore(context)
+                    }
+                    GestureHoneycombLayout(store, onBack = {
+                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                    })
+                }
+                entry(SettingsRoute.SideTargets) {
+                    GestureTargetsContent(context, "side", onBack = {
+                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                    })
+                }
+                entry(SettingsRoute.Visibility) {
+                    VisibilityPage(
+                        context = context,
+                        settings = currentSettings.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                        persist = currentPersist.value,
+                    )
+                }
+                entry(SettingsRoute.Order) {
+                    OrderPage(
+                        context = context,
+                        settings = currentSettings.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                        persist = currentPersist.value,
+                    )
+                }
+                entry(SettingsRoute.Blacklist) {
+                    AccessibilityBlacklistPage(
+                        context = context,
+                        settings = currentSettings.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                        persist = currentPersist.value,
+                    )
+                }
+                entry(SettingsRoute.Games) {
+                    GameAppsPage(
+                        context = context,
+                        settings = currentSettings.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                        persist = currentPersist.value,
+                    )
+                }
+                entry(SettingsRoute.About) {
+                    DragShareAboutPage(
+                        context = context,
+                        dark = currentDark.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                        onOpenLicenses = { backStack.add(SettingsRoute.Licenses) },
+                    )
+                }
+                entry(SettingsRoute.Licenses) {
+                    DragShareOpenSourceLicensePage(
+                        dark = currentDark.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                    )
+                }
             }
         }
-    }
-    val entries = rememberDecoratedNavEntries(
-        backStack = backStack,
-        entryProvider = settingsEntryProvider,
-    )
+        val entries = rememberDecoratedNavEntries(
+            backStack = backStack,
+            entryProvider = settingsEntryProvider,
+        )
 
-    MiuixTheme(controller = themeController) {
         SyncSystemBars(dark)
         NavDisplay(
             entries = entries,
@@ -286,26 +297,18 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
 }
 
 @Composable
-private fun MainPage(
+private fun portalSettingEntries(
     context: Context,
     settings: DragShareSettings,
-    listState: LazyListState,
-    topAppBarState: TopAppBarState,
     onOpenVisibility: () -> Unit,
     onOpenOrder: () -> Unit,
     onOpenBlacklist: () -> Unit,
     onOpenGames: () -> Unit,
     onOpenAbout: () -> Unit,
-    onOpenGestures: () -> Unit,
     persist: (DragShareSettings) -> Unit,
-) {
-    var settingsSection by rememberSaveable { mutableIntStateOf(0) }
+): List<SettingEntry> {
     var showAccessibilityDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-    var aicrOcrEnabled by remember(context) {
-        mutableStateOf(IntegrationSettings.isAicrOcrEnabled(context))
-    }
-    val ocrEngineNames = listOf("ML Kit", "系统 AICR V2（默认）")
     var copyDirectEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
     }
@@ -348,7 +351,9 @@ private fun MainPage(
                     try {
                         DragShareLog.exportTo(context, destination)
                         null
-                    } catch (error: Throwable) {
+                    } catch (error: java.io.IOException) {
+                        error.message ?: error.javaClass.simpleName
+                    } catch (error: SecurityException) {
                         error.message ?: error.javaClass.simpleName
                     }
                 }
@@ -387,7 +392,6 @@ private fun MainPage(
     var accessibilitySensitivity by remember(settings.accessibilityRecognitionSensitivityPercent) {
         mutableFloatStateOf(settings.accessibilityRecognitionSensitivityPercent.toFloat())
     }
-    val scrollBehavior = MiuixScrollBehavior(state = topAppBarState)
     val cleanupPrefs = remember(context) { context.getSharedPreferences(SharedImageCleanupJob.PREFS, Context.MODE_PRIVATE) }
     var cleanupError by remember(cleanupPrefs) { mutableStateOf(cleanupPrefs.getString(SharedImageCleanupJob.LAST_ERROR, null)) }
     DisposableEffect(cleanupPrefs) {
@@ -398,717 +402,122 @@ private fun MainPage(
         onDispose { cleanupPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    Scaffold(
-        topBar = {
-            SmallTopAppBar(
-                title = "HyperDragShare",
-                scrollBehavior = scrollBehavior,
+    val entries = mutableListOf<SettingEntry>()
+    val dragSharingEnabled = settings.textSharingEnabled || settings.imageSharingEnabled
+    val dragSharingPrerequisite = if (dragSharingEnabled) null else "先启用文字分享或图片分享"
+    fun row(
+        id: String, title: String, module: SettingModule, group: String,
+        summary: String = "", keywords: String = "", icon: androidx.compose.ui.graphics.vector.ImageVector = settingGroupIcon(module, group),
+        enabled: Boolean = true, prerequisite: String? = null, open: (() -> Unit)? = null,
+        body: @Composable (String, String, Boolean) -> Unit,
+    ) {
+        entries += SettingEntry(id, title, module, group, summary, keywords, icon, enabled, prerequisite, open) {
+            body(title, summary, it)
+        }
+    }
+    fun navigationRow(
+        id: String,
+        title: String,
+        module: SettingModule,
+        group: String,
+        summary: String,
+        keywords: String = "",
+        icon: androidx.compose.ui.graphics.vector.ImageVector = settingGroupIcon(module, group),
+        enabled: Boolean = true,
+        prerequisite: String? = null,
+        onClick: () -> Unit,
+    ) {
+        row(id, title, module, group, summary, keywords, icon, enabled, prerequisite, onClick) {
+            rowTitle, rowSummary, rowEnabled ->
+            ArrowPreference(
+                title = rowTitle,
+                summary = rowSummary,
+                enabled = rowEnabled,
+                onClick = onClick,
             )
+        }
+    }
+    entries += thumbTriggerEntries(context, settings) { timeout ->
+        persist(copySettings(settings, accessibilityLongPressTimeoutMillis = timeout))
+    }
+    row("ocr.system", "系统 AICR 识字", SettingModule.PORTAL, "触发与识别",
+        summary = "图片与屏幕识字使用系统 AICR V2",
+        keywords = "OCR 识字 图片 屏幕 AICR 小米", icon = MiuixIcons.Show,
+    ) { title, summary, _ -> BasicComponent(title = title, summary = summary) }
+    val openStash = { StashOverlayPanel.show(context); Unit }
+    navigationRow("stash.open", "打开侧边中转站", SettingModule.PORTAL, "中转站",
+        summary = "临时收集图文，按住内容拖出",
+        icon = MiuixIcons.Folder, onClick = openStash,
+    )
+    row("runtime.reload", context.getString(R.string.scope_restart_title), SettingModule.GENERAL, "运行与权限",
+        summary = context.getString(R.string.scope_restart_summary), keywords = "热重载 重启 作用域 Root LSPosed",
+    ) { title, _, _ -> ScopeRestartPreference(context, title) }
+    cleanupError?.let { message ->
+        row("stash.cleanupError", "上次暂存图片清理未完成", SettingModule.GENERAL, "日志与诊断", summary = message) {
+            title, summary, _ -> BasicComponent(title = title, summary = summary)
+        }
+    }
+    row("ocr.backtap", "背部轻敲启动屏幕识字", SettingModule.PORTAL, "触发与识别",
+        summary = "使用系统框架作用域",
+        keywords = "识字 OCR 屏幕 双击 三击",
+    ) { title, summary, enabled ->
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = listOf("关闭", "双击", "三击", "双击和三击"),
+            selectedIndex = backTapMode,
+            onSelectedIndexChange = { selected ->
+                val previousMode = backTapMode
+                val requestedMode = BackTapMode.normalize(selected)
+                IntegrationSettings.setBackTapMode(context, requestedMode)
+                backTapMode = requestedMode
+                coroutineScope.launch {
+                    val applied = withContext(Dispatchers.IO) {
+                        IntegrationSettings.syncBackTapModeAsRoot(context)
+                    }
+                    if (!applied) {
+                        IntegrationSettings.setBackTapMode(context, previousMode)
+                        backTapMode = previousMode
+                        Toast.makeText(
+                            context,
+                            "写入系统设置失败，请确认 Root 已授权",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("capture.source", "内容获取方式", SettingModule.PORTAL, "触发与识别",
+        summary = if (settings.isPortalCaptureMode) {
+            "由传送门识别长按内容"
+        } else {
+            "由无障碍读取文字并截取图片区域"
         },
-    ) { paddingValues ->
-        Column(Modifier.fillMaxSize().padding(paddingValues)) {
-            TabRow(
-                tabs = listOf("首页", "拖拽", "更多"),
-                selectedTabIndex = settingsSection,
-                onTabSelected = { selected ->
-                    settingsSection = selected
-                    coroutineScope.launch { listState.scrollToItem(0) }
-                },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            )
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = PaddingValues(bottom = 12.dp),
-        ) {
-            if (settingsSection == 2) {
-            item(key = "maintenance") {
-                SmallTitle(text = "运行与权限")
-                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    ScopeRestartPreference(context)
-                    SettingsNavigationPreference(
-                        title = "悬浮窗权限",
-                        summary = "用于原页分词和侧边中转站，允许在其他应用上层操作",
-                        icon = MiuixIcons.Layers,
-                        onClick = {
-                            context.startActivity(Intent(
-                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                android.net.Uri.parse("package:${context.packageName}"),
-                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        },
-                    )
-                    SwitchPreference(
-                        title = "预加载分词库",
-                        summary = "减少首次打开分词的等待",
-                        checked = settings.preloadTextSegmenter,
-                        onCheckedChange = { checked ->
-                            persist(copySettings(settings, preloadTextSegmenter = checked))
-                        },
-                    )
+        keywords = "无障碍 传送门 来源",
+    ) { title, summary, enabled ->
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = listOf("传送门", "无障碍"),
+            selectedIndex = settings.contentCaptureMode.coerceIn(0, 1),
+            onSelectedIndexChange = { selected ->
+                val mode = if (selected == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
+                    DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
+                } else {
+                    DragShareSettings.CONTENT_CAPTURE_PORTAL
                 }
-            }
-            item(key = "system-integration-title") {
-                SmallTitle(text = "系统集成")
-            }
-            item(key = "system-integration-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    BasicComponent(
-                        title = "图片暂存",
-                        summary = "分享副本满24小时后在使用时清理，保留中转站原内容",
-                    )
-                    OverlayDropdownPreference(
-                        title = "文字识别引擎",
-                        summary = ocrEngineNames[if (aicrOcrEnabled) 1 else 0] +
-                            "\n图片、整屏和选区共用；失败提示原因，不自动切换引擎",
-                        showValue = false,
-                        items = ocrEngineNames,
-                        selectedIndex = if (aicrOcrEnabled) 1 else 0,
-                        onSelectedIndexChange = { selected ->
-                            aicrOcrEnabled = selected == 1
-                            IntegrationSettings.setAicrOcrEnabled(context, aicrOcrEnabled)
-                        },
-                    )
-                    SwitchPreference(
-                        title = "复制直达与分词",
-                        summary = "复制卡片接入原页分词与实体直达；也可选词后点击直达图标。需启用传送门/AICR作用域；默认关闭",
-                        checked = copyDirectEnabled,
-                        onCheckedChange = { enabled ->
-                            IntegrationSettings.setCopyDirectEnabled(context, enabled)
-                            copyDirectEnabled = enabled
-                        },
-                    )
-                    OverlayDropdownPreference(
-                        title = "复制直达浏览器",
-                        summary = if (copyDirectBrowserUnavailable) {
-                            "当前已选浏览器未安装；请重新选择，不会自动切换"
-                        } else {
-                            "选择复制直达打开链接时使用的浏览器"
-                        },
-                        items = copyDirectBrowserItems,
-                        selectedIndex = copyDirectBrowserIndex,
-                        onSelectedIndexChange = { selected ->
-                            val choiceIndex = selected - if (copyDirectBrowserUnavailable) 1 else 0
-                            copyDirectBrowserChoices.getOrNull(choiceIndex)?.let { choice ->
-                                IntegrationSettings.setCopyDirectBrowserPackage(context, choice.packageName)
-                                copyDirectBrowserPackage = choice.packageName
-                            }
-                        },
-                    )
-                    OverlayDropdownPreference(
-                        title = "背部轻敲启动屏幕识字",
-                        summary = "需要 LSPosed 启用 android 进程和 Root。关闭时保留系统原动作",
-                        items = listOf("关闭", "双击", "三击", "双击和三击"),
-                        selectedIndex = backTapMode,
-                        onSelectedIndexChange = { selected ->
-                            val previousMode = backTapMode
-                            val requestedMode = BackTapMode.normalize(selected)
-                            IntegrationSettings.setBackTapMode(context, requestedMode)
-                            backTapMode = requestedMode
-                            coroutineScope.launch {
-                                val applied = withContext(Dispatchers.IO) {
-                                    IntegrationSettings.syncBackTapModeAsRoot(context)
-                                }
-                                if (!applied) {
-                                    IntegrationSettings.setBackTapMode(context, previousMode)
-                                    backTapMode = previousMode
-                                    Toast.makeText(
-                                        context,
-                                        "写入系统设置失败，请确认 Root 已授权",
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
-                            }
-                        },
-                    )
+                persist(copySettings(settings, contentCaptureMode = mode))
+                if (mode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
+                    && !AccessibilityRuntimeStatus.isServiceEnabled(context)
+                ) {
+                    showAccessibilityDialog = true
                 }
-            }
-
-
-            item(key = "app-visibility-title") {
-                SmallTitle(text = "应用显示")
-            }
-            item(key = "launcher-icon") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                SwitchPreference(
-                    title = "桌面显示应用图标",
-                    summary = stringResource(R.string.launcher_icon_summary),
-                    checked = launcherIconEnabled,
-                    onCheckedChange = { enabled ->
-                        if (LauncherIconSettings.setEnabled(context, enabled)) {
-                            launcherIconEnabled = enabled
-                            Toast.makeText(
-                                context,
-                                if (enabled) {
-                                    R.string.launcher_icon_restored
-                                } else {
-                                    R.string.launcher_icon_hidden
-                                },
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        } else {
-                            Toast.makeText(
-                                context,
-                                R.string.launcher_icon_change_failed,
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        }
-                    },
-                )
-                }
-            }
-            }
-            if (settingsSection == 0) {
-            item(key = "activation-status") {
-                ActivationStatusCard(
-                    context = context,
-                    contentCaptureMode = settings.contentCaptureMode,
-                    onOpenAccessibilitySettings = if (settings.isAccessibilityCaptureMode) {
-                        { openAccessibilitySettings(context) }
-                    } else {
-                        null
-                    },
-                )
-            }
-            item(key = "scope-restart") {
-                SmallTitle(text = "常用入口")
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SettingsNavigationPreference(
-                        title = "手势与小窗",
-                        summary = "底角、侧边、蜂巢与任务中心",
-                        icon = MiuixIcons.GridView,
-                        onClick = onOpenGestures,
-                    )
-                    SettingsNavigationPreference(
-                        title = "打开侧边中转站",
-                        summary = "临时收集图文，拖出使用",
-                        icon = MiuixIcons.Folder,
-                        onClick = { StashOverlayPanel.show(context) },
-                    )
-                }
-            }
-            item(key = "text-panel-title") {
-                SmallTitle(text = "按住取词与避让")
-            }
-            item(key = "thumb-trigger-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ThumbTriggerPreference(context, settings) { timeout ->
-                        persist(copySettings(settings, accessibilityLongPressTimeoutMillis = timeout))
-                    }
-                    SettingsNavigationPreference(
-                        title = "应用黑名单",
-                        summary = "自动取词和 Hyper 手势共用此名单；桌面、输入法的内置排除只影响取词",
-                        icon = MiuixIcons.Blocklist,
-                        onClick = onOpenBlacklist,
-                    )
-                    SwitchPreference(
-                        title = "游戏内暂停自动触发",
-                        summary = "游戏中暂停自动取词和 Hyper 手势；手动点取、主动识屏仍可用",
-                        checked = settings.pauseAutomaticInGames,
-                        onCheckedChange = { enabled ->
-                            persist(copySettings(settings, pauseAutomaticInGames = enabled))
-                        },
-                    )
-                    SettingsNavigationPreference(
-                        title = "手动添加游戏",
-                        summary = if (settings.manualGamePackages.isEmpty()) {
-                            "手动选择应用，自动取词和 Hyper 手势均会避让"
-                        } else {
-                            "已选 ${settings.manualGamePackages.size} 个；自动取词和 Hyper 手势均会避让"
-                        },
-                        icon = MiuixIcons.Play,
-                        onClick = onOpenGames,
-                    )
-                }
-            }
-            item(key = "content-title") {
-                SmallTitle(text = "拖拽内容")
-            }
-            item(key = "content-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    OverlayDropdownPreference(
-                        title = "内容获取方式",
-                        summary = if (settings.isPortalCaptureMode) {
-                            "由传送门识别长按内容"
-                        } else {
-                            "由无障碍读取文字并截取图片区域"
-                        },
-                        items = listOf("传送门", "无障碍"),
-                        selectedIndex = settings.contentCaptureMode.coerceIn(0, 1),
-                        onSelectedIndexChange = { selected ->
-                            val mode = if (selected == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
-                                DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
-                            } else {
-                                DragShareSettings.CONTENT_CAPTURE_PORTAL
-                            }
-                            persist(copySettings(settings, contentCaptureMode = mode))
-                            if (mode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
-                                && !AccessibilityRuntimeStatus.isServiceEnabled(context)
-                            ) {
-                                showAccessibilityDialog = true
-                            }
-                        },
-                    )
-                    if (settings.isAccessibilityCaptureMode) {
-                        SwitchPreference(
-                            title = "横屏启用识别",
-                            summary = "横屏时也允许无障碍读取长按内容",
-                            checked = settings.accessibilityLandscapeRecognitionEnabled,
-                            onCheckedChange = { checked ->
-                                persist(
-                                    copySettings(
-                                        settings,
-                                        accessibilityLandscapeRecognitionEnabled = checked,
-                                    ),
-                                )
-                            },
-                        )
-                        SliderPreference(
-                            title = "识别灵敏度",
-                            summary = "提高后允许长按期间有更大的手指位移",
-                            value = accessibilitySensitivity,
-                            valueText = "${accessibilitySensitivity.roundToInt()}%",
-                            valueRange = DragShareSettings
-                                .MIN_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT.toFloat()
-                                ..DragShareSettings
-                                    .MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT.toFloat(),
-                            steps = 5,
-                            showKeyPoints = true,
-                            keyPoints = listOf(50f, 75f, 100f, 125f, 150f, 175f, 200f),
-                            onValueChange = { accessibilitySensitivity = it },
-                            onValueChangeFinished = {
-                                persist(
-                                    copySettings(
-                                        settings,
-                                        accessibilityRecognitionSensitivityPercent =
-                                            accessibilitySensitivity.roundToInt(),
-                                    ),
-                                )
-                            },
-                        )
-                    }
-                    SwitchPreference(
-                        title = "启用文字分享",
-                        summary = "长按文字时显示分享菜单",
-                        checked = settings.textSharingEnabled,
-                        onCheckedChange = { checked ->
-                            persist(copySettings(settings, textSharingEnabled = checked))
-                        },
-                    )
-                    SwitchPreference(
-                        title = "启用图片分享",
-                        summary = "长按图片时显示分享菜单",
-                        checked = settings.imageSharingEnabled,
-                        onCheckedChange = { checked ->
-                            persist(copySettings(settings, imageSharingEnabled = checked))
-                        },
-                    )
-                }
-            }
-
-            item(key = "text-panel-options-title") { SmallTitle(text = "分词操作") }
-            item(key = "text-panel-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SwitchPreference(
-                        title = "选词触感反馈",
-                        summary = "手指选中或取消词语时轻振一次",
-                        checked = selectionHapticEnabled,
-                        onCheckedChange = { enabled ->
-                            BigBangSettings.setSelectionHapticEnabled(context, enabled)
-                            selectionHapticEnabled = enabled
-                        },
-                    )
-                    SwitchPreference(
-                        title = "复制后退出",
-                        summary = "复制所选文字后关闭分词面板",
-                        checked = exitAfterCopyEnabled,
-                        onCheckedChange = { enabled ->
-                            BigBangSettings.setExitAfterCopyEnabled(context, enabled)
-                            exitAfterCopyEnabled = enabled
-                        },
-                    )
-                }
-            }
-
-            }
-            if (settingsSection == 1) {
-            item(key = "appearance-title") {
-                SmallTitle(text = "外观")
-            }
-            item(key = "appearance-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    OverlayDropdownPreference(
-                        title = "主题",
-                        summary = "设置与所有悬浮面板共用",
-                        items = listOf("浅色", "深色", "跟随系统"),
-                        selectedIndex = settings.colorMode,
-                        onSelectedIndexChange = { selected ->
-                            persist(
-                                copySettings(
-                                    settings,
-                                    colorMode = selected,
-                                ),
-                            )
-                        },
-                    )
-                    OverlayDropdownPreference(
-                        title = "拖拽样式",
-                        summary = "仅影响拖拽时的悬浮菜单",
-                        items = listOf("简洁", "流光", "环形", "现代"),
-                        selectedIndex = settings.uiStyle.coerceIn(0, 3),
-                        onSelectedIndexChange = { selected ->
-                            persist(copySettings(settings, uiStyle = selected.coerceIn(0, 3)))
-                        },
-                    )
-                }
-            }
-
-            if (settings.uiStyle == DragShareSettings.STYLE_SIMPLE
-                || settings.uiStyle == DragShareSettings.STYLE_MODERN
-            ) {
-                item(key = "simple-appearance-title") {
-                    SmallTitle(
-                        text = if (settings.uiStyle == DragShareSettings.STYLE_MODERN) {
-                            "现代样式"
-                        } else {
-                            "简洁样式"
-                        },
-                    )
-                }
-                item(key = "simple-appearance-preferences") {
-                    Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                        if (settings.uiStyle == DragShareSettings.STYLE_SIMPLE) {
-                            SliderPreference(
-                                title = "背景不透明度",
-                                value = simpleOpacity,
-                                valueText = "${simpleOpacity.roundToInt()}%",
-                                valueRange = DragShareSettings.MIN_SIMPLE_MENU_OPACITY_PERCENT.toFloat()
-                                    ..DragShareSettings.MAX_SIMPLE_MENU_OPACITY_PERCENT.toFloat(),
-                                steps = 15,
-                                showKeyPoints = true,
-                                keyPoints = listOf(20f, 40f, 60f, 80f, 100f),
-                                onValueChange = { simpleOpacity = it },
-                                onValueChangeFinished = {
-                                    persist(
-                                        copySettings(
-                                            settings,
-                                            simpleMenuOpacityPercent = simpleOpacity.roundToInt(),
-                                        ),
-                                    )
-                                },
-                            )
-                            SliderPreference(
-                                title = "背景圆角",
-                                value = simpleCornerRadius,
-                                valueText = "${simpleCornerRadius.roundToInt()} dp",
-                                valueRange = DragShareSettings.MIN_SIMPLE_MENU_CORNER_RADIUS_DP.toFloat()
-                                    ..DragShareSettings.MAX_SIMPLE_MENU_CORNER_RADIUS_DP.toFloat(),
-                                steps = 16,
-                                showKeyPoints = true,
-                                keyPoints = listOf(0f, 8f, 16f, 24f, 32f),
-                                onValueChange = { simpleCornerRadius = it },
-                                onValueChangeFinished = {
-                                    persist(
-                                        copySettings(
-                                            settings,
-                                            simpleMenuCornerRadiusDp = simpleCornerRadius.roundToInt(),
-                                        ),
-                                    )
-                                },
-                            )
-                            SliderPreference(
-                                title = "菜单到边缘距离",
-                                value = simpleEdgeDistance,
-                                valueText = "${simpleEdgeDistance.roundToInt()} dp",
-                                valueRange = DragShareSettings.MIN_SIMPLE_MENU_EDGE_DISTANCE_DP.toFloat()
-                                    ..DragShareSettings.MAX_SIMPLE_MENU_EDGE_DISTANCE_DP.toFloat(),
-                                steps = 16,
-                                showKeyPoints = true,
-                                keyPoints = listOf(0f, 8f, 16f, 32f, 64f),
-                                onValueChange = { simpleEdgeDistance = it },
-                                onValueChangeFinished = {
-                                    persist(
-                                        copySettings(
-                                            settings,
-                                            simpleMenuEdgeDistanceDp = simpleEdgeDistance.roundToInt(),
-                                        ),
-                                    )
-                                },
-                            )
-                        } else {
-                            SliderPreference(
-                                title = "模糊半径",
-                                summary = "HyperOS 局部背景模糊强度",
-                                value = modernBlurRadius,
-                                valueText = "${modernBlurRadius.roundToInt()} dp",
-                                valueRange = DragShareSettings.MIN_MODERN_BLUR_RADIUS_DP.toFloat()
-                                    ..DragShareSettings.MAX_MODERN_BLUR_RADIUS_DP.toFloat(),
-                                steps = 30,
-                                showKeyPoints = true,
-                                keyPoints = listOf(0f, 20f, 40f, 60f, 100f, 150f),
-                                onValueChange = { modernBlurRadius = it },
-                                onValueChangeFinished = {
-                                    persist(
-                                        copySettings(
-                                            settings,
-                                            modernBlurRadiusDp = modernBlurRadius.roundToInt(),
-                                        ),
-                                    )
-                                },
-                            )
-                            SliderPreference(
-                                title = "底板不透明度",
-                                value = modernGlassOpacity,
-                                valueText = "${modernGlassOpacity.roundToInt()}%",
-                                valueRange = DragShareSettings.MIN_MODERN_GLASS_OPACITY_PERCENT.toFloat()
-                                    ..DragShareSettings.MAX_MODERN_GLASS_OPACITY_PERCENT.toFloat(),
-                                steps = 8,
-                                showKeyPoints = true,
-                                keyPoints = listOf(68f, 76f, 84f, 92f, 100f),
-                                onValueChange = { modernGlassOpacity = it },
-                                onValueChangeFinished = {
-                                    persist(
-                                        copySettings(
-                                            settings,
-                                            modernGlassOpacityPercent = modernGlassOpacity.roundToInt(),
-                                        ),
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
-            item(key = "common-appearance-title") {
-                SmallTitle(text = "公共外观")
-            }
-            item(key = "common-appearance-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SliderPreference(
-                        title = "图标不透明度",
-                        summary = "同时影响应用图标和名称",
-                        value = iconOpacity,
-                        valueText = "${iconOpacity.roundToInt()}%",
-                        valueRange = DragShareSettings.MIN_ICON_OPACITY_PERCENT.toFloat()
-                            ..DragShareSettings.MAX_ICON_OPACITY_PERCENT.toFloat(),
-                        steps = 20,
-                        showKeyPoints = true,
-                        keyPoints = listOf(0f, 25f, 50f, 75f, 100f),
-                        onValueChange = { iconOpacity = it },
-                        onValueChangeFinished = {
-                            persist(
-                                copySettings(
-                                    settings,
-                                    iconOpacityPercent = iconOpacity.roundToInt(),
-                                ),
-                            )
-                        },
-                    )
-                }
-            }
-
-            item(key = "menu-title") {
-                SmallTitle(text = "菜单管理")
-            }
-            item(key = "menu-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SettingsNavigationPreference(
-                        title = "菜单可见性",
-                        summary = "按应用分别控制每个分享入口",
-                        icon = MiuixIcons.Show,
-                        onClick = onOpenVisibility,
-                    )
-                    SettingsNavigationPreference(
-                        title = "菜单排序",
-                        summary = "拖动应用条目调整显示顺序",
-                        icon = MiuixIcons.Sort,
-                        onClick = onOpenOrder,
-                    )
-                }
-            }
-
-            item(key = "touch-title") {
-                SmallTitle(text = "触摸行为")
-            }
-            item(key = "touch-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SwitchPreference(
-                        title = "阻止背景滑动",
-                        summary = "HyperDragShare 开始后尝试取消原页面触摸",
-                        checked = settings.blockBackgroundScroll,
-                        onCheckedChange = { checked ->
-                            persist(copySettings(settings, blockBackgroundScroll = checked))
-                        },
-                    )
-                    SwitchPreference(
-                        title = "离开菜单区域时关闭",
-                        summary = "离开菜单或触发区域后关闭；重新进入可再次打开",
-                        checked = settings.closeMenuWhenPointerLeaves,
-                        onCheckedChange = { checked ->
-                            persist(
-                                copySettings(
-                                    settings,
-                                    closeMenuWhenPointerLeaves = checked,
-                                ),
-                            )
-                        },
-                    )
-                }
-            }
-
-            item(key = "threshold-title") {
-                SmallTitle(text = "滚动参数")
-            }
-            item(key = "threshold-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SliderPreference(
-                        title = "边缘触发距离",
-                        summary = "手指靠近屏幕左右边缘时开始滚动",
-                        value = edgeTriggerDp,
-                        valueText = "${edgeTriggerDp.roundToInt()} dp",
-                        valueRange = DragShareSettings.MIN_EDGE_TRIGGER_DP.toFloat()
-                            ..DragShareSettings.MAX_EDGE_TRIGGER_DP.toFloat(),
-                        steps = 21,
-                        showKeyPoints = true,
-                        keyPoints = listOf(24f, 56f, 100f, 150f, 200f),
-                        onValueChange = { edgeTriggerDp = it },
-                        onValueChangeFinished = {
-                            persist(copySettings(settings, edgeTriggerDp = edgeTriggerDp.roundToInt()))
-                        },
-                    )
-                    SliderPreference(
-                        title = "滚动速度",
-                        summary = "设置分享菜单横向滚动速度",
-                        value = scrollSpeed,
-                        valueText = "${scrollSpeed.roundToInt()} dp/s",
-                        valueRange = DragShareSettings.MIN_SCROLL_SPEED_DP_PER_SECOND.toFloat()
-                            ..DragShareSettings.MAX_SCROLL_SPEED_DP_PER_SECOND.toFloat(),
-                        steps = 26,
-                        showKeyPoints = true,
-                        keyPoints = listOf(120f, 320f, 560f, 800f, 1200f),
-                        onValueChange = { scrollSpeed = it },
-                        onValueChangeFinished = {
-                            persist(
-                                copySettings(
-                                    settings,
-                                    scrollSpeedDp = scrollSpeed.roundToInt(),
-                                ),
-                            )
-                        },
-                    )
-                }
-            }
-
-            }
-            if (settingsSection == 2) {
-            item(key = "logging-title") {
-                SmallTitle(text = "日志")
-            }
-            item(key = "logging-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    cleanupError?.let { message ->
-                        BasicComponent(title = "上次暂存图片清理未完成", summary = message)
-                    }
-                    OverlayDropdownPreference(
-                        title = "日志输出等级",
-                        summary = when (settings.logLevel) {
-                            DragShareSettings.LOG_LEVEL_DISABLED -> "不输出模块日志"
-                            DragShareSettings.LOG_LEVEL_DEBUG -> "记录运行环境与输入诊断步骤"
-                            else -> "记录当前常规运行信息"
-                        },
-                        items = listOf("禁用", "信息（当前）", "调试"),
-                        selectedIndex = settings.logLevel.coerceIn(
-                            DragShareSettings.LOG_LEVEL_DISABLED,
-                            DragShareSettings.LOG_LEVEL_DEBUG,
-                        ),
-                        onSelectedIndexChange = { selected ->
-                            val next = copySettings(settings, logLevel = selected)
-                            persist(next)
-                            DragShareDiagnostics.captureRuntimeOnce(
-                                context,
-                                "logging level changed",
-                                null,
-                            )
-                            DragShareDiagnostics.captureInputInventory(
-                                context,
-                                "logging level changed",
-                                null,
-                                null,
-                            )
-                        },
-                    )
-                    OverlayDropdownPreference(
-                        title = "日志保存位置",
-                        summary = if (settings.logDestination
-                            == DragShareSettings.LOG_DESTINATION_FILE
-                        ) {
-                            "存储到 ${DragShareLog.LOG_DIRECTORY}"
-                        } else {
-                            "写入系统日志（Logcat）"
-                        },
-                        items = listOf("系统日志（当前）", "文件"),
-                        selectedIndex = settings.logDestination.coerceIn(
-                            DragShareSettings.LOG_DESTINATION_SYSTEM,
-                            DragShareSettings.LOG_DESTINATION_FILE,
-                        ),
-                        onSelectedIndexChange = { selected ->
-                            val next = copySettings(settings, logDestination = selected)
-                            persist(next)
-                            DragShareDiagnostics.captureRuntimeOnce(
-                                context,
-                                "logging destination changed",
-                                null,
-                            )
-                            DragShareDiagnostics.captureInputInventory(
-                                context,
-                                "logging destination changed",
-                                null,
-                                null,
-                            )
-                        },
-                    )
-                    AnimatedVisibility(
-                        visible = settings.logDestination == DragShareSettings.LOG_DESTINATION_FILE,
-                    ) {
-                        ArrowPreference(
-                            title = "导出日志",
-                            summary = "将当前日志保存到所选位置",
-                            onClick = {
-                                exportLogLauncher.launch(DragShareLog.exportFileName())
-                            },
-                        )
-                    }
-                }
-            }
-
-            item(key = "about-title") {
-                SmallTitle(text = "关于")
-            }
-            item(key = "about-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ArrowPreference(
-                        title = "关于 HyperDragShare",
-                        summary = "版本 ${BuildConfig.VERSION_NAME}",
-                        onClick = onOpenAbout,
-                    )
-                }
-            }
-
-            item(key = "footer") {
-                Text(
-                    text = "作用域：系统框架 · 系统界面 · 桌面 · 传送门 · AICR · ${BuildConfig.VERSION_NAME}",
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp),
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    fontSize = 13.sp,
-                )
-            }
-            }
-        }
-        FirstRunGuide(context = context)
-        }
+            },
+            enabled = enabled,
+        )
         OverlayDialog(
             show = showAccessibilityDialog,
             title = "开启无障碍服务",
@@ -1136,6 +545,658 @@ private fun MainPage(
             }
         }
     }
+
+    row("capture.landscape", "横屏启用识别", SettingModule.PORTAL, "触发与识别",
+        summary = "横屏时也允许无障碍读取长按内容",
+        keywords = "横屏 无障碍", enabled = settings.isAccessibilityCaptureMode, prerequisite = "仅在内容获取方式为无障碍时可用",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = settings.accessibilityLandscapeRecognitionEnabled,
+            onCheckedChange = { checked ->
+                persist(
+                    copySettings(
+                        settings,
+                        accessibilityLandscapeRecognitionEnabled = checked,
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("capture.sensitivity", "识别灵敏度", SettingModule.PORTAL, "触发与识别",
+        summary = "提高后允许长按期间有更大的手指位移",
+        keywords = "无障碍 位移 灵敏度", enabled = settings.isAccessibilityCaptureMode, prerequisite = "仅在内容获取方式为无障碍时可用",
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            summary = summary,
+            value = accessibilitySensitivity,
+            valueText = "${accessibilitySensitivity.roundToInt()}%",
+            valueRange = DragShareSettings
+                    .MIN_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT.toFloat()
+            ..DragShareSettings
+                        .MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT.toFloat(),
+            steps = 5,
+            showKeyPoints = true,
+            keyPoints = listOf(50f, 75f, 100f, 125f, 150f, 175f, 200f),
+            onValueChange = { accessibilitySensitivity = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        accessibilityRecognitionSensitivityPercent =
+                            accessibilitySensitivity.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    navigationRow("avoid.blacklist", "应用黑名单", SettingModule.PORTAL, "应用避让",
+        summary = "自动取词和 Hyper 手势共用此名单；桌面、输入法的内置排除只影响取词",
+        keywords = "黑名单 取词 手势 排除", icon = MiuixIcons.Blocklist,
+        onClick = onOpenBlacklist,
+    )
+
+    row("avoid.games", "游戏内暂停自动触发", SettingModule.PORTAL, "应用避让",
+        summary = "游戏中暂停自动取词和 Hyper 手势；手动点取、主动识屏仍可用",
+        keywords = "游戏 取词 手势 避让",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = settings.pauseAutomaticInGames,
+            onCheckedChange = { enabled ->
+                persist(copySettings(settings, pauseAutomaticInGames = enabled))
+            },
+            enabled = enabled,
+        )
+    }
+
+    navigationRow("avoid.gameApps", "手动添加游戏", SettingModule.PORTAL, "应用避让",
+        summary = if (settings.manualGamePackages.isEmpty()) {
+            "手动选择应用，自动取词和 Hyper 手势均会避让"
+        } else {
+            "已选 ${settings.manualGamePackages.size} 个；自动取词和 Hyper 手势均会避让"
+        },
+        keywords = "游戏 名单 手动 添加",
+        onClick = onOpenGames,
+    )
+
+    row("segmentation.preload", "预加载分词库", SettingModule.PORTAL, "分词与取用",
+        summary = "减少首次打开分词的等待",
+        keywords = "分词 速度 预热",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = settings.preloadTextSegmenter,
+            onCheckedChange = { checked ->
+                persist(copySettings(settings, preloadTextSegmenter = checked))
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("segmentation.haptic", "选词触感反馈", SettingModule.PORTAL, "分词与取用",
+        summary = "手指选中或取消词语时轻振一次",
+        keywords = "选词 震动 触感",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = selectionHapticEnabled,
+            onCheckedChange = { enabled ->
+                BigBangSettings.setSelectionHapticEnabled(context, enabled)
+                selectionHapticEnabled = enabled
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("segmentation.exitCopy", "复制后退出", SettingModule.PORTAL, "分词与取用",
+        summary = "复制所选文字后关闭分词面板",
+        keywords = "分词 复制 退出",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = exitAfterCopyEnabled,
+            onCheckedChange = { enabled ->
+                BigBangSettings.setExitAfterCopyEnabled(context, enabled)
+                exitAfterCopyEnabled = enabled
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.text", "启用文字分享", SettingModule.PORTAL, "拖拽分享",
+        summary = "长按文字时显示分享菜单",
+        keywords = "文字 分享 拖拽",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = settings.textSharingEnabled,
+            onCheckedChange = { checked ->
+                persist(copySettings(settings, textSharingEnabled = checked))
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.image", "启用图片分享", SettingModule.PORTAL, "拖拽分享",
+        summary = "长按图片时显示分享菜单",
+        keywords = "图片 分享 拖拽",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = settings.imageSharingEnabled,
+            onCheckedChange = { checked ->
+                persist(copySettings(settings, imageSharingEnabled = checked))
+            },
+            enabled = enabled,
+        )
+    }
+
+    navigationRow("drag.targets", "拖拽分享目标", SettingModule.PORTAL, "拖拽分享",
+        summary = "按应用分别控制每个分享入口",
+        keywords = "分享目标 应用 显示 隐藏 菜单可见性",
+        icon = MiuixIcons.Show, onClick = onOpenVisibility,
+    )
+
+    navigationRow("drag.order", "拖拽分享目标排序", SettingModule.PORTAL, "拖拽分享",
+        summary = "拖动应用条目调整显示顺序",
+        keywords = "分享目标 应用 排序 菜单排序",
+        icon = MiuixIcons.Sort, onClick = onOpenOrder,
+    )
+
+    row("stash.storage", "图片暂存", SettingModule.PORTAL, "中转站",
+        summary = "分享副本满24小时后在使用时清理，保留中转站原内容",
+        keywords = "图片 暂存 清理",
+    ) { title, summary, enabled ->
+        BasicComponent(
+            title = title,
+            summary = summary,
+        )
+    }
+
+    row("drag.style", "拖拽样式", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "仅影响拖拽时的悬浮菜单",
+        keywords = "简洁 流光 环形 现代",
+        enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
+    ) { title, summary, enabled ->
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = listOf("简洁", "流光", "环形", "现代"),
+            selectedIndex = settings.uiStyle.coerceIn(0, 3),
+            onSelectedIndexChange = { selected ->
+                persist(copySettings(settings, uiStyle = selected.coerceIn(0, 3)))
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.simple.opacity", "背景不透明度", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "",
+        keywords = "简洁 背景 透明",
+        enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_SIMPLE,
+        prerequisite = dragSharingPrerequisite ?: "选择简洁拖拽样式后可调整",
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            value = simpleOpacity,
+            valueText = "${simpleOpacity.roundToInt()}%",
+            valueRange = DragShareSettings.MIN_SIMPLE_MENU_OPACITY_PERCENT.toFloat()
+                ..DragShareSettings.MAX_SIMPLE_MENU_OPACITY_PERCENT.toFloat(),
+            steps = 15,
+            showKeyPoints = true,
+            keyPoints = listOf(20f, 40f, 60f, 80f, 100f),
+            onValueChange = { simpleOpacity = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        simpleMenuOpacityPercent = simpleOpacity.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.simple.radius", "背景圆角", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "",
+        keywords = "简洁 背景 圆角",
+        enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_SIMPLE,
+        prerequisite = dragSharingPrerequisite ?: "选择简洁拖拽样式后可调整",
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            value = simpleCornerRadius,
+            valueText = "${simpleCornerRadius.roundToInt()} dp",
+            valueRange = DragShareSettings.MIN_SIMPLE_MENU_CORNER_RADIUS_DP.toFloat()
+                ..DragShareSettings.MAX_SIMPLE_MENU_CORNER_RADIUS_DP.toFloat(),
+            steps = 16,
+            showKeyPoints = true,
+            keyPoints = listOf(0f, 8f, 16f, 24f, 32f),
+            onValueChange = { simpleCornerRadius = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        simpleMenuCornerRadiusDp = simpleCornerRadius.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.simple.edge", "菜单到边缘距离", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "",
+        keywords = "简洁 菜单 边缘 距离",
+        enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_SIMPLE,
+        prerequisite = dragSharingPrerequisite ?: "选择简洁拖拽样式后可调整",
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            value = simpleEdgeDistance,
+            valueText = "${simpleEdgeDistance.roundToInt()} dp",
+            valueRange = DragShareSettings.MIN_SIMPLE_MENU_EDGE_DISTANCE_DP.toFloat()
+                ..DragShareSettings.MAX_SIMPLE_MENU_EDGE_DISTANCE_DP.toFloat(),
+            steps = 16,
+            showKeyPoints = true,
+            keyPoints = listOf(0f, 8f, 16f, 32f, 64f),
+            onValueChange = { simpleEdgeDistance = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        simpleMenuEdgeDistanceDp = simpleEdgeDistance.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.modern.blur", "模糊半径", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "HyperOS 局部背景模糊强度",
+        keywords = "现代 模糊",
+        enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_MODERN,
+        prerequisite = dragSharingPrerequisite ?: "选择现代拖拽样式后可调整",
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            summary = summary,
+            value = modernBlurRadius,
+            valueText = "${modernBlurRadius.roundToInt()} dp",
+            valueRange = DragShareSettings.MIN_MODERN_BLUR_RADIUS_DP.toFloat()
+                ..DragShareSettings.MAX_MODERN_BLUR_RADIUS_DP.toFloat(),
+            steps = 30,
+            showKeyPoints = true,
+            keyPoints = listOf(0f, 20f, 40f, 60f, 100f, 150f),
+            onValueChange = { modernBlurRadius = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        modernBlurRadiusDp = modernBlurRadius.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.modern.opacity", "底板不透明度", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "",
+        keywords = "现代 底板 透明",
+        enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_MODERN,
+        prerequisite = dragSharingPrerequisite ?: "选择现代拖拽样式后可调整",
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            value = modernGlassOpacity,
+            valueText = "${modernGlassOpacity.roundToInt()}%",
+            valueRange = DragShareSettings.MIN_MODERN_GLASS_OPACITY_PERCENT.toFloat()
+                ..DragShareSettings.MAX_MODERN_GLASS_OPACITY_PERCENT.toFloat(),
+            steps = 8,
+            showKeyPoints = true,
+            keyPoints = listOf(68f, 76f, 84f, 92f, 100f),
+            onValueChange = { modernGlassOpacity = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        modernGlassOpacityPercent = modernGlassOpacity.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.icons.opacity", "图标不透明度", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "同时影响应用图标和名称",
+        keywords = "分享菜单 图标 透明",
+        enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            summary = summary,
+            value = iconOpacity,
+            valueText = "${iconOpacity.roundToInt()}%",
+            valueRange = DragShareSettings.MIN_ICON_OPACITY_PERCENT.toFloat()
+                ..DragShareSettings.MAX_ICON_OPACITY_PERCENT.toFloat(),
+            steps = 20,
+            showKeyPoints = true,
+            keyPoints = listOf(0f, 25f, 50f, 75f, 100f),
+            onValueChange = { iconOpacity = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        iconOpacityPercent = iconOpacity.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.blockTouch", "阻止背景滑动", SettingModule.PORTAL, "拖拽触摸与滚动",
+        summary = "HyperDragShare 开始后尝试取消原页面触摸",
+        keywords = "拖拽 背景 触摸 滑动",
+        enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = settings.blockBackgroundScroll,
+            onCheckedChange = { checked ->
+                persist(copySettings(settings, blockBackgroundScroll = checked))
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.close", "离开菜单区域时关闭", SettingModule.PORTAL, "拖拽触摸与滚动",
+        summary = "离开菜单或触发区域后关闭；重新进入可再次打开",
+        keywords = "分享菜单 离开 关闭",
+        enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = settings.closeMenuWhenPointerLeaves,
+            onCheckedChange = { checked ->
+                persist(
+                    copySettings(
+                        settings,
+                        closeMenuWhenPointerLeaves = checked,
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.scrollEdge", "边缘触发距离", SettingModule.PORTAL, "拖拽触摸与滚动",
+        summary = "手指靠近屏幕左右边缘时开始滚动",
+        keywords = "边缘 滚动 触发 距离",
+        enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            summary = summary,
+            value = edgeTriggerDp,
+            valueText = "${edgeTriggerDp.roundToInt()} dp",
+            valueRange = DragShareSettings.MIN_EDGE_TRIGGER_DP.toFloat()
+                ..DragShareSettings.MAX_EDGE_TRIGGER_DP.toFloat(),
+            steps = 21,
+            showKeyPoints = true,
+            keyPoints = listOf(24f, 56f, 100f, 150f, 200f),
+            onValueChange = { edgeTriggerDp = it },
+            onValueChangeFinished = {
+                persist(copySettings(settings, edgeTriggerDp = edgeTriggerDp.roundToInt()))
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.scrollSpeed", "滚动速度", SettingModule.PORTAL, "拖拽触摸与滚动",
+        summary = "设置分享菜单横向滚动速度",
+        keywords = "分享菜单 滚动 速度",
+        enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            summary = summary,
+            value = scrollSpeed,
+            valueText = "${scrollSpeed.roundToInt()} dp/s",
+            valueRange = DragShareSettings.MIN_SCROLL_SPEED_DP_PER_SECOND.toFloat()
+                ..DragShareSettings.MAX_SCROLL_SPEED_DP_PER_SECOND.toFloat(),
+            steps = 26,
+            showKeyPoints = true,
+            keyPoints = listOf(120f, 320f, 560f, 800f, 1200f),
+            onValueChange = { scrollSpeed = it },
+            onValueChangeFinished = {
+                persist(
+                    copySettings(
+                        settings,
+                        scrollSpeedDp = scrollSpeed.roundToInt(),
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("copy.enabled", "复制直达与分词", SettingModule.COPY_DIRECT, "启用与触发",
+        summary = "复制卡片接入原页分词与实体直达；也可选词后点击直达图标。需启用传送门/AICR作用域；默认关闭",
+        keywords = "剪贴板 复制卡片 实体 识别 执行动作",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = copyDirectEnabled,
+            onCheckedChange = { enabled ->
+                IntegrationSettings.setCopyDirectEnabled(context, enabled)
+                copyDirectEnabled = enabled
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("copy.browser", "复制直达浏览器", SettingModule.COPY_DIRECT, "目标应用",
+        summary = if (copyDirectBrowserUnavailable) {
+            "当前已选浏览器未安装；请重新选择，不会自动切换"
+        } else {
+            "选择复制直达打开链接时使用的浏览器"
+        },
+        keywords = "链接 网页 浏览器 默认",
+        enabled = copyDirectEnabled,
+        prerequisite = "先启用复制直达与分词",
+    ) { title, summary, enabled ->
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = copyDirectBrowserItems,
+            selectedIndex = copyDirectBrowserIndex,
+            onSelectedIndexChange = { selected ->
+                val choiceIndex = selected - if (copyDirectBrowserUnavailable) 1 else 0
+                copyDirectBrowserChoices.getOrNull(choiceIndex)?.let { choice ->
+                    IntegrationSettings.setCopyDirectBrowserPackage(context, choice.packageName)
+                    copyDirectBrowserPackage = choice.packageName
+                }
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("launcher.icon", "桌面显示应用图标", SettingModule.GENERAL, "主题与显示",
+        summary = stringResource(R.string.launcher_icon_summary),
+        keywords = "桌面 图标 隐藏",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = launcherIconEnabled,
+            onCheckedChange = { enabled ->
+                if (LauncherIconSettings.setEnabled(context, enabled)) {
+                    launcherIconEnabled = enabled
+                    Toast.makeText(
+                        context,
+                        if (enabled) {
+                            R.string.launcher_icon_restored
+                        } else {
+                            R.string.launcher_icon_hidden
+                        },
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        R.string.launcher_icon_change_failed,
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("theme", "主题", SettingModule.GENERAL, "主题与显示",
+        summary = "设置与所有悬浮面板共用",
+        keywords = "深色 暗色 浅色 跟随系统",
+    ) { title, summary, enabled ->
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = listOf("浅色", "深色", "跟随系统"),
+            selectedIndex = settings.colorMode,
+            onSelectedIndexChange = { selected ->
+                persist(
+                    copySettings(
+                        settings,
+                        colorMode = selected,
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    val openOverlaySettings = {
+        context.startActivity(Intent(
+            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:${context.packageName}"),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    navigationRow("permission.overlay", "悬浮窗权限", SettingModule.GENERAL, "运行与权限",
+        summary = if (android.provider.Settings.canDrawOverlays(context)) "已授权" else "未授权，点此开启",
+        keywords = "悬浮窗 权限 浮窗",
+        onClick = openOverlaySettings,
+    )
+
+    row("log.level", "日志输出等级", SettingModule.GENERAL, "日志与诊断",
+        summary = when (settings.logLevel) {
+            DragShareSettings.LOG_LEVEL_DISABLED -> "不输出模块日志"
+            DragShareSettings.LOG_LEVEL_DEBUG -> "记录运行环境与输入诊断步骤"
+            else -> "记录当前常规运行信息"
+        },
+        keywords = "调试 信息 日志",
+    ) { title, summary, enabled ->
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = listOf("禁用", "信息（当前）", "调试"),
+            selectedIndex = settings.logLevel.coerceIn(
+                DragShareSettings.LOG_LEVEL_DISABLED,
+                DragShareSettings.LOG_LEVEL_DEBUG,
+            ),
+            onSelectedIndexChange = { selected ->
+                val next = copySettings(settings, logLevel = selected)
+                persist(next)
+                DragShareDiagnostics.captureRuntimeOnce(
+                    context,
+                    "logging level changed",
+                    null,
+                )
+                DragShareDiagnostics.captureInputInventory(
+                    context,
+                    "logging level changed",
+                    null,
+                    null,
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("log.destination", "日志保存位置", SettingModule.GENERAL, "日志与诊断",
+        summary = if (settings.logDestination == DragShareSettings.LOG_DESTINATION_FILE) {
+            "存储到 ${DragShareLog.LOG_DIRECTORY}"
+        } else {
+            "写入系统日志（Logcat）"
+        },
+        keywords = "文件 系统 Logcat 日志",
+    ) { title, summary, enabled ->
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = listOf("系统日志（当前）", "文件"),
+            selectedIndex = settings.logDestination.coerceIn(
+                DragShareSettings.LOG_DESTINATION_SYSTEM,
+                DragShareSettings.LOG_DESTINATION_FILE,
+            ),
+            onSelectedIndexChange = { selected ->
+                val next = copySettings(settings, logDestination = selected)
+                persist(next)
+                DragShareDiagnostics.captureRuntimeOnce(
+                    context,
+                    "logging destination changed",
+                    null,
+                )
+                DragShareDiagnostics.captureInputInventory(
+                    context,
+                    "logging destination changed",
+                    null,
+                    null,
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
+    val openLogExport = { exportLogLauncher.launch(DragShareLog.exportFileName()); Unit }
+    navigationRow("log.export", "导出日志", SettingModule.GENERAL, "日志与诊断",
+        summary = "将当前日志保存到所选位置",
+        keywords = "保存 导出 日志",
+        enabled = settings.logDestination == DragShareSettings.LOG_DESTINATION_FILE,
+        prerequisite = "先将日志保存位置设为文件",
+        onClick = openLogExport,
+    )
+
+    row("app.update", "检查更新", SettingModule.GENERAL, "关于",
+        summary = "查看正式版更新说明，下载并安装新版本",
+        keywords = "更新 版本 升级 下载 安装 release", icon = MiuixIcons.Update,
+    ) { title, _, enabled -> AppUpdatePreference(title = title, enabled = enabled) }
+    navigationRow("about", "关于 HyperDragShare", SettingModule.GENERAL, "关于",
+        summary = "版本 ${BuildConfig.VERSION_NAME}",
+        keywords = "版本 说明 许可 使用指南",
+        onClick = onOpenAbout,
+    )
+
+    return entries
 }
 
 private enum class ActivationUiState {
@@ -1178,7 +1239,7 @@ private fun portalActivation(context: Context): ActivationUiState = when {
     else -> runtimeActivation(context, false)
 }
 
-private fun openAccessibilitySettings(context: Context) {
+internal fun openAccessibilitySettings(context: Context) {
     context.startActivity(
         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -1186,7 +1247,7 @@ private fun openAccessibilitySettings(context: Context) {
 }
 
 @Composable
-private fun ActivationStatusCard(
+internal fun ActivationStatusCard(
     context: Context,
     contentCaptureMode: Int,
     onOpenAccessibilitySettings: (() -> Unit)?,
@@ -1290,7 +1351,7 @@ private fun ActivationStatusCard(
     val summary = when (state) {
         ActivationUiState.Checking -> "正在检查运行环境"
         ActivationUiState.NoRoot -> "Root 输入通道当前不可用"
-        ActivationUiState.NotInjected -> "尚未收到当前传送门进程的存活确认。已启用作用域时，可通过下方“重载模块”重新连接。"
+        ActivationUiState.NotInjected -> "确认作用域已启用，在通用设置中重载模块"
         ActivationUiState.PortalRootUnavailable -> "传送门的 Root 检测未完成或未成功，请检查作用域运行状态"
         ActivationUiState.AccessibilityDisabled -> "请在系统设置中手动开启“HyperDragShare”服务"
         ActivationUiState.AccessibilityConnecting -> "正在等待无障碍服务和 Root 输入就绪"
@@ -1402,8 +1463,8 @@ private fun VisibilityPage(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = "菜单可见性",
-                largeTitle = "菜单可见性",
+                title = "拖拽分享目标",
+                largeTitle = "拖拽分享目标",
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { BackNavigationIcon(onClick = onBack) },
                 actions = {
@@ -2063,8 +2124,8 @@ private fun OrderPage(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = "菜单排序",
-                largeTitle = "菜单排序",
+                title = "拖拽分享目标排序",
+                largeTitle = "拖拽分享目标排序",
                 scrollBehavior = scrollBehavior,
                 navigationIcon = { BackNavigationIcon(onClick = onBack) },
             )
@@ -2165,42 +2226,16 @@ internal fun SettingsNavigationPreference(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
 ) {
-    BasicComponent(
+    ArrowPreference(
+        title = title,
+        summary = summary,
         startAction = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
+            Icon(icon, contentDescription = null,
                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                modifier = Modifier.padding(end = 8.dp).size(22.dp),
-            )
+                modifier = Modifier.padding(end = 8.dp).size(22.dp))
         },
-        endActions = {
-            Icon(
-                imageVector = MiuixIcons.ChevronForward,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                modifier = Modifier.size(18.dp),
-            )
-        },
-        insideMargin = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
         onClick = onClick,
-    ) {
-        Text(
-            text = title,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = summary,
-            fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    )
 }
 
 private data class TargetGroup(

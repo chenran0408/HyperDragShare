@@ -178,6 +178,9 @@ final class PressCaptureSource {
                         settings.isSharingEnabled(false), settings.isSharingEnabled(true), earlyCapture, source ->
                                 acceptAutomaticSource(request, source, excludedByPolicy));
                 CapturedContent content = result.content;
+                if (content == null && result.rejectionReason != null) {
+                    DragShareLog.i(TAG, "press lookup rejected reason=" + result.rejectionReason);
+                }
                 if (result.policyExcluded) excludedByPolicy.set(true);
                 main.post(() -> {
                     if (request != generation || !allowed()) {

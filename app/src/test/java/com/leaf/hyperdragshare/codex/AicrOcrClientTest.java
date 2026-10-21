@@ -5,6 +5,10 @@ import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.os.Binder;
 import android.os.Bundle;
@@ -17,7 +21,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowLooper;
+import org.robolectric.shadows.ShadowPackageManager;
 import org.robolectric.annotation.Config;
 
 import java.util.concurrent.CancellationException;
@@ -86,6 +92,57 @@ public final class AicrOcrClientTest {
         bitmap.recycle();
     }
 
+    @Test public void missingServiceFailsBeforeBindAndReleasesSlotForNextRequest() throws Exception {
+        assertPreflightFailureAndSlotReleased(
+                new FakeContext(false, false, true, true, false),
+                "系统 AICR 服务未安装或组件缺失");
+    }
+
+    @Test public void disabledApplicationFailsBeforeBindAndReleasesSlotForNextRequest() throws Exception {
+        assertPreflightFailureAndSlotReleased(
+                new FakeContext(false, true, false, true, false),
+                "系统 AICR 服务已停用");
+    }
+
+    @Test public void disabledServiceComponentFailsBeforeBindAndReleasesSlotForNextRequest() throws Exception {
+        assertPreflightFailureAndSlotReleased(
+                new FakeContext(false, true, true, false, false),
+                "系统 AICR 服务组件已停用");
+    }
+
+    @Test public void packageLookupPermissionFailureIsReportedWithoutBinding() throws Exception {
+        FakeContext context = new FakeContext(false, true, true, true, true);
+        Bitmap bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
+        Completion completion = new Completion(null, bitmap);
+        AicrOcrClient.recognize(context, bitmap, completion);
+        awaitCompletion(completion);
+        assertTrue(completion.error.getMessage().contains("系统拒绝连接 AICR，权限受限"));
+        assertEquals(0, context.binds);
+        assertEquals(0, context.unbinds);
+        bitmap.recycle();
+    }
+
+    private static void assertPreflightFailureAndSlotReleased(FakeContext unavailable,
+            String expectedMessage) throws Exception {
+        Bitmap unavailableBitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
+        Completion unavailableCompletion = new Completion(null, unavailableBitmap);
+        AicrOcrClient.recognize(unavailable, unavailableBitmap, unavailableCompletion);
+        awaitCompletion(unavailableCompletion);
+        assertTrue(unavailableCompletion.error.getMessage().contains(expectedMessage));
+        assertEquals(0, unavailable.binds);
+        assertEquals(0, unavailable.unbinds);
+
+        FakeContext available = new FakeContext(false);
+        Bitmap availableBitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
+        Completion availableCompletion = new Completion(available, availableBitmap);
+        AicrOcrClient.recognize(available, availableBitmap, availableCompletion);
+        awaitCompletion(availableCompletion);
+        assertNull(availableCompletion.error);
+        assertEquals(1, available.binds);
+        unavailableBitmap.recycle();
+        availableBitmap.recycle();
+    }
+
     private static void awaitCompletion(Completion completion) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (completion.count == 0 && System.nanoTime() < deadline) {
@@ -124,6 +181,7 @@ public final class AicrOcrClientTest {
         final AtomicInteger recognizes = new AtomicInteger();
         int binds;
         int unbinds;
+        private final boolean denyPackageLookup;
         final Binder vision = new Binder() {
             { attachInterface(null, "com.xiaomi.aicr.plugin.IVisionService"); }
             @Override protected boolean onTransact(int code, Parcel data, Parcel reply, int flags)
@@ -181,11 +239,37 @@ public final class AicrOcrClientTest {
         };
 
         FakeContext(boolean blockDetection) {
+            this(blockDetection, true, true, true, false);
+        }
+
+        FakeContext(boolean blockDetection, boolean installService, boolean applicationEnabled,
+                boolean serviceEnabled, boolean denyPackageLookup) {
             super(RuntimeEnvironment.getApplication());
             allowDetect = new CountDownLatch(blockDetection ? 1 : 0);
+            this.denyPackageLookup = denyPackageLookup;
+            if (installService) {
+                PackageInfo packageInfo = new PackageInfo();
+                packageInfo.packageName = "com.xiaomi.aicr";
+                ApplicationInfo applicationInfo = new ApplicationInfo();
+                applicationInfo.packageName = packageInfo.packageName;
+                applicationInfo.enabled = applicationEnabled;
+                packageInfo.applicationInfo = applicationInfo;
+                ServiceInfo serviceInfo = new ServiceInfo();
+                serviceInfo.packageName = packageInfo.packageName;
+                serviceInfo.name = "com.xiaomi.aicr.access.AiCrCoreService";
+                serviceInfo.applicationInfo = applicationInfo;
+                serviceInfo.enabled = serviceEnabled;
+                packageInfo.services = new ServiceInfo[] { serviceInfo };
+                ShadowPackageManager packages = Shadow.extract(super.getPackageManager());
+                packages.installPackage(packageInfo);
+            }
         }
 
         @Override public Context getApplicationContext() { return this; }
+        @Override public PackageManager getPackageManager() {
+            if (denyPackageLookup) throw new SecurityException("test permission denial");
+            return super.getPackageManager();
+        }
         @Override public boolean bindService(Intent service, ServiceConnection connection, int flags) {
             assertSame(Looper.getMainLooper(), Looper.myLooper());
             binds++;

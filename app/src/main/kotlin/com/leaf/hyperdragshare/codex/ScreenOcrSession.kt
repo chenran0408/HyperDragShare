@@ -53,9 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -73,7 +70,7 @@ import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-/** One explicit capture, region/result UI and engine lifetime, independent of an Activity. */
+/** One explicit capture, region/result UI and AICR request lifetime, independent of an Activity. */
 internal class ScreenOcrSession(
     private val context: Context,
     private val selectRegion: Boolean,
@@ -88,7 +85,7 @@ internal class ScreenOcrSession(
     private var statusMessage by mutableIntStateOf(R.string.screen_ocr_capturing)
     private var isRecognizing by mutableStateOf(true)
     private var screenshotForRegion: Bitmap? = null
-    // Neither engine's input may be recycled before its completion callback, even after cancel.
+    // AICR reads its input synchronously; keep the Bitmap alive through its completion callback.
     private var readingBitmap: Bitmap? = null
     private var regionSelectionMessage by mutableIntStateOf(0)
     private var aicrRequest: AicrOcrClient.Request? = null
@@ -151,46 +148,16 @@ internal class ScreenOcrSession(
         readingBitmap = bitmap
         resultText = emptyList()
         failureDetail = null
-        if (IntegrationSettings.isAicrOcrEnabled(context)) {
-            aicrRequest = AicrOcrClient.recognize(context, bitmap) { result, error ->
-                aicrRequest = null
-                finishReading(bitmap)
-                if (!closed && error !is java.util.concurrent.CancellationException) {
-                    if (error != null) {
-                        reportFailure(R.string.screen_ocr_failed, error)
-                    } else {
-                        recognitionCompleted(result.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() })
-                    }
+        aicrRequest = AicrOcrClient.recognize(context, bitmap) { result, error ->
+            aicrRequest = null
+            finishReading(bitmap)
+            if (!closed && error !is java.util.concurrent.CancellationException) {
+                if (error != null) {
+                    reportFailure(R.string.screen_ocr_failed, error)
+                } else {
+                    recognitionCompleted(result.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() })
                 }
             }
-            return
-        }
-        val recognizer = try {
-            TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-        } catch (error: RuntimeException) {
-            finishReading(bitmap)
-            reportFailure(R.string.screen_ocr_failed, error)
-            return
-        }
-        try {
-            recognizer.process(InputImage.fromBitmap(bitmap, 0)).addOnCompleteListener { task ->
-                recognizer.close()
-                finishReading(bitmap)
-                if (!closed) {
-                    if (task.isSuccessful) {
-                        val recognizedLines = task.result.textBlocks.flatMap { it.lines }
-                            .filter { it.text.isNotBlank() }
-                        recognitionCompleted(recognizedLines.map { it.text.trim() })
-                    } else {
-                        reportFailure(R.string.screen_ocr_failed,
-                            task.exception ?: IllegalStateException("ML Kit recognition failed"))
-                    }
-                }
-            }
-        } catch (error: RuntimeException) {
-            recognizer.close()
-            finishReading(bitmap)
-            reportFailure(R.string.screen_ocr_failed, error)
         }
     }
 

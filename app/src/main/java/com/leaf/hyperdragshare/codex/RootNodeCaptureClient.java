@@ -27,6 +27,7 @@ final class RootNodeCaptureClient {
     private static final String TAG = "DragShare/RootNodes";
     private static final long RESPONSE_TIMEOUT_MILLIS = 4500L;
     static final String KEY_POLICY_EXCLUDED = "capture_policy_excluded";
+    static final String KEY_CAPTURE_REASON = "capture_rejection_reason";
 
     private RootNodeCaptureClient() {}
 
@@ -135,6 +136,11 @@ final class RootNodeCaptureClient {
                         Bundle excluded = new Bundle();
                         excluded.putBoolean(KEY_POLICY_EXCLUDED, true);
                         return excluded;
+                    }
+                    if (pressLookup) {
+                        Bundle rejection = new Bundle();
+                        rejection.putString(KEY_CAPTURE_REASON, reason);
+                        return rejection;
                     }
                     return null;
                 }

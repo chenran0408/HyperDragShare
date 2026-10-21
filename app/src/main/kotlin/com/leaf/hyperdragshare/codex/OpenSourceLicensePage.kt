@@ -115,10 +115,6 @@ fun DragShareOpenSourceLicensePage(
                                 summary = "MIT License · Copyright (c) 2013",
                             )
                             BasicComponent(
-                                title = "Google ML Kit Text Recognition",
-                                summary = "中文识别 16.0.1 · ML Kit Terms of Service · https://developers.google.com/ml-kit/terms",
-                            )
-                            BasicComponent(
                                 title = "Miuix for Compose",
                                 summary = "miuix-ui、preference、icons、navigation3-ui、blur、shader · Apache License 2.0",
                             )

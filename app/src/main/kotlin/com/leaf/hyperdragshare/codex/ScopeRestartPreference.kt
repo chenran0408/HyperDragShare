@@ -33,7 +33,7 @@ private enum class ReloadMode(val label: String, val detail: String) {
 }
 
 @Composable
-internal fun ScopeRestartPreference(context: Context) {
+internal fun ScopeRestartPreference(context: Context, title: String) {
     var showConfirmation by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(ReloadMode.Apps) }
@@ -41,7 +41,7 @@ internal fun ScopeRestartPreference(context: Context) {
     val scope = rememberCoroutineScope()
 
     ArrowPreference(
-        title = stringResource(R.string.scope_restart_title),
+        title = title,
         summary = stringResource(R.string.scope_restart_summary),
         onClick = {
             failure = null

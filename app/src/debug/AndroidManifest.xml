@@ -23,10 +23,6 @@
         android:targetPackage="com.leaf.hyperdragshare.codex"
         android:label="Generated modern menu lifecycle check" />
     <instrumentation
-        android:name=".AicrOcrProbe"
-        android:targetPackage="com.leaf.hyperdragshare.codex"
-        android:label="AICR synthetic OCR probe" />
-    <instrumentation
         android:name=".OverlayInteractionProbe"
         android:targetPackage="com.leaf.hyperdragshare.codex"
         android:label="Synthetic overlay interaction probe" />

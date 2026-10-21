@@ -4,6 +4,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.os.Binder;
 import android.os.Bundle;
@@ -26,6 +28,8 @@ public final class AicrOcrClient {
     private static final String CORE = "com.xiaomi.aicr.IAiCrCoreService";
     private static final String VISION = "com.xiaomi.aicr.plugin.IVisionService";
     private static final String CALLBACK = "com.xiaomi.aicr.ICoreServiceCallback";
+    private static final ComponentName SERVICE_COMPONENT = new ComponentName(
+            "com.xiaomi.aicr", "com.xiaomi.aicr.access.AiCrCoreService");
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     // The vendor plugin has one image cache. Do not queue arbitrary images behind a blocked Binder.
     private static final AtomicBoolean ACTIVE = new AtomicBoolean();
@@ -113,15 +117,40 @@ public final class AicrOcrClient {
                 deliver(null, null, true);
                 return;
             }
+            try {
+                ServiceInfo service = context.getPackageManager().getServiceInfo(
+                        SERVICE_COMPONENT, PackageManager.MATCH_DISABLED_COMPONENTS);
+                if (!service.applicationInfo.enabled) {
+                    throw new IOException("系统 AICR 服务已停用");
+                }
+                if (!service.enabled) {
+                    throw new IOException("系统 AICR 服务组件已停用");
+                }
+            } catch (PackageManager.NameNotFoundException error) {
+                DragShareLog.w(TAG, "AICR component is missing", error);
+                deliver(null, new IOException("系统 AICR 服务未安装或组件缺失", error), true);
+                return;
+            } catch (SecurityException error) {
+                DragShareLog.w(TAG, "AICR component lookup denied", error);
+                deliver(null, new IOException("系统拒绝连接 AICR，权限受限", error), true);
+                return;
+            } catch (IOException error) {
+                DragShareLog.w(TAG, "AICR component is disabled", error);
+                deliver(null, error, true);
+                return;
+            }
             Intent intent = new Intent("com.xiaomi.aicr.access.AICR_ENGINE")
-                    .setComponent(new ComponentName("com.xiaomi.aicr",
-                            "com.xiaomi.aicr.access.AiCrCoreService"))
+                    .setComponent(SERVICE_COMPONENT)
                     .putExtra("bind_type", address);
             try {
                 bound = context.bindService(intent, connection, Context.BIND_AUTO_CREATE);
                 if (!bound) {
                     throw new IOException("无法连接 AICR，请确认系统智能服务已启用");
                 }
+            } catch (SecurityException error) {
+                DragShareLog.w(TAG, "AICR binding denied", error);
+                deliver(null, new IOException("系统拒绝连接 AICR，权限受限", error), true);
+                return;
             } catch (IOException | RuntimeException error) {
                 DragShareLog.w(TAG, "unable to bind AICR", error);
                 deliver(null, error instanceof IOException ? error

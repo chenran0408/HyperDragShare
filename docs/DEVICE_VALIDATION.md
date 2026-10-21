@@ -1300,3 +1300,13 @@ build371 testDebugUnitTest/lintDebug/assembleDebug/assembleRelease成功，394�
 ADB起初离线后恢复，preflight确认Root和SDK37/arm64；桌面闲置后操作。只重载SystemUI/Portal，PID8688日志明确合并手势201；PID8761 Portal/Root输入/reader报告201且ready=true。Miuix底角页实际显示左右开关；左角关后偏好false/true，待配置落盘后在桌面左(50,3130)、右(1390,3130)分别注入点击，仅右角armed。首次即时点击使用了落盘前旧配置，不纳入生效后证据；日志epoch行首空格解析错误已修正，保留原始证据。最后恢复两角true和桌面；未改变原方向/应用目标、未操作私人内容。截图和日志在work/flyme018，不入Git。
 
 本地Miui-WindowManager-Shell.jar与设备/system_ext/framework同文件SHA256 6a03b772d0fbf16b9305f34da4c2006dec8d5cef66c4df99810c2fad0771eeb6，静态确认原生底部上滑mini及快速上甩关闭分支；不冒称本批真实手指操作通过。新装AICR默认只经源码/构建确认，本机旧选择不变；备用捕获单侧窗口、横屏/游戏、侧栏拖出及参考动画未本批实测。未发布177正式Release。
+
+## 179 设置、AICR精简与微信窗口修复 / 2026-10-21
+
+build375共404项单测0失败/错误/跳过；修复Lint缩进后build376的lintDebug/assembleDebug/assembleRelease成功（R8及资源压缩启用）。首个179/203同签名包7,429,983 bytes，覆盖安装成功，设备base.apk哈希与APK相同。升级前后的drag_share_settings、drag_share_integrations、text_panel_settings、first_run_guide一致，fan_config只更新诊断键，未清数据。
+
+只重载Portal，PID16497，注入/Root输入/reader均203且ready=true；SystemUI仍201，其他Hook未重载。模块自己的首页四模块、OCR搜索两项、具体行高亮、Back保留查询、release搜索定位底部检查更新均已操作确认。未在本批触碰私人微信内容，不把404单测与Hook就绪当成微信真实按住或中转站拖放验收。
+
+检查更新首轮实际HTTP403，正确请求头的手机curl响应证实X-RateLimit-Remaining=0，匿名API配额耗尽；随后改用官方正式Release页面，不加入多级回退或凭据。该具体失败修复后的最终包与最小复核在CURRENT_STATUS本批收尾记录，下载/系统安装新版本仍未验收。证据仅存任务work/settings179，不提交设备原始截图和日志。
+
+最终179同版本修复包第二次覆盖安装完成，SHA256 88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb，7,429,983 bytes；设备base.apk同哈希。build377 Lint/Release通过；Portal PID25488与SystemUI PID25885均有203运行证据（Portal输入/reader就绪，SystemUI合并手势及Hook诊断）。安全服务:ui旧进程已结束但未打开侧栏，不称新Hook加载；其他作用域未重载。手机锁屏，未唤醒重复页面验收。详细已验/未验见CURRENT_STATUS的179收尾。

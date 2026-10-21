@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -542,27 +543,48 @@ object StashOverlayPanel {
                     else MiuixTheme.colorScheme.surfaceContainer),
             ) {
                 Column(Modifier.padding(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StashDraggableContent(if (selectionMode) dragSelection else listOf(entry), Modifier.weight(1f),
-                            enabled = !updating, draggable = !selectionMode || selected,
-                            startDrag = ::startContentDrag, onClick = open) {
-                            if (entry.kind == StashStore.KIND_IMAGE) {
-                                StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp), ContentScale.Fit)
-                            } else {
-                                Text(entry.text.orEmpty(), fontSize = 13.sp, maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MiuixTheme.colorScheme.onSurface)
+                    if (entry.kind == StashStore.KIND_IMAGE) {
+                        Box(Modifier.fillMaxWidth()) {
+                            StashDraggableContent(if (selectionMode) dragSelection else listOf(entry),
+                                Modifier.fillMaxWidth(), enabled = !updating, draggable = !selectionMode || selected,
+                                startDrag = ::startContentDrag, onClick = open) {
+                                StashImage(entry, 480, Modifier.fillMaxWidth().height(96.dp), ContentScale.Fit)
+                            }
+                            if (selectionMode) {
+                                Checkbox(
+                                    state = if (selected) ToggleableState.On else ToggleableState.Off,
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(44.dp)
+                                        .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
+                                        .semantics {
+                                            contentDescription = if (selected) "取消选择这条内容" else "选择这条内容"
+                                        },
+                                    enabled = !updating,
+                                    onClick = open,
+                                )
                             }
                         }
-                        if (selectionMode) {
-                            Checkbox(
-                                state = if (selected) ToggleableState.On else ToggleableState.Off,
-                                modifier = Modifier.size(44.dp).semantics {
-                                    contentDescription = if (selected) "取消选择这条内容" else "选择这条内容"
-                                },
-                                enabled = !updating,
-                                onClick = open,
-                            )
+                    } else {
+                        Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            StashDraggableContent(if (selectionMode) dragSelection else listOf(entry),
+                                Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = !updating,
+                                draggable = !selectionMode || selected, startDrag = ::startContentDrag, onClick = open) {
+                                Text(entry.text.orEmpty(), Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(
+                                    start = 8.dp, top = 8.dp, bottom = 8.dp, end = if (selectionMode) 52.dp else 8.dp),
+                                    fontSize = 13.sp, lineHeight = 18.sp, maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurface)
+                            }
+                            if (selectionMode) {
+                                Checkbox(
+                                    state = if (selected) ToggleableState.On else ToggleableState.Off,
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(44.dp)
+                                        .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
+                                        .semantics {
+                                            contentDescription = if (selected) "取消选择这条内容" else "选择这条内容"
+                                        },
+                                    enabled = !updating,
+                                    onClick = open,
+                                )
+                            }
                         }
                     }
                 }

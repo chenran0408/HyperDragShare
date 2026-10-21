@@ -2,6 +2,22 @@
 
 事实来源为当前源码、具体构建报告、安装元数据与对应运行日志；构建通过、已安装、Hook加载和实际操作分别记账。旧逐版记录的“当前”仅代表当时。
 
+## 179 设置重整、单引擎精简、更新检查与微信修复
+
+源码1.7.179/203；本轮开始核验设备仍177/201，178未安装。178旧验收心跳已通过工具暂停，不能再按旧提示安装178。用户新增的检查更新、微信深度适配与解包分析并入本批，覆盖原“本轮不做微信专项”的早先范围；不恢复面积实验或原生侧栏研究。
+
+四模块设置、公共设置与共享SettingEntry目录已实现；首页离线搜索，精确行滚动高亮、前置开关说明与返回保留查询/位置已接入。主标题、分组与条目使用Miuix图标，沿用0.9.3；原键/值保留。中转站混合卡横向图文、单图预览、多选触区和行距已调整，灰条/贴边/≤16%面积/源窗保留沿用。源码说明见SETTINGS_CATALOG.md/STASH.md。按用户Root群体定位压缩首次指南、按住/磁贴/识字等重复说明；悬浮窗入口显示真实授权状态。Root输入、无障碍来源和必要的权限失败反馈仍保留，不因精简UI删除有效能力。
+
+图片/屏幕OCR已删除ML Kit依赖与识别分支、选择键读写、许可与旧调试探针，仅使用现有AICR V2。依赖报告 `work/settings179/release-dependencies.txt` 位于仓库父级任务work，确认无ML Kit/Google OCR/Play Services相关依赖。ZIP/mapping中无ML Kit，移除28项专属模型/库，三个jieba字典与178逐字节相同；唯一ABI仍arm64，保留graphics.path和dragshare_jieba两个原生库。首个179签名R8包7,429,983bytes（7.09MiB），对比同为Release/R8/arm64的178的21,475,042bytes（20.48MiB），减少65.4%；最终修复包数字在本节后补。
+
+build374完成Debug/Release编译，402单测中1项新增权限测试在FakeContext初始化失败，修正为super.getPackageManager。build375共404项单测0失败/错误/跳过，Lint发现主题块缩进错误；修正后build376 lintDebug/assembleDebug/assembleRelease成功，Lint0错误185警告2提示，执行R8和资源压缩。没有为后续纯文字改动重复跑404单测。
+
+用户23:01微信提示已定位到PressCaptureSource收到空内容，并非时长检测未触发。实际WMS证实当前WindowState无frame，窗口bounds在visible handles；实际聊天Activity为ChattingMainUI而非仅LauncherUI。已修正窗口解析、关联真实Insets，以及精确识别已核对透明GestureStub窗口，微信按窗口所属包识别普通页面，不再限制两种Activity；保留锁屏/secure/密码/IME等真实边界。微信8.0.79/3182 APK与split已只读提取Manifest/DEX页面族和触摸/拖放入口，详见WECHAT_ADAPTATION.md，原始材料不入Git。不改微信APK、不新增微信Hook作用域；真实手指按住及各页面仍未在179验证。
+
+检查更新组件已接入通用设置，固定官方正式Release、arm64包、显式下载/系统安装；当前最新正式版176，比本地179旧，不应提示降级。首轮实测发现匿名GitHub API HTTP403，正确请求头复核响应明确X-RateLimit-Remaining=0；已改为官方releases/latest最终重定向确定正式tag，再读取该页明确指向的assets列表，只接受同tag的arm64包。不以Atom数字tag猜测正式版，不加入token或多级回退；错误详情仅显示一次。手机curl已确认页面和资产列表返回200，修复后的完整应用检查、下载和安装新版链路尚未真实操作通过。
+
+首个179包已同签名覆盖安装，设备base.apk与交付APK哈希一致，未清数据；四份用户偏好完全不变，fan_config只更新运行诊断。仅重载Portal，PID16497，注入/输入/reader均203且ready=true；SystemUI仍201，其他Hook未重载，不称全部203。设备仅在本模块设置检查：首页四模块可见，搜索OCR显示两项并直接滚动高亮系统AICR行，Back保留查询；搜索release直接定位靠底部的检查更新。没有操作私人微信内容；长结果列表滚动恢复、中转站新布局和OCR识别本批未实测。
+
 ## 178 大批源码检查完成：待集中安装验收
 
 用户追加“大更新，再测试”：177检查/安装已完成并以222c716推送；此后小窗、分词、图片拖动和UI合成178，不按单按钮出包。三名Luna high代理负责独立范围，主任务统一接口、动画减负、构建及验收。当前178源码不等于设备已更新。
@@ -243,3 +259,7 @@ build341完整通过381项测试（0失败/错误/跳过），Lint0错误180警�
 ## 最新范围调整（2026-10-21）
 
 用户明确停止真实触摸面积研究，继续Root evdev时长/位移触发。历史原始帧不代表有效面积，不再继续实验或校准。优先微信取词、内容拖放、中转站及Miuix统一；另一个完整项目待用户后续交付，本批不预建合并结构。现有依赖已使用compose-miuix-ui/miuix 0.9.3，不是新引入组件库。
+
+179最终收尾：build377 lintDebug/assembleRelease成功（1m39s，Lint0错误185警告2提示），明确执行minifyReleaseWithR8。最终APK仍7,429,983 bytes/7.09MiB，比178同条件Release/R8/arm64减少65.4%；SHA256 `88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb`，签名不变，设备base.apk哈希相同。首包后发现真实更新API403，修复并追加Root用户精简后同版本第二次覆盖安装；不伪称整批仅安装一次。最终重载Portal PID25488，注入/Root输入/reader203且ready=true；重载SystemUI PID25885，持久诊断明确Merged gesture hook version=203，输入注册/小窗Hook安装。只结束安全服务:ui旧PID12373，下次打开才加载新侧栏代码，未称其已加载203；框架/桌面/AICR未重载。手机锁屏，不唤醒、不发消息、不再跑截图矩阵。
+
+已确认：首包四模块首页、OCR/release搜索直达高亮及Back保留查询；最终包构建/安装/Portal与SystemUI加载。未确认：最终Root精简页面与更新弹窗实际显示、下载/系统安装新版本、微信各页面真实按住与新中转站拖放、OCR删除分支后的完整设备识别、长结果列表滚动恢复。7.09MiB包已交付outputs/HyperDragShare-1.7.179-arm64-v8a.apk；正式Latest仍176，179尚未发布Release。旧178心跳保持暂停。

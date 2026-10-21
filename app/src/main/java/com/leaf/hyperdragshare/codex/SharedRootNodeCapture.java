@@ -197,10 +197,12 @@ final class SharedRootNodeCapture {
         static final class PressResult {
             final CapturedContent content;
             final boolean policyExcluded;
+            final String rejectionReason;
 
-            PressResult(CapturedContent content, boolean policyExcluded) {
+            PressResult(CapturedContent content, boolean policyExcluded, String rejectionReason) {
                 this.content = content;
                 this.policyExcluded = policyExcluded;
+                this.rejectionReason = rejectionReason;
             }
         }
 
@@ -252,18 +254,20 @@ final class SharedRootNodeCapture {
                                 finally { Binder.restoreCallingIdentity(identity); }
                             }
                         });
-                if (closed) return new PressResult(null, false);
+                if (closed) return new PressResult(null, false, "connection_closed");
                 if (pressLookup && node != null
                         && node.getBoolean(RootNodeCaptureClient.KEY_POLICY_EXCLUDED)) {
-                    return new PressResult(null, true);
+                    return new PressResult(null, true, "excluded_app");
                 }
+                String rejectionReason = pressLookup && node != null
+                        ? node.getString(RootNodeCaptureClient.KEY_CAPTURE_REASON) : null;
                 CapturedContent content = RootNodeCaptureClient.contentFromNode(context, node, (source, windowId) -> {
                     try { return !closed && lease.verifyWindow(source, windowId); }
                     catch (RemoteException | IllegalStateException error) {
                         throw requestFailure("核验来源窗口失败", error);
                     }
                 });
-                return new PressResult(content, false);
+                return new PressResult(content, false, content == null ? rejectionReason : null);
             } catch (RemoteException | IllegalStateException error) {
                 throw requestFailure("读取当前页面失败", error);
             }

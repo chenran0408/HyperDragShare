@@ -141,7 +141,7 @@ public final class RootNodeCaptureMain {
                 }
             }
             if ("verify_source".equals(request.optString("operation"))) {
-                if (pressWindow != null && request.getString("package").equals(pressWindow.packageName)) {
+                if (pressWindow != null) {
                     return new JSONObject().put("same_source", verifyPressWindow(request.getString("package")));
                 }
                 automation.clearCache();
@@ -176,18 +176,12 @@ public final class RootNodeCaptureMain {
             if (root == null && press && request.optBoolean("allow_text")) {
                 JSONObject conversation = captureUnexposedConversation(request);
                 if (conversation.optBoolean("found")
-                        || !"no_supported_visible_conversation".equals(conversation.optString("reason")))
+                        || !"no_supported_visible_wechat_window".equals(conversation.optString("reason")))
                     return conversation;
                 // Keep the existing semantics-startup wait for other applications.
                 root = awaitRoot(automation, eventLock, eventVersion);
             }
             if (root == null) return new JSONObject().put("found", false).put("reason", "window_not_ready");
-            // HyperOS may expose a system root while withholding the focused WeChat window.
-            if (press && request.optBoolean("allow_text")
-                    && "com.android.systemui".equals(string(root.getPackageName()))) {
-                root.recycle();
-                return captureUnexposedConversation(request);
-            }
             long rootAt = SystemClock.uptimeMillis();
             try {
                 JSONObject result = capture(root, request);
@@ -205,6 +199,17 @@ public final class RootNodeCaptureMain {
                 if (pressHitsInputMethod(automation, request)) {
                     result = new JSONObject().put("found", false).put("reason", "excluded_input_method");
                 }
+                String rejection = result.optString("reason");
+                if (press && request.optBoolean("allow_text", true)
+                        && ("root_window_missing".equals(rejection) || "root_not_visible".equals(rejection))) {
+                    JSONObject windowCapture = captureUnexposedConversation(request);
+                    if (windowCapture.optBoolean("found")
+                            || !"no_supported_visible_wechat_window".equals(windowCapture.optString("reason"))) {
+                        return windowCapture.put("root_ms", rootAt - started)
+                                .put("capture_ms", capturedAt - rootAt)
+                                .put("verify_ms", SystemClock.uptimeMillis() - capturedAt);
+                    }
+                }
                 return result.put("window_id", root.getWindowId()).put("root_ms", rootAt - started)
                         .put("capture_ms", capturedAt - rootAt)
                         .put("verify_ms", SystemClock.uptimeMillis() - capturedAt);
@@ -216,13 +221,13 @@ public final class RootNodeCaptureMain {
         }
     }
 
-    private static PressWindowSnapshot readPressWindow() throws IOException, InterruptedException {
+    private static PressWindowSnapshot.ParseResult readPressWindow() throws IOException, InterruptedException {
         Process dump = new ProcessBuilder("/system/bin/dumpsys", "-t", "1", "window")
                 .redirectErrorStream(true).start();
         try {
             String output = new String(dump.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             if (dump.waitFor() != 0) throw new IOException("系统窗口查询失败");
-            return PressWindowSnapshot.parse(output);
+            return PressWindowSnapshot.parseDetailed(output);
         } finally {
             dump.destroy();
         }
@@ -232,23 +237,34 @@ public final class RootNodeCaptureMain {
         JSONObject absent = new JSONObject().put("found", false);
         if (!request.optBoolean("allow_text") || keyguardLocked())
             return absent.put("reason", "text_disabled_or_locked");
-        final PressWindowSnapshot window;
-        try { window = readPressWindow(); }
+        final PressWindowSnapshot.ParseResult parsed;
+        try { parsed = readPressWindow(); }
         catch (IOException error) {
             System.err.println("Press window inspection failed: " + error.getMessage());
             return absent.put("reason", "window_inspection_failed");
         }
-        // Deliberately scoped to the verified conversation host, not payment/login activities.
-        if (window == null || !"com.tencent.mm".equals(window.packageName)
-                || !"com.tencent.mm/com.tencent.mm.ui.LauncherUI".equals(window.windowName))
-            return absent.put("reason", "no_supported_visible_conversation");
+        if (parsed.snapshot == null) {
+            System.err.println("Press window capture rejected reason=" + parsed.reason);
+            return absent.put("reason", "window_" + parsed.reason);
+        }
+        PressWindowSnapshot window = parsed.snapshot;
+        if (!PressWindowSnapshot.isSupportedWeChatWindow(window.packageName, window.windowName)) {
+            System.err.println("Press window capture rejected reason=unsupported_wechat_component");
+            return absent.put("reason", "no_supported_visible_wechat_window");
+        }
         JSONArray blocked = request.getJSONArray("blocked");
         for (int i = 0; i < blocked.length(); i++) {
-            if (window.packageName.equals(blocked.getString(i))) return absent.put("reason", "excluded_app");
+            if (window.packageName.equals(blocked.getString(i))) {
+                System.err.println("Press window capture rejected reason=excluded_app");
+                return absent.put("reason", "excluded_app");
+            }
         }
         Rect region = window.regionAt((float) request.getDouble("x"), (float) request.getDouble("y"),
                 request.getInt("width"), request.getInt("height"), (float) request.getDouble("density"));
-        if (region == null) return absent.put("reason", "press_region_obscured");
+        if (region == null) {
+            System.err.println("Press window capture rejected reason=press_region_obscured");
+            return absent.put("reason", "press_region_obscured");
+        }
         pressWindow = window;
         pressRegion = region;
         return new JSONObject().put("found", true).put("package", window.packageName)
@@ -259,10 +275,19 @@ public final class RootNodeCaptureMain {
 
     private static boolean verifyPressWindow(String source) throws Exception {
         if (pressWindow == null || pressRegion == null || !source.equals(pressWindow.packageName)
+                || !PressWindowSnapshot.isSupportedWeChatWindow(source, pressWindow.windowName)
                 || keyguardLocked()) return false;
         try {
-            PressWindowSnapshot current = readPressWindow();
-            return current != null && pressWindow.sameWindow(current) && current.permits(pressRegion);
+            PressWindowSnapshot.ParseResult parsed = readPressWindow();
+            if (parsed.snapshot == null) {
+                System.err.println("Press window verification rejected reason=" + parsed.reason);
+                return false;
+            }
+            PressWindowSnapshot current = parsed.snapshot;
+            boolean valid = PressWindowSnapshot.isSupportedWeChatWindow(current.packageName, current.windowName)
+                    && pressWindow.sameWindow(current) && current.permits(pressRegion);
+            if (!valid) System.err.println("Press window verification rejected reason=window_changed_or_region_invalid");
+            return valid;
         } catch (IOException error) {
             System.err.println("Press window verification failed: " + error.getMessage());
             return false;
@@ -445,15 +470,16 @@ public final class RootNodeCaptureMain {
         float x = (float) request.getDouble("x"), y = (float) request.getDouble("y");
         Rect windowBounds = new Rect();
         AccessibilityWindowInfo window = root.getWindow();
-        if (pressLookup && (window == null || !root.isVisibleToUser())) {
-            if (window != null) window.recycle();
-            return absent.put("reason", "excluded_window");
+        if (pressLookup && window == null) return absent.put("reason", "root_window_missing");
+        if (pressLookup && !root.isVisibleToUser()) {
+            window.recycle();
+            return absent.put("reason", "root_not_visible");
         }
         if (window != null) {
             try {
                 if (window.getType() == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
                         || (pressLookup && window.getType() != AccessibilityWindowInfo.TYPE_APPLICATION)) {
-                    return absent.put("reason", "excluded_window");
+                    return absent.put("reason", "excluded_window_type");
                 }
                 window.getBoundsInScreen(windowBounds);
                 if (pressLookup && !windowBounds.contains((int) x, (int) y)) {

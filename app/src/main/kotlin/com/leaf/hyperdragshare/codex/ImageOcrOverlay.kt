@@ -29,9 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -281,35 +278,11 @@ object ImageOcrOverlay {
         }
 
         private fun recognize(bitmap: Bitmap) {
-            if (IntegrationSettings.isAicrOcrEnabled(app)) {
-                aicr = AicrOcrClient.recognize(app, bitmap) { text, error ->
-                    bitmap.recycle()
-                    if (!cancelled) {
-                        if (error == null) completed(text.orEmpty()) else failed(error)
-                    }
-                }
-                return
-            }
-            val recognizer = try {
-                TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-            } catch (error: RuntimeException) {
+            aicr = AicrOcrClient.recognize(app, bitmap) { text, error ->
                 bitmap.recycle()
-                failed(error)
-                return
-            }
-            try {
-                recognizer.process(InputImage.fromBitmap(bitmap, 0)).addOnCompleteListener { task ->
-                    recognizer.close()
-                    bitmap.recycle()
-                    if (!cancelled) {
-                        if (task.isSuccessful) completed(task.result.text)
-                        else failed(task.exception ?: IllegalStateException("文字识别失败"))
-                    }
+                if (!cancelled) {
+                    if (error == null) completed(text.orEmpty()) else failed(error)
                 }
-            } catch (error: RuntimeException) {
-                recognizer.close()
-                bitmap.recycle()
-                failed(error)
             }
         }
 

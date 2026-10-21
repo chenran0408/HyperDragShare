@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,19 +89,25 @@ internal fun StashBatchCard(
             Column(Modifier.fillMaxWidth().padding(6.dp)) {
                 val images = batch.filter { it.kind == StashStore.KIND_IMAGE }
                 val texts = batch.filter { it.kind == StashStore.KIND_TEXT }
-                StashDraggableContent(images, Modifier.fillMaxWidth().height(imageHeight),
-                    enabled = enabled, startDrag = startDrag, onClick = onClick) {
-                    StashImage(images.first(), 480, Modifier.fillMaxWidth().height(imageHeight), ContentScale.Fit)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    StashDraggableContent(images, Modifier.size(56.dp),
+                        enabled = enabled, startDrag = startDrag, onClick = onClick) {
+                        StashImage(images.first(), 480, Modifier.size(56.dp), ContentScale.Fit)
+                    }
+                    StashDraggableContent(texts, Modifier.weight(1f).heightIn(min = 56.dp).padding(start = 8.dp),
+                        enabled = enabled, startDrag = startDrag, onClick = onClick) {
+                        Column(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalArrangement = Arrangement.Center) {
+                            Text(texts.first().text.orEmpty(), Modifier.fillMaxWidth().padding(8.dp),
+                                fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2,
+                                overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurface)
+                        }
+                    }
                 }
-                StashDraggableContent(texts, Modifier.fillMaxWidth(), enabled = enabled,
-                    startDrag = startDrag, onClick = onClick) {
-                    Text(texts.first().text.orEmpty(), fontSize = 13.sp, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurface)
-                }
-                Text("${stashBatchLabel(batch)} · 点按展开", fontSize = 12.sp, maxLines = 1,
+                Text("${stashBatchLabel(batch)} · 点按展开",
+                    Modifier.fillMaxWidth().padding(top = 4.dp).clickable(onClick = onClick),
+                    fontSize = 12.sp, maxLines = 1,
                     color = if (selectedCount > 0) MiuixTheme.colorScheme.primary
-                        else MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.fillMaxWidth().clickable(onClick = onClick))
+                        else MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
         } else {
             StashDraggableContent(dragEntries, Modifier.fillMaxWidth().padding(6.dp), enabled = enabled,

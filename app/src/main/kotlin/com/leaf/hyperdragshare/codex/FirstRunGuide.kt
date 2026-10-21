@@ -41,7 +41,7 @@ internal fun FirstRunGuide(
     OverlayDialog(
         show = show,
         title = "开始使用 HyperDragShare",
-        summary = "只有设置需要进入应用，其他操作都在当前页面完成。",
+        summary = "Root + LSPosed 模块，功能在当前页面使用。",
         onDismissRequest = {
             show = false
             onDismiss()
@@ -52,15 +52,15 @@ internal fun FirstRunGuide(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "1. 在 LSPosed 启用模块并勾选推荐作用域，授予 Root 和悬浮窗权限。首次启用后重启手机。",
+                text = "1. 启用推荐作用域并授权。首次重启；更新后可在设置中重载。",
                 color = MiuixTheme.colorScheme.onSurface,
             )
             Text(
-                text = "2. 在其他应用静止按住文字，弹出后点选词块；用图标复制、搜索或拆词，按住选中内容可拖出。",
+                text = "2. 按住文字取词，选中后复制、搜索或拆词；按住选区直接拖出。",
                 color = MiuixTheme.colorScheme.onSurface,
             )
             Text(
-                text = "3. 将图文加入中转站，点灰色侧条展开，按住内容拖到目标应用。微信接收后可能直接发送。",
+                text = "3. 灰色侧条展开中转站，拖动标题移动，按住内容拖出。微信接收后可能直接发送。",
                 color = MiuixTheme.colorScheme.onSurface,
             )
             TextButton(
