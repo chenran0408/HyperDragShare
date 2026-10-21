@@ -379,47 +379,29 @@ final class PressCaptureSource {
                 blocker.stop();
                 return;
             }
-            SharedRootNodeCapture.Connection session = nodeSession;
-            worker.execute(() -> {
-                try {
-                    boolean current = session != null && session.isCurrentSource(content.sourcePackage);
-                    main.post(() -> {
-                        if (request != generation || stopped || !current) {
-                            abortWeChatOcrPanel(pressId);
-                            blocker.stop();
-                            return;
-                        }
-                        Bundle recognized = new Bundle();
-                        recognized.putLong("press_id", pressId);
-                        recognized.putString("text", text);
-                        DragShareLog.i(TAG, "WeChat OCR finished elapsedMs="
-                                + (SystemClock.elapsedRealtime() - started)
-                                + " characters=" + text.length());
-                        try {
-                            Bundle update = context.getContentResolver().call(ImageStagingClient.BASE_URI,
-                                    BigBangOverlayLauncher.METHOD_COMPLETE_OCR, null, recognized);
-                            if (update == null || !update.getBoolean("accepted")) {
-                                abortWeChatOcrPanel(pressId);
-                                showFailure("微信识别结果窗口已关闭");
-                            }
-                        } catch (SecurityException | IllegalStateException | IllegalArgumentException failure) {
-                            DragShareLog.w(TAG, "cannot update WeChat OCR panel", failure);
-                            abortWeChatOcrPanel(pressId);
-                            showFailure("无法显示微信识别结果：" + failure.getMessage());
-                        }
-                    });
-                } catch (IOException | InterruptedException failure) {
-                    if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
-                    main.post(() -> {
-                        abortWeChatOcrPanel(pressId);
-                        if (request == generation && !stopped) {
-                            DragShareLog.w(TAG, "WeChat source changed before OCR result", failure);
-                            showFailure("微信页面已变化，请重新按压");
-                        }
-                        blocker.stop();
-                    });
+            if (request != generation || stopped) {
+                abortWeChatOcrPanel(pressId);
+                blocker.stop();
+                return;
+            }
+            Bundle recognized = new Bundle();
+            recognized.putLong("press_id", pressId);
+            recognized.putString("text", text);
+            DragShareLog.i(TAG, "WeChat OCR finished elapsedMs="
+                    + (SystemClock.elapsedRealtime() - started)
+                    + " characters=" + text.length());
+            try {
+                Bundle update = context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                        BigBangOverlayLauncher.METHOD_COMPLETE_OCR, null, recognized);
+                if (update == null || !update.getBoolean("accepted")) {
+                    abortWeChatOcrPanel(pressId);
+                    showFailure("微信识别结果窗口已关闭");
                 }
-            });
+            } catch (SecurityException | IllegalStateException | IllegalArgumentException failure) {
+                DragShareLog.w(TAG, "cannot update WeChat OCR panel", failure);
+                abortWeChatOcrPanel(pressId);
+                showFailure("无法显示微信识别结果：" + failure.getMessage());
+            }
         });
     }
 

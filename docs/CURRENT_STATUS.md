@@ -1,10 +1,14 @@
 # 当前功能与验证状态
 
-## 183 微信按住识字直达分词浮窗（构建完成，设备待加载与实测）
+## 184 微信按住识字直达分词浮窗（构建完成，设备待加载与实测）
 
 用户反馈微信长按比其他应用慢，且先打开独立“图片识字”窗口。根路径是微信安全窗口的 `ocr_region` 捕获结果被当成普通图片，先暂存图片，再经 Provider 打开图片识字浮窗；识别后又关闭该窗并新建分词浮窗。本版仅为 Root press 返回的 `ocr_region` 增加来源标记，直接把同一截图交给现有 AICR V2，并立即显示分词浮窗内的识别进度；识别文本填回同一个浮窗。普通图片识字路径不变，不按包名把所有图片改道。取消仍遵守 AICR 的 bitmap 生命周期：调用取消后等 Binder 识别回调再回收图片。
 
-Release R8/arm64构建及 `testDebugUnitTest lintDebug assembleDebug assembleRelease` 已通过，签名候选包已生成并由 apksigner 校验：`outputs/HyperDragShare-1.7.183-arm64-v8a.apk`，7,446,367 bytes。源码、构建均已完成；尚未安装，Portal Hook尚未加载本版，微信真实长按与延迟改善待用户设备验收。AICR阶段记录识别耗时与字符数，不记录聊天文本。此前日志中的语义查询约45–54ms、按住确认约250ms及首帧711/1211ms是历史观测；这些数字不能证明本次优化后的首帧或整条链路耗时。
+回查用户提供的428 APK（包 `com.mengting.bigbang`，版本1.7.0/code428）发现其长按后约4秒触发Root截屏分支：`s6` 使用Root `/system/bin/screencap -p`，裁触点附近区域；先探测文本，未读到文字再做OCR，识别结束后才打开分词。旧图片OCR链还会按图像特征查找微信本地图片缓存原图，这不属于文本长按主路径。
+
+183直接AICR路径第一次构建并安装后，源码复核发现识别前已出现可交互全屏面板，但识别结束又调用 `verify_source`。该检查要求焦点仍是微信，窗口已被本模块浮窗接管，因此会自我否决。184修正：保留捕获阶段已完成的微信窗口与可见区域复核，移除弹窗后的重复焦点校验和额外Root往返；仍跳过图片暂存与中间识字窗。
+
+184执行 `testDebugUnitTest lintDebug assembleDebug assembleRelease` 全部通过。R8/arm64候选包签名并由apksigner校验通过：`outputs/HyperDragShare-1.7.184-arm64-v8a.apk`，7,446,367 bytes，SHA256 `143A64D4A6A0EF26A4C181B5B78BCE68FD83EE247ABE67B7D132026FDD586BD7`。设备已安装183，尚未确认Portal Hook加载184；微信真实长按与延迟改善待验。AICR日志只记录识别耗时与字符数，不记聊天文字。428 APK SHA256 `5C18D11B3169CED658809039473320FA7D0F6EAAC05DEC393E739C24B362441D`.
 
 最新发布：**v1.7.179 正式版 / Latest**，源码tag指向 `87fd4957eff3d093f856a83d74bf7ed62288367b`。已上传arm64 R8 APK及SHA256文件，服务端APK大小7,429,983bytes、digest `88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb` 与本地一致。发布地址：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.179 。下文“Latest仍176”是发布前历史状态，不再代表最新正式版；发布没有增加新的功能实测结论。
 

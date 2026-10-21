@@ -1,8 +1,10 @@
 # 目标设备验证记录
 
-## 2026-10-22：1.7.183 微信按住识字直达分词面板（候选包）
+## 2026-10-22：1.7.184 微信按住识字直达分词面板（候选包）
 
-`testDebugUnitTest lintDebug assembleDebug assembleRelease` 均通过。Release采用R8与arm64-v8a，签名及apksigner校验通过，候选APK为`outputs/HyperDragShare-1.7.183-arm64-v8a.apk`（7,446,367 bytes）。本次尚未安装，亦未操作微信页面；Portal运行中的Hook仍不是183，因此微信长按、识别与窗口延迟未实测。预期日志为 `WeChat OCR direct start`、`WeChat OCR finished elapsedMs=... characters=...` 和 `WeChat OCR result delivered to existing panel`，日志不含识别文本。安装/热重载后由用户实际长按验收，再依据日志确认AICR是否直达和时间变化。
+用户提供的428 APK静态核验确认其Root长按回退分支约4秒后使用Root screencap，拿到截图裁剪，图片识别结束后才打开分词；OCR中间窗与文本分词不是其这条回退路径的两次独立交接。183已安装但未重载Portal；复核发现它显示全屏交互浮窗后还会检查微信焦点，必然可能因浮窗接管焦点而否决识别。184移除这一步重复校验，保留截图捕获前的WMS窗口/可见区域检查。
+
+184的 `testDebugUnitTest lintDebug assembleDebug assembleRelease` 全部通过。Release采用R8、arm64-v8a，签名与apksigner校验通过；APK `outputs/HyperDragShare-1.7.184-arm64-v8a.apk`，7,446,367 bytes，SHA256 `143A64D4A6A0EF26A4C181B5B78BCE68FD83EE247ABE67B7D132026FDD586BD7`。设备183已安装，尚未安装/加载184；微信长按、AICR结果及延迟仍待实测。预期日志为 `WeChat OCR direct start`、`WeChat OCR finished elapsedMs=... characters=...` 和 `WeChat OCR result delivered to existing panel`，日志不含识别文本.
 
 继续工作前先阅读本文件与 MIBIGBANG_MIGRATION_PLAN.md。代码与设备现状优先于历史计划；未执行的行为不得标成通过。
 
