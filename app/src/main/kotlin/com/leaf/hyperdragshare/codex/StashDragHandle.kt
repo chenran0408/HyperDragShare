@@ -2,7 +2,21 @@ package com.leaf.hyperdragshare.codex
 
 import android.content.ClipData
 import android.content.ClipDescription
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ImageDecoder
+import android.graphics.Point
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.text.TextUtils
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.TextView
+import android.widget.Toast
+import java.io.File
 import java.io.IOException
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -13,14 +27,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import android.graphics.Canvas
-import android.graphics.Point
-import android.graphics.drawable.GradientDrawable
-import android.text.TextUtils
-import android.view.Gravity
-import android.view.View
-import android.widget.TextView
-import android.widget.Toast
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
@@ -63,8 +69,8 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
         return
     }
     val density = view.resources.displayMetrics.density
-    val preview = TextView(view.context).apply {
-        text = if (entries.size > 1) "${entries.size} 项内容" else if (hasImages) "图片" else entries.first().text
+    fun textPreview(label: String): View = TextView(view.context).apply {
+        text = label
         textSize = 14f
         maxLines = 3
         ellipsize = TextUtils.TruncateAt.END
@@ -76,23 +82,45 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
             View.MeasureSpec.makeMeasureSpec((120 * density).toInt(), View.MeasureSpec.AT_MOST))
         layout(0, 0, measuredWidth, measuredHeight)
     }
-    val shadow = object : View.DragShadowBuilder() {
-        override fun onProvideShadowMetrics(size: Point, touch: Point) {
-            size.set(preview.width, preview.height)
-            touch.set(preview.width / 2, preview.height / 2)
-        }
-        override fun onDrawShadow(canvas: Canvas) = preview.draw(canvas)
-    }
     try {
+        var thumbnail: Bitmap? = null
         val clip = if (!hasImages) ClipData.newPlainText("中转站文字", entries.joinToString("\n") { it.text.orEmpty() })
         else {
-            val uris = withContext(Dispatchers.IO) {
+            val prepared = withContext(Dispatchers.IO) {
                 StashStore(view.context.applicationContext).use { store ->
-                    entries.map { StashDragImageCache.uri(view.context.applicationContext, it, store.openImage(it.id)) }
+                    val files = entries.map { store.openImage(it.id) }
+                    val uris = entries.zip(files).map { (entry, file) ->
+                        StashDragImageCache.uri(view.context.applicationContext, entry, file)
+                    }
+                    val thumbnail = try {
+                        decodeDragThumbnail(files.first())
+                    } catch (error: IOException) {
+                        DragShareLog.w("DragShare/Stash", "Unable to decode optional drag thumbnail", error)
+                        null
+                    } catch (error: SecurityException) {
+                        DragShareLog.w("DragShare/Stash", "Permission denied decoding optional drag thumbnail", error)
+                        null
+                    }
+                    uris to thumbnail
                 }
             }
-            if (!isHeld() || !view.isAttachedToWindow) return
-            clipForStash(entries, uris)
+            thumbnail = prepared.second
+            clipForStash(entries, prepared.first)
+        }
+        if (!isHeld() || !view.isAttachedToWindow) return
+        val preview = when {
+            hasImages -> thumbnail?.let {
+                imagePreview(view.context, it, entries.size, density, foreground, background)
+            } ?: textPreview(if (entries.size > 1) "${entries.size} 张（预览不可用）" else "图片（预览不可用）")
+            entries.size > 1 -> textPreview("${entries.size} 项内容")
+            else -> textPreview(entries.first().text.orEmpty())
+        }
+        val shadow = object : View.DragShadowBuilder() {
+            override fun onProvideShadowMetrics(size: Point, touch: Point) {
+                size.set(preview.width, preview.height)
+                touch.set(preview.width / 2, preview.height / 2)
+            }
+            override fun onDrawShadow(canvas: Canvas) = preview.draw(canvas)
         }
         val started = startDrag(view, clip, shadow,
             View.DRAG_FLAG_GLOBAL or if (hasImages) View.DRAG_FLAG_GLOBAL_URI_READ else 0)
@@ -104,6 +132,59 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
         DragShareLog.w("DragShare/Stash", "drag permission denied", error)
         Toast.makeText(view.context, "系统拒绝拖出内容：${error.message}", Toast.LENGTH_LONG).show()
     }
+}
+
+private fun decodeDragThumbnail(file: File): Bitmap {
+    val edgeLimit = 256
+    return ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
+        decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
+        val longest = maxOf(info.size.width, info.size.height)
+        if (longest > edgeLimit) {
+            val scale = edgeLimit / longest.toFloat()
+            decoder.setTargetSize(
+                (info.size.width * scale).toInt().coerceAtLeast(1),
+                (info.size.height * scale).toInt().coerceAtLeast(1),
+            )
+        }
+    }
+}
+
+private fun imagePreview(context: Context, bitmap: Bitmap, count: Int, density: Float,
+    foreground: Int, background: Int): View {
+    val width = (200 * density).toInt()
+    val height = (120 * density).toInt()
+    val frame = FrameLayout(context).apply {
+        this.background = GradientDrawable().apply { setColor(background); cornerRadius = 16 * density }
+        clipToOutline = true
+        addView(ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageBitmap(bitmap)
+            contentDescription = "中转站图片拖动预览"
+        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        if (count > 1) {
+            val badge = TextView(context).apply {
+                text = "${count} 张"
+                textSize = 12f
+                setTextColor(foreground)
+                this.background = GradientDrawable().apply {
+                    setColor(background)
+                    cornerRadius = 12 * density
+                }
+                val horizontal = (9 * density).toInt()
+                val vertical = (5 * density).toInt()
+                setPadding(horizontal, vertical, horizontal, vertical)
+            }
+            addView(badge, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
+                val margin = (8 * density).toInt()
+                setMargins(margin, margin, margin, margin)
+            })
+        }
+        measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+        layout(0, 0, measuredWidth, measuredHeight)
+    }
+    return frame
 }
 
 internal fun clipForStash(entries: List<StashStore.Entry>, imageUris: List<Uri> = emptyList()): ClipData {

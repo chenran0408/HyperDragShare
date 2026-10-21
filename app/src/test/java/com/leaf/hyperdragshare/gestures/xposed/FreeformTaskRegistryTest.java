@@ -25,4 +25,20 @@ public final class FreeformTaskRegistryTest {
         registry.remove(10);
         assertFalse(registry.contains(10));
     }
+
+    @Test
+    public void touchedWindowWinsOverLaterTaskCallbacks() {
+        assertEquals(21, HyperOsFreeformBridge.selectInteractionTaskId(
+                21, 22, 23, 24));
+    }
+
+    @Test
+    public void invalidatedTouchTargetUsesExistingFallbackOrder() {
+        assertEquals(22, HyperOsFreeformBridge.selectInteractionTaskId(
+                -1, 22, 23, 24));
+        assertEquals(23, HyperOsFreeformBridge.selectInteractionTaskId(
+                -1, -1, 23, 24));
+        assertEquals(24, HyperOsFreeformBridge.selectInteractionTaskId(
+                -1, -1, -1, 24));
+    }
 }

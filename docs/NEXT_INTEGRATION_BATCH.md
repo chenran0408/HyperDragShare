@@ -1,5 +1,7 @@
 # 后续整批：导航区域、复制直达与原生侧边栏
 
+> 此文件为169–175的历史推进记录。177之后的当前任务目录见TASK_BATCHES.md，现状与证据见CURRENT_STATUS.md；不要继续执行下文已经完成的“待合并”项。
+
 2026-10-21用户在169游戏避让期间新增；172已实现独立浮窗避让，复制直达增强及原生侧栏尚待合并。
 
 1. 底部小白条与Hyper手势：不通过隐藏系统导航或全面禁止底角动作解决。先核对当前独立托盘/分词窗口的systemGestures、mandatorySystemGestures、navigationBars边界；可移动托盘须避开系统导航区。对模块面板/把手触点，在SystemUI的DOWN时让位并保持整段归属，不在MOVE中争抢。仅靠Compose.systemGestureExclusion不能约束独立Root/Hyper监听。白条具体所属窗口仍需实机核对。

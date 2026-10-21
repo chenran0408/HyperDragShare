@@ -2,6 +2,8 @@
 
 最新版本、功能差距和验证层级先读 `docs/CURRENT_STATUS.md`，再读各文档末条。用户最新明确停止真实触摸面积研究；产品沿用Root evdev时长/位移，不强制校准、不把按住称为面积触发。历史只读实验保留记录，不继续解码、实验或消耗时间。优先修复取词、拖放与Miuix交互。
 
+当前按批次任务目录为 `docs/TASK_BATCHES.md`；`NEXT_INTEGRATION_BATCH.md`是历史记录，不能把其中已完成的待办再做一次。子代理Luna high并行处理独立范围，由主任务统一构建、安装和验收。
+
 本文是后续自动化代理在本工程内工作的约束。当前源码和
 `docs/IMPLEMENTATION.md` 是实现事实来源；`E:\workspace\TaplusContentPreview`
 只可作为早期传送门内容抓取思路的参考，不代表可运行基线。

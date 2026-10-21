@@ -74,4 +74,44 @@ public final class BoomActionHandler {
         return res.toString();
     }
 
+    /** Counts the exact code points produced by getSelectedText without building that string. */
+    public int getSelectedTextCharacterCount() {
+        final int wordCount = mBoomPage.mLayout.getWordCount();
+        final String original = mBoomPage.mLayout.getOriText();
+        if (mSelectedId.size() == wordCount) {
+            return original.codePointCount(0, original.length());
+        }
+
+        int count = 0;
+        boolean previousEndedWithHighSurrogate = false;
+        int last = -1;
+        for (Integer cur : mSelectedId) {
+            final String fragment;
+            final int start;
+            final int end;
+            if (last == -1 || cur != last + 1) {
+                fragment = mBoomPage.mLayout.getWord(cur);
+                start = 0;
+                end = fragment.length();
+            } else {
+                fragment = original;
+                start = mBoomPage.mLayout.getWordEnd(last);
+                end = cur == wordCount - 1
+                        ? original.length() : mBoomPage.mLayout.getWordEnd(cur);
+            }
+
+            int fragmentCount = fragment.codePointCount(start, end);
+            if (previousEndedWithHighSurrogate && start < end
+                    && Character.isLowSurrogate(fragment.charAt(start))) {
+                fragmentCount--;
+            }
+            count += fragmentCount;
+            if (start < end) {
+                previousEndedWithHighSurrogate = Character.isHighSurrogate(fragment.charAt(end - 1));
+            }
+            last = cur;
+        }
+        return count;
+    }
+
 }

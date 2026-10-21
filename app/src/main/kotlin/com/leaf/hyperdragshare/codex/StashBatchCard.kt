@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -67,26 +70,52 @@ internal fun StashBatchCard(
     onClick: () -> Unit,
 ) {
     Card(
-        modifier.fillMaxWidth(),
+        modifier.fillMaxWidth().then(
+            if (selectedCount > 0) Modifier.border(
+                1.dp, MiuixTheme.colorScheme.primary.copy(alpha = .72f), RoundedCornerShape(16.dp))
+            else Modifier
+        ),
         colors = CardDefaults.defaultColors(
             color = if (selectedCount > 0) MiuixTheme.colorScheme.primary.copy(alpha = .12f)
                 else MiuixTheme.colorScheme.surfaceContainer,
         ),
     ) {
-        StashDraggableContent(dragEntries, Modifier.fillMaxWidth().padding(6.dp), enabled = enabled,
-            draggable = !selectionMode || selectedCount > 0, startDrag = startDrag, onClick = onClick) {
-            Column {
-                batch.firstOrNull { it.kind == StashStore.KIND_IMAGE }?.let {
-                    StashImage(it, 480, Modifier.fillMaxWidth().height(imageHeight), ContentScale.Fit)
+        val mixedBatch = batch.any { it.kind == StashStore.KIND_IMAGE } &&
+            batch.any { it.kind == StashStore.KIND_TEXT }
+        if (mixedBatch && !selectionMode) {
+            Column(Modifier.fillMaxWidth().padding(6.dp)) {
+                val images = batch.filter { it.kind == StashStore.KIND_IMAGE }
+                val texts = batch.filter { it.kind == StashStore.KIND_TEXT }
+                StashDraggableContent(images, Modifier.fillMaxWidth().height(imageHeight),
+                    enabled = enabled, startDrag = startDrag, onClick = onClick) {
+                    StashImage(images.first(), 480, Modifier.fillMaxWidth().height(imageHeight), ContentScale.Fit)
                 }
-                batch.firstOrNull { it.kind == StashStore.KIND_TEXT }?.let {
-                    Text(it.text.orEmpty(), fontSize = 13.sp, maxLines = if (batch.any {
-                        item -> item.kind == StashStore.KIND_IMAGE }) 1 else 3,
+                StashDraggableContent(texts, Modifier.fillMaxWidth(), enabled = enabled,
+                    startDrag = startDrag, onClick = onClick) {
+                    Text(texts.first().text.orEmpty(), fontSize = 13.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurface)
                 }
-                Text(if (selectionMode) "已选 $selectedCount/${batch.size} 项" else "${stashBatchLabel(batch)} · 点按展开",
-                    fontSize = 12.sp, maxLines = 1, color = if (selectedCount > 0)
-                        MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text("${stashBatchLabel(batch)} · 点按展开", fontSize = 12.sp, maxLines = 1,
+                    color = if (selectedCount > 0) MiuixTheme.colorScheme.primary
+                        else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onClick))
+            }
+        } else {
+            StashDraggableContent(dragEntries, Modifier.fillMaxWidth().padding(6.dp), enabled = enabled,
+                draggable = !selectionMode || selectedCount > 0, startDrag = startDrag, onClick = onClick) {
+                Column {
+                    batch.firstOrNull { it.kind == StashStore.KIND_IMAGE }?.let {
+                        StashImage(it, 480, Modifier.fillMaxWidth().height(imageHeight), ContentScale.Fit)
+                    }
+                    batch.firstOrNull { it.kind == StashStore.KIND_TEXT }?.let {
+                        Text(it.text.orEmpty(), fontSize = 13.sp, maxLines = if (batch.any {
+                            item -> item.kind == StashStore.KIND_IMAGE }) 1 else 3,
+                            overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurface)
+                    }
+                    Text(if (selectionMode) "已选 $selectedCount/${batch.size} 项" else "${stashBatchLabel(batch)} · 点按展开",
+                        fontSize = 12.sp, maxLines = 1, color = if (selectedCount > 0)
+                            MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
             }
         }
     }

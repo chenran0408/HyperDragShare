@@ -86,6 +86,30 @@ public class SwipeSelectViewTest {
         assertEquals(new TreeSet<>(List.of(0, 1)), page.mBoomActionHandler.mSelectedId);
     }
 
+    @Test public void selectedCharacterCountMatchesSelectedTextAcrossEmojiAndGaps() {
+        open();
+        page.prepareForReinit();
+        String text = "😀 a b";
+        assertTrue(page.initWords(new int[]{0, 1, 3, 3, 5, 5, -1}, text, -1, -1, -1));
+
+        TreeSet<Integer> selection = new TreeSet<>(List.of(0, 1));
+        page.restoreSelectionNow(selection);
+        String selected = page.selectedTextOrOriginal();
+        assertEquals("😀 a", selected);
+        assertEquals(selected.codePointCount(0, selected.length()), page.selectedCharacterCount());
+
+        selection = new TreeSet<>(List.of(0, 2));
+        page.restoreSelectionNow(selection);
+        selected = page.selectedTextOrOriginal();
+        assertEquals("😀b", selected);
+        assertEquals(selected.codePointCount(0, selected.length()), page.selectedCharacterCount());
+
+        page.restoreSelectionNow(new TreeSet<>(List.of(0, 1, 2)));
+        selected = page.selectedTextOrOriginal();
+        assertEquals(text, selected);
+        assertEquals(selected.codePointCount(0, selected.length()), page.selectedCharacterCount());
+    }
+
     @Test public void rejectedDragRestoresOriginalSelectionRatherThanAddingHeldWord() {
         open();
         page.restoreSelectionNow(new TreeSet<>(List.of(0)));

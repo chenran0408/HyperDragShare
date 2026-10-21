@@ -39,8 +39,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,6 +55,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -74,6 +74,7 @@ import top.yukonga.miuix.kmp.icon.extended.Forward
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.theme.ThemeController
 
 /** One search state and WebView implementation shared by the overlay and legacy Activity host. */
@@ -371,7 +372,7 @@ private fun SearchPanel(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(26.dp)
+                    .height(44.dp)
                     .pointerInput(screenHeightPx) {
                         detectVerticalDragGestures { _, deltaY ->
                             onHeightDrag(deltaY, screenHeightPx)
@@ -453,7 +454,7 @@ private fun SearchPanel(
                 engines.forEach { engine ->
                     val selected = engine.id == selectedEngine.id
                     Card(
-                        modifier = Modifier.height(44.dp),
+                        modifier = Modifier.height(44.dp).semantics { this.selected = selected },
                         colors = CardDefaults.defaultColors(
                             color = if (selected) {
                                 MiuixTheme.colorScheme.primaryContainer
@@ -534,7 +535,7 @@ private fun SearchPanel(
                     contentDescription = stringResource(R.string.search_forward))
                 OverlayIconAction(MiuixIcons.Refresh, MiuixTheme.colorScheme.onSurface,
                     onClick = onRefresh, contentDescription = stringResource(R.string.search_refresh))
-                OverlayIconAction(Icons.Outlined.OpenInBrowser, MiuixTheme.colorScheme.onSurface,
+                OverlayIconAction(MiuixIcons.Link, MiuixTheme.colorScheme.onSurface,
                     onClick = onOpenInBrowser, contentDescription = stringResource(R.string.search_open_browser))
             }
         }

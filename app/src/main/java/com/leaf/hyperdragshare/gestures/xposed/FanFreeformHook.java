@@ -11,6 +11,9 @@ import android.content.pm.ApplicationInfo;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 
+import com.leaf.hyperdragshare.codex.NativeSidebarState;
+import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
+
 import dalvik.system.DexFile;
 
 import java.io.IOException;
@@ -862,13 +865,55 @@ public final class FanFreeformHook implements IXposedHookLoadPackage {
                             FanRuntime active = runtime;
                             if (active == null || param.args.length == 0
                                     || !(param.args[0] instanceof MotionEvent)) return;
-                            active.onNativeFreeformMotion((MotionEvent) param.args[0]);
+                            MotionEvent event = (MotionEvent) param.args[0];
+                            if (event.getActionMasked() == MotionEvent.ACTION_DOWN
+                                    && !param.hasThrowable()
+                                    && !OverlayTouchRegions.contains(event.getX(), event.getY())
+                                    && !NativeSidebarState.owns(event.getX(), event.getY())) {
+                                recordNativeFreeformTouchTarget(param.getResult(), active);
+                            }
+                            active.onNativeFreeformMotion(event);
                         }
             });
             freeformControllerHookInstalled = true;
             Log.i("Freeform controller hooks installed controller=" + controllerName);
         } catch (Throwable error) {
             Log.e("Freeform controller hooks failed safely controller=" + controllerName, error);
+        }
+    }
+
+    private static void recordNativeFreeformTouchTarget(Object result, FanRuntime active) {
+        if (result == null) return;
+        try {
+            Object typeValue = result.getClass().getMethod("getType").invoke(result);
+            if (!(typeValue instanceof Number)) {
+                Log.e("Native freeform touch result type is not numeric");
+                return;
+            }
+            int type = ((Number) typeValue).intValue();
+            // HyperOS returns type 1 for FREEFORM_HANDLE and 2 for FREEFORM_MOVE;
+            // the stock caller reads this same target.
+            if (type != 1 && type != 2) return;
+            Object taskInfo = result.getClass()
+                    .getMethod("getFreeformModeTaskInfo").invoke(result);
+            if (taskInfo == null) {
+                Log.e("Native freeform touch result omitted its target task");
+                return;
+            }
+            Object normalState = taskInfo.getClass().getMethod("isNormalState").invoke(taskInfo);
+            Object miniState = taskInfo.getClass().getMethod("isMiniState").invoke(taskInfo);
+            Object pinMode = taskInfo.getClass().getMethod("isInPinMode").invoke(taskInfo);
+            if (!(normalState instanceof Boolean) || !(Boolean) normalState
+                    || !(miniState instanceof Boolean) || (Boolean) miniState
+                    || !(pinMode instanceof Boolean) || (Boolean) pinMode) return;
+            Object taskId = taskInfo.getClass().getMethod("getTaskId").invoke(taskInfo);
+            if (!(taskId instanceof Number)) {
+                Log.e("Native freeform touch target taskId is not numeric");
+                return;
+            }
+            active.onNativeFreeformTouchDown(((Number) taskId).intValue());
+        } catch (ReflectiveOperationException | SecurityException error) {
+            Log.e("Cannot read native freeform touch result", error);
         }
     }
 

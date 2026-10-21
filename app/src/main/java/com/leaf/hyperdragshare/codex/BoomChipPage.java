@@ -86,7 +86,7 @@ public class BoomChipPage {
                 float rowY = row.getY();
                 for (int j = 0; j < row.getChildCount(); ++j) {
                     View child = row.getChildAt(j);
-                    child.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                    child.animate().cancel();
                     float newX = mTouchedX - pageX - rowX - child.getMeasuredWidth() / 2;
                     float newY = mTouchedY - pageY - rowY - child.getMeasuredHeight() / 2;
                     float x = child.getX();
@@ -177,6 +177,11 @@ public class BoomChipPage {
 
     public boolean hasSelection() {
         return mBoomActionHandler != null && mBoomActionHandler.hasSelection();
+    }
+
+    public int selectedCharacterCount() {
+        return mBoomActionHandler != null && mBoomActionHandler.hasSelection()
+                ? mBoomActionHandler.getSelectedTextCharacterCount() : 0;
     }
 
     public void setOnChipsChangedListener(Runnable listener) {

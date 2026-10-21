@@ -532,7 +532,11 @@ object StashOverlayPanel {
                 else preview = entry
             }
             Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 3.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 3.dp).then(
+                    if (selected) Modifier.border(
+                        1.dp, MiuixTheme.colorScheme.primary.copy(alpha = .72f), RoundedCornerShape(16.dp))
+                    else Modifier
+                ),
                 colors = CardDefaults.defaultColors(color = if (selected)
                     MiuixTheme.colorScheme.primary.copy(alpha = .12f)
                     else MiuixTheme.colorScheme.surfaceContainer),

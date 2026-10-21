@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
+import android.view.Choreographer
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
@@ -39,6 +40,11 @@ internal class BigBangPanelSession(private val context: Context, private val act
     }
     private val main = Handler(Looper.getMainLooper())
     private var closed = false
+    private var selectionSummaryFrameScheduled = false
+    private val selectionSummaryFrameCallback = Choreographer.FrameCallback {
+        selectionSummaryFrameScheduled = false
+        if (!closed) updateSelectionSummary()
+    }
     private var boomChipPage: BoomChipPage? = null
     private lateinit var legacyContentView: View
     private var launchTouchX by mutableIntStateOf(-1)
@@ -59,6 +65,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var animatedDismissRequester: (() -> Unit)? = null
     private val requests = LatestRequest()
     private var totalCharacterCount by mutableIntStateOf(0)
+    private var lastCountedOriginal: String? = null
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
     private var isSegmenting by mutableStateOf(true)
@@ -72,11 +79,19 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private fun updateSelectionSummary() {
         if (!copying) copyFeedback = null
         val page = boomChipPage ?: return
-        val original = page.originalText.orEmpty()
+        val original = page.originalText
+        if (lastCountedOriginal !== original) {
+            lastCountedOriginal = original
+            totalCharacterCount = original?.codePointCount(0, original.length) ?: 0
+        }
         hasTextSelection = page.hasSelection()
-        totalCharacterCount = original.codePointCount(0, original.length)
-        val selected = if (hasTextSelection) page.selectedTextOrOriginal() else ""
-        selectedCharacterCount = selected.codePointCount(0, selected.length)
+        selectedCharacterCount = page.selectedCharacterCount()
+    }
+
+    private fun scheduleSelectionSummary() {
+        if (closed || selectionSummaryFrameScheduled) return
+        selectionSummaryFrameScheduled = true
+        Choreographer.getInstance().postFrameCallback(selectionSummaryFrameCallback)
     }
 
 
@@ -90,7 +105,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
             override fun dragText(source: View, text: String) = actions.dragText(source, text)
         }).also { page ->
             page.setOnChipsChangedListener(::refreshLegacyTheme)
-            page.setOnSelectionChangedListener(::updateSelectionSummary)
+            page.setOnSelectionChangedListener(::scheduleSelectionSummary)
             page.setOnAdjacentRequestListener(object : BoomChipPage.OnAdjacentRequestListener {
                 override fun peekAdjacentText(direction: String): String? =
                     if (direction == "before") beforeText else afterText
@@ -214,7 +229,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     if (!closed && requests.accepts(request)) {
                         if (page.replaceWords(segments, combined, 0, prefix.length)) {
                             if (prepend) beforeText = null else afterText = null
-                            updateSelectionSummary()
+                            scheduleSelectionSummary()
                         } else {
                             Toast.makeText(context, "无法展开附近文字，请重试", Toast.LENGTH_SHORT).show()
                         }
@@ -247,6 +262,10 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     fun close() {
         closed = true
+        if (selectionSummaryFrameScheduled) {
+            Choreographer.getInstance().removeFrameCallback(selectionSummaryFrameCallback)
+            selectionSummaryFrameScheduled = false
+        }
         requests.invalidate()
         animatedDismissRequester = null
     }

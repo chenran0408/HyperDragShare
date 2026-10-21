@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
@@ -53,17 +54,6 @@ public class BoomAnimator {
         animatorSet.setInterpolator(mIterpolator);
         animatorSet.setDuration(duration);
         animatorSet.play(x).with(y);
-        return animatorSet;
-    }
-
-    private static Animator makeTranslationAnimator(final View view, long duration) {
-        AnimatorSet animatorSet = new AnimatorSet();
-        ObjectAnimator transX = ObjectAnimator.ofFloat(view, View.TRANSLATION_X, view.getTranslationX(), 0);
-        ObjectAnimator transY = ObjectAnimator.ofFloat(view, View.TRANSLATION_Y, view.getTranslationY(), 0);
-
-        animatorSet.setInterpolator(mIterpolator);
-        animatorSet.setDuration(duration);
-        animatorSet.play(transX).with(transY);
         return animatorSet;
     }
 
@@ -243,33 +233,26 @@ public class BoomAnimator {
     }
 
     public static void makeBoomAnimation(final View view) {
-        AnimatorSet animatorSet = new AnimatorSet();
-        Animator scaleAnimator = makeScaleAnimator(view, 0f, 1f, BOOM_DURATION);
-        Animator alphaAnimator = makeAlphaAnimator(view, 0f, 1f, BOOM_DURATION);
-        animatorSet.playTogether(scaleAnimator, alphaAnimator, makeTranslationAnimator(view, BOOM_DURATION));
-        animatorSet.addListener(new Animator.AnimatorListener() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-            }
-
-            @Override
-            public void onAnimationEnd(Animator animation) {
-            }
-
-            @Override
-            public void onAnimationCancel(Animator animation) {
-                view.setScaleX(1.0f);
-                view.setScaleY(1.0f);
-                view.setAlpha(1.0f);
-                view.setTranslationX(0);
-                view.setTranslationY(0);
-            }
-
-            @Override
-            public void onAnimationRepeat(Animator animation) {
-            }
-        });
-        animatorSet.start();
+        view.setScaleX(0f);
+        view.setScaleY(0f);
+        view.setAlpha(0f);
+        view.animate()
+                .scaleX(1f).scaleY(1f).alpha(1f)
+                .translationX(0f).translationY(0f)
+                .setDuration(BOOM_DURATION)
+                .setInterpolator(mIterpolator)
+                .setListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        // End also follows cancellation: a chip must stay usable if interrupted.
+                        view.setScaleX(1f);
+                        view.setScaleY(1f);
+                        view.setAlpha(1f);
+                        view.setTranslationX(0f);
+                        view.setTranslationY(0f);
+                        view.animate().setListener(null);
+                    }
+                }).start();
     }
 
     public static void makeMoveAnimation(final View view, float startY, final float endY) {

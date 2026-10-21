@@ -61,6 +61,7 @@ final class HyperOsFreeformBridge {
     private volatile Object controller;
     private volatile int trackedTaskId = -1;
     private volatile int externalTrackedTaskId = -1;
+    private int touchedInteractionTaskId = -1;
     private volatile String pendingPackage;
     private volatile int pendingUserId;
     private volatile long pendingSince;
@@ -487,6 +488,15 @@ final class HyperOsFreeformBridge {
         if (info != null) onTaskInfo(info);
     }
 
+    void onNativeFreeformTouchDown(int taskId) {
+        if (taskId < 0) return;
+        synchronized (taskLock) {
+            if (touchedInteractionTaskId == taskId) return;
+            touchedInteractionTaskId = taskId;
+        }
+        Log.i("Native freeform touch target selected task=" + taskId);
+    }
+
     void onTaskInfo(Object info) {
         if (info == null) return;
         int taskId = intCall(info, "getTaskId", -1);
@@ -509,6 +519,10 @@ final class HyperOsFreeformBridge {
                     && SystemClock.elapsedRealtime() - pendingSince <= MATCH_WINDOW_MS;
             boolean matchesPending = inMatchWindow && expected.equals(actual)
                     && pendingUserId == userId(info) && !pinned;
+            if (matchesPending && (normal || mini)
+                    && touchedInteractionTaskId != taskId) {
+                touchedInteractionTaskId = -1;
+            }
             boolean matchesRecentShortcut = normal && recentShortcutPackage != null
                     && SystemClock.elapsedRealtime() <= recentShortcutUntil
                     && recentShortcutPackage.equals(actual)
@@ -620,6 +634,7 @@ final class HyperOsFreeformBridge {
         Object info = taskInfo(taskId);
         if (info == null) {
             synchronized (taskLock) {
+                if (touchedInteractionTaskId == taskId) touchedInteractionTaskId = -1;
                 if (taskId == launchInputProtectionTaskId
                         && SystemClock.elapsedRealtime() <= launchInputProtectionUntil) {
                     return null;
@@ -634,6 +649,7 @@ final class HyperOsFreeformBridge {
         boolean pinned = isPinned(info);
         if (!normal || mini || pinned) {
             synchronized (taskLock) {
+                if (touchedInteractionTaskId == taskId) touchedInteractionTaskId = -1;
                 normalFreeformTaskIds.remove(taskId);
             }
             if (!owned) {
@@ -674,8 +690,8 @@ final class HyperOsFreeformBridge {
             Object info = taskInfo(taskId);
             if (info == null) {
                 synchronized (taskLock) {
-                    visibleFreeformTaskIds.remove(taskId);
-                    normalFreeformTaskIds.remove(taskId);
+                    if (touchedInteractionTaskId == taskId) touchedInteractionTaskId = -1;
+                    updateVisibleStateLocked(taskId, false, false, false);
                 }
                 continue;
             }
@@ -685,18 +701,13 @@ final class HyperOsFreeformBridge {
             boolean visible = isTaskVisible(info) && (normal || mini || pinned);
             if (!visible) {
                 synchronized (taskLock) {
-                    visibleFreeformTaskIds.remove(taskId);
-                    normalFreeformTaskIds.remove(taskId);
+                    updateVisibleStateLocked(taskId, false, false, false);
                 }
                 continue;
             }
             synchronized (taskLock) {
-                if (visible && normal && !mini && !pinned) {
-                    normalFreeformTaskIds.remove(taskId);
-                    normalFreeformTaskIds.add(taskId);
-                } else {
-                    normalFreeformTaskIds.remove(taskId);
-                }
+                updateVisibleStateLocked(taskId, visible && normal,
+                        visible && mini, visible && pinned);
             }
             try {
                 boolean animating = isTaskAnimating(taskId)
@@ -1326,6 +1337,7 @@ final class HyperOsFreeformBridge {
         FreeformTaskRegistry.Record removed = tasks.remove(taskId);
         nativeLaunchBoundsByTaskId.remove(taskId);
         normalFreeformTaskIds.remove(taskId);
+        if (touchedInteractionTaskId == taskId) touchedInteractionTaskId = -1;
         if (trackedTaskId == taskId) trackedTaskId = -1;
         if (launchInputProtectionTaskId == taskId) {
             launchInputProtectionTaskId = -1;
@@ -1342,10 +1354,16 @@ final class HyperOsFreeformBridge {
         synchronized (taskLock) {
             int active = -1;
             for (int taskId : normalFreeformTaskIds) active = taskId;
-            if (active >= 0) return active;
-            int external = externalTrackedTaskId;
-            return external >= 0 ? external : trackedTaskId;
+            return selectInteractionTaskId(touchedInteractionTaskId, active,
+                    externalTrackedTaskId, trackedTaskId);
         }
+    }
+
+    static int selectInteractionTaskId(int touchedTaskId, int activeTaskId,
+                                       int externalTaskId, int ownedTaskId) {
+        if (touchedTaskId >= 0) return touchedTaskId;
+        if (activeTaskId >= 0) return activeTaskId;
+        return externalTaskId >= 0 ? externalTaskId : ownedTaskId;
     }
 
     private void clearInteractiveTaskLocked(int taskId, String reason) {
@@ -1354,6 +1372,7 @@ final class HyperOsFreeformBridge {
             removeTaskLocked(taskId, reason);
             return;
         }
+        if (touchedInteractionTaskId == taskId) touchedInteractionTaskId = -1;
         if (externalTrackedTaskId == taskId) {
             externalTrackedTaskId = -1;
             Log.i("Native external freeform cleared task=" + taskId + " reason=" + reason);
@@ -1362,6 +1381,9 @@ final class HyperOsFreeformBridge {
 
     private void updateVisibleStateLocked(int taskId, boolean normal,
                                           boolean mini, boolean pinned) {
+        if (touchedInteractionTaskId == taskId && (!normal || mini || pinned)) {
+            touchedInteractionTaskId = -1;
+        }
         if (normal || mini || pinned) {
             visibleFreeformTaskIds.remove(taskId);
             visibleFreeformTaskIds.add(taskId);

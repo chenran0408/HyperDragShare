@@ -56,3 +56,5 @@ APK manifest、Xposed scope、索引交叉引用及定点类反编译位于工�
 build371整批构建成功（Debug/Release、R8、Lint），394项测试无失败/错误/跳过，Lint0错误。177仅arm64包20.48MiB，同签名一次覆盖安装，设备APK哈希与本地一致。SystemUI明确加载201，Portal激活/Root输入/reader201就绪；其他作用域未本批重载。
 
 设备实际查看Miuix左右开关，关闭左角后保存false/true，配置生效后左右同位置点击只有右角armed；已恢复true/true。首次即时点击赶在异步偏好落盘前仍是旧配置，已与后续证据分开；日志epoch解析漏空格曾得空结果，修正后用原始日志确认。备用捕获通路未在本机强切，真实手指扫选/迷你窗/游戏横屏/侧栏拖出本轮未重新实测。Flyme对应能力在本批分别复用或记录，本文不代表参考模块的全部交互已在HyperOS实机验收。
+
+178/202：复用原生触摸返回的TaskInfo（仅normal、非mini/pin），有效DOWN记录精确taskId，模块/原生侧栏区域不改目标；后续别的窗口状态回调不能盖掉它，失效/销毁/关闭/新启动匹配时清理。统一供几何、窗外操作、mini/fullscreen/close使用；不从after-hook新发上滑动作。build373回归与R8通过，真实多窗与遮挡场景尚未验；设备安装状态继续以CURRENT_STATUS为准。

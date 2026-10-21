@@ -571,6 +571,10 @@ final class FanRuntime {
         }
     }
 
+    void onNativeFreeformTouchDown(int taskId) {
+        freeform.onNativeFreeformTouchDown(taskId);
+    }
+
     void onNativeFreeformLeavingInteractiveState(String reason) {
         suspendOutsideCaptureForWindowTransition("native " + reason);
     }
