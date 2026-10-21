@@ -47,7 +47,7 @@ internal fun StashGroupingActions(
     }
 }
 
-/** Same batch and selection order in the shelf, native small window and management page. */
+/** The card itself is the drag handle for a group or the current selection. */
 @Composable
 internal fun StashBatchCard(
     batch: List<StashStore.Entry>,
@@ -56,12 +56,13 @@ internal fun StashBatchCard(
     selectionMode: Boolean,
     selectedCount: Int,
     enabled: Boolean = true,
+    dragEntries: List<StashStore.Entry> = batch,
     onDragStarted: () -> Unit,
     onClick: () -> Unit,
 ) {
     Card(modifier.fillMaxWidth()) {
-        StashDraggableContent(batch, Modifier.fillMaxWidth().padding(6.dp), enabled = enabled,
-            draggable = !selectionMode, onStarted = onDragStarted, onClick = onClick) {
+        StashDraggableContent(dragEntries, Modifier.fillMaxWidth().padding(6.dp), enabled = enabled,
+            draggable = !selectionMode || selectedCount > 0, onStarted = onDragStarted, onClick = onClick) {
             Column {
                 batch.firstOrNull { it.kind == StashStore.KIND_IMAGE }?.let {
                     StashImage(it, 480, Modifier.fillMaxWidth().height(imageHeight), ContentScale.Fit)

@@ -12,14 +12,10 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Click to inspect; hold the content itself to take it to another application. */
@@ -37,33 +33,10 @@ internal fun StashDraggableContent(
     val foreground = MiuixTheme.colorScheme.onSurface.toArgb()
     val background = MiuixTheme.colorScheme.surfaceContainer.toArgb()
     Box(modifier.combinedClickable(enabled = enabled, onClick = onClick,
-        onLongClickLabel = "拖出内容", onLongClick = if (draggable) ({
+        onLongClickLabel = if (entries.size > 1) "拖出所选 ${entries.size} 项" else "拖出内容", onLongClick = if (draggable) ({
             startStashDrag(view, entries, foreground, background, onStarted)
             Unit
         }) else null)) { content() }
-}
-
-/** Single and multi-item drag use the same URI grants and current selection. */
-@Composable
-internal fun StashDragHandle(entries: List<StashStore.Entry>, onStarted: () -> Unit = {}) {
-    val color = MiuixTheme.colorScheme.primary.toArgb()
-    val foreground = MiuixTheme.colorScheme.onSurface.toArgb()
-    val background = MiuixTheme.colorScheme.surfaceContainer.toArgb()
-    AndroidView(
-        modifier = Modifier.fillMaxWidth().height(40.dp),
-        factory = { context ->
-            TextView(context).apply { textSize = 12f; gravity = Gravity.CENTER }
-        },
-        update = { view ->
-            view.text = if (entries.size > 1) "按住拖出 ${entries.size} 项" else "按住拖出"
-            view.setTextColor(color)
-            view.isEnabled = entries.isNotEmpty()
-            view.alpha = if (entries.isEmpty()) .4f else 1f
-            view.setOnLongClickListener {
-                startStashDrag(view, entries, foreground, background, onStarted)
-            }
-        },
-    )
 }
 
 private fun startStashDrag(view: View, entries: List<StashStore.Entry>, foreground: Int,

@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.141 / versionCode 165。沿用本 fork 包名和 debug 签名，原位升级成功；Portal进程仍为164，141新Hook尚未重载。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.142 / versionCode 166。沿用本 fork 包名和 debug 签名，原位升级成功；Portal进程仍为164，141新Hook尚未重载。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装 1.7.141 / 165；196 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
+- 当前已安装 1.7.142 / 166；196 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -886,3 +886,14 @@ PressCaptureSource共用一次Root读取、缓存、确认、接管和原页文�
 最终288构建成功：196项单测0失败/0错误，Lint 0 errors/140 warnings/2 hints，assembleDebug成功；无新UI镜像测试。APK为1.7.141/165，SHA256 `015BE09F9027CA5113A92F75824685AA5590DC9FDCC49DFAA0F98559FBF76FDD`，签名与原包一致。apksigner首次因当前shell未设置JAVA_HOME未执行，设置JDK21后验证成功。
 
 已单次adb install -r成功，PackageManager读回165/1.7.141；Portal PID及原前台任务均未改变，注入/Root持久记录仍164/true。安装不是新Hook已加载：本轮不切换用户正在使用的页面、不强停Portal、不重启android，Portal消息Hook及框架锁屏修正待下一次对应进程重载。未做点击、截图、旋转、拖动或长按验收，未写中转站/剪贴板。当前新交互与60秒存活仍未实测。
+
+
+## 2026-10-21：1.7.142 在内容上直接拖出选区
+
+多选后按住任一已选条目或含已选成员的组卡，即可拖出当前可见顺序的全部所选项。未选条目不启动多项拖出，点击仍用于改变选择。拖出和分组共用visibleBatches展开后的顺序，避免原数据库倒序使同组图片倒序。图片预览本身也能长按拖出，不再只能返回列表取用。
+
+删除底部40dp独立拖动控件和无引用AndroidView代码；标题显示按住拖出提示，普通多选入口改为空复选框图标，与真正全选区分。复用现有ClipData、URI读授权和成功开始拖动后收起逻辑；未新增页面、权限、数据库变更或兼容回退。
+
+289首次构建通过后，源码检查发现多选拖出应复用可见组顺序而非原始entries；修正参数传递后最终290完整testDebugUnitTest/lintDebug/assembleDebug通过。196项单测0失败/0错误，Lint 0 errors/140 warnings/2 hints；未增加UI镜像测试，也未进行设备点击/截图矩阵。
+
+1.7.142/166同签名覆盖安装成功，PackageManager读回版本正确。APK SHA256 `64481B6AF1B18CF3E23DE09094FAFD5B4A972903D6D034DA693464F0E3F15CB5`。本轮只安装，没有切换当前任务、重启作用域、写用户内容或拖拽验收；多选/预览新交互属于已实现未实测。141新增Portal消息Hook与android锁屏修正仍待相应进程重载，不因142安装而标记已生效。

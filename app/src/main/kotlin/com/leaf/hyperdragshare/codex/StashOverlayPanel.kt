@@ -253,8 +253,9 @@ object StashOverlayPanel {
             ) {
                 Box(Modifier.width(28.dp).height(4.dp).background(
                     MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .45f), RoundedCornerShape(2.dp)))
-                Text(if (selectionMode) "已选 ${selectedIds.size}" else "中转站 · ${entries.size}",
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)
+                Text(if (selectionMode) "已选 ${selectedIds.size} · 按住拖出" else "中转站 · ${entries.size}",
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -371,7 +372,7 @@ object StashOverlayPanel {
             Toast.makeText(app, message, Toast.LENGTH_LONG).show()
         }
 
-        @Composable private fun ShelfItem(entry: StashStore.Entry) {
+        @Composable private fun ShelfItem(entry: StashStore.Entry, dragSelection: List<StashStore.Entry>) {
             val selected = entry.id in selectedIds
             val open = {
                 if (selectionMode) {
@@ -382,8 +383,8 @@ object StashOverlayPanel {
             Card(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                 Column(Modifier.padding(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        StashDraggableContent(listOf(entry), Modifier.weight(1f),
-                            enabled = !updating, draggable = !selectionMode,
+                        StashDraggableContent(if (selectionMode) dragSelection else listOf(entry), Modifier.weight(1f),
+                            enabled = !updating, draggable = !selectionMode || selected,
                             onStarted = ::collapse, onClick = open) {
                             if (entry.kind == StashStore.KIND_IMAGE) {
                                 StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp), ContentScale.Fit)
@@ -405,15 +406,16 @@ object StashOverlayPanel {
             }
         }
 
-        @Composable private fun ShelfBatch(batch: List<StashStore.Entry>) {
+        @Composable private fun ShelfBatch(batch: List<StashStore.Entry>, dragSelection: List<StashStore.Entry>) {
             if (batch.size == 1) {
-                ShelfItem(batch.first())
+                ShelfItem(batch.first(), dragSelection)
                 return
             }
             val ids = batch.map { it.id }.toSet()
             val selectedCount = ids.count { it in selectedIds }
             StashBatchCard(batch, Modifier.padding(horizontal = 4.dp), imageHeight = 56.dp,
                 enabled = !updating, selectionMode = selectionMode, selectedCount = selectedCount,
+                dragEntries = if (selectionMode) dragSelection else batch,
                 onDragStarted = ::collapse, onClick = {
                     if (selectionMode) {
                         selectedIds = if (selectedCount == batch.size) selectedIds - ids else selectedIds + ids
@@ -431,6 +433,7 @@ object StashOverlayPanel {
             }.let { if (openedBatchId != null) it.sortedBy { entry -> entry.batchOrder } else it }
             val visibleBatches = if (openedBatchId != null) visibleEntries.map { listOf(it) }
                 else stashBatches(visibleEntries)
+            val selected = visibleBatches.flatten().filter { it.id in selectedIds }
             LaunchedEffect(openedBatchId) { listState.requestScrollToItem(0) }
             MiuixTheme(controller = remember(dark) {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
@@ -487,7 +490,10 @@ object StashOverlayPanel {
                                     }
                                 }
                                 image != null -> Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                                    StashImage(image, 1200, Modifier.fillMaxWidth().weight(1f), ContentScale.Fit)
+                                    StashDraggableContent(listOf(image), Modifier.fillMaxWidth().weight(1f),
+                                        enabled = !updating, onStarted = ::collapse, onClick = {}) {
+                                        StashImage(image, 1200, Modifier.fillMaxSize(), ContentScale.Fit)
+                                    }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                         OverlayIconAction(Icons.Outlined.ArrowBack,
                                             MiuixTheme.colorScheme.onSurfaceVariantActions,
@@ -510,22 +516,20 @@ object StashOverlayPanel {
                                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     items(visibleBatches, key = {
                                         if (openedBatchId == null) it.first().batchId else it.first().id
-                                    }) { ShelfBatch(it) }
+                                    }) { ShelfBatch(it, selected) }
                                 }
                             }
                             if (updating) {
                                 Text("正在处理…", Modifier.padding(6.dp), fontSize = 12.sp,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             } else if (selectionMode && !confirmDelete) {
-                                val selected = visibleBatches.flatten().filter { it.id in selectedIds }
                                 StashGroupingActions(selected, true,
                                     canUngroup = selected.any { it.id in stashGroupedEntryIds(entries) },
                                     onGroup = { regroup(selected, false) },
                                     onUngroup = { regroup(selected, true) })
-                                StashDragHandle(selected, ::collapse)
                             }
                             if (!confirmDelete) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                OverlayIconAction(if (selectionMode) Icons.Outlined.ArrowBack else Icons.Outlined.SelectAll,
+                                OverlayIconAction(if (selectionMode) Icons.Outlined.ArrowBack else Icons.Outlined.CheckBoxOutlineBlank,
                                     if (selectionMode) MiuixTheme.colorScheme.primary
                                     else MiuixTheme.colorScheme.onSurfaceVariantActions,
                                     enabled = !updating && (selectionMode || visibleEntries.isNotEmpty()),
