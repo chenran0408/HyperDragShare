@@ -1,33 +1,65 @@
 package com.leaf.hyperdragshare.codex;
 
+import android.content.Context;
+import android.os.SystemClock;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
-/** Reloads system_server and app scopes by restarting the target ROM's zygote service. */
+/** User-requested app scope reload or a restart of the target Android runtime/device. */
 final class ScopeRestart {
     private static final String TAG = "DragShare/ScopeRestart";
-
     private ScopeRestart() {}
 
-    static void restartAndroidRuntime() throws IOException {
-        DragShareLog.i(TAG, "user confirmed Android runtime restart for android, Taplus and AICR scopes");
-        Process process = new ProcessBuilder("su", "-c", "setprop ctl.restart zygote")
-                .redirectErrorStream(true)
-                .start();
+    static void reloadAppScopes(Context context) throws IOException {
+        int oldPid = ModuleActivation.injectedProcessId(context);
+        ModuleActivation.clearPortalReport(context);
+        runRoot("am force-stop --user current com.miui.contentextension && "
+                + "am force-stop --user current com.xiaomi.aicr && "
+                + ModuleActivation.portalHandshakeCommand(), "应用作用域重载");
+        long deadline = SystemClock.uptimeMillis() + 10000L;
         try {
-            if (!process.waitFor(10, TimeUnit.SECONDS)) {
-                throw new IOException("Root 授权或软重启请求超时");
+            while (SystemClock.uptimeMillis() < deadline) {
+                int pid = ModuleActivation.injectedProcessId(context);
+                if (pid > 0 && pid != oldPid && ModuleActivation.isCurrentBuildInjected(context)
+                        && ModuleActivation.isCurrentBuildPortalRootGranted(context)) {
+                    DragShareLog.i(TAG, "new portal injection and Root grant confirmed pid=" + pid);
+                    return;
+                }
+                Thread.sleep(100L);
             }
-            if (process.exitValue() != 0) {
-                String reason = new String(
-                        process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-                throw new IOException(reason.isEmpty() ? "Root 未允许软重启" : reason);
-            }
-            DragShareLog.i(TAG, "Android runtime restart request accepted");
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            throw new IOException("软重启请求被中断", error);
+            throw new IOException("作用域重载等待被中断", error);
+        }
+        throw new IOException("尚未收到新传送门进程的当前版本与Root确认；请检查LSPosed作用域及Root授权");
+    }
+
+    static void restartAndroidRuntime() throws IOException {
+        runRoot("setprop ctl.restart zygote", "软重启");
+    }
+
+    static void restartDevice() throws IOException {
+        runRoot("reboot", "整机重启");
+    }
+
+    private static void runRoot(String command, String action) throws IOException {
+        DragShareLog.i(TAG, "user requested " + action);
+        Process process = new ProcessBuilder("su", "-c", command).redirectErrorStream(true).start();
+        try (InputStream output = process.getInputStream(); OutputStream input = process.getOutputStream()) {
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException(action + "请求超时");
+            }
+            if (process.exitValue() != 0) {
+                String reason = new String(output.readAllBytes(), StandardCharsets.UTF_8).trim();
+                throw new IOException(reason.isEmpty() ? "Root未允许" + action : reason);
+            }
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IOException(action + "请求被中断", error);
         } finally {
             process.destroy();
         }

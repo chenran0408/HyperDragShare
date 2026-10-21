@@ -111,6 +111,12 @@
 - `ShareLauncher.java`：构造显式 `ACTION_SEND` 并启动目标 Activity。
 - `GestureMath.java`、`ShareUriToken.java`：可单测的纯逻辑。
 
+## 传送门启动与重载
+
+144起精确Hook 5.1.5的App.onCreate，仅主进程初始化；无拾取服务时只在按压已启用且来源为传送门时启动Root运行时。Root可query SwitchControlProvider根URI拉进程，不打开原生Activity；其query/getType无业务调用，getControlStatus可能迁移设置，不用于唤醒。content --user需要数字，Root用am get-current-user取得，不把CLI零退出码当成功。168已真机证实无需拾取服务即可Root输入/取词ready。
+
+既有重载弹窗的热重载只结束Portal/AICR，空query重启Portal后核对新PID/版本/Root确认；AICR下次绑定加载。android/system_server的代码更新必须软或整机重启，不宣称应用热重载更新全部作用域。未为了验证重启用户手机。
+
 ## 当前交互验收标准
 
 - 内容就是入口：词块、图片预览和中转站内容可直接按住拖；多选时按已选内容拖整个选区，不增加专用拖出页面或按钮。

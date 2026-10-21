@@ -2,6 +2,10 @@
 
 本文件记录本 fork 的实验和行为参考；不包含参考 APK 的反编译代码。目标设备为小米 15 Pro / HyperOS 4.0.0.17 / Android 17。
 
+## 1.7.144 后台启动已接通
+
+按压监听现在由传送门5.1.5主进程App.onCreate启动，不再必须创建拾取服务。Root空query拉起进程已真机通过，168的输入和取词连接ready；不会为握手打开原生设置页。没有服务且未开启按压时不创建输入源，原销毁/关闭路径保留。此证据解决的是启动，不证明接触尺寸有效或完整真实触发通过；保留220/700/120/300分支和143输入法矩形排除。
+
 ## 1.7.141 传送门退出路径补充
 
 5.1.5的BlacklistSettingActivity.onStop还会通过App持有的StopSelfHandler发送what=1、延迟60000ms消息；其handleMessage在当前顶部不是Portal时直接killProcess。它独立于服务scheduleStopSelfJob，因此140只取消服务任务不完整。141只Hook该精确类的handleMessage：what=1且按压Source存在时跳过，其他情况保持原行为；安装失败记录具体原因并提示，不Hook通用Handler/killProcess，也不定时复活进程。

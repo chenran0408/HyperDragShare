@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.143 / versionCode 167。沿用本 fork 包名和 debug 签名，原位升级成功；安装后持久注入/Root记录为166/true，167尚未确认重载。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.144 / versionCode 168。沿用本 fork 包名和 debug 签名，原位升级成功；本批后台冷启动后注入/Root记录为168/true，PID与新传送门进程一致。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装 1.7.143 / 167；202 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
+- 当前已安装 1.7.144 / 168；203 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -916,3 +916,20 @@ PressCaptureSource共用一次Root读取、缓存、确认、接管和原页文�
 同一debug签名覆盖安装143/167一次成功，PackageManager读回正确。交付APK SHA256 `8DDF81DC90BB47233BF48BCB8B3ECD0F2EC0DBFC21B3917C8AB6AF8868B3973F`。安装后注入/Root持久记录为166/true，说明中间已重建至142，不是仍164；不能据此称167的Hook已加载。观察到用户自行切换应用，故未输入、截图、重启作用域或改变当前任务；本轮未写任何用户暂存/剪贴板内容。
 
 真机未验：本批真实按压→选词拖出→目标接收、编辑/OCR返回与取消、灰条/多选拖放手感；普通长按冲突、物理面积、bilipai新入口仍未通过。167的Root助手和Portal需对应重载确认，框架锁屏背敲修正也未重载。本批单测回调证明源码交互，不等于原生跨应用接收或完整体验通过。未抢占用户手机做验证，也未声称整项目完成。
+
+
+## 2026-10-21：1.7.144 不切页面的启动与分级重载
+
+实际启动缺口是Root运行时原来只在TextContentExtensionService.onCreate创建，而后台am startservice在本机可能被拒；此前部署借原生设置Activity启动再恢复任务。现在精确Hook传送门5.1.5的com.miui.contentextension.App.onCreate，仅主进程初始化上下文和设置观察，传送门模式且按压已开启时即可创建原有Root运行时。未开启按压且服务不存在时不创建输入源；原服务生命周期、关闭与系统销毁仍清理，不做定时复活。失败记录并提示，保留宿主原行为。
+
+APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null，无业务调用；exported但有signature级SWITCH_CONTROL权限，因此模块通过已授权Root执行根URI query。没有调用getControlStatus：它可能执行旧设置迁移。没有改签名权限、系统后台策略、无障碍、用户黑名单或系统开关。握手改成无业务副作用的query，不打开Activity或后台强行拉服务。
+
+原有“重载模块”弹窗增加热重载、软重启、整机重启三选一，不新增页面。热重载只结束Portal/AICR，再通过上述query重启Portal；AICR在下一次识别绑定时加载。清除旧握手后，要求收到新PID、当前版本、Root授权确认才显示完成；不会把零退出码或旧记录当作成功。系统框架更新明确需要软重启/整机重启，不能称应用热重载已重新加载android。软重启沿用已验证zygote命令，整机为Root reboot，但本批未执行二者。
+
+必要验证：295因SDK未公开UserHandle.getIdentifier编译失败；改为Root命令am get-current-user取得实际用户，不猜数字UID。实机content的--user current被拒（且CLI退出码仍0），使用实际数字替换后query正常返回No result found。最终296完整testDebugUnitTest/lintDebug/assembleDebug通过：203项测试0失败/0错误，Lint 0 errors/151 warnings/2 hints；只增加握手清理保留设置/拒绝旧版本报告场景，并更新既有启动命令边界断言。未重复截图矩阵、合成OCR或校准样本。
+
+1.7.144/168同debug签名覆盖安装一次成功，SHA256 `DE5D5644259A51EAFE3B4BA8EE0905917B9CE7223C9B6EE36078E0173CAD7350`。随后仅后台重启Portal并Root空query，未停止AICR、ContentCatcher、模块私有数据或其他前台应用。旧PID25926→新PID22301；首次立即读到旧166记录，未当作失败重启，继续观察同一新进程，随后收到process_id=22301、injected_version=168、portal_root_version=168、portal_root_granted=true。
+
+新PID日志：12:46:43.587 reference press trigger enabled/portal runtime started，12:46:43.597 application initialized，12:46:43.677 RootInput ready，12:46:44.446 press reader ready; idle without reading nodes。此时dumpsys services没有TextContentExtensionService记录，证明不依赖拾取服务前台启动；进程已经报告真实Root输入和取词连接就绪。前后台任务/焦点仍是用户原微信任务，无am start Activity、输入、截图、节点dump、剪贴板或中转站写入。自然收到的用户输入不作为自造面积样本或分词验收证据。
+
+已确认范围仅后台启动/新代码注入/Root输入与取词准备。热重载弹窗完整点击及AICR重启后再次识别未实测；软/整机重启未执行；框架的141锁屏修正仍未重载。真实面积、普通按住冲突、143全链路拖出/返回与灰条手感仍未验收。不因本批启动成功宣称整体目标完成。

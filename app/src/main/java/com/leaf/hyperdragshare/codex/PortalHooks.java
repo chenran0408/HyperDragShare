@@ -63,6 +63,7 @@ final class PortalHooks {
             xposedBridgeVersion = readXposedBridgeVersion();
             Class<?> serviceClass = XposedHelpers.findClass(SERVICE_CLASS, classLoader);
             suppressOriginalFloatWindows(classLoader);
+            hookApplicationStartup(classLoader);
             hookServiceLifecycle(serviceClass, classLoader);
             hookAppIdleExit(classLoader);
             hookShareStart(serviceClass);
@@ -72,6 +73,28 @@ final class PortalHooks {
         } catch (Throwable error) {
             log("unable to install Taplus hooks", error);
         }
+    }
+
+    private static void hookApplicationStartup(ClassLoader classLoader) {
+        XposedHelpers.findAndHookMethod("com.miui.contentextension.App", classLoader, "onCreate",
+                new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        if (!MainHook.TAPLUS_PACKAGE.equals(android.app.Application.getProcessName())) return;
+                        Context context = ((Context) param.thisObject).getApplicationContext();
+                        try {
+                            portalContext = context;
+                            registerSettingsObserver(context);
+                            applyPortalRuntime();
+                            activationReported = reportPortalActivation(context);
+                            log("application initialized; press input does not require the pick service");
+                        } catch (RuntimeException | LinkageError error) {
+                            stopPortalRuntime(false);
+                            log("cannot initialize application press input; keeping host behavior", error);
+                            android.widget.Toast.makeText(context, "按压监听启动失败：" + error.getMessage(),
+                                    android.widget.Toast.LENGTH_LONG).show();
+                        }
+                    }
+                });
     }
 
     private static void hookAppIdleExit(ClassLoader classLoader) {
@@ -427,7 +450,8 @@ final class PortalHooks {
         DragShareLog.d(TAG, "portal runtime settings captureMode=" + settings.contentCaptureMode
                 + " logLevel=" + settings.logLevel
                 + " logDestination=" + settings.logDestination);
-        if (!settings.isPortalCaptureMode()) {
+        if (!settings.isPortalCaptureMode() || (portalService == null
+                && !ThumbTriggerSettings.readFromProvider(context).enabled)) {
             stopPortalRuntime(true);
             return;
         }

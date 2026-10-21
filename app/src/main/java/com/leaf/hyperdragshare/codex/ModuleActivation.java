@@ -11,18 +11,17 @@ import java.util.concurrent.TimeUnit;
 final class ModuleActivation {
     static final String METHOD_REPORT_INJECTED = "report_injected";
     static final String EXTRA_VERSION_CODE = "version_code";
+    static final String EXTRA_PROCESS_ID = "process_id";
     static final String EXTRA_PORTAL_ROOT_GRANTED = "portal_root_granted";
 
     private static final String PREFS_NAME = "module_activation";
     private static final String KEY_INJECTED_VERSION = "injected_version";
     private static final String KEY_PORTAL_ROOT_VERSION = "portal_root_version";
+    private static final String KEY_PROCESS_ID = "process_id";
     private static final String KEY_PORTAL_ROOT_GRANTED = "portal_root_granted";
     private static final long ROOT_TIMEOUT_SECONDS = 4L;
-    private static final String PORTAL_SERVICE_COMMAND =
-            "am startservice --user current "
-                    + "-a miui.intent.action.TEXT_CONTENT_EXTENSION "
-                    + "-n com.miui.contentextension/"
-                    + "com.miui.contentextension.services.TextContentExtensionService";
+    private static final String PORTAL_PROVIDER_URI =
+            "content://com.miui.contentextension.provider.switchcontrolprovider";
     private static final String PORTAL_BLACKLIST_ACTIVITY_COMMAND =
             "am start --user current -n com.miui.contentextension/"
                     + "com.miui.contentextension.setting.whitelist.BlacklistSettingActivity";
@@ -33,6 +32,7 @@ final class ModuleActivation {
     static boolean reportInjected(Context portalContext) {
         Bundle extras = new Bundle();
         extras.putLong(EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+        extras.putInt(EXTRA_PROCESS_ID, android.os.Process.myPid());
         return reportPortalStatus(portalContext, extras);
     }
 
@@ -64,6 +64,7 @@ final class ModuleActivation {
     private static boolean reportPortalRootAccess(Context portalContext, boolean rootGranted) {
         Bundle extras = new Bundle();
         extras.putLong(EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+        extras.putInt(EXTRA_PROCESS_ID, android.os.Process.myPid());
         extras.putBoolean(EXTRA_PORTAL_ROOT_GRANTED, rootGranted);
         return reportPortalStatus(portalContext, extras);
     }
@@ -79,7 +80,8 @@ final class ModuleActivation {
                     null,
                     extras);
             return true;
-        } catch (Throwable ignored) {
+        } catch (RuntimeException | LinkageError error) {
+            DragShareLog.w("DragShare/Activation", "cannot report portal injection", error);
             return false;
         }
     }
@@ -94,7 +96,8 @@ final class ModuleActivation {
         SharedPreferences.Editor editor = moduleContext
                 .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
-                .putLong(KEY_INJECTED_VERSION, reportedVersion);
+                .putLong(KEY_INJECTED_VERSION, reportedVersion)
+                .putInt(KEY_PROCESS_ID, extras.getInt(EXTRA_PROCESS_ID, 0));
         if (extras != null && extras.containsKey(EXTRA_PORTAL_ROOT_GRANTED)) {
             editor.putLong(KEY_PORTAL_ROOT_VERSION, reportedVersion)
                     .putBoolean(
@@ -129,16 +132,23 @@ final class ModuleActivation {
         return runRootCommand("id -u");
     }
 
-    /**
-     * Starts Taplus' own exported service so an already-running service receives
-     * onStartCommand and a stopped service loads the current LSPosed hook.
-     */
+    /** Root reads the no-op provider to start the host without opening an Activity. */
     static boolean requestPortalInjectionHandshake() {
-        return runRootCommand(PORTAL_SERVICE_COMMAND);
+        return runRootCommand(portalHandshakeCommand());
     }
 
     static String portalHandshakeCommand() {
-        return PORTAL_SERVICE_COMMAND;
+        return "content query --user $(am get-current-user) --uri " + PORTAL_PROVIDER_URI;
+    }
+
+    static int injectedProcessId(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_PROCESS_ID, 0);
+    }
+
+    static void clearPortalReport(Context context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .remove(KEY_INJECTED_VERSION).remove(KEY_PORTAL_ROOT_VERSION)
+                .remove(KEY_PORTAL_ROOT_GRANTED).remove(KEY_PROCESS_ID).apply();
     }
 
     /** Starts Taplus' non-exported blacklist activity as root for the current Android user. */
@@ -153,33 +163,30 @@ final class ModuleActivation {
     private static boolean runRootCommand(String command) {
         java.lang.Process process = null;
         try {
-            process = new ProcessBuilder("su", "-c", command)
-                    .redirectErrorStream(true)
-                    .start();
-            if (!process.waitFor(ROOT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                return false;
+            process = new ProcessBuilder("su", "-c", command).redirectErrorStream(true).start();
+            try (java.io.InputStream output = process.getInputStream();
+                 java.io.OutputStream input = process.getOutputStream()) {
+                if (!process.waitFor(ROOT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                    DragShareLog.w("DragShare/Activation", "Root command timed out", null);
+                    return false;
+                }
+                if (process.exitValue() != 0) {
+                    String reason = new String(output.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+                    DragShareLog.w("DragShare/Activation", "Root command rejected: " + reason, null);
+                    return false;
+                }
+                return true;
             }
-            return process.exitValue() == 0;
-        } catch (IOException | InterruptedException ignored) {
-            if (ignored instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+        } catch (IOException error) {
+            DragShareLog.w("DragShare/Activation", "Root command failed", error);
+            return false;
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            DragShareLog.w("DragShare/Activation", "Root command interrupted", error);
             return false;
         } finally {
-            if (process != null) {
-                try {
-                    process.getInputStream().close();
-                } catch (IOException ignored) {
-                    // Process cleanup only.
-                }
-                try {
-                    process.getOutputStream().close();
-                } catch (IOException ignored) {
-                    // Process cleanup only.
-                }
-                process.destroy();
-            }
+            if (process != null) process.destroy();
         }
     }
 

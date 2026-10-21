@@ -45,12 +45,36 @@ public final class ModuleActivationTest {
     }
 
     @Test
-    public void handshakeOnlyStartsThePortalService() {
+    public void handshakeOnlyReadsTheNoopPortalProvider() {
         String command = ModuleActivation.portalHandshakeCommand();
-        assertTrue(command.contains("com.miui.contentextension/"));
-        assertTrue(command.contains("TextContentExtensionService"));
+        assertTrue(command.startsWith("content query --user "));
+        assertTrue(command.contains("content://com.miui.contentextension.provider.switchcontrolprovider"));
+        assertFalse(command.contains("start"));
+        assertFalse(command.contains("call"));
         assertFalse(command.contains("com.miui.contentcatcher"));
         assertFalse(command.contains("force-stop"));
+    }
+
+    @Test
+    public void explicitReloadClearsOldReadinessButKeepsUserSettings() {
+        Context context = RuntimeEnvironment.getApplication();
+        context.getSharedPreferences("drag_share_settings", Context.MODE_PRIVATE).edit()
+                .putBoolean("thumb_trigger_enabled", true).commit();
+        Bundle report = new Bundle();
+        report.putLong(ModuleActivation.EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+        report.putInt(ModuleActivation.EXTRA_PROCESS_ID, 1234);
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_ROOT_GRANTED, true);
+        ModuleActivation.recordInjected(context, report);
+        assertEquals(1234, ModuleActivation.injectedProcessId(context));
+        ModuleActivation.clearPortalReport(context);
+        assertFalse(ModuleActivation.isCurrentBuildInjected(context));
+        assertFalse(ModuleActivation.isCurrentBuildPortalRootGranted(context));
+        assertEquals(0, ModuleActivation.injectedProcessId(context));
+        assertTrue(context.getSharedPreferences("drag_share_settings", Context.MODE_PRIVATE)
+                .getBoolean("thumb_trigger_enabled", false));
+        report.putLong(ModuleActivation.EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE - 1L);
+        ModuleActivation.recordInjected(context, report);
+        assertEquals(0, ModuleActivation.injectedProcessId(context));
     }
 
     @Test

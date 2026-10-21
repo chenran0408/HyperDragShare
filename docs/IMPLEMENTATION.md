@@ -2,11 +2,17 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装1.7.143（167），安装后注入/Root记录为166/true，未为本轮重载打断用户页面。140已删除强制校准与旧180ms检测器，以统一PressCaptureSource实现220ms面积、700ms普通按住及安全无文字300ms流程；有效物理面积和真实新触发尚未通过，不能将零尺寸普通路径称为面积恢复。
+当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装1.7.144（168）；后台Provider空查询拉起Portal后注入/Root记录为168/true，Root输入和取词连接就绪，原前台未切换。140已删除强制校准与旧180ms检测器，以统一PressCaptureSource实现220ms面积、700ms普通按住及安全无文字300ms流程；有效物理面积和真实新触发尚未通过，不能将零尺寸普通路径称为面积恢复。
 
 除设置外，文字、图片OCR、屏幕OCR、搜索与中转站以原页独立浮窗工作；外部分享使用透明接收桥，不打开设置首页。中转站仅保留临时拖放托盘和灰条，标题或灰条拖动、松手就近贴边、展开面积≤16%；系统小窗、搜索、复制和手动左右切换已删除，保留原有数据。141补系统栏避让与显示变化后的重新定位；142直接按住已选条目/组卡拖出整个选区，预览图也能拖出，删除底部专用拖动行并复用列表可见顺序；新交互未实测。
 
 141新增精确StopSelfHandler消息1 Hook，补服务计时器以外的传送门退出路径；只在按压Source存在时抑制该消息。锁屏背敲保留系统动作的修正尚未重载到android。当前差距以[MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)顶部表为准，设备证据见[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，按压机制见[CONTACT_AREA_TRIGGER.md](CONTACT_AREA_TRIGGER.md)，中转站见[STASH.md](STASH.md)。下文旧版本的系统小窗、校准和1220×2656参数均是历史记录，不代表当前入口。
+
+## 1.7.144 启动与作用域重载
+
+传送门5.1.5的App.onCreate负责主进程按压初始化，不再必须先创建TextContentExtensionService。无服务时仅传送门模式且按压已启用才创建输入源；设置观察保留，关闭/服务销毁不被通用Hook拦截。Root通过无业务副作用的SwitchControlProvider根query拉进程，既有首页握手也使用此路径，不打开Activity、不调用会迁移设置的getControlStatus。
+
+设置沿用同一重载弹窗，提供应用热重载、Android软重启、整机重启；热重载只涉及Portal和AICR，并核对新PID/版本/Root确认。AICR下次绑定加载，android代码更新要后两种方式，不能在热重载中冒称框架已更新。168后台冷启动已真机确认输入/取词ready，三选一UI和全模式重载未验。框架Hook仍待重载；真实面积缺失和普通按住冲突不因启动修复而消失。
 
 ## 1.7.143 原页操作与临时托盘完整批次
 
