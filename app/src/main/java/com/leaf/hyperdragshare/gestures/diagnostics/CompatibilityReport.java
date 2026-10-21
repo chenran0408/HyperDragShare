@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Locale;
 
 public final class CompatibilityReport {
-    public static final String AUTHORITY = "com.leaf.hyperdragshare.gestures.reports";
+    public static final String AUTHORITY = com.leaf.hyperdragshare.codex.BuildConfig.APPLICATION_ID + ".gestures.reports";
     public static final String FILE_NAME = "compatibility-report.txt";
 
     private CompatibilityReport() { }

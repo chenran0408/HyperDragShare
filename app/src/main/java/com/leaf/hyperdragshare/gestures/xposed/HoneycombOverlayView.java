@@ -360,9 +360,10 @@ final class HoneycombOverlayView extends View {
     private void applyForegroundColors() {
         boolean light = appBackgroundEnabled && !liveBlurEnabled
                 && Color.luminance(appBackgroundColor) > 0.62f;
-        namePaint.setColor(light ? 0xff202126 : Color.WHITE);
-        namePillPaint.setColor(light ? 0xdde7e9f0 : 0xdd20263f);
-        iconPlatePaint.setColor(light ? 0x99ffffff : 0xff17181d);
+        int[] colors = com.leaf.hyperdragshare.codex.OverlayThemeColors.colors(!light);
+        namePaint.setColor(colors[1]);
+        namePillPaint.setColor(colors[0]);
+        iconPlatePaint.setColor(colors[0]);
     }
 
     void playEntry() {

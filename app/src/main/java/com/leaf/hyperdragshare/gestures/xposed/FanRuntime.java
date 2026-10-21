@@ -2293,6 +2293,7 @@ final class FanRuntime {
                     overlay.removeNow();
                 }
                 config = next;
+                ShortcutHostRuntime.installCatalogSource(context);
                 updateRecentsCleanCover(next);
                 outsideGestures.setDoubleTapTimeout(next.outsideTapWindowMs);
                 targets = nextTargets;

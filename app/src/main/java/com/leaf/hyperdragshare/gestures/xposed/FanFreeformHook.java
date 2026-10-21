@@ -65,6 +65,12 @@ public final class FanFreeformHook implements IXposedHookLoadPackage {
         // Only the main process should own the runtime and exported receivers; child
         // processes would otherwise create duplicate sensors, captures and receivers.
         if (!loadPackageParam.packageName.equals(loadPackageParam.processName)) return;
+        if (MIUI_HOME.equals(loadPackageParam.packageName)
+                || SYSTEM_UI.equals(loadPackageParam.packageName)) {
+            Log.i("Merged gesture hook version="
+                    + com.leaf.hyperdragshare.codex.BuildConfig.VERSION_CODE
+                    + " process=" + loadPackageParam.processName);
+        }
         if (MIUI_HOME.equals(loadPackageParam.packageName)) {
             hookShortcutHost(loadPackageParam.classLoader);
             hookRecentsClearButton(loadPackageParam.classLoader);

@@ -10,7 +10,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
-            DragShareSettingsApp(applicationContext)
+            DragShareSettingsApp(applicationContext,
+                openGestures = intent?.data?.let { it.scheme == "hypergesture" && it.host == "settings" } == true)
         }
     }
 }

@@ -49,7 +49,18 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true" />
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="hypergesture" android:host="settings" />
+            </intent-filter>
+        </activity>
 
         <activity-alias
             android:name=".LauncherAlias"
@@ -237,5 +248,16 @@
             android:exported="true"
             android:grantUriPermissions="true"
             tools:ignore="ExportedContentProvider" />
+        <provider
+            android:name="com.leaf.hyperdragshare.gestures.config.ConfigProvider"
+            android:authorities="${applicationId}.gestures.config"
+            android:exported="true"
+            android:grantUriPermissions="false"
+            tools:ignore="ExportedContentProvider" />
+        <provider
+            android:name="com.leaf.hyperdragshare.gestures.diagnostics.CompatibilityReportProvider"
+            android:authorities="${applicationId}.gestures.reports"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

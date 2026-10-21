@@ -16,7 +16,8 @@ final class ScopeRestart {
     static void reloadAppScopes(Context context) throws IOException {
         int oldPid = ModuleActivation.injectedProcessId(context);
         ModuleActivation.clearPortalReport(context);
-        runRoot("am force-stop --user current com.miui.contentextension && "
+        runRoot("killall com.android.systemui && "
+                + "am force-stop --user current com.miui.contentextension && "
                 + "am force-stop --user current com.xiaomi.aicr && "
                 + ModuleActivation.portalHandshakeCommand(), "应用作用域重载");
         long deadline = SystemClock.uptimeMillis() + 10000L;

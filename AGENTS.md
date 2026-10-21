@@ -10,7 +10,7 @@
 
 ## 当前合并任务
 
-用户要求完整合并自己的FanFreeform，并迁移已安装Hyper手势数据。来源应使用用户提供的157性能版源码档案，而不是GitHub main131；准确来源、校验和与进度见docs/FANFREEFORM_INTEGRATION.md。核心已经导入com.leaf.hyperdragshare.gestures，但尚未挂运行入口；用户明确授权后续整合SystemUI与com.miui.home所需Hook，原有四作用域约束不应被误读为禁止本次完整功能合并。实际scope在集成完成前仍保持四项。迁移前保留完整备份，原包保留；配置与截图不得提交。不能在旧模块与合并模块同时启用手势接管的情况下验收。
+用户要求完整合并自己的FanFreeform，并迁移已安装Hyper手势数据。来源应使用用户提供的157性能版源码档案，而不是GitHub main131；准确来源、校验和与进度见docs/FANFREEFORM_INTEGRATION.md。核心已经导入com.leaf.hyperdragshare.gestures，工作树已挂SystemUI/桌面运行入口；用户明确授权后续整合SystemUI与com.miui.home所需Hook，原有四作用域约束不应被误读为禁止本次完整功能合并。162已安装，设备五scope已核验；旧手势模块已禁用而保留数据。SystemUI186运行，桌面Rust不执行本Java入口，目录已转SystemUI；详见最新记录。迁移前保留完整备份，原包保留；配置与截图不得提交。不能在旧模块与合并模块同时启用手势接管的情况下验收。
 
 ## 工程基线
 
@@ -25,8 +25,8 @@
 
 ## 不可破坏的约束
 
-1. LSPosed 作用域只包含 `com.miui.contentextension`、`com.xiaomi.aicr`、`android` 和 `com.android.systemui`，
-   分别用于传送门拖拽、AICR 文本直取、可选背部轻敲与自有 Root 子进程数量裁剪、用户新要求的原生触摸旁路尺寸核验。SystemUI目前只在已核验的WMShell EventReceiver入口采样，不拦截、不改事件/handler顺序，不将其与Root活动拖拽混用。不要加入
+1. LSPosed 作用域只包含 `com.miui.contentextension`、`com.xiaomi.aicr`、`android` 、`com.android.systemui` 和 `com.miui.home`，
+   分别用于传送门拖拽、AICR 文本直取、可选背部轻敲与自有 Root 子进程数量裁剪、合并手势运行时和桌面快捷方式。已停止面积研究并从入口移除旧SystemUI面积诊断。手势运行时继承157的方向判定与接管策略；不得与旧Hyper手势模块同时接管。不要加入
    `com.miui.contentcatcher`（Application Extension Service），也不要在部署脚本中强停它；
    已知部分系统上强停它会连带结束其他应用。
 2. root 输入源一旦 `isReady()`，它就是一次拖拽的唯一权威输入源。不得把 MIUI
@@ -64,7 +64,7 @@
 13. 内容获取方式默认是传送门。无障碍模式只由 `DragShareAccessibilityService` 在模块进程中
     工作，仍依赖 Root evdev，不得因此新增 LSPosed 作用域或静默启用无障碍服务。Xposed API
     仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
-    `AicrCopyHooks`、`BackTapFrameworkHooks`、`RootProcessFrameworkHooks` 和 `NativePressSystemUiHooks`；AICR 与框架 Hook 必须保持包名、目标类和方法
+    `AicrCopyHooks`、`BackTapFrameworkHooks`、`RootProcessFrameworkHooks` 和合并后的 `gestures.xposed` 包；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
 14. 节点树只在一次明确请求后读取：无障碍长按超时、用户已启用按压入口且单指静止按住120ms后的分类、按住时长确认或用户主动点取。
     按压分类按MI行为仅缓存本次内容，到确认时才接管并打开窗口；松手、移位或多指取消，不在空闲时读取。

@@ -26,7 +26,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 
 private enum class ReloadMode(val label: String, val detail: String) {
-    Apps("热重载", "重启传送门和AICR进程，不重启手机。系统框架更新需要软重启；AICR在下次识别时加载。"),
+    Apps("热重载", "重启系统界面、传送门和AICR，屏幕会短暂闪动。系统框架或桌面代码更新仍需软重启；手势设置保存后自动生效。"),
     Android("软重启", "重新加载全部作用域。当前应用会关闭并回到锁屏；请先保存正在编辑的内容。"),
     Device("整机重启", "手机将重新启动，全部作用域重新加载；请先保存正在编辑的内容。"),
 }
@@ -103,7 +103,7 @@ internal fun ScopeRestartPreference(context: Context) {
                             if (error == null) {
                                 showConfirmation = false
                                 if (mode == ReloadMode.Apps) Toast.makeText(context,
-                                    "传送门已重载，AICR将在下次识别时加载新代码", Toast.LENGTH_LONG).show()
+                                    "已请求重启系统界面，传送门已重载；AICR将在下次识别时加载新代码", Toast.LENGTH_LONG).show()
                             }
                         }
                     },

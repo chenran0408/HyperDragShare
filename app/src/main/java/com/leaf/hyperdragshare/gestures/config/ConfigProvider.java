@@ -11,19 +11,25 @@ import android.os.Bundle;
 import android.os.Process;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.util.Log;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
 public final class ConfigProvider extends ContentProvider {
+    private static final String TAG = "HyperDragShareConfig";
+
     @Override
     public boolean onCreate() {
         return true;
@@ -34,6 +40,14 @@ public final class ConfigProvider extends ContentProvider {
         enforceCaller();
         Context context = requireProviderContext();
         SharedPreferences prefs = context.getSharedPreferences(ConfigContract.PREFS, Context.MODE_PRIVATE);
+        if ("get_catalog".equals(method)) {
+            Bundle out = new Bundle();
+            out.putString(ConfigContract.KEY_SHORTCUT_CATALOG,
+                    prefs.getString(ConfigContract.KEY_SHORTCUT_CATALOG, "[]"));
+            out.putString(ConfigContract.KEY_ACTIVITY_CATALOG,
+                    prefs.getString(ConfigContract.KEY_ACTIVITY_CATALOG, "[]"));
+            return out;
+        }
         if ("get".equals(method)) {
             ConfigStore.seedDefaultsIfNeeded(context, prefs);
             ConfigStore.migrateUnifiedActionsIfNeeded(prefs);
@@ -571,59 +585,6 @@ public final class ConfigProvider extends ContentProvider {
             prefs.edit().putString(key, diagnostics).apply();
             return Bundle.EMPTY;
         }
-        if ("report_shortcuts".equals(method) && extras != null) {
-            String catalog = extras.getString(ConfigContract.KEY_SHORTCUT_CATALOG, "[]");
-            if (!catalog.equals(prefs.getString(ConfigContract.KEY_SHORTCUT_CATALOG, "[]"))) {
-                prefs.edit().putString(ConfigContract.KEY_SHORTCUT_CATALOG, catalog).apply();
-                context.getContentResolver().notifyChange(ConfigContract.URI, null);
-            }
-            return Bundle.EMPTY;
-        }
-        if (ShortcutIconLoader.METHOD_REPORT.equals(method) && extras != null) {
-            ArrayList<String> keys = extras.getStringArrayList(ShortcutIconLoader.EXTRA_KEYS);
-            @SuppressWarnings("deprecation")
-            ArrayList<Bitmap> icons = extras.getParcelableArrayList(
-                    ShortcutIconLoader.EXTRA_ICONS);
-            if (keys != null && icons != null) {
-                int count = Math.min(keys.size(), icons.size());
-                for (int index = 0; index < count; index++) {
-                    saveShortcutIcon(context, keys.get(index), icons.get(index));
-                }
-            }
-            return Bundle.EMPTY;
-        }
-        if (ShortcutIconLoader.METHOD_GET.equals(method) && arg != null) {
-            Bitmap icon = readShortcutIcon(context, arg);
-            Bundle out = new Bundle();
-            if (icon != null) out.putParcelable(ShortcutIconLoader.EXTRA_ICON, icon);
-            return out;
-        }
-        if ("report_activities".equals(method) && extras != null) {
-            String catalog = extras.getString(ConfigContract.KEY_ACTIVITY_CATALOG, "[]");
-            if (!catalog.equals(prefs.getString(ConfigContract.KEY_ACTIVITY_CATALOG, "[]"))) {
-                prefs.edit().putString(ConfigContract.KEY_ACTIVITY_CATALOG, catalog).apply();
-                context.getContentResolver().notifyChange(ConfigContract.URI, null);
-            }
-            return Bundle.EMPTY;
-        }
-        if ("report_diagnostics".equals(method) && extras != null) {
-            String process = extras.getString(ConfigContract.EXTRA_DIAGNOSTIC_PROCESS, "");
-            String key;
-            if ("com.android.systemui".equals(process)) {
-                key = ConfigContract.KEY_DIAGNOSTICS_SYSTEM_UI;
-            } else if ("com.miui.home".equals(process)) {
-                key = ConfigContract.KEY_DIAGNOSTICS_MIUI_HOME;
-            } else {
-                return Bundle.EMPTY;
-            }
-            String diagnostics = extras.getString(
-                    ConfigContract.EXTRA_DIAGNOSTIC_TEXT, "");
-            if (diagnostics.length() > 32000) {
-                diagnostics = diagnostics.substring(diagnostics.length() - 32000);
-            }
-            prefs.edit().putString(key, diagnostics).apply();
-            return Bundle.EMPTY;
-        }
         return super.call(method, arg, extras);
     }
 
@@ -642,18 +603,29 @@ public final class ConfigProvider extends ContentProvider {
     private static void saveShortcutIcon(Context context, String key, Bitmap icon) {
         if (key == null || key.isEmpty() || icon == null) return;
         File directory = new File(context.getFilesDir(), "shortcut-icons");
-        if (!directory.exists() && !directory.mkdirs()) return;
         File file = new File(directory, iconFileName(key));
-        try (FileOutputStream output = new FileOutputStream(file)) {
-            icon.compress(Bitmap.CompressFormat.PNG, 100, output);
-        } catch (Throwable ignored) { }
+        try {
+            if (!directory.isDirectory() && !directory.mkdirs() && !directory.isDirectory()) {
+                throw new IOException("Unable to create shortcut icon cache directory");
+            }
+            try (FileOutputStream output = new FileOutputStream(file)) {
+                if (!icon.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                    throw new IOException("Bitmap encoder rejected PNG output");
+                }
+            }
+        } catch (IOException | SecurityException | IllegalStateException error) {
+            Log.e(TAG, "Unable to save shortcut icon cache file " + file, error);
+            throw new IllegalStateException("Unable to save shortcut icon cache file: " + file,
+                    error);
+        }
     }
 
     private static void pruneShortcutIcons(Context context, String catalog) {
         final JSONArray entries;
         try {
             entries = new JSONArray(catalog);
-        } catch (Throwable ignored) {
+        } catch (JSONException error) {
+            Log.w(TAG, "Ignoring malformed shortcut catalog while pruning icon cache", error);
             return;
         }
         Set<String> expectedFiles = new HashSet<>();
@@ -667,22 +639,64 @@ public final class ConfigProvider extends ContentProvider {
             expectedFiles.add(iconFileName(ShortcutIconLoader.key(
                     packageName, shortcutId, userId)));
         }
-        File directory = new File(context.getFilesDir(), "shortcut-icons");
-        File[] files = directory.listFiles();
-        if (files == null) return;
-        for (File file : files) {
-            if (file.isFile() && file.getName().endsWith(".png")
-                    && !expectedFiles.contains(file.getName())) {
-                // This directory contains only generated shortcut icon files.
-                file.delete();
+        // A temporarily missing catalog entry must not remove a selected shortcut's icon.
+        SharedPreferences prefs = context.getSharedPreferences(ConfigContract.PREFS,
+                Context.MODE_PRIVATE);
+        for (String targetKey : new String[] { ConfigContract.KEY_COMPONENTS,
+                ConfigContract.KEY_HONEYCOMB_COMPONENTS, ConfigContract.KEY_SIDE_COMPONENTS }) {
+            try {
+                JSONArray targets = new JSONArray(prefs.getString(targetKey, "[]"));
+                for (int index = 0; index < targets.length(); index++) {
+                    JSONObject target = targets.optJSONObject(index);
+                    if (target == null) continue;
+                    String packageName = target.optString("package", "");
+                    String shortcutId = target.optString("id", "");
+                    if (!packageName.isEmpty() && !shortcutId.isEmpty()) {
+                        expectedFiles.add(iconFileName(ShortcutIconLoader.key(packageName,
+                                shortcutId, target.optInt("userId", 0))));
+                    }
+                }
+            } catch (JSONException error) {
+                Log.w(TAG, "Skipping icon cleanup because selected targets cannot be read", error);
+                return;
             }
+        }
+        File directory = new File(context.getFilesDir(), "shortcut-icons");
+        try {
+            if (!directory.exists()) return;
+            File[] files = directory.listFiles();
+            if (files == null) {
+                Log.w(TAG, "Unable to list shortcut icon cache directory: " + directory);
+                return;
+            }
+            for (File file : files) {
+                if (file.isFile() && file.getName().endsWith(".png")
+                        && !expectedFiles.contains(file.getName())) {
+                    // This directory contains only generated shortcut icon files.
+                    if (!file.delete()) {
+                        Log.w(TAG, "Unable to remove stale shortcut icon cache file: " + file);
+                    }
+                }
+            }
+        } catch (SecurityException error) {
+            Log.w(TAG, "Unable to prune shortcut icon cache directory: " + directory, error);
         }
     }
 
     private static Bitmap readShortcutIcon(Context context, String key) {
         File file = new File(new File(context.getFilesDir(), "shortcut-icons"),
                 iconFileName(key));
-        return file.isFile() ? BitmapFactory.decodeFile(file.getAbsolutePath()) : null;
+        try {
+            if (!file.isFile()) return null;
+            Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+            if (bitmap == null) {
+                Log.w(TAG, "Unable to decode shortcut icon cache file: " + file);
+            }
+            return bitmap;
+        } catch (SecurityException | IllegalArgumentException error) {
+            Log.w(TAG, "Unable to read shortcut icon cache file: " + file, error);
+            return null;
+        }
     }
 
     private static String iconFileName(String key) {
@@ -690,10 +704,14 @@ public final class ConfigProvider extends ContentProvider {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(
                     key.getBytes(StandardCharsets.UTF_8));
             StringBuilder name = new StringBuilder(digest.length * 2 + 4);
-            for (byte value : digest) name.append(String.format("%02x", value & 0xff));
+            for (byte value : digest) {
+                name.append(Character.forDigit((value >>> 4) & 0xf, 16));
+                name.append(Character.forDigit(value & 0xf, 16));
+            }
             return name.append(".png").toString();
-        } catch (Throwable ignored) {
-            return Integer.toHexString(key.hashCode()) + ".png";
+        } catch (NoSuchAlgorithmException error) {
+            throw new IllegalStateException("SHA-256 is unavailable for shortcut icon keys",
+                    error);
         }
     }
 

@@ -105,8 +105,9 @@ final class TaskSwitcherOverlayView extends View {
         density = context.getResources().getDisplayMetrics().density;
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setFocusableInTouchMode(true);
-        cardPaint.setColor(0xff242733);
-        labelPaint.setColor(Color.WHITE);
+        int[] colors = com.leaf.hyperdragshare.codex.OverlayThemeColors.colors(true);
+        cardPaint.setColor(colors[0]);
+        labelPaint.setColor(colors[1]);
         labelPaint.setTextAlign(Paint.Align.LEFT);
         labelPaint.setTextSize(15f * density);
     }

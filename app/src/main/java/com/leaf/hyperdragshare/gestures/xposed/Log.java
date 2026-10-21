@@ -49,6 +49,10 @@ final class Log {
         remember("I", message, null, false);
     }
 
+    static void e(String message) {
+        remember("E", message, null, true);
+    }
+
     static void e(String message, Throwable throwable) {
         remember("E", message, throwable, true);
     }

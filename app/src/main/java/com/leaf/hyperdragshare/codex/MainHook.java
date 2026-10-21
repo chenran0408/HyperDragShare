@@ -1,5 +1,6 @@
 package com.leaf.hyperdragshare.codex;
 
+import com.leaf.hyperdragshare.gestures.xposed.FanFreeformHook;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
@@ -15,8 +16,9 @@ public final class MainHook implements IXposedHookLoadPackage {
             PortalHooks.install(lpparam.classLoader);
         } else if (AICR_PACKAGE.equals(lpparam.packageName)) {
             AicrCopyHooks.install(lpparam.classLoader);
-        } else if (SYSTEM_UI_PACKAGE.equals(lpparam.packageName)) {
-            NativePressSystemUiHooks.install(lpparam.classLoader);
+        } else if (SYSTEM_UI_PACKAGE.equals(lpparam.packageName)
+                || "com.miui.home".equals(lpparam.packageName)) {
+            new FanFreeformHook().handleLoadPackage(lpparam);
         } else if (ANDROID_PACKAGE.equals(lpparam.packageName)) {
             RootProcessFrameworkHooks.install(lpparam.classLoader);
             BackTapFrameworkHooks.install(lpparam);

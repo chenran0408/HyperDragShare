@@ -29,7 +29,6 @@ import com.leaf.hyperdragshare.gestures.config.ShortcutIconLoader;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.Collections;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HashMap;
@@ -67,6 +66,8 @@ final class ShortcutHostRuntime {
     private static boolean catalogScheduled;
     private static boolean catalogRunning;
     private static boolean catalogPending;
+    private static boolean catalogObserverInstalled;
+    private static boolean catalogSourceInstalled;
     private static final Runnable START_CATALOG_REFRESH =
             ShortcutHostRuntime::startCatalogRefresh;
 
@@ -112,15 +113,38 @@ final class ShortcutHostRuntime {
                 }
             }
         }, filter, Context.RECEIVER_EXPORTED);
-        appContext.getContentResolver().registerContentObserver(ConfigContract.CATALOG_URI, false,
-                new android.database.ContentObserver(MAIN_HANDLER) {
-                    @Override public void onChange(boolean selfChange) {
-                        requestCatalogRefresh(appContext, CATALOG_DEBOUNCE_MS);
-                    }
-                });
         installed = true;
+        Log.i("Shortcut launch bridge active in MiuiHome");
+    }
+
+    /** Installs the catalog publisher in a host that can query LauncherApps, currently SystemUI. */
+    static synchronized void installCatalogSource(Context context) {
+        if (catalogSourceInstalled) return;
+        Context appContext = context == null ? null : context.getApplicationContext();
+        if (appContext == null) {
+            Log.e("SystemUI catalog source unavailable: application context is null");
+            return;
+        }
+        Log.attachReporter(appContext);
+        installCatalogObserver(appContext);
+        catalogSourceInstalled = true;
         requestCatalogRefresh(appContext, 0L);
-        Log.i("Shortcut host active in MiuiHome");
+        Log.i("Shortcut catalog source active in SystemUI");
+    }
+
+    private static synchronized void installCatalogObserver(Context context) {
+        if (catalogObserverInstalled) return;
+        try {
+            context.getContentResolver().registerContentObserver(ConfigContract.CATALOG_URI,
+                    false, new android.database.ContentObserver(MAIN_HANDLER) {
+                        @Override public void onChange(boolean selfChange) {
+                            requestCatalogRefresh(context, CATALOG_DEBOUNCE_MS);
+                        }
+                    });
+            catalogObserverInstalled = true;
+        } catch (RuntimeException error) {
+            Log.e("Cannot observe shortcut catalog refresh requests", error);
+        }
     }
 
     private static void requestCatalogRefresh(Context context, long delayMs) {
@@ -156,9 +180,9 @@ final class ShortcutHostRuntime {
             try {
                 publishCatalog(refreshContext);
                 long elapsed = SystemClock.elapsedRealtime() - started;
-                Log.i("MiuiHome catalog refresh completed in " + elapsed + "ms");
+                Log.i("Shortcut catalog refresh completed in " + elapsed + "ms");
             } catch (Throwable error) {
-                Log.e("MiuiHome catalog refresh failed", error);
+                Log.e("Shortcut catalog refresh failed at host boundary", error);
             } finally {
                 MAIN_HANDLER.post(() -> finishCatalogRefresh(refreshContext));
             }
@@ -276,22 +300,67 @@ final class ShortcutHostRuntime {
     }
 
     private static void publishCatalog(Context context) {
+        LauncherApps launcherApps = context.getSystemService(LauncherApps.class);
+        ArrayList<String> iconKeys = new ArrayList<>();
+        ArrayList<Bitmap> icons = new ArrayList<>();
+        CatalogReadResult dynamic = readDynamicShortcuts(context, launcherApps, iconKeys, icons);
+        CatalogReadResult desktop = readDesktopShortcuts(context, iconKeys, icons);
+        JSONArray previous = null;
+        if (!dynamic.readable || !desktop.readable) {
+            previous = readPreviousCatalog(context, ConfigContract.KEY_SHORTCUT_CATALOG);
+            if (previous == null) {
+                Log.e("Shortcut catalog update skipped: a source failed and the existing catalog "
+                        + "could not be read; preserving the stored catalog");
+                publishActivityCatalog(context, launcherApps);
+                return;
+            }
+        }
+
+        JSONArray out = new JSONArray();
+        Set<String> seen = new HashSet<>();
+        if (!dynamic.readable) appendPreviousKind(previous, out, seen, false);
+        else appendAllUnique(dynamic.items, out, seen);
+        if (!desktop.readable) appendPreviousKind(previous, out, seen, true);
+        else appendAllUnique(desktop.items, out, seen);
+
         try {
-            LauncherApps launcherApps = context.getSystemService(LauncherApps.class);
-            if (launcherApps == null) return;
+            try {
+                flushShortcutIcons(context, iconKeys, icons);
+            } catch (RuntimeException iconError) {
+                Log.e("SystemUI could not publish shortcut icons; continuing with catalog", iconError);
+            }
+            prunePublishedIconVersions(out);
+            Bundle extras = new Bundle();
+            extras.putString(ConfigContract.KEY_SHORTCUT_CATALOG, out.toString());
+            context.getContentResolver().call(ConfigContract.URI, "report_shortcuts", null, extras);
+            Log.i("SystemUI published shortcut catalog count=" + out.length()
+                    + " dynamic=" + (dynamic.readable ? dynamic.items.length() : "preserved")
+                    + " desktop=" + (desktop.readable ? desktop.items.length() : "preserved"));
+        } catch (RuntimeException error) {
+            Log.e("SystemUI could not publish shortcut catalog", error);
+        }
+        publishActivityCatalog(context, launcherApps);
+    }
+
+    private static CatalogReadResult readDynamicShortcuts(Context context,
+                                                           LauncherApps launcherApps,
+                                                           ArrayList<String> iconKeys,
+                                                           ArrayList<Bitmap> icons) {
+        if (launcherApps == null) {
+            Log.e("SystemUI LauncherApps unavailable; keeping previous dynamic shortcuts");
+            return CatalogReadResult.failed();
+        }
+        JSONArray out = new JSONArray();
+        try {
             LauncherApps.ShortcutQuery query = new LauncherApps.ShortcutQuery().setQueryFlags(
                     LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC
                             | LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST
                             | LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
                             | LauncherApps.ShortcutQuery.FLAG_MATCH_CACHED);
             List<ShortcutInfo> shortcuts = launcherApps.getShortcuts(query, Process.myUserHandle());
-            if (shortcuts == null) shortcuts = Collections.emptyList();
-            JSONArray out = new JSONArray();
-            Set<String> seen = new HashSet<>();
-            ArrayList<String> iconKeys = new ArrayList<>();
-            ArrayList<Bitmap> icons = new ArrayList<>();
+            if (shortcuts == null) throw new IllegalStateException("LauncherApps returned null shortcuts");
             for (ShortcutInfo shortcut : shortcuts) {
-                if (!shortcut.isEnabled()) continue;
+                if (shortcut == null || !shortcut.isEnabled()) continue;
                 CharSequence label = shortcut.getShortLabel();
                 if (label == null) label = shortcut.getLongLabel();
                 if (label == null) continue;
@@ -302,58 +371,75 @@ final class ShortcutHostRuntime {
                         label.toString()));
                 item.put("kind", "standard");
                 out.put(item);
-                seen.add(shortcut.getPackage() + "\n" + shortcut.getId());
-                Drawable icon = launcherApps.getShortcutIconDrawable(shortcut,
-                        context.getResources().getDisplayMetrics().densityDpi);
-                queueShortcutIcon(context, iconKeys, icons,
-                        ShortcutIconLoader.key(shortcut.getPackage(), shortcut.getId(), 0),
-                        shortcut.getLastChangedTimestamp(), icon);
+                try {
+                    Drawable icon = launcherApps.getShortcutIconDrawable(shortcut,
+                            context.getResources().getDisplayMetrics().densityDpi);
+                    queueShortcutIcon(context, iconKeys, icons,
+                            ShortcutIconLoader.key(shortcut.getPackage(), shortcut.getId(), 0),
+                            shortcut.getLastChangedTimestamp(), icon);
+                } catch (RuntimeException iconError) {
+                    Log.i("SystemUI could not read icon for shortcut " + shortcut.getPackage()
+                            + "/" + shortcut.getId() + ": " + iconError.getClass().getSimpleName());
+                }
             }
-            appendLauncherShortcuts(context, out, seen, iconKeys, icons);
-            flushShortcutIcons(context, iconKeys, icons);
-            prunePublishedIconVersions(out);
-            Bundle extras = new Bundle();
-            extras.putString(ConfigContract.KEY_SHORTCUT_CATALOG, out.toString());
-            context.getContentResolver().call(ConfigContract.URI, "report_shortcuts", null, extras);
-            publishActivityCatalog(context, launcherApps);
-        } catch (Throwable error) {
-            Log.e("Cannot publish shortcut catalog from MiuiHome", error);
+            return CatalogReadResult.success(out);
+        } catch (Exception error) {
+            Log.e("SystemUI could not read dynamic shortcuts; keeping prior entries", error);
+            return CatalogReadResult.failed();
         }
     }
 
-    private static void appendLauncherShortcuts(Context context, JSONArray out,
-                                                Set<String> seen,
-                                                ArrayList<String> iconKeys,
-                                                ArrayList<Bitmap> icons) {
+    private static CatalogReadResult readDesktopShortcuts(Context context,
+                                                            ArrayList<String> iconKeys,
+                                                            ArrayList<Bitmap> icons) {
+        JSONArray out = new JSONArray();
+        Set<String> seen = new HashSet<>();
+        ArrayList<String> pendingKeys = new ArrayList<>();
+        ArrayList<Bitmap> pendingIcons = new ArrayList<>();
         Uri favorites = Uri.parse(
                 "content://com.miui.home.launcher.settings/favorites");
         int added = 0;
         try (Cursor cursor = context.getContentResolver().query(
                 favorites, null, null, null, null)) {
-            if (cursor == null) return;
+            if (cursor == null) throw new IllegalStateException("Desktop favorites provider returned null cursor");
             int idColumn = cursor.getColumnIndex("_id");
             int titleColumn = cursor.getColumnIndex("title");
             int intentColumn = cursor.getColumnIndex("intent");
             int typeColumn = cursor.getColumnIndex("itemType");
             int shortcutColumn = cursor.getColumnIndex("isShortcut");
             int iconColumn = cursor.getColumnIndex("icon");
-            while (cursor.moveToNext() && out.length() < 240) {
+            if (intentColumn < 0) {
+                throw new IllegalStateException("Desktop favorites table has no intent column");
+            }
+            if (typeColumn < 0 && shortcutColumn < 0) {
+                throw new IllegalStateException("Desktop favorites table has no shortcut type columns");
+            }
+            while (cursor.moveToNext()) {
+                if (out.length() >= 240) {
+                    throw new IllegalStateException("Desktop favorites exceed the 240-item catalog limit");
+                }
                 int itemType = typeColumn >= 0 && !cursor.isNull(typeColumn)
                         ? cursor.getInt(typeColumn) : -1;
                 int isShortcut = shortcutColumn >= 0 && !cursor.isNull(shortcutColumn)
                         ? cursor.getInt(shortcutColumn) : 0;
                 if (itemType != 1 && itemType != 14 && isShortcut == 0) continue;
-                if (intentColumn < 0 || cursor.isNull(intentColumn)) continue;
+                if (cursor.isNull(intentColumn)) {
+                    throw new IllegalStateException("Desktop shortcut row has no intent");
+                }
                 String rawIntent = cursor.getString(intentColumn);
-                if (rawIntent == null || rawIntent.isEmpty()) continue;
+                if (rawIntent == null || rawIntent.isEmpty()) {
+                    throw new IllegalStateException("Desktop shortcut row has an empty intent");
+                }
                 Intent launch;
                 try {
                     launch = Intent.parseUri(rawIntent, 0);
-                } catch (Throwable ignored) {
-                    continue;
+                } catch (Exception error) {
+                    throw new IllegalStateException("Cannot parse desktop shortcut intent", error);
                 }
                 String packageName = packageName(context, launch);
-                if (packageName == null || packageName.isEmpty()) continue;
+                if (packageName == null || packageName.isEmpty()) {
+                    throw new IllegalStateException("Cannot resolve package for desktop shortcut");
+                }
                 String label = titleColumn >= 0 && !cursor.isNull(titleColumn)
                         ? cursor.getString(titleColumn) : packageName;
                 if (label == null || label.isEmpty()) label = packageName;
@@ -365,31 +451,95 @@ final class ShortcutHostRuntime {
                 }
                 String key = packageName + "\n" + shortcutId;
                 if (!seen.add(key)) continue;
-                try {
-                    context.getPackageManager().getApplicationInfo(packageName, 0);
-                    JSONObject item = new JSONObject();
-                    item.put("package", packageName);
-                    item.put("id", shortcutId);
-                    item.put("label", displayShortcutLabel(context, packageName, label));
-                    item.put("kind", "launcher");
-                    item.put("intent", rawIntent);
-                    item.put("userId", 0);
-                    out.put(item);
-                    if (iconColumn >= 0 && !cursor.isNull(iconColumn)) {
-                        byte[] encoded = cursor.getBlob(iconColumn);
-                        Bitmap icon = encoded == null ? null : BitmapFactory.decodeByteArray(
-                                encoded, 0, encoded.length);
-                        queueShortcutIcon(context, iconKeys, icons,
-                                ShortcutIconLoader.key(packageName, shortcutId, 0),
-                                encoded == null ? 0L : java.util.Arrays.hashCode(encoded), icon);
-                    }
-                    added++;
-                } catch (Throwable ignored) { }
+                context.getPackageManager().getApplicationInfo(packageName, 0);
+                JSONObject item = new JSONObject();
+                item.put("package", packageName);
+                item.put("id", shortcutId);
+                item.put("label", displayShortcutLabel(context, packageName, label));
+                item.put("kind", "launcher");
+                item.put("intent", rawIntent);
+                item.put("userId", 0);
+                out.put(item);
+                if (iconColumn >= 0 && !cursor.isNull(iconColumn)) {
+                    byte[] encoded = cursor.getBlob(iconColumn);
+                    Bitmap icon = encoded == null ? null : BitmapFactory.decodeByteArray(
+                            encoded, 0, encoded.length);
+                    queueShortcutIcon(context, pendingKeys, pendingIcons,
+                            ShortcutIconLoader.key(packageName, shortcutId, 0),
+                            encoded == null ? 0L : java.util.Arrays.hashCode(encoded), icon);
+                }
+                added++;
             }
-            Log.i("MiuiHome published desktop shortcut catalog added=" + added);
-        } catch (Throwable error) {
-            Log.e("Cannot read MiuiHome desktop shortcut catalog", error);
+            iconKeys.addAll(pendingKeys);
+            icons.addAll(pendingIcons);
+            Log.i("SystemUI read desktop shortcut catalog added=" + added);
+            return CatalogReadResult.success(out);
+        } catch (Exception error) {
+            Log.e("SystemUI could not read desktop favorites; keeping prior launcher entries", error);
+            return CatalogReadResult.failed();
         }
+    }
+
+    private static final class CatalogReadResult {
+        final boolean readable;
+        final JSONArray items;
+
+        private CatalogReadResult(boolean readable, JSONArray items) {
+            this.readable = readable;
+            this.items = items;
+        }
+
+        static CatalogReadResult success(JSONArray items) {
+            return new CatalogReadResult(true, items);
+        }
+
+        static CatalogReadResult failed() {
+            return new CatalogReadResult(false, new JSONArray());
+        }
+    }
+
+    private static JSONArray readPreviousCatalog(Context context, String key) {
+        try {
+            Bundle catalogs = context.getContentResolver().call(
+                    ConfigContract.URI, "get_catalog", null, null);
+            if (catalogs == null || !catalogs.containsKey(key)) {
+                throw new IllegalStateException("Provider did not return " + key);
+            }
+            String raw = catalogs.getString(key);
+            if (raw == null) throw new IllegalStateException("Provider returned null " + key);
+            return new JSONArray(raw);
+        } catch (Exception error) {
+            Log.e("Cannot read previous catalog " + key + "; partial source result will not replace it",
+                    error);
+            return null;
+        }
+    }
+
+    private static void appendAllUnique(JSONArray from, JSONArray to, Set<String> seen) {
+        for (int index = 0; index < from.length(); index++) {
+            JSONObject item = from.optJSONObject(index);
+            appendUnique(item, to, seen);
+        }
+    }
+
+    private static void appendPreviousKind(JSONArray previous, JSONArray target,
+                                           Set<String> seen, boolean launcherShortcuts) {
+        for (int index = 0; index < previous.length(); index++) {
+            JSONObject item = previous.optJSONObject(index);
+            if (item == null) continue;
+            boolean isLauncher = "launcher".equals(item.optString("kind"))
+                    || !item.optString("intent", "").isEmpty();
+            if (isLauncher == launcherShortcuts) appendUnique(item, target, seen);
+        }
+    }
+
+    private static void appendUnique(JSONObject item, JSONArray target, Set<String> seen) {
+        if (item == null) return;
+        String packageName = item.optString("package", "");
+        String shortcutId = item.optString("id", "");
+        String key = packageName + "\n" + shortcutId;
+        if (packageName.isEmpty() || shortcutId.isEmpty() || !seen.add(key)) return;
+        target.put(item);
     }
 
     private static synchronized void queueShortcutIcon(Context context, ArrayList<String> keys,
@@ -457,7 +607,9 @@ final class ShortcutHostRuntime {
                     .resolveActivity(intent, 0);
             return resolved == null || resolved.activityInfo == null
                     ? null : resolved.activityInfo.packageName;
-        } catch (Throwable ignored) {
+        } catch (Exception error) {
+            Log.i("Cannot resolve desktop shortcut package: "
+                    + error.getClass().getSimpleName());
             return null;
         }
     }
@@ -471,7 +623,10 @@ final class ShortcutHostRuntime {
                     .getApplicationInfo(packageName, 0);
             CharSequence label = context.getPackageManager().getApplicationLabel(info);
             if (label != null) app = label.toString().trim();
-        } catch (Throwable ignored) { }
+        } catch (Exception error) {
+            Log.i("Cannot read app label for shortcut package=" + packageName + ": "
+                    + error.getClass().getSimpleName());
+        }
         if (app.isEmpty()) app = packageName == null ? "" : packageName;
         if (shortcut.isEmpty()) return app;
         if (app.isEmpty() || shortcut.startsWith(app)) return shortcut;
@@ -479,15 +634,32 @@ final class ShortcutHostRuntime {
     }
 
     private static void publishActivityCatalog(Context context, LauncherApps launcherApps) {
+        if (launcherApps == null) {
+            Log.e("SystemUI LauncherApps unavailable; keeping previous dual-app activities");
+            return;
+        }
         JSONArray out = new JSONArray();
         try {
-            List<LauncherActivityInfo> activities = launcherApps.getActivityList(
-                    null, userHandle(999));
-            if (activities == null) activities = Collections.emptyList();
+            android.os.UserManager users = context.getSystemService(android.os.UserManager.class);
+            Object dualUser = de.robv.android.xposed.XposedHelpers.callMethod(users, "getUserInfo", 999);
+            List<LauncherActivityInfo> activities = dualUser == null
+                    ? java.util.Collections.emptyList()
+                    : launcherApps.getActivityList(null, userHandle(999));
+            if (activities == null) {
+                throw new IllegalStateException("LauncherApps returned null dual-app activity list");
+            }
             for (LauncherActivityInfo activity : activities) {
+                if (activity == null) {
+                    throw new IllegalStateException("LauncherApps returned a null dual-app activity");
+                }
                 ComponentName component = activity.getComponentName();
                 CharSequence label = activity.getLabel();
-                if (component == null || label == null || out.length() >= 160) continue;
+                if (component == null || label == null) {
+                    throw new IllegalStateException("Dual-app activity has no component or label");
+                }
+                if (out.length() >= 160) {
+                    throw new IllegalStateException("Dual-app activity list exceeds the 160-item limit");
+                }
                 JSONObject item = new JSONObject();
                 item.put("component", component.flattenToString());
                 item.put("label", label.toString());
@@ -498,9 +670,9 @@ final class ShortcutHostRuntime {
             extras.putString(ConfigContract.KEY_ACTIVITY_CATALOG, out.toString());
             context.getContentResolver().call(ConfigContract.URI, "report_activities",
                     null, extras);
-            Log.i("MiuiHome published dual-app activity catalog count=" + out.length());
-        } catch (Throwable error) {
-            Log.e("Cannot publish dual-app activity catalog from MiuiHome", error);
+            Log.i("SystemUI published dual-app activity catalog count=" + out.length());
+        } catch (Exception error) {
+            Log.e("SystemUI could not read dual-app activity list; preserving previous catalog", error);
         }
     }
 

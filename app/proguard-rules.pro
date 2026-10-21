@@ -11,3 +11,7 @@
 -keep class com.leaf.hyperdragshare.codex.TextSegmenter {
     native <methods>;
 }
+
+# HyperGesture runtime hooks and proxies use reflection across the host boundary.
+-keep class com.leaf.hyperdragshare.gestures.xposed.** { *; }
+-keep class com.leaf.hyperdragshare.gestures.config.ConfigProvider { *; }

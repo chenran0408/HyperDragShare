@@ -41,6 +41,11 @@ public final class AppTarget {
         return new AppTarget(packageName, shortcutId, label, "", 0);
     }
 
+    public static AppTarget shortcut(String packageName, String shortcutId, String label,
+                                     int userId) {
+        return new AppTarget(packageName, shortcutId, label, "", userId);
+    }
+
     public static AppTarget launcherShortcut(String packageName, String shortcutId,
                                              String label, String intentUri, int userId) {
         return new AppTarget(packageName, shortcutId, label, intentUri, userId);

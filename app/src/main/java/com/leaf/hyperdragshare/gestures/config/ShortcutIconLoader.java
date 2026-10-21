@@ -11,11 +11,14 @@ import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
 import android.os.Process;
 import android.os.UserHandle;
+import android.os.BadParcelableException;
+import android.util.Log;
 
 import java.util.Collections;
 import java.util.List;
 
 public final class ShortcutIconLoader {
+    private static final String TAG = "HyperDragShareShortcutIcon";
     public static final String METHOD_GET = "get_shortcut_icon";
     public static final String METHOD_REPORT = "report_shortcut_icons";
     public static final String EXTRA_KEYS = "shortcut_icon_keys";
@@ -46,21 +49,28 @@ public final class ShortcutIconLoader {
                     if (icon != null) return icon;
                 }
             }
-        } catch (Throwable ignored) {
-            // Most module processes are not registered shortcut hosts; try launcher cache.
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException error) {
+            Log.w(TAG, "Launcher shortcut lookup failed; trying the saved icon cache", error);
         }
+        Bundle response = null;
         try {
-            Bundle response = context.getContentResolver().call(ConfigContract.URI,
+            response = context.getContentResolver().call(ConfigContract.URI,
                     METHOD_GET, key(packageName, shortcutId, userId), null);
-            if (response != null) {
+        } catch (RuntimeException error) {
+            // ContentResolver wraps provider and transport failures in RuntimeException.
+            Log.w(TAG, "Saved shortcut icon lookup failed; using the app icon", error);
+        }
+        if (response != null) {
+            try {
                 @SuppressWarnings("deprecation")
                 Bitmap bitmap = response.getParcelable(EXTRA_ICON);
                 if (bitmap != null) {
                     return new BitmapDrawable(context.getResources(), bitmap);
                 }
+            } catch (BadParcelableException | ClassCastException | IllegalArgumentException error) {
+                Log.w(TAG, "Saved shortcut icon response could not be decoded; using the app icon",
+                        error);
             }
-        } catch (Throwable ignored) {
-            // The launcher cache may not have been populated yet.
         }
         ApplicationInfo appInfo = packageManager.getApplicationInfo(packageName, 0);
         return appInfo.loadIcon(packageManager);

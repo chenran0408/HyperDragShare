@@ -127,13 +127,20 @@ private sealed interface SettingsRoute : NavKey {
     data object Order : SettingsRoute
     data object Blacklist : SettingsRoute
     data object About : SettingsRoute
+    data object Gestures : SettingsRoute
+    data object BottomTargets : SettingsRoute
+    data object HoneycombLayout : SettingsRoute
+    data object HoneycombTargets : SettingsRoute
+    data object SideTargets : SettingsRoute
     data object Licenses : SettingsRoute
 }
 
 @Composable
-fun DragShareSettingsApp(context: Context) {
+fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
     var settings by remember { mutableStateOf(DragShareSettings.readLocal(context)) }
-    val backStack = remember { mutableStateListOf<NavKey>(SettingsRoute.Main) }
+    val backStack = remember { mutableStateListOf<NavKey>(SettingsRoute.Main).apply {
+        if (openGestures) add(SettingsRoute.Gestures)
+    } }
     val mainListState = rememberLazyListState()
     val mainTopAppBarState = rememberTopAppBarState()
     val dark = settings.isDarkThemeInComposition()
@@ -163,8 +170,44 @@ fun DragShareSettingsApp(context: Context) {
                     onOpenOrder = { backStack.add(SettingsRoute.Order) },
                     onOpenBlacklist = { backStack.add(SettingsRoute.Blacklist) },
                     onOpenAbout = { backStack.add(SettingsRoute.About) },
+                    onOpenGestures = { backStack.add(SettingsRoute.Gestures) },
                     persist = currentPersist.value,
                 )
+            }
+            entry(SettingsRoute.Gestures) {
+                GestureSettingsContent(context,
+                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                    onManageTargets = { group ->
+                        backStack.add(when (group) {
+                            "bottom" -> SettingsRoute.BottomTargets
+                            "honeycomb" -> SettingsRoute.HoneycombTargets
+                            "side" -> SettingsRoute.SideTargets
+                            else -> error("Unknown gesture target group: $group")
+                        })
+                    })
+            }
+            entry(SettingsRoute.BottomTargets) {
+                GestureTargetsContent(context, "bottom", onBack = {
+                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                })
+            }
+            entry(SettingsRoute.HoneycombTargets) {
+                GestureTargetsContent(context, "honeycomb", onBack = {
+                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                }, onEditHoneycombLayout = { backStack.add(SettingsRoute.HoneycombLayout) })
+            }
+            entry(SettingsRoute.HoneycombLayout) {
+                val store = remember(context) {
+                    com.leaf.hyperdragshare.gestures.config.ConfigStore(context)
+                }
+                GestureHoneycombLayout(store, onBack = {
+                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                })
+            }
+            entry(SettingsRoute.SideTargets) {
+                GestureTargetsContent(context, "side", onBack = {
+                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                })
             }
             entry(SettingsRoute.Visibility) {
                 VisibilityPage(
@@ -231,6 +274,7 @@ private fun MainPage(
     onOpenOrder: () -> Unit,
     onOpenBlacklist: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenGestures: () -> Unit,
     persist: (DragShareSettings) -> Unit,
 ) {
     var showAccessibilityDialog by remember { mutableStateOf(false) }
@@ -329,6 +373,13 @@ private fun MainPage(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = paddingValues,
         ) {
+            item(key = "hypergesture-entry") {
+                SmallTitle(text = "手势与小窗")
+                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    BasicComponent(title = "Hyper 手势", summary = "底角、侧边、蜂巢、任务中心与小窗",
+                        onClick = onOpenGestures)
+                }
+            }
             item(key = "app-visibility-title") {
                 SmallTitle(text = "应用显示")
             }
@@ -970,7 +1021,7 @@ private fun MainPage(
 
             item(key = "footer") {
                 Text(
-                    text = "作用域：系统框架 · 传送门 · AICR · 版本 ${BuildConfig.VERSION_NAME}",
+                    text = "作用域：系统框架 · 系统界面 · 桌面 · 传送门 · AICR · ${BuildConfig.VERSION_NAME}",
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp),
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     fontSize = 13.sp,

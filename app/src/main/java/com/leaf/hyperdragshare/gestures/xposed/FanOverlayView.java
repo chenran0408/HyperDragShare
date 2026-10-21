@@ -2,7 +2,6 @@ package com.leaf.hyperdragshare.gestures.xposed;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
@@ -90,18 +89,33 @@ final class FanOverlayView extends View {
         iconStrokePaint.setStyle(Paint.Style.STROKE);
         iconStrokePaint.setStrokeWidth(dp(1));
         iconStrokePaint.setColor(0x88ffffff);
-        selectedPaint.setColor(0xff6572f6);
         selectedPaint.setStyle(Paint.Style.STROKE);
         selectedPaint.setStrokeWidth(dp(3));
         selectedPaint.setShadowLayer(dp(10), 0, dp(3), 0x52000000);
-        selectedFillPaint.setColor(0x386572f6);
-        textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(dp(14));
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setFakeBoldText(true);
-        pillPaint.setColor(0xdd20263f);
-        railPaint.setColor(0xb820263f);
         railPaint.setShadowLayer(dp(14), 0, dp(4), 0x50000000);
+        updateTheme();
+    }
+
+    private void updateTheme() {
+        boolean dark = (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        int[] colors = com.leaf.hyperdragshare.codex.OverlayThemeColors.colors(dark);
+        selectedPaint.setColor(colors[3]);
+        selectedFillPaint.setColor(colors[4]);
+        textPaint.setColor(colors[1]);
+        pillPaint.setColor(colors[0]);
+        railPaint.setColor(colors[0]);
+    }
+
+    @Override
+    protected void onConfigurationChanged(android.content.res.Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        updateTheme();
+        invalidate();
     }
 
     @Override

@@ -3,7 +3,6 @@ package com.leaf.hyperdragshare.gestures.xposed;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
@@ -78,20 +77,35 @@ final class SideWheelOverlayView extends View {
         minimumFlingVelocity = configuration.getScaledMinimumFlingVelocity();
         scroller = new OverScroller(context, new DecelerateInterpolator());
 
-        railPaint.setColor(0xd020263f);
         railPaint.setShadowLayer(dp(16), 0, dp(4), 0x58000000);
-        centerPaint.setColor(0x426572f6);
         centerPaint.setStyle(Paint.Style.FILL);
         iconShadowPaint.setColor(0x01000000);
         iconShadowPaint.setShadowLayer(dp(10), 0, dp(3), 0x66000000);
         iconStrokePaint.setStyle(Paint.Style.STROKE);
         iconStrokePaint.setStrokeWidth(dp(1));
         iconStrokePaint.setColor(0x99ffffff);
-        pillPaint.setColor(0xf020263f);
-        textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(dp(14));
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setFakeBoldText(true);
+        updateTheme();
+    }
+
+    private void updateTheme() {
+        boolean dark = (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        int[] colors = com.leaf.hyperdragshare.codex.OverlayThemeColors.colors(dark);
+        railPaint.setColor(colors[0]);
+        centerPaint.setColor(colors[4]);
+        pillPaint.setColor(colors[0]);
+        textPaint.setColor(colors[1]);
+    }
+
+    @Override
+    protected void onConfigurationChanged(android.content.res.Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        updateTheme();
+        invalidate();
     }
 
     void setForceCircularIcons(boolean forceCircularIcons) {
