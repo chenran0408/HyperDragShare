@@ -31,19 +31,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DocumentScanner
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Deselect
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,6 +48,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
@@ -75,6 +75,12 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import java.io.IOException
 import kotlin.math.abs
 
@@ -128,6 +134,14 @@ object StashOverlayPanel {
         main.post { active?.overlay?.dismiss() }
     }
 
+    internal fun textDropFinished(source: View, error: Exception?) {
+        val shelf = active?.takeIf { source.rootView === it.overlay.window.decorView } ?: return
+        if (error == null) {
+            shelf.collapse()
+            Toast.makeText(source.context, "已填入输入框", Toast.LENGTH_SHORT).show()
+        } else shelf.report("未填入文字，内容已保留", error)
+    }
+
     private class Shelf(private val app: Context) {
         private val position = app.getSharedPreferences("stash_window_position", Context.MODE_PRIVATE)
         private var onLeft by mutableStateOf(position.getBoolean("left", false))
@@ -151,6 +165,9 @@ object StashOverlayPanel {
         private var reloadRequested = false
         private var message by mutableStateOf<String?>(null)
         private var expanded by mutableStateOf(true)
+        private var draggingContent by mutableStateOf(false)
+        private var dragContentWidthDp = 0f
+        private var dragContentHeightDp = 0f
         private var selectionMode by mutableStateOf(false)
         private var selectedIds by mutableStateOf<Set<String>>(emptySet())
         private var confirmDelete by mutableStateOf(false)
@@ -205,7 +222,16 @@ object StashOverlayPanel {
 
         private fun startContentDrag(source: View, clip: ClipData,
             shadow: View.DragShadowBuilder, flags: Int): Boolean {
-            overlay.observeDragHandoff({ active === this@Shelf }, ::collapse)
+            overlay.observeDragHandoff({ active === this@Shelf },
+                onDropped = { if (!StashTextDropWindow.handles(clip)) collapse() },
+                onStarted = {
+                    val density = context.resources.displayMetrics.density
+                    dragContentWidthDp = overlay.window.attributes.width / density
+                    dragContentHeightDp = overlay.window.attributes.height / density
+                    draggingContent = true
+                    resize(allowDuringDrag = true)
+                },
+                onFinished = { draggingContent = false })
             var started = false
             try {
                 started = source.startDragAndDrop(clip, shadow, null, flags)
@@ -225,18 +251,19 @@ object StashOverlayPanel {
             }
         }
 
-        private fun resize() {
-            if (overlay.isDragHandoffActive) return
+        private fun resize(allowDuringDrag: Boolean = false) {
+            if (overlay.isDragHandoffActive && !allowDuringDrag) return
             val windowMetrics = context.getSystemService(WindowManager::class.java).maximumWindowMetrics
             val metrics = windowMetrics.bounds
             val insets = windowMetrics.windowInsets.getInsetsIgnoringVisibility(
                 WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
             val density = context.resources.displayMetrics.density
+            val showPanel = expanded && !draggingContent
             overlay.window.attributes = overlay.window.attributes.apply {
                 // Both dimensions are at most 40% of the display: area <= 16%, below 1/6.
-                width = if (expanded) minOf((200 * density).toInt(), (metrics.width() * .4f).toInt())
+                width = if (showPanel) minOf((200 * density).toInt(), (metrics.width() * .4f).toInt())
                     else (24 * density).toInt()
-                height = if (expanded) minOf((320 * density).toInt(), (metrics.height() * .4f).toInt())
+                height = if (showPanel) minOf((320 * density).toInt(), (metrics.height() * .4f).toInt())
                     else (96 * density).toInt()
                 gravity = Gravity.LEFT or Gravity.TOP
                 val rightEdge = (metrics.width() - insets.right - width).coerceAtLeast(insets.left)
@@ -245,7 +272,9 @@ object StashOverlayPanel {
                 y = (centerY * metrics.height() - height / 2f).toInt()
                     .coerceIn(insets.top, (metrics.height() - insets.bottom - height).coerceAtLeast(insets.top))
                 flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    if (expanded) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    if (draggingContent) WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    else if (expanded) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             }
         }
 
@@ -303,7 +332,13 @@ object StashOverlayPanel {
             ) {
                 Box(Modifier.width(28.dp).height(4.dp).background(
                     MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .45f), RoundedCornerShape(2.dp)))
-                Text(if (selectionMode) "已选 ${selectedIds.size} · 按住拖出" else "中转站 · ${entries.size}",
+                Text(when {
+                    confirmDelete -> "删除所选"
+                    preview != null -> "图片预览"
+                    selectionMode -> "已选 ${selectedIds.size}"
+                    openedBatchId != null -> "分组"
+                    else -> "中转站"
+                },
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -424,7 +459,7 @@ object StashOverlayPanel {
             if (BigBangOverlayLauncher.showText(app, entry.text.orEmpty(), -1, -1, null)) collapse()
         }
 
-        private fun report(label: String, error: Exception) {
+        fun report(label: String, error: Exception) {
             DragShareLog.w("DragShare/StashWindow", label, error)
             message = "$label：${error.message.orEmpty()}"
             Toast.makeText(app, message, Toast.LENGTH_LONG).show()
@@ -496,26 +531,35 @@ object StashOverlayPanel {
             MiuixTheme(controller = remember(dark) {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
-                BackHandler(enabled = expanded, onBack = ::back)
-                if (!expanded) {
-                    CollapsedHandle()
-                } else {
-                    Scaffold {
+                BackHandler(enabled = expanded && !draggingContent, onBack = ::back)
+                Box(Modifier.fillMaxSize()) {
+                    if (expanded) Scaffold(
+                        // Resizing the window must not detach or remeasure the active drag source.
+                        modifier = (if (draggingContent)
+                            Modifier.requiredSize(dragContentWidthDp.dp, dragContentHeightDp.dp)
+                            else Modifier.fillMaxSize())
+                            .graphicsLayer { alpha = if (draggingContent) 0f else 1f },
+                    ) {
                         Column(Modifier.fillMaxSize()) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                if (preview != null || openedBatchId != null || confirmDelete) {
+                                    OverlayIconAction(MiuixIcons.Back,
+                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        onClick = ::back, contentDescription = "返回内容列表")
+                                } else {
+                                    OverlayIconAction(if (selectionMode) MiuixIcons.Close else MiuixIcons.SelectAll,
+                                        if (selectionMode) MiuixTheme.colorScheme.primary
+                                            else MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        enabled = !updating && (selectionMode || visibleEntries.isNotEmpty()),
+                                        onClick = {
+                                            if (selectionMode) cancelSelection() else selectionMode = true
+                                        }, contentDescription = if (selectionMode) "退出多选" else "多选拖出")
+                                }
                                 Box(Modifier.weight(1f)) { MoveHandle() }
-                                OverlayIconAction(Icons.Outlined.ExpandMore,
+                                OverlayIconAction(StashCollapseIcon,
                                     MiuixTheme.colorScheme.onSurfaceVariantActions,
                                     onClick = ::collapse, contentDescription = "收起中转站")
-                            }
-                            if (openedBatchId != null && preview == null && !confirmDelete) {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    OverlayIconAction(Icons.Outlined.ArrowBack,
-                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        onClick = ::back, contentDescription = "返回全部内容")
-                                    Text(stashBatchLabel(visibleEntries), fontSize = 12.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                                }
                             }
                             message?.let {
                                 Text(it, Modifier.padding(horizontal = 6.dp), fontSize = 11.sp,
@@ -542,10 +586,7 @@ object StashOverlayPanel {
                                         StashImage(image, 1200, Modifier.fillMaxSize(), ContentScale.Fit)
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                        OverlayIconAction(Icons.Outlined.ArrowBack,
-                                            MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                            onClick = ::back, contentDescription = "返回内容列表")
-                                        OverlayIconAction(Icons.Outlined.DocumentScanner,
+                                        OverlayIconAction(MiuixIcons.Scan,
                                             MiuixTheme.colorScheme.onSurfaceVariantActions,
                                             onClick = {
                                                 val uri = StashImageProvider.uriForEntry(image.id)
@@ -574,7 +615,7 @@ object StashOverlayPanel {
                                         fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
                                 else -> LazyColumn(Modifier.weight(1f), state = listState,
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     items(visibleBatches, key = {
                                         if (openedBatchId == null) it.first().batchId else it.first().id
                                     }) { ShelfBatch(it, selected) }
@@ -589,38 +630,42 @@ object StashOverlayPanel {
                                     onGroup = { regroup(selected, false) },
                                     onUngroup = { regroup(selected, true) })
                             }
-                            if (!confirmDelete && preview == null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                OverlayIconAction(if (selectionMode) Icons.Outlined.Deselect else Icons.Outlined.CheckBoxOutlineBlank,
-                                    if (selectionMode) MiuixTheme.colorScheme.primary
-                                    else MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                    enabled = !updating && (selectionMode || visibleEntries.isNotEmpty()),
-                                    onClick = {
-                                        if (selectionMode) cancelSelection() else selectionMode = true
-                                    }, contentDescription = if (selectionMode) "清空选择" else "多选拖出")
-                                if (selectionMode) {
+                            if (selectionMode && !confirmDelete && preview == null) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                     val allSelected = visibleEntries.isNotEmpty() &&
                                         visibleEntries.all { it.id in selectedIds }
-                                    OverlayIconAction(Icons.Outlined.SelectAll,
-                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    OverlayIconAction(MiuixIcons.SelectAll,
+                                        if (allSelected) MiuixTheme.colorScheme.primary
+                                            else MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         enabled = !updating && visibleEntries.isNotEmpty(),
                                         onClick = {
                                             val visibleIds = visibleEntries.map { it.id }.toSet()
                                             selectedIds = if (allSelected) selectedIds - visibleIds
                                                 else selectedIds + visibleIds
                                         }, contentDescription = if (allSelected) "取消当前列表全选" else "全选当前列表")
-                                    OverlayIconAction(Icons.Outlined.Delete,
+                                    OverlayIconAction(MiuixIcons.Delete,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         enabled = !updating && selectedIds.isNotEmpty(),
                                         onClick = { confirmDelete = true }, contentDescription = "移除所选内容")
                                 }
-                                OverlayIconAction(Icons.Outlined.Close,
-                                    MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                    onClick = overlay::dismiss, contentDescription = "关闭中转站入口")
                             }
                         }
                     }
+                    if (!expanded || draggingContent) CollapsedHandle()
                 }
             }
         }
     }
 }
+
+private val StashCollapseIcon = ImageVector.Builder(
+    name = "CollapseShelf", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f,
+).apply {
+    path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+        strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        moveTo(6f, 9f)
+        lineTo(12f, 15f)
+        lineTo(18f, 9f)
+    }
+}.build()

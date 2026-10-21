@@ -4,6 +4,7 @@ import android.app.UiAutomation;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.graphics.Rect;
 import android.os.Handler;
+import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -144,6 +145,13 @@ public final class RootNodeCaptureMain {
         };
         watchdog.postDelayed(timeout, 4000L);
         try {
+            if ("insert_text".equals(request.optString("operation"))) {
+                try { return insertTextAt(automation, request); }
+                catch (ReflectiveOperationException | SecurityException | IllegalStateException error) {
+                    System.err.println("Root text insertion failed: " + error.getClass().getSimpleName());
+                    return insertFailure("系统拒绝输入文字，请检查 Root 连接与当前窗口");
+                }
+            }
             long started = SystemClock.uptimeMillis();
             if (pressHitsInputMethod(automation, request)) {
                 return new JSONObject().put("found", false).put("reason", "excluded_input_method");
@@ -178,6 +186,106 @@ public final class RootNodeCaptureMain {
         } finally {
             watchdog.removeCallbacks(timeout);
         }
+    }
+
+    private static boolean keyguardLocked() throws ReflectiveOperationException {
+        Class<?> manager = Class.forName("android.view.IWindowManager");
+        android.os.IBinder binder = (android.os.IBinder) Class.forName("android.os.ServiceManager")
+                .getMethod("getService", String.class).invoke(null, "window");
+        Object service = Class.forName("android.view.IWindowManager$Stub")
+                .getMethod("asInterface", android.os.IBinder.class).invoke(null, binder);
+        if (service == null) throw new IllegalStateException("Window service unavailable");
+        return (Boolean) manager.getMethod("isKeyguardLocked").invoke(service);
+    }
+
+    private static JSONObject insertFailure(String reason) throws org.json.JSONException {
+        return new JSONObject().put("inserted", false).put("reason", reason);
+    }
+
+    private static JSONObject insertTextAt(UiAutomation automation, JSONObject request) throws Exception {
+        float x = (float) request.getDouble("x"), y = (float) request.getDouble("y");
+        String text = request.getString("text");
+        if (!Float.isFinite(x) || !Float.isFinite(y) || text.isEmpty()) return insertFailure("拖入位置或文字无效");
+        if (keyguardLocked()) return insertFailure("请先解锁手机再拖入文字");
+        automation.clearCache();
+        List<AccessibilityWindowInfo> windows = automation.getWindows();
+        windows.sort((a, b) -> Integer.compare(b.getLayer(), a.getLayer()));
+        try {
+            Rect bounds = new Rect();
+            for (AccessibilityWindowInfo window : windows) {
+                window.getBoundsInScreen(bounds);
+                if (!bounds.contains((int) x, (int) y)) continue;
+                AccessibilityNodeInfo root = window.getRoot();
+                try {
+                    // The module's own drop shield is intentionally above the destination.
+                    if (root != null && BuildConfig.APPLICATION_ID.equals(string(root.getPackageName()))) continue;
+                    if (window.getType() == AccessibilityWindowInfo.TYPE_INPUT_METHOD)
+                        return insertFailure("请把文字拖到输入框内，不要拖到键盘上");
+                    if (window.getType() != AccessibilityWindowInfo.TYPE_APPLICATION)
+                        return insertFailure("拖入位置被系统窗口遮挡");
+                    if (root == null) return insertFailure("无法读取目标应用的输入框");
+                    AccessibilityNodeInfo target = editableAt(root, x, y);
+                    if (target == null) return insertFailure("此位置不是可编辑输入框");
+                    try {
+                        if (!target.refresh() || !eligibleEditor(target, x, y))
+                            return insertFailure("输入框已变化，请重新拖入");
+                        if (keyguardLocked()) return insertFailure("手机已锁定，未填入文字");
+                        CharSequence oldValue = target.getText();
+                        String old = oldValue == null ? "" : oldValue.toString();
+                        int start = target.getTextSelectionStart(), end = target.getTextSelectionEnd();
+                        int cursor = insertionStart(old, start, end) + text.length();
+                        Bundle arguments = new Bundle();
+                        arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                                insertedText(old, start, end, text));
+                        if (!target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments))
+                            return insertFailure("目标输入框拒绝填入文字");
+                        Bundle selection = new Bundle();
+                        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, cursor);
+                        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, cursor);
+                        boolean cursorSet = false;
+                        try { cursorSet = target.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selection); }
+                        catch (SecurityException | IllegalStateException error) {
+                            // Text was already accepted; a cursor failure must not report insertion failure.
+                            System.err.println("Inserted text; cursor update failed: " + error.getClass().getSimpleName());
+                        }
+                        return new JSONObject().put("inserted", true).put("cursor_set", cursorSet);
+                    } finally { target.recycle(); }
+                } finally { if (root != null) root.recycle(); }
+            }
+            return insertFailure("拖入位置没有应用输入框");
+        } finally { for (AccessibilityWindowInfo window : windows) window.recycle(); }
+    }
+
+    static boolean eligibleEditor(AccessibilityNodeInfo node, float x, float y) {
+        Rect bounds = new Rect();
+        node.getBoundsInScreen(bounds);
+        return node.isVisibleToUser() && node.isEnabled() && node.isEditable() && !node.isPassword()
+                && bounds.contains((int) x, (int) y);
+    }
+
+    private static AccessibilityNodeInfo editableAt(AccessibilityNodeInfo node, float x, float y) {
+        if (node.isPassword()) return null;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try {
+                AccessibilityNodeInfo found = editableAt(child, x, y);
+                if (found != null) return found;
+            } finally { child.recycle(); }
+        }
+        return eligibleEditor(node, x, y) ? AccessibilityNodeInfo.obtain(node) : null;
+    }
+
+    private static int insertionStart(String old, int start, int end) {
+        return start >= 0 && end >= 0 && start <= old.length() && end <= old.length()
+                ? Math.min(start, end) : old.length();
+    }
+
+    static String insertedText(String old, int start, int end, String insertion) {
+        int first = insertionStart(old, start, end);
+        int last = start >= 0 && end >= 0 && start <= old.length() && end <= old.length()
+                ? Math.max(start, end) : old.length();
+        return old.substring(0, first) + insertion + old.substring(last);
     }
 
     private static boolean pressHitsInputMethod(UiAutomation automation, JSONObject request)

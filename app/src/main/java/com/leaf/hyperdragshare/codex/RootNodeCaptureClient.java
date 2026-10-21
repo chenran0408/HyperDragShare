@@ -162,6 +162,31 @@ final class RootNodeCaptureClient {
             return node;
         }
 
+        synchronized Bundle insertTextAt(float x, float y, String text) throws IOException, InterruptedException {
+            if (closed) throw new IOException("Root 输入连接已关闭");
+            Bundle reply = new Bundle();
+            if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()) {
+                reply.putString("reason", "请先解锁手机再拖入文字");
+                return reply;
+            }
+            try {
+                JSONObject request = new JSONObject().put("operation", "insert_text")
+                        .put("x", x).put("y", y).put("text", text);
+                process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
+                process.getOutputStream().flush();
+                JSONObject result = awaitResponse();
+                reply.putBoolean("inserted", result.getBoolean("inserted"));
+                reply.putString("reason", result.optString("reason", ""));
+                return reply;
+            } catch (JSONException error) {
+                close();
+                throw new IOException("Root 输入返回格式无效", error);
+            } catch (IOException | InterruptedException error) {
+                close();
+                throw error;
+            }
+        }
+
         synchronized boolean isCurrentWindow(String source, int windowId) throws IOException, InterruptedException {
             try {
                 JSONObject request = new JSONObject().put("operation", "verify_window")

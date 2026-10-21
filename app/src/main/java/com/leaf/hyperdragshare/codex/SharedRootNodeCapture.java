@@ -127,6 +127,21 @@ final class SharedRootNodeCapture {
             } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
         }
 
+        @Override public Bundle insertTextAt(float x, float y, String text) {
+            enforceOwner();
+            if (!io.tryLock()) throw new IllegalStateException("输入服务正在处理另一次请求，请稍后重试");
+            long identity = Binder.clearCallingIdentity();
+            try {
+                if (closed) throw new IllegalStateException("输入连接已关闭");
+                return root.insertTextAt(x, y, text);
+            } catch (IOException | InterruptedException error) {
+                if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+                invalidate(root);
+                DragShareLog.w("DragShare/SharedNodes", "Root text insertion transport failed", error);
+                throw new IllegalStateException(error.getMessage());
+            } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
+        }
+
         @Override public boolean verifyWindow(String source, int windowId) {
             enforceOwner();
             if (!io.tryLock()) throw new IllegalStateException("取词服务正忙，本次图片读取已取消");
@@ -240,6 +255,21 @@ final class SharedRootNodeCapture {
             } catch (RemoteException | IllegalStateException error) {
                 throw requestFailure("核验按压来源失败", error);
             }
+        }
+
+        boolean insertTextAt(float x, float y, String text) throws IOException {
+            if (closed) throw new ConnectionFailedException("输入连接已关闭", null);
+            if (!Float.isFinite(x) || !Float.isFinite(y) || text == null || text.isEmpty())
+                throw new IOException("拖入位置或文字无效");
+            if (context.getSystemService(KeyguardManager.class).isKeyguardLocked())
+                throw new IOException("请先解锁手机再拖入文字");
+            final Bundle reply;
+            try { reply = lease.insertTextAt(x, y, text); }
+            catch (RemoteException | IllegalStateException | SecurityException error) {
+                throw requestFailure("填入文字失败", error);
+            }
+            if (!reply.getBoolean("inserted")) throw new IOException(reply.getString("reason", "目标输入框未接受文字"));
+            return true;
         }
 
         private IOException requestFailure(String operation, Exception error) {

@@ -1171,4 +1171,14 @@ ModuleActivation所有Portal报告携同一进程Binder token。模块端仅订�
 
 审查已准备源码发现codePoint仍会拆开组合字形，故同批修TextSegmenter与BoomWordsLayout：ICU字符边界保护重音、肤色、旗帜、VS16和ZWJ，初次native token与手动拆词都不产生字形残片；保持原文、UTF16范围、中文词语粒度、选区/合并快照。既存碎片快照不自动重分词，避免改变已存用户语义。
 
-构建、安装与真实验收见DEVICE_VALIDATION最新156记录；CURRENT_STATUS为当前账本。
+## 2026-10-21 1.7.157：中转站直接拖取与输入诊断
+
+Stash标题压成单行；统一44dp点击区/22dp图形，正常态不放底部操作栏，移除容易误触关闭的底部按钮。托盘拖放期间保持源Compose树和窗口尺寸，系统取消后恢复选区。混合文字/图片选择显式拒绝拖出。
+
+纯文字使用私有MIME的intent-only全局ClipData，不把文字暴露给聊天应用原生drop；临时全屏drop shield只记录落点，Root helper再按点位定位可编辑非密码节点，以`ACTION_SET_TEXT`插入并尝试恢复光标，不写系统剪贴板。系统回报DragEvent accepted不等于Root插入成功。图片仍使用私有URI；当微信查询`_data`时，按图片条目在MediaStore Downloads/HyperDragShare建立副本并返回其路径。清理仅按模块自有映射清除24小时以上副本，属机会式清理，不扫描相册，也不保证准时。
+
+157已安装，Portal 30012/181的输入和reader ready；system_server/SystemUI/AICR仍179。build323完整通过：228 tests/0 failures/0 errors/0 skipped，Lint 0 errors/163 warnings/2 hints，51秒。321旧AIDL测试桩漏方法；322开发期间Lint内部分析异常；修复后323成功，未禁用检查。APK SHA256 `F5CCFE48287D8A986304DB5746D6132E5AB92705EA74D9B20D9DB8CE014F9FE0`，证书未变。
+
+设备故障验证见`DEVICE_VALIDATION.md`：微信文字填框命中“拖入位置被系统窗口遮挡”，四次lease约20ms结束；生成图片拖拽虽`accepted=true`，没有图像/预览、没有副本记录或本次URI grant。两者都是未通过的实测结果，不能以构建、安装、Portal ready或DragEvent accepted冒充功能完成。微信Accessibility窗口列表缺目标应用，当前原因未定。
+
+构建、安装与真实验收见DEVICE_VALIDATION最新157记录；CURRENT_STATUS为当前账本。

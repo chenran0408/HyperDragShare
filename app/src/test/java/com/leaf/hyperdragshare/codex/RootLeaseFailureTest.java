@@ -30,6 +30,7 @@ public final class RootLeaseFailureTest {
                                             boolean press, boolean early, IRootNodeCandidate callback) { throw failure; }
             @Override public boolean verifyWindow(String source, int windowId) { return true; }
             @Override public boolean verifySource(String source) { return true; }
+            @Override public Bundle insertTextAt(float x, float y, String text) { throw failure; }
             @Override public boolean isOpen() { return !fatal; }
             @Override public void close() {}
         };

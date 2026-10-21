@@ -30,6 +30,37 @@ import org.robolectric.shadows.ShadowUiAutomation;
 @Config(manifest = Config.NONE, shadows = RootNodeRequestTest.AutomationShadow.class)
 @LooperMode(LooperMode.Mode.PAUSED)
 public final class RootNodeRequestTest {
+    @Test public void insertionReplacesSelectionAndPreservesSurroundingText() {
+        assertEquals("aXd", RootNodeCaptureMain.insertedText("abcd", 1, 3, "X"));
+        assertEquals("aXd", RootNodeCaptureMain.insertedText("abcd", 3, 1, "X"));
+        assertEquals("abXcd", RootNodeCaptureMain.insertedText("abcd", 2, 2, "X"));
+        assertEquals("abcdX", RootNodeCaptureMain.insertedText("abcd", -1, -1, "X"));
+        assertEquals("abcdX", RootNodeCaptureMain.insertedText("abcd", 0, 20, "X"));
+    }
+
+    @Test public void insertionOnlyAcceptsVisibleEnabledNonPasswordEditorAtDropPoint() {
+        AccessibilityNodeInfo node = AccessibilityNodeInfo.obtain();
+        try {
+            node.setBoundsInScreen(new Rect(10, 20, 100, 80));
+            node.setVisibleToUser(true);
+            node.setEnabled(true);
+            node.setEditable(true);
+            assertTrue(RootNodeCaptureMain.eligibleEditor(node, 50, 50));
+            assertFalse(RootNodeCaptureMain.eligibleEditor(node, 50, 100));
+            node.setPassword(true);
+            assertFalse(RootNodeCaptureMain.eligibleEditor(node, 50, 50));
+            node.setPassword(false);
+            node.setEnabled(false);
+            assertFalse(RootNodeCaptureMain.eligibleEditor(node, 50, 50));
+            node.setEnabled(true);
+            node.setVisibleToUser(false);
+            assertFalse(RootNodeCaptureMain.eligibleEditor(node, 50, 50));
+            node.setVisibleToUser(true);
+            node.setEditable(false);
+            assertFalse(RootNodeCaptureMain.eligibleEditor(node, 50, 50));
+        } finally { node.recycle(); }
+    }
+
     @Test public void missingWindowEndsOnlyThisRequestAndNextPressCanRead() throws Exception {
         UiAutomation automation = Shadow.newInstanceOf(UiAutomation.class);
         AutomationShadow shadow = Shadow.extract(automation);

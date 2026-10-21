@@ -78,7 +78,7 @@ import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.icon.extended.SelectAll
+import top.yukonga.miuix.kmp.icon.extended.Cut
 import top.yukonga.miuix.kmp.icon.extended.Merge
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
@@ -335,11 +335,12 @@ internal fun BigBangOverlayContent(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            BigBangIconAction(MiuixIcons.SelectAll,
+                            BigBangIconAction(SelectAllWordsIcon,
                                 if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
                                 primary = allTextSelected,
                                 modifier = Modifier.semantics { selected = allTextSelected })
-                            BigBangToolAction("拆词", { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
+                            BigBangIconAction(MiuixIcons.Cut, "拆词",
+                                { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
                             BigBangIconAction(MiuixIcons.Copy, if (copying) "正在复制" else "复制", onCopy,
                                 ready && !copying, primary = true)
                             BigBangIconAction(MiuixIcons.Search, "搜索", onSearch, ready)
@@ -471,6 +472,47 @@ internal fun BigBangOverlayContent(
         }
     }
 }
+
+private val SelectAllWordsIcon = ImageVector.Builder(
+    name = "SelectAllWords", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f,
+).apply {
+    path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+        strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        moveTo(3f, 8f)
+        lineTo(3f, 3f)
+        lineTo(8f, 3f)
+        moveTo(16f, 3f)
+        lineTo(21f, 3f)
+        lineTo(21f, 8f)
+        moveTo(21f, 16f)
+        lineTo(21f, 21f)
+        lineTo(16f, 21f)
+        moveTo(8f, 21f)
+        lineTo(3f, 21f)
+        lineTo(3f, 16f)
+        moveTo(7f, 7f)
+        lineTo(11f, 7f)
+        lineTo(11f, 10f)
+        lineTo(7f, 10f)
+        close()
+        moveTo(14f, 7f)
+        lineTo(17f, 7f)
+        lineTo(17f, 10f)
+        lineTo(14f, 10f)
+        close()
+        moveTo(7f, 14f)
+        lineTo(10f, 14f)
+        lineTo(10f, 17f)
+        lineTo(7f, 17f)
+        close()
+        moveTo(13f, 14f)
+        lineTo(17f, 14f)
+        lineTo(17f, 17f)
+        lineTo(13f, 17f)
+        close()
+    }
+}.build()
 
 // Miuix 0.9.3 has no dictionary icon. An outlined book with an A distinguishes lookup from translation.
 private val DictionaryIcon = ImageVector.Builder(

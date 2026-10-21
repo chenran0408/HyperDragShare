@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.151 / versionCode175。同包名/debug签名覆盖安装；最新Portal PID15214、注入/Root175true，输入reader15961存活，取词reader准备失败。系统phantom裁剪会影响两个宿主的su，当前按住入口仍不能称可用。
+- 当前源码/安装与未完成事项以 [`CURRENT_STATUS.md`](CURRENT_STATUS.md) 为准；设备记录按批次追加，旧条目保留历史意义。最近一次已知安装为1.7.157 / versionCode181，同包名、同debug签名覆盖安装；Portal PID30012报告Root、输入及reader ready。系统/SystemUI/AICR仍为179，未随157重启。ready只代表通道就绪，不代表按住、OCR或拖放行为通过。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装1.7.151 / 175；212项本地单测0失败/错误，Lint0错误/153警告/2提示，build311通过。分词一级图标/二次爆炸入口及手势去重已接线，新UI未实测；Root进程裁剪详见文末与ROOT_PROCESS_LIFECYCLE.md。
+- 最近构建为build323：228项测试、0失败/错误/跳过，Lint 0 errors/163 warnings/2 hints，完整检查51秒；157安装与APK信息见本文件末尾。历史版本的构建和设备结果不覆盖当前功能状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -1122,3 +1122,15 @@ build320完整testDebugUnitTest/lintDebug/assembleDebug成功：226tests/0failur
 真机针对原故障：初次Portal18074/180 input、reader ready，首页已激活；15:43:25执行一次针对性宿主停止，模块18622实际记录Portal process ended; cleared its runtime readiness pid=18074，偏好<map/>，同一首页立即显示未连接传送门。下一次明确恢复前pidof仍为空，没有死亡通知自动重拉。单次后台唤醒后22290/180输入/reader再次ready、错误空。系统/AICR/SystemUI仍179，未再软重启。此结果证明死亡后的状态修复，不证明宿主避免LMK。
 
 图标针对性操作使用现有SEND桥带生成文字alpha beta gamma（16字符），不新增Probe。原页浮窗先全选16/16、图标主题色，按同图标取消回无选区/合并禁用，再全选与合并图标将3块变1块，原文字/空格与选区16/16保留、合并重新禁用。明确点击该浮窗关闭图标，未盲发Back。没有复制/分享、写中转站、私聊草稿、私人内容或权限修改。截图仅本机validation156，不做新截图矩阵。字符组合/撤销与连续选词本轮主要为自动回归，未写成完整真机手感通过。
+
+## 2026-10-21 1.7.157：中转站直接拖取与输入诊断
+
+build323的`testDebugUnitTest lintDebug assembleDebug`完整通过，228 tests/0 failures/0 errors/0 skipped，Lint 0 errors/163 warnings/2 hints，51秒。321因旧AIDL测试桩漏新方法未通过；322在开发期间遇Lint内部分析异常；固定源码后323完整检查成功，没有关闭或绕过检查。包`com.leaf.hyperdragshare.codex`，181/1.7.157，同开发证书SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`；APK `work/HyperDragShare-1.7.157-debug.apk`（本机任务路径`outputs/HyperDragShare-1.7.157-debug.apk`），SHA256 `F5CCFE48287D8A986304DB5746D6132E5AB92705EA74D9B20D9DB8CE014F9FE0`。同签名安装一次。Portal 30012/181报告Root输入和reader ready；system_server、SystemUI、AICR仍179，未重启。
+
+157托盘采用紧凑单行标题、44dp/22dp Miuix图标、常态无底部操作栏；拖动内容期间维持原Compose树及原窗口尺寸，取消恢复选区；去掉易误关闭的底部关闭按钮。混合文字/图片拖出明确拒绝，需分开选取。纯文字走私有MIME且ClipData仅携Intent标记，不把正文交给目标应用原生drop；Root按落点找到非密码编辑框执行`ACTION_SET_TEXT`，不写剪贴板。图片继续私有URI；仅微信调用`_data`查询时按条目创建MediaStore Downloads/HyperDragShare副本，按本模块清单做24小时机会式清理，不遍历相册。
+
+157新交互实测未通过。用户报告微信无法触发拖拽、文字和图片拖不出发送。已复现纯文字Root填框失败，结果为“拖入位置被系统窗口遮挡”；16:21:19、16:21:24、16:21:26、16:21:35四次manual lease均约20ms结束，非传输超时。16:31:57在自有文件传输助手拖入生成PNG，系统报告`accepted=true`，但无图/预览；本次副本偏好不存在且没有本次URI grant，因此只证明系统拖拽接收器接受了拖拽事件，未证明图片到达或可读。
+
+窗口只读核验显示微信WMS窗口正常可见、focused BASE_APPLICATION且无SECURE；Accessibility窗口列表却只有状态栏和本模块Stash，Active/TopFocused为-1，收起Stash后仍未见微信。根因仍在调查，不能归因于某个模块。检测到微信scope另有FreeMoe 5.1.3 beta，仅只读识别，未更改。
+
+测试数据清理：156生成批次`ac2cbb17`中的图片真实条目ID为`ade43994...`（批次ID不是图片ID）；两条生成文字和图片均按确切ID清理，回到原4条/3图。157为复现新建`HDS157_TEXT_DROP_TEST`和生成PNG `HDS157 DRAG IMAGE TEST`（6084 bytes）；本次记录时尚未清理，主代理将按确切ID处理。用户之后新增的真实条目不以旧数量推定或清理。私人截图不提交Git。

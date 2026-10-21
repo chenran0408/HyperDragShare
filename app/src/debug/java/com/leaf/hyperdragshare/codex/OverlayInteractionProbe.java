@@ -29,6 +29,25 @@ public final class OverlayInteractionProbe extends Instrumentation {
     }
 
     @Override public void onStart() {
+        if (arguments != null && "stash_cleanup".equals(arguments.getString("mode"))) {
+            Bundle report = new Bundle();
+            try (StashStore store = new StashStore(getTargetContext())) {
+                String ids = arguments.getString("ids", "");
+                if (ids.isEmpty()) throw new IOException("Explicit generated entry IDs required");
+                int removed = 0;
+                for (String id : ids.split(",")) {
+                    UUID.fromString(id);
+                    if (store.delete(id)) removed++;
+                }
+                report.putInt("removed", removed);
+                report.putInt("remaining", store.listEntries().size());
+                finish(Activity.RESULT_OK, report);
+            } catch (IOException | IllegalArgumentException | SecurityException error) {
+                report.putString("error", error.toString());
+                finish(Activity.RESULT_CANCELED, report);
+            }
+            return;
+        }
         if (arguments != null && ("cache_cleanup_prepare".equals(arguments.getString("mode"))
                 || "cache_cleanup_verify".equals(arguments.getString("mode")))) {
             Bundle report = new Bundle();

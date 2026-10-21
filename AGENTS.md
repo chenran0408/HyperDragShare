@@ -1,6 +1,6 @@
 # HyperDragShare Agent Guide
 
-最新版本、功能差距和验证层级先读 `docs/CURRENT_STATUS.md`，再读各文档末条。用户已明确暂缓面积研究，沿用Root evdev时长/位移；不要根据旧计划继续安排尺寸实验或校准。
+最新版本、功能差距和验证层级先读 `docs/CURRENT_STATUS.md`，再读各文档末条。用户最新明确恢复小米触摸面积的联网研究及可行实验；产品仍沿用Root evdev时长/位移，不强制校准、不把原始帧可读或普通长按称为面积触发。当前研究和安全边界见 `docs/NATIVE_PRESS_INPUT.md` 157末条。
 
 本文是后续自动化代理在本工程内工作的约束。当前源码和
 `docs/IMPLEMENTATION.md` 是实现事实来源；`E:\workspace\TaplusContentPreview`
@@ -107,7 +107,7 @@
 - `ShareTargetRepository.java`：查询可处理对应 MIME 的导出 Activity，并克隆/着色内置目标的旧矢量图标。
 - `BitmapEncoder.java`、`ImageStagingClient.java`、`ShareImageProvider.java`：图片压缩、
   跨 UID 暂存、能力 URI 和授权。
-- `SharedImageCleanupJob.java`：系统周期清理与导入时清理共用24小时期限，只遍历cache/shared-images及cache/ocr-input；不可清理files/stash、数据库或相册。目标ROM已观察到冷进程Job绑定被自启动管理器拒绝，不能仅凭schedule成功声称后台可用，也不能自动修改自启动权限。
+- `SharedImageCleanupJob.java`：系统周期清理与导入时清理共用24小时期限，遍历cache/shared-images及cache/ocr-input；157另按私有清单清理本模块为旧式微信拖放创建的Downloads副本。不可遍历/清理files/stash、数据库或其他媒体。目标ROM已观察到冷进程Job绑定被自启动管理器拒绝，不能仅凭schedule成功声称后台可用，也不能自动修改自启动权限。
 - `ClipboardWriter.java`、`RootClipboardMain.java`：读取剪贴板AppOps原始模式，受限时文字用Root系统UID、图片用Root Shell UID写入并核对；原文/URI只经stdin，不能把无异常当复制成功，不能修改AppOps来掩盖限制。120已验证侧窗/系统小窗图片跨UID读取及删除源后副本读取。System/Root UID不能作为剪贴板URI授权来源；Shell使用目标ROM实测IClipboard签名与com.android.shell归属，固定主用户/本机剪贴板，其他用户/虚拟设备未支持，不添加猜测兼容。
 - `LocalImageSaver.java`：把图片首项保存到系统 Pictures，按秒生成文件名。
 - `ShareLauncher.java`：构造显式 `ACTION_SEND` 并启动目标 Activity。

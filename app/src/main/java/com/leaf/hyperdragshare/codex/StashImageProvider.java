@@ -6,7 +6,12 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
+import android.os.Binder;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.OpenableColumns;
+import android.provider.MediaStore;
+import android.widget.Toast;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -53,23 +58,32 @@ public final class StashImageProvider extends ContentProvider {
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) {
+        // This receiver queries _data instead of opening the granted content URI.
+        boolean legacyDrop = "com.tencent.mm".equals(getCallingPackage());
         String[] columns = projection == null
-                ? new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE} : projection;
+                ? legacyDrop ? new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE, MediaStore.MediaColumns.DATA}
+                    : new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE} : projection;
         MatrixCursor cursor = new MatrixCursor(columns);
         StashStore.Entry entry = entry(uri);
         if (entry == null) return cursor;
+        long identity = Binder.clearCallingIdentity();
         try {
             MatrixCursor.RowBuilder row = cursor.newRow();
             for (String column : columns) {
                 if (OpenableColumns.DISPLAY_NAME.equals(column)) row.add("HyperDragShare-" + entry.id);
                 else if (OpenableColumns.SIZE.equals(column)) row.add(store.openImage(entry.id).length());
+                else if (legacyDrop && MediaStore.MediaColumns.DATA.equals(column))
+                    row.add(StashDragImageCache.path(getContext(), entry, store.openImage(entry.id)));
                 else row.add(null);
             }
             return cursor;
-        } catch (IOException error) {
+        } catch (IOException | SecurityException | IllegalArgumentException error) {
             cursor.close();
+            DragShareLog.w("DragShare/Stash", "image drop metadata failed", error);
+            new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(getContext(),
+                    "图片未能交给目标应用，原图仍保留：" + error.getMessage(), Toast.LENGTH_LONG).show());
             throw new IllegalStateException("无法读取中转站图片信息", error);
-        }
+        } finally { Binder.restoreCallingIdentity(identity); }
     }
 
     private StashStore.Entry entry(Uri uri) {

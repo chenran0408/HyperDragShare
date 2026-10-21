@@ -84,7 +84,7 @@ public final class SharedImageCleanupJob extends JobService {
     }
 
     static synchronized int cleanup(Context context) throws IOException {
-        int removed = 0;
+        int removed = StashDragImageCache.cleanup(context);
         long cutoff = System.currentTimeMillis() - MAX_AGE_MS;
         for (String name : new String[] {"shared-images", "ocr-input"}) {
             File directory = new File(context.getCacheDir(), name);

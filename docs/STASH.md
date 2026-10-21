@@ -173,3 +173,13 @@ StashActivity删除原全屏/系统小窗页面，只保留透明分享接收、
 ## 1.7.155：源窗口持有到真实拖放结束
 
 此前“拖出成功启动后收起”已被本批替换。单条、组卡、多选及预览图共用 InteractiveOverlayWindow.observeDragHandoff；STARTED后隐藏并穿透但保持源窗/内容attached，ENDED.result=true才收起，false恢复原窗/选区。观察期间不执行resize/collapse；启动失败清理观察。未改存储/内容/ClipData授权。155构建安装和Portal179已确认，微信实际文字/图片接收、取消恢复的新手感仍未实测。
+
+## 1.7.157：文字落点填框与微信图片兼容尝试
+
+157侧窗使用单行标题和紧凑Miuix操作；44dp触区/22dp图标，常态无底栏，并删除底部关闭操作。拖放时保持原Compose树和窗口尺寸；取消后恢复原选区。多选混有文字和图片时明确提示分开选取并拒绝启动。
+
+纯文字拖出使用私有MIME与intent-only ClipData，不在系统全局拖放载荷中携正文。临时满屏DropShield记录目标坐标；Root端只接受位置命中的普通应用窗口和非密码editable节点，通过`ACTION_SET_TEXT`插入并尝试把光标放到新内容之后，不走剪贴板。微信当前“拖入位置被系统窗口遮挡”故障意味着整条文字路径尚未通过。图片沿用单张/纯图片的原生拖拽及私有URI；若微信按其旧接收路径查询MediaStore `_data`，Provider为该图片在`Downloads/HyperDragShare`建立可读副本并返回路径。副本由模块自有ID/时间清单清理，超过24小时后机会式清理；不遍历相册、不保证24小时准点删除。
+
+157同签名安装后Portal 30012/181输入与reader ready，但新操作没有因此自动验收。四次文字Root lease在约20ms结束并返回“拖入位置被系统窗口遮挡”，不是传输超时。生成PNG拖入微信自有文件传输助手时系统报告accepted=true，微信未显示图片/预览，本次副本映射不存在且无本次URI grant。accepted仅代表系统拖放事件被接受，不代表微信读取URI或完成接收。WMS能列出focused微信应用窗口，但A11y仅列状态栏与模块托盘，Active/TopFocused=-1，收起托盘后也仍缺微信；未确定原因。检测到该微信scope还有FreeMoe 5.1.3 beta，只作只读识别。
+
+清理边界：156生成批次ID `ac2cbb17` 与图片条目ID不同，图片实际ID `ade43994...`；已按精确ID删除该生成图片及两条对应文字，回到原4条/3图。157故障复现新增的`HDS157_TEXT_DROP_TEST`文字和`HDS157 DRAG IMAGE TEST` PNG（6084 bytes）在本记录时仍待主代理按确切ID清理。用户后续另行存入的新内容不按历史条目数推定，不做批量清除。

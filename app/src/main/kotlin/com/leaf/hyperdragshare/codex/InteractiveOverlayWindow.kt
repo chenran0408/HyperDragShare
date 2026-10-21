@@ -34,6 +34,7 @@ internal class InteractiveOverlayWindow(
     internal val window: Window = requireNotNull(dialog.window)
     private var disposed = false
     private var dragWindowAttributes: WindowManager.LayoutParams? = null
+    private var onDragFinished: ((Boolean) -> Unit)? = null
 
     init {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -76,33 +77,41 @@ internal class InteractiveOverlayWindow(
 
     fun observeTextDrag(isCurrent: () -> Boolean) = observeDragHandoff(isCurrent, ::dismiss)
 
-    /** One lifecycle for text and stash sources; only a real accepted drop completes the handoff. */
-    fun observeDragHandoff(isCurrent: () -> Boolean, onDropped: () -> Unit) {
+    /** Keep the source attached until ENDED; the target's result only reports its drag acceptance. */
+    fun observeDragHandoff(
+        isCurrent: () -> Boolean,
+        onDropped: () -> Unit,
+        onStarted: (() -> Unit)? = null,
+        onFinished: ((Boolean) -> Unit)? = null,
+    ) {
         check(!disposed && dragWindowAttributes == null)
         val original = WindowManager.LayoutParams().also { it.copyFrom(window.attributes) }
         dragWindowAttributes = original
+        onDragFinished = onFinished
         // This class owns the decor's listener; Compose children retain their own listeners.
         window.decorView.setOnDragListener { _, event ->
             when (event.action) {
                 DragEvent.ACTION_DRAG_STARTED -> {
                     window.attributes = WindowManager.LayoutParams().also {
                         it.copyFrom(original)
-                        it.alpha = 0f
+                        if (onStarted == null) it.alpha = 0f
                         it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     }
+                    onStarted?.invoke()
                     true
                 }
                 DragEvent.ACTION_DRAG_ENDED -> {
                     DragShareLog.i("DragShare/InteractiveWindow", "content drag ended accepted=${event.result}")
                     window.decorView.setOnDragListener(null)
                     dragWindowAttributes = null
+                    val finished = onDragFinished
+                    onDragFinished = null
                     if (!disposed) {
+                        window.attributes = original
+                        finished?.invoke(event.result)
                         if (!isCurrent()) dismiss()
-                        else {
-                            window.attributes = original
-                            if (event.result) onDropped()
-                        }
+                        else if (event.result) onDropped()
                     }
                     true
                 }
@@ -117,7 +126,12 @@ internal class InteractiveOverlayWindow(
         val original = dragWindowAttributes ?: return
         window.decorView.setOnDragListener(null)
         dragWindowAttributes = null
-        if (!disposed) window.attributes = original
+        val finished = onDragFinished
+        onDragFinished = null
+        if (!disposed) {
+            window.attributes = original
+            finished?.invoke(false)
+        }
     }
 
     private fun failedToShow(error: RuntimeException): Boolean {
@@ -132,6 +146,7 @@ internal class InteractiveOverlayWindow(
         disposed = true
         window.decorView.setOnDragListener(null)
         dragWindowAttributes = null
+        onDragFinished = null
         composeView.disposeComposition()
         viewModelStore.clear()
         onDismissed()
