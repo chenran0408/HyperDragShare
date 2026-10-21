@@ -37,6 +37,30 @@ public final class GameCapturePolicyTest {
         assertTrue(ShadowToast.getTextOfLatestToast().contains("本次保留原操作"));
     }
 
+    @Test public void builtInGamesDoNotRequireGameCategoryAndMatchExactly() {
+        install("com.tencent.tmgp.sgame", ApplicationInfo.CATEGORY_UNDEFINED);
+        install("com.tencent.tmgp.sgame.tools", ApplicationInfo.CATEGORY_UNDEFINED);
+        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "com.tencent.tmgp.sgame"));
+        assertFalse(GameCapturePolicy.shouldPause(context, enabled(), "com.tencent.tmgp.sgame.tools"));
+        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.defaults(), "com.tencent.tmgp.sgame"));
+    }
+
+    @Test public void manualGamesSurviveStorageAndProviderBundleAndRespectSwitch() {
+        install("test.custom", ApplicationInfo.CATEGORY_UNDEFINED);
+        Bundle bundle = enabled().toBundle();
+        bundle.putStringArrayList("manual_game_packages", new java.util.ArrayList<>(java.util.List.of("test.custom")));
+        DragShareSettings configured = DragShareSettings.fromBundle(bundle);
+        configured.saveLocal(context);
+        DragShareSettings restored = DragShareSettings.readLocal(context);
+        assertTrue(restored.manualGamePackages.contains("test.custom"));
+        assertTrue(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(restored.toBundle()), "test.custom"));
+        bundle.putBoolean("pause_automatic_in_games", false);
+        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(bundle), "test.custom"));
+        bundle.putBoolean("pause_automatic_in_games", true);
+        bundle.putStringArrayList("manual_game_packages", new java.util.ArrayList<>());
+        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(bundle), "test.custom"));
+    }
+
     private static DragShareSettings enabled() {
         Bundle bundle = DragShareSettings.defaults().toBundle();
         bundle.putBoolean("pause_automatic_in_games", true);

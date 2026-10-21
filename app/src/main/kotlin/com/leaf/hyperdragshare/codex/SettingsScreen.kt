@@ -128,6 +128,7 @@ private sealed interface SettingsRoute : NavKey {
     data object Visibility : SettingsRoute
     data object Order : SettingsRoute
     data object Blacklist : SettingsRoute
+    data object Games : SettingsRoute
     data object About : SettingsRoute
     data object Gestures : SettingsRoute
     data object BottomTargets : SettingsRoute
@@ -171,6 +172,7 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                     onOpenVisibility = { backStack.add(SettingsRoute.Visibility) },
                     onOpenOrder = { backStack.add(SettingsRoute.Order) },
                     onOpenBlacklist = { backStack.add(SettingsRoute.Blacklist) },
+                    onOpenGames = { backStack.add(SettingsRoute.Games) },
                     onOpenAbout = { backStack.add(SettingsRoute.About) },
                     onOpenGestures = { backStack.add(SettingsRoute.Gestures) },
                     persist = currentPersist.value,
@@ -235,6 +237,14 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                     persist = currentPersist.value,
                 )
             }
+            entry(SettingsRoute.Games) {
+                GameAppsPage(
+                    context = context,
+                    settings = currentSettings.value,
+                    onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                    persist = currentPersist.value,
+                )
+            }
             entry(SettingsRoute.About) {
                 DragShareAboutPage(
                     context = context,
@@ -275,6 +285,7 @@ private fun MainPage(
     onOpenVisibility: () -> Unit,
     onOpenOrder: () -> Unit,
     onOpenBlacklist: () -> Unit,
+    onOpenGames: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenGestures: () -> Unit,
     persist: (DragShareSettings) -> Unit,
@@ -635,11 +646,20 @@ private fun MainPage(
                     }
                     SwitchPreference(
                         title = "游戏内暂停自动触发",
-                        summary = "按应用声明的游戏类别暂停；手动点取、识屏仍可用，未标记的游戏可单独加入黑名单",
+                        summary = "游戏类别、常见游戏名单和手动添加的应用只暂停自动触发；手动点取、识屏仍可用",
                         checked = settings.pauseAutomaticInGames,
                         onCheckedChange = { enabled ->
                             persist(copySettings(settings, pauseAutomaticInGames = enabled))
                         },
+                    )
+                    ArrowPreference(
+                        title = "手动添加游戏",
+                        summary = if (settings.manualGamePackages.isEmpty()) {
+                            "可搜索并添加未被识别的游戏"
+                        } else {
+                            "已添加 ${settings.manualGamePackages.size} 个应用"
+                        },
+                        onClick = onOpenGames,
                     )
                 }
             }
@@ -1565,6 +1585,7 @@ private data class AccessibilityBlacklistApp(
     val label: String,
     val iconBitmap: Bitmap?,
     val builtInReason: String?,
+    val isGameCategory: Boolean = false,
 )
 
 @Composable
@@ -1713,6 +1734,173 @@ private fun AccessibilityBlacklistPage(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GameAppsPage(
+    context: Context,
+    settings: DragShareSettings,
+    onBack: () -> Unit,
+    persist: (DragShareSettings) -> Unit,
+) {
+    var apps by remember(context) { mutableStateOf<List<AccessibilityBlacklistApp>?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchExpanded by remember { mutableStateOf(false) }
+    val scrollBehavior = MiuixScrollBehavior()
+
+    LaunchedEffect(context) {
+        apps = null
+        apps = withContext(Dispatchers.IO) { queryAccessibilityBlacklistApps(context) }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = "手动添加游戏",
+                largeTitle = "手动添加游戏",
+                scrollBehavior = scrollBehavior,
+                navigationIcon = { BackNavigationIcon(onClick = onBack) },
+            )
+        },
+    ) { paddingValues ->
+        val allApps = apps
+        if (allApps == null) {
+            LoadingContent(paddingValues)
+        } else {
+            val query = searchQuery.trim()
+            val filteredApps = allApps.filter { app ->
+                query.isEmpty()
+                        || app.label.contains(query, ignoreCase = true)
+                        || app.packageName.contains(query, ignoreCase = true)
+            }
+            val recognizedGames = filteredApps.filter { app ->
+                app.isGameCategory || GameCapturePolicy.isBuiltInGame(app.packageName)
+            }
+            val otherApps = filteredApps.filterNot { app ->
+                app.isGameCategory || GameCapturePolicy.isBuiltInGame(app.packageName)
+            }.sortedBy { app ->
+                if (app.packageName in settings.manualGamePackages) 0 else 1
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                contentPadding = paddingValues,
+            ) {
+                item(key = "game-picker-description") {
+                    Text(
+                        text = "系统游戏类别和常见游戏会自动识别。也可以搜索其他应用并手动添加；此名单只影响自动触发。",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        fontSize = 13.sp,
+                    )
+                    SearchBar(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        inputField = {
+                            InputField(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it },
+                                onSearch = { searchExpanded = false },
+                                expanded = searchExpanded,
+                                onExpandedChange = { searchExpanded = it },
+                                label = "搜索 ${allApps.size} 个应用",
+                            )
+                        },
+                        expanded = searchExpanded,
+                        onExpandedChange = { searchExpanded = it },
+                    ) {}
+                }
+                if (filteredApps.isEmpty()) {
+                    item(key = "game-picker-empty") {
+                        Text(
+                            text = "没有匹配的应用",
+                            modifier = Modifier.padding(28.dp),
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                } else {
+                    if (recognizedGames.isNotEmpty()) {
+                        item(key = "game-picker-recognized-title") {
+                            SmallTitle(text = "已按类别或常见名单识别")
+                        }
+                        items(recognizedGames, key = { "game:${it.packageName}" }) { app ->
+                            GamePickerAppRow(app, settings.manualGamePackages) { checked ->
+                                val packages = LinkedHashSet(settings.manualGamePackages)
+                                if (checked) packages.add(app.packageName)
+                                else packages.remove(app.packageName)
+                                persist(copySettings(settings, manualGamePackages = packages))
+                            }
+                        }
+                    }
+                    if (otherApps.isNotEmpty()) {
+                        item(key = "game-picker-other-title") {
+                            SmallTitle(text = "其他应用 · 手动添加")
+                        }
+                        items(otherApps, key = { "game:${it.packageName}" }) { app ->
+                            GamePickerAppRow(app, settings.manualGamePackages) { checked ->
+                                val packages = LinkedHashSet(settings.manualGamePackages)
+                                if (checked) packages.add(app.packageName)
+                                else packages.remove(app.packageName)
+                                persist(copySettings(settings, manualGamePackages = packages))
+                            }
+                        }
+                    }
+                }
+                item(key = "game-picker-spacer") { Spacer(modifier = Modifier.height(16.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GamePickerAppRow(
+    app: AccessibilityBlacklistApp,
+    manualGamePackages: Set<String>,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val knownGame = app.isGameCategory || GameCapturePolicy.isBuiltInGame(app.packageName)
+    val checked = app.packageName in manualGamePackages
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 3.dp),
+    ) {
+        BasicComponent(
+            startAction = {
+                AccessibilityBlacklistAppIcon(app, modifier = Modifier.padding(end = 10.dp))
+            },
+            endActions = {
+                if (knownGame) {
+                    Text(
+                        text = "自动识别",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                } else {
+                    Switch(checked = checked, onCheckedChange = onCheckedChange)
+                }
+            },
+            insideMargin = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            onClick = if (knownGame) null else { { onCheckedChange(!checked) } },
+        ) {
+            Text(
+                text = app.label,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = if (knownGame) "已按类别或常见名单识别"
+                    else if (checked) "已加入手动名单" else app.packageName,
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -1998,6 +2186,7 @@ private fun queryAccessibilityBlacklistApps(context: Context): List<Accessibilit
             label = info.loadLabel(packageManager).toString().ifBlank { packageName },
             iconBitmap = icon,
             builtInReason = builtInReason,
+            isGameCategory = info.category == android.content.pm.ApplicationInfo.CATEGORY_GAME,
         )
     }
     return apps.sortedWith(
@@ -2184,6 +2373,7 @@ private fun copySettings(
     logLevel: Int = current.logLevel,
     logDestination: Int = current.logDestination,
     pauseAutomaticInGames: Boolean = current.pauseAutomaticInGames,
+    manualGamePackages: Set<String> = current.manualGamePackages,
 ): DragShareSettings = DragShareSettings(
     colorMode,
     uiStyle,
@@ -2211,6 +2401,7 @@ private fun copySettings(
     logLevel,
     logDestination,
     pauseAutomaticInGames,
+    manualGamePackages,
 )
 
 @Suppress("DEPRECATION")

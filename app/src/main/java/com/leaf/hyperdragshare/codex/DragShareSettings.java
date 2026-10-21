@@ -177,6 +177,8 @@ public final class DragShareSettings {
     public final int logLevel;
     public final int logDestination;
     public final boolean pauseAutomaticInGames;
+    public final Set<String> manualGamePackages;
+    private static final String KEY_MANUAL_GAME_PACKAGES = "manual_game_packages";
 
     /** Backward-compatible constructor for callers using the original settings shape. */
     public DragShareSettings(int colorMode, int edgeTriggerDp, int scrollSpeedDpPerSecond) {
@@ -634,6 +636,65 @@ public final class DragShareSettings {
             int logLevel,
             int logDestination,
             boolean pauseAutomaticInGames) {
+        this(
+                colorMode,
+                uiStyle,
+                edgeTriggerDp,
+                scrollSpeedDpPerSecond,
+                blockBackgroundScroll,
+                textSharingEnabled,
+                imageSharingEnabled,
+                simpleMenuPosition,
+                simpleMenuOpacityPercent,
+                simpleMenuCornerRadiusDp,
+                simpleMenuEdgeDistanceDp,
+                iconOpacityPercent,
+                closeMenuWhenPointerLeaves,
+                hiddenTargetKeys,
+                targetOrder,
+                contentCaptureMode,
+                accessibilityLandscapeRecognitionEnabled,
+                accessibilityBlacklistedPackages,
+                accessibilityLongPressTimeoutMillis,
+                accessibilityRecognitionSensitivityPercent,
+                preloadTextSegmenter,
+                modernBlurRadiusDp,
+                modernGlassOpacityPercent,
+                logLevel,
+                logDestination,
+                pauseAutomaticInGames,
+                Collections.emptySet());
+    }
+
+    /** Full constructor including diagnostic logging and automatic game capture preference. */
+    public DragShareSettings(
+            int colorMode,
+            int uiStyle,
+            int edgeTriggerDp,
+            int scrollSpeedDpPerSecond,
+            boolean blockBackgroundScroll,
+            boolean textSharingEnabled,
+            boolean imageSharingEnabled,
+            int simpleMenuPosition,
+            int simpleMenuOpacityPercent,
+            int simpleMenuCornerRadiusDp,
+            int simpleMenuEdgeDistanceDp,
+            int iconOpacityPercent,
+            boolean closeMenuWhenPointerLeaves,
+            Set<String> hiddenTargetKeys,
+            List<String> targetOrder,
+            int contentCaptureMode,
+            boolean accessibilityLandscapeRecognitionEnabled,
+            Set<String> accessibilityBlacklistedPackages,
+            int accessibilityLongPressTimeoutMillis,
+            int accessibilityRecognitionSensitivityPercent,
+            boolean preloadTextSegmenter,
+            int modernBlurRadiusDp,
+            int modernGlassOpacityPercent,
+            int logLevel,
+            int logDestination,
+            boolean pauseAutomaticInGames,
+            Set<String> manualGamePackages) {
         this.colorMode = colorMode == COLOR_DARK || colorMode == COLOR_SYSTEM
                 ? colorMode : COLOR_LIGHT;
         this.contentCaptureMode = normalizeContentCaptureMode(contentCaptureMode);
@@ -695,6 +756,7 @@ public final class DragShareSettings {
         this.logLevel = normalizeLogLevel(logLevel);
         this.logDestination = normalizeLogDestination(logDestination);
         this.pauseAutomaticInGames = pauseAutomaticInGames;
+        this.manualGamePackages = immutableKeys(manualGamePackages);
     }
 
     public static DragShareSettings defaults() {
@@ -790,7 +852,8 @@ public final class DragShareSettings {
                         DEFAULT_MODERN_GLASS_OPACITY_PERCENT),
                 preferences.getInt(KEY_LOG_LEVEL, DEFAULT_LOG_LEVEL),
                 preferences.getInt(KEY_LOG_DESTINATION, DEFAULT_LOG_DESTINATION),
-                preferences.getBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, false));
+                preferences.getBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, false),
+                preferences.getStringSet(KEY_MANUAL_GAME_PACKAGES, Collections.emptySet()));
     }
 
     public void saveLocal(Context context) {
@@ -837,6 +900,7 @@ public final class DragShareSettings {
                 .putInt(KEY_LOG_LEVEL, logLevel)
                 .putInt(KEY_LOG_DESTINATION, logDestination)
                 .putBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, pauseAutomaticInGames)
+                .putStringSet(KEY_MANUAL_GAME_PACKAGES, new LinkedHashSet<>(manualGamePackages))
                 .apply();
         DragShareLog.configure(this);
         DragShareLog.i("DragShare/Settings", "logging configured level=" + logLevel
@@ -903,6 +967,7 @@ public final class DragShareSettings {
         result.putInt(KEY_LOG_LEVEL, logLevel);
         result.putInt(KEY_LOG_DESTINATION, logDestination);
         result.putBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, pauseAutomaticInGames);
+        result.putStringArrayList(KEY_MANUAL_GAME_PACKAGES, new ArrayList<>(manualGamePackages));
         return result;
     }
 
@@ -982,7 +1047,10 @@ public final class DragShareSettings {
                         DEFAULT_MODERN_GLASS_OPACITY_PERCENT),
                 bundle.getInt(KEY_LOG_LEVEL, DEFAULT_LOG_LEVEL),
                 bundle.getInt(KEY_LOG_DESTINATION, DEFAULT_LOG_DESTINATION),
-                bundle.getBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, false));
+                bundle.getBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, false),
+                bundle.containsKey(KEY_MANUAL_GAME_PACKAGES)
+                        ? new LinkedHashSet<>(bundle.getStringArrayList(KEY_MANUAL_GAME_PACKAGES))
+                        : Collections.emptySet());
     }
 
     public boolean isDarkTheme(Context context) {
