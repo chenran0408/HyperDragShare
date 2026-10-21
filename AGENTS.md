@@ -180,3 +180,5 @@ adb logcat -v time | Select-String "DragShare|AndroidRuntime"
 不要重新接入或围绕它改造正式实现。
 
 149运行证据：页面暂未就绪曾使RootNodeCaptureMain.awaitRoot抛IOException并使服务永久失效，现1200ms预算耗尽回window_not_ready，只结束该请求、保留helper，不自动重连或回退；同服务下一请求成功有回归。173已安装/Portal4566与Root ready确认，真实空缺后恢复未验。148已删除四秒冷却与录音子串筛选，在Root取词前排除触点明确录音控件；不得把这些源码检查写成实际录音体验通过。CI首轮39552595165对应148且success，后续版本按自己的run核对。
+
+150目标ROM元数据探针：UiAutomation默认flags65554/caps11，窗口列表0；只增FLAG_RETRIEVE_INTERACTIVE_WINDOWS得到2/3个窗口及应用root。产品已在ready前配置此标志。212项本地检查与build308通过，174已安装；最新Portal12882取词reader ready，但Root输入探测命令退出137并报false。首次4541节点准备退出无stderr，直接Shell Root相同APK可ready；原因未定，不能用重试/修改授权掩盖。149缺窗后helper两次存活有真机证据；完整按住/录音手感仍未验。元数据探针均退出、设备jar已删、未接触私人内容。当前用户仍使用手机，避免开测试页。149 CI39553180987 success。

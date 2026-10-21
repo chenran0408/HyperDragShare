@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.147 / versionCode171。同包名/debug签名覆盖安装；Portal PID21130，注入/Root171、Root授权true。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.150 / versionCode174。同包名/debug签名覆盖安装；最新Portal PID12882，注入174，Root输入探测退出137、Root授权状态false，取词helper另已连接。当前按住入口不可据启动元数据称可用。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装1.7.147 / 171；208项单测0失败/错误，Lint0错误/151警告/2提示，构建通过。147依据作者反馈改为时长/位移，新真实手势未验；最新批次见文末。
+- 当前已安装1.7.150 / 174；212项本地单测0失败/错误，Lint0错误/151警告/2提示，构建通过。147后入口使用Root时长/位移；149已有真实缺窗后helper持续存活证据，150窗口配置及当前Root初始化失败见文末。完整手势未验。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -1005,3 +1005,17 @@ build307完整testDebugUnitTest/lintDebug/assembleDebug通过，212项0失败/0�
 用户确认workflow权限后API读回含workflow；本地完成后提交android.yml，固定Action提交版本，JDK21、SDK37.0、build-tools36、NDK26.1和CMake3.22.1。默认开发分支push、PR与手动触发，单测/Lint/Debug APK及报告上传；contents仅read，不读本地签名或创建Release。
 
 首次运行 https://github.com/chenran0408/HyperDragShare/actions/runs/39552595165 ，对应7a71745/1.7.148，终态success，检出/环境/完整检查构建/两个上传步骤均success。Artifacts HyperDragShare-debug-1和Android-reports-1确实存在且未过期。云端临时调试签名与本地设备验收包分开说明；此轮成功不代表149已经云端通过。
+
+## 2026-10-21：1.7.150 交互窗口列表配置
+
+149 helper5423在14:03:16和14:04:21分别回复window_not_ready、elapsed1202/1200ms后仍存活。这是真机缺窗不再退出的证据，尚非下次实际取词成功。dumpsys同时显示活动窗口ID=-1，需要继续查取窗配置。
+
+仅在释放本模块租约后运行独立app_process元数据探针，不并占UiAutomation，不打印节点文字、图片、包名或标题。默认flags65554、capabilities11，getWindows=0、activeRoot=false；仅增加FLAG_RETRIEVE_INTERACTIVE_WINDOWS后首轮返回2窗口（activeRoot仍false），第二轮返回3窗口，包含type1应用窗口root=true、activeRoot=true（当时系统层获得焦点）。这证明窗口列表标志缺失以及节点可读取，不证明全部页面可读或该标志单独解释全部活动窗口变化。两次探针正常退出并删除设备jar，根Provider恢复Portal，用户页面未由测试脚本点击或截图。
+
+产品在UiAutomation连接成功后、ready握手前明确请求FLAG_RETRIEVE_INTERACTIVE_WINDOWS，使既有输入法窗口保护与来源窗口检查能获取列表。未加入按猜测选窗、多级回退或额外权限。build308完整testDebugUnitTest/lintDebug/assembleDebug成功，212项0失败/0错误，Lint0错误/151警告/2提示。
+
+150/174 APK SHA256 F1DBD42E60FC0C49F0BA7F2629662B163D499513B0ED152DC84CCDF5CC37CF77，原调试证书一致，单次覆盖安装和PM版本核对成功。后台首次Portal4541输入ready，但Root取词准备在ready前退出、stderr为空，未判原因；无新AndroidRuntime异常。确认没有存活UiAutomation后，直接以Shell Root运行相同APK的RootNodeCaptureMain --serve得ready=true并退出。一次明确后台重载后Portal12882、injected174，取词reader ready/helper12974存活；Root输入的独立设备发现命令却退出137，状态上报false。未把137猜成权限拒绝或新窗口标志故障，也未增加循环重试/修改授权。当前按住入口因input不ready仍不可验，需要继续定位Root进程被终止的原因。
+
+没有新设备页面、截图矩阵、校准、拖拽样本或暂存/剪贴板修改。用户一直在操作，只做安装和后台连接核验。当前APK仍为开发预览，实际录音共存、完整按住取词、混合/图片中转站取用仍未完成。
+
+149云端运行 https://github.com/chenran0408/HyperDragShare/actions/runs/39553180987 已终态success，所有检查与两个Artifact上传成功。150需核对后续运行。

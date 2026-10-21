@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.app.UiAutomation;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -55,6 +56,9 @@ public final class RootNodeCaptureMain {
         try (BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
             try {
                 connect.invoke(automation, UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES, 2000L);
+                AccessibilityServiceInfo info = automation.getServiceInfo();
+                info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
+                automation.setServiceInfo(info);
                 connected = true;
             } catch (ReflectiveOperationException | SecurityException error) {
                 if (!serve) throw error;
