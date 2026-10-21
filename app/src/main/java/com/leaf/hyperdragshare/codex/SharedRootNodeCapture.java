@@ -1,5 +1,6 @@
 package com.leaf.hyperdragshare.codex;
 
+import android.app.KeyguardManager;
 import android.content.ContentProviderClient;
 import android.content.Context;
 import android.os.Binder;
@@ -101,14 +102,16 @@ final class SharedRootNodeCapture {
             if (closed) throw new IllegalStateException("取词连接已关闭，请重新点取或重载作用域");
         }
 
-        @Override public Bundle capture(float x, float y, String[] blocked, boolean text, boolean images,
+        @Override public Bundle capture(float x, float y, String[] blocked, boolean text, boolean images, boolean pressLookup,
+                                         boolean earlyCapture,
                                          IRootNodeCandidate callback) {
             enforceOwner();
             if (!manual && manualActive()) return null;
             if (!io.tryLock()) throw new IllegalStateException("取词服务正在处理另一次请求，请稍后点取");
             long identity = Binder.clearCallingIdentity();
             try {
-                Bundle result = root.captureNode(x, y, new HashSet<>(Arrays.asList(blocked)), text, images, source -> {
+                Bundle result = root.captureNode(x, y, new HashSet<>(Arrays.asList(blocked)), text, images,
+                        pressLookup, earlyCapture, source -> {
                     if (closed || (!manual && manualActive())) return false;
                     try { return callback.onCandidate(source); }
                     catch (RemoteException | IllegalStateException | SecurityException error) {
@@ -133,6 +136,20 @@ final class SharedRootNodeCapture {
                 if (error instanceof InterruptedException) Thread.currentThread().interrupt();
                 invalidate(root);
                 DragShareLog.w("DragShare/SharedNodes", "Root window check failed", error);
+                throw new IllegalStateException(error.getMessage());
+            } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
+        }
+
+        @Override public boolean verifySource(String source) {
+            enforceOwner();
+            if (!manual && manualActive()) return false;
+            if (!io.tryLock()) throw new IllegalStateException("取词服务正忙，本次按压已取消");
+            long identity = Binder.clearCallingIdentity();
+            try { return root.isCurrentSource(source); }
+            catch (IOException | InterruptedException error) {
+                if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+                invalidate(root);
+                DragShareLog.w("DragShare/SharedNodes", "Root source check failed", error);
                 throw new IllegalStateException(error.getMessage());
             } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
         }
@@ -173,9 +190,21 @@ final class SharedRootNodeCapture {
         CapturedContent capture(float x, float y, Set<String> blocked, boolean text, boolean images,
                                  RootNodeCaptureClient.CandidateHandler handler)
                 throws IOException, InterruptedException {
+            return capture(x, y, blocked, text, images, false, false, handler);
+        }
+
+        CapturedContent capturePress(float x, float y, Set<String> blocked, boolean text, boolean images, boolean earlyCapture,
+                                    RootNodeCaptureClient.CandidateHandler handler)
+                throws IOException, InterruptedException {
+            return capture(x, y, blocked, text, images, true, earlyCapture, handler);
+        }
+
+        private CapturedContent capture(float x, float y, Set<String> blocked, boolean text, boolean images,
+                                        boolean pressLookup, boolean earlyCapture, RootNodeCaptureClient.CandidateHandler handler)
+                throws IOException, InterruptedException {
             if (closed) throw new IOException("取词连接已关闭");
             try {
-                Bundle node = lease.capture(x, y, blocked.toArray(new String[0]), text, images,
+                Bundle node = lease.capture(x, y, blocked.toArray(new String[0]), text, images, pressLookup, earlyCapture,
                         new IRootNodeCandidate.Stub() {
                             @Override public boolean onCandidate(String source) throws RemoteException {
                                 if (Binder.getCallingUid() != moduleUid) throw new SecurityException("Invalid capture callback UID");
@@ -195,6 +224,16 @@ final class SharedRootNodeCapture {
                 });
             } catch (RemoteException | IllegalStateException error) {
                 throw new IOException("读取当前页面失败：" + error.getMessage(), error);
+            }
+        }
+
+        boolean isCurrentSource(String source) throws IOException, InterruptedException {
+            KeyguardManager keyguard = context.getSystemService(KeyguardManager.class);
+            if (closed || keyguard.isKeyguardLocked()) return false;
+            try {
+                return lease.verifySource(source) && !closed && !keyguard.isKeyguardLocked();
+            } catch (RemoteException | IllegalStateException error) {
+                throw new IOException("核验按压来源失败：" + error.getMessage(), error);
             }
         }
 

@@ -31,10 +31,6 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         portalInjected = ModuleActivation.isCurrentBuildInjected(context)
         portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
     }
-    val openCalibration = {
-        context.startActivity(Intent(context, ThumbCalibrationActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
     ArrowPreference(
         title = "添加“点取内容”磁贴",
         summary = tileMessage ?: "从控制中心打开后点选文字或图片，不使用普通长按；需要 Root",
@@ -72,15 +68,12 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         },
     )
     SwitchPreference(
-        title = "拇指面积触发",
+        title = "拇指按压触发",
         summary = when {
             portalMode && !portalInjected -> "请先重载传送门，让当前版本的设置生效"
             portalMode && !portalRootGranted -> "请先为传送门授予 Root 权限"
-            portalMode -> if (thumb.calibrated) "使用自定义面积门槛；真实接触尺寸达标后在当前页面分词或识字"
-                else "无需校准；真实接触尺寸达到默认门槛后，在当前页面分词或识字"
-            !serviceEnabled -> "无需校准即可开启；需要 Root 与无障碍服务，真实接触尺寸达标后触发"
-            else -> if (thumb.calibrated) "使用自定义面积门槛；启用后取代无障碍长按触发"
-                else "无需校准；真实接触尺寸达到默认门槛才触发，启用后取代无障碍长按"
+            !portalMode && !serviceEnabled -> "需要 Root 与无障碍服务；无需校准"
+            else -> "拇指快速按压，普通按住也可触发；在原页面分词或识字，无需校准"
         },
         checked = thumb.enabled,
         onCheckedChange = { enabled ->
@@ -97,12 +90,6 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
                 }
             }
         },
-    )
-    ArrowPreference(
-        title = "触摸数据与校准（可选）",
-        summary = if (thumb.calibrated) "已保存自定义门槛，可查看输入或重新采集"
-            else "默认门槛可直接使用；无有效尺寸时无需反复采集，也不会触发",
-        onClick = openCalibration,
     )
     ArrowPreference(
         title = "拇指触发应用黑名单",

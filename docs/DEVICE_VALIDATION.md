@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.138 / versionCode 162。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 162。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.140 / versionCode 164。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 164。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装 1.7.138 / 162；208 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
+- 当前已安装 1.7.140 / 164；196 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -858,3 +858,20 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 StashActivity删除原全屏/系统小窗页面，只保留透明分享接收、串行导入和错误提示，成功后转同一托盘。共享图片组件移入StashImage.kt，删除无引用搜索组件。不改数据库、不清理用户已有暂存内容，临时托盘定位不等于擅自清空数据。
 
 284构建成功，208项测试0失败/0错误，Lint 0 errors/140 warnings/2 hints。没有为删除控件写镜像测试。APK 1.7.139/163 SHA256 `4D5BCEB38F392DD1FADAA0A01D515E393FC8FC950C04CCAFE6DFB4813158CBC1`。用户要求减少验证；未执行本版点击矩阵、安装或拖动验收，最后安装仍138/162。新raw坐标拖动/贴边为源码实现，不能写成真机通过；稍后触发重写版合并一次更新。用户正在操作时不抢占页面。
+
+
+## 2026-10-21：1.7.140 按参考行为重写按压触发
+
+删除旧校准Activity、校准计算/阈值迁移、180ms检测器以及Portal/无障碍各一套CaptureSource。PressTriggerDetector统一默认面积两轴门槛、220ms面积/700ms普通按住、120ms分类、安全无文字300ms、分轴36px移动/松手/多指取消和已有峰值保留。分类结果只能提前截止，不能把220ms反向延到300ms。开关保留原键和用户值；不读取旧校准偏好，不再提供校准入口。
+
+PressCaptureSource共用一次Root读取、缓存、确认、接管和原页文字/OCR窗口。普通路径先读安全叶或完整TextView子树中的原文，确认时只核验前台同源；原生菜单换ID不再让缓存正文直接失效。图片仍严格核验截图前后源窗口ID/尺寸。无文字必须全树检查明确安全区域才截图，不能null→OCR；早截图为92%×92%，晚截图78%×34%，都限制来源应用窗口与屏幕并保护密码矩形及余量。新增Binder参数按显式press/early类型传递，旧点取接口默认false,false。成功交接25ms触感，4秒防重复，录音按住界面多项提示退出。
+
+传送门5.1.5仅Hook私有scheduleStopSelfJob：按压开启时取消旧空闲计时器并阻止新计时，关闭或换来源恢复原生安排；系统onDestroy、用户禁用及进程终止仍清理。未Hook通用stopSelf/killProcess，未增加SystemUI作用域、周期拉起或猜测ROM分支。用户Hyper手势源码只读核对的是已有inputMonitor确认后pilfer的接管方式，没有面积通道；本实现仍由Root evdev独立决定手势结束。
+
+普通700ms路径仍可能晚于原App原生长按，接管不能撤回已经发生的菜单；缓存解决取错原文的问题，不承诺所有页面都无冲突。零面积可走普通路径，不能写成物理面积数据已恢复。完整手指触发、录音界面、原生菜单共存、空闲超过60秒及新托盘贴边手感尚未实测。
+
+最终287构建成功，196项测试0失败/0错误，Lint 0 errors/140 warnings/2 hints。测试数量减少源于删除旧校准/180ms机制及其测试；保留8项新按压时序和2项实际裁图边界/密码保护场景，不扩张UI测试矩阵。首次285缺少旧onInterrupt取消入口，已改为取消当前手势；286通过后补齐早晚几何、录音保护和触感，再由287验证最终源码。
+
+1.7.140/164合并139托盘改动覆盖安装成功，同一debug签名；已安装base.apk与交付包SHA256均 `CEF70F709397B819D10B73D980A1221DA496CDF7D1DFB3C956DBE6148EABB5AC`。只重载Portal作用域，注入与Root握手均164/true，日志确认reference press trigger enabled与press reader ready，原thumb开关仍true。没有重启android/AICR/整机，也没有改无障碍/系统后台权限。部署借用原生设置Activity启动服务后，通过Root setFocusedTask恢复原前台任务，前后task一致；未向原搜索Activity发送新Intent或输入内容。
+
+按用户“少验证”要求未做点击、截图、ADB手势或真实长按验收。启动握手不等于新按压功能或托盘新拖动通过。没有写剪贴板/中转站、没有播放Bili或恢复已消失提醒；最终手机仍由用户使用。部署临时dex与本批设备测试截图/层次文件清理，不提交私人内容。下一步以真实反馈定位触发问题，不再安排反复无数据校准。

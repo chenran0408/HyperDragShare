@@ -3,6 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 import android.graphics.Rect;
 import java.util.ArrayList;
@@ -35,6 +36,41 @@ public final class RootImageSelectionTest {
         AccessibilityNodeSnapshot text = node("android.widget.TextView", "reader").text("sample").build();
         assertNull(select(text, List.of(), false, true));
         assertNotNull(select(text, List.of(), true, false));
+    }
+
+    @Test public void emptyPressOcrStaysInsideItsVerifiedSourceWindow() {
+        assertEquals(new Rect(40, 80, 960, 1920), RootNodeCaptureMain.safeEmptyOcrRegion(
+                500, 1000, new Rect(0, 0, 1000, 2000), 1000, 2000, 1f, true,
+                "reader", List.of(), List.of()));
+        assertEquals(new Rect(110, 660, 890, 1340), RootNodeCaptureMain.safeEmptyOcrRegion(
+                500, 1000, new Rect(0, 0, 1000, 2000), 1000, 2000, 1f, false,
+                "reader", List.of(), List.of()));
+        Rect window = new Rect(20, 40, 320, 240);
+        Rect original = new Rect(window);
+        Rect region = RootNodeCaptureMain.safeEmptyOcrRegion(30, 50, window, 1000, 2000, 1f, true,
+                "reader", List.of(node("android.view.View", "reader").bounds(window).build()), List.of());
+        assertEquals(window, region);
+        assertEquals(original, window);
+        assertNull(RootNodeCaptureMain.safeEmptyOcrRegion(19, 50, window, 1000, 2000, 1f, false,
+                "reader", List.of(), List.of()));
+        assertEquals(new Rect(900, 1900, 1000, 2000), RootNodeCaptureMain.safeEmptyOcrRegion(
+                990, 1990, new Rect(900, 1900, 1100, 2100), 1000, 2000, 1f, false,
+                "reader", List.of(), List.of()));
+    }
+
+    @Test public void emptyPressOcrRejectsAnyPasswordInCropAndForeignContent() {
+        Rect window = new Rect(0, 0, 1000, 2000);
+        // The point is outside this field, but the bounded crop includes it.
+        assertNull(RootNodeCaptureMain.safeEmptyOcrRegion(500, 1000, window, 1000, 2000, 1f, false,
+                "reader", List.of(), List.of(new Rect(700, 1000, 750, 1040))));
+        // The one-pixel margin also protects a field adjacent to the crop's right edge.
+        assertNull(RootNodeCaptureMain.safeEmptyOcrRegion(500, 1000, window, 1000, 2000, 1f, false,
+                "reader", List.of(), List.of(new Rect(890, 1000, 910, 1020))));
+        assertNull(RootNodeCaptureMain.safeEmptyOcrRegion(500, 1000, window, 1000, 2000, 1f, false,
+                "reader", List.of(node("android.view.View", "other")
+                        .bounds(new Rect(600, 800, 800, 1100)).build()), List.of()));
+        assertNotNull(RootNodeCaptureMain.safeEmptyOcrRegion(500, 1000, window, 1000, 2000, 1f, false,
+                "reader", List.of(), List.of(new Rect(950, 1800, 990, 1900))));
     }
 
     private AccessibilityCandidateSelector.Selection select(AccessibilityNodeSnapshot node,

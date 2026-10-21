@@ -6,6 +6,7 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- The accessibility blacklist enumerates installed apps, including IMEs without launchers. -->
     <uses-permission
@@ -82,11 +83,6 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".ThumbCalibrationActivity"
-            android:exported="false"
-            android:theme="@style/Theme.DragShare" />
 
         <activity
             android:name=".StashActivity"

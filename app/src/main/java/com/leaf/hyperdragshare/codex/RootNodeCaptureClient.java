@@ -91,6 +91,13 @@ final class RootNodeCaptureClient {
         synchronized Bundle captureNode(float x, float y, Set<String> blockedPackages,
                                         boolean allowText, boolean allowImages, CandidateHandler handler)
                 throws IOException, InterruptedException {
+            return captureNode(x, y, blockedPackages, allowText, allowImages, false, false, handler);
+        }
+
+        synchronized Bundle captureNode(float x, float y, Set<String> blockedPackages,
+                                        boolean allowText, boolean allowImages, boolean pressLookup, boolean earlyCapture,
+                                        CandidateHandler handler)
+                throws IOException, InterruptedException {
             if (closed) throw new IOException("Root node process has stopped; reload the Portal scope");
             KeyguardManager keyguard = context.getSystemService(KeyguardManager.class);
             if (keyguard.isKeyguardLocked()) return null;
@@ -105,7 +112,9 @@ final class RootNodeCaptureClient {
                 JSONObject request = new JSONObject().put("x", x).put("y", y)
                         .put("density", metrics.density).put("width", expectedWidth)
                         .put("height", expectedHeight).put("blocked", new JSONArray(blockedPackages))
-                        .put("early_candidate", true).put("allow_text", allowText)
+                        .put("early_candidate", !pressLookup).put("press_lookup", pressLookup)
+                        .put("press_early", earlyCapture)
+                        .put("allow_text", allowText)
                         .put("allow_images", allowImages);
                 process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
                 process.getOutputStream().flush();
@@ -124,8 +133,9 @@ final class RootNodeCaptureClient {
                 source = result.getString("package");
                 if (blockedPackages.contains(source)) return null;
                 String kind = result.getString("kind");
-                if (!"text".equals(kind) && !"image".equals(kind)) throw new JSONException("Unknown node kind");
-                image = "image".equals(kind);
+                if (!"text".equals(kind) && !"image".equals(kind)
+                        && !(pressLookup && "ocr_region".equals(kind))) throw new JSONException("Unknown node kind");
+                image = !"text".equals(kind);
                 text = image ? null : result.getString("text");
                 before = result.optString("before", null);
                 after = result.optString("after", null);
@@ -162,6 +172,22 @@ final class RootNodeCaptureClient {
             } catch (JSONException error) {
                 close();
                 throw new IOException("Invalid Root window response", error);
+            } catch (IOException | InterruptedException error) {
+                close();
+                throw error;
+            }
+        }
+
+        synchronized boolean isCurrentSource(String source) throws IOException, InterruptedException {
+            if (closed) throw new IOException("Root node process has stopped; reload the Portal scope");
+            try {
+                JSONObject request = new JSONObject().put("operation", "verify_source").put("package", source);
+                process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
+                process.getOutputStream().flush();
+                return awaitResponse().getBoolean("same_source");
+            } catch (JSONException error) {
+                close();
+                throw new IOException("Invalid Root source response", error);
             } catch (IOException | InterruptedException error) {
                 close();
                 throw error;

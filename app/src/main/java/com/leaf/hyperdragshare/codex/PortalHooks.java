@@ -42,9 +42,9 @@ final class PortalHooks {
     private static volatile DragShareController controller;
     private static volatile MiuiMotionSource motionSource;
     private static volatile RootTouchSource rootTouchSource;
-    private static volatile PortalThumbCaptureSource thumbCaptureSource;
-    private static float thumbThreshold;
-    private static float thumbWidthThreshold;
+    private static volatile PressCaptureSource thumbCaptureSource;
+    @SuppressLint("StaticFieldLeak")
+    private static android.app.Service portalService;
     private static volatile boolean rootAuthorityLogged;
     private static volatile boolean hostCancelIgnoredLogged;
     private static volatile boolean controlIgnoredLogged;
@@ -145,6 +145,7 @@ final class PortalHooks {
             protected void afterHookedMethod(MethodHookParam param) {
                 Context context = ((Context) param.thisObject).getApplicationContext();
                 portalContext = context;
+                portalService = (android.app.Service) param.thisObject;
                 portalClassLoader = classLoader;
                 DragShareLog.configure(DragShareSettings.readFromProvider(context));
                 DragShareDiagnostics.captureRuntimeOnce(
@@ -162,8 +163,18 @@ final class PortalHooks {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
                 unregisterSettingsObserver();
+                portalService = null;
                 stopPortalRuntime(false);
                 portalContext = null;
+            }
+        });
+
+        XposedHelpers.findAndHookMethod(serviceClass, "scheduleStopSelfJob", new XC_MethodHook() {
+            @Override protected void beforeHookedMethod(MethodHookParam param) {
+                if (thumbCaptureSource != null) {
+                    param.setResult(null);
+                    log("press input active; skipping host idle stop job");
+                }
             }
         });
 
@@ -416,9 +427,10 @@ final class PortalHooks {
     }
 
     private static synchronized void stopPortalRuntime(boolean replayDeferredCalls) {
-        PortalThumbCaptureSource thumb = thumbCaptureSource;
+        PressCaptureSource thumb = thumbCaptureSource;
         thumbCaptureSource = null;
         if (thumb != null) thumb.stop();
+        updateHostIdleTimer(false);
         if (replayDeferredCalls) {
             replayDeferredHostCalls();
         }
@@ -445,9 +457,10 @@ final class PortalHooks {
         ContentObserver observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange) {
-                PortalThumbCaptureSource thumb = thumbCaptureSource;
+                PressCaptureSource thumb = thumbCaptureSource;
                 thumbCaptureSource = null;
                 if (thumb != null) thumb.stop();
+                updateHostIdleTimer(false);
                 applyPortalRuntime();
             }
         };
@@ -478,7 +491,7 @@ final class PortalHooks {
 
     private static void dispatchRootPointer(
             int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
-        PortalThumbCaptureSource thumb = thumbCaptureSource;
+        PressCaptureSource thumb = thumbCaptureSource;
         if (thumb != null) thumb.onPointerEvent(action, x, y, eventTime, rawTouchMajor, rawWidthMajor);
         DragShareLog.d(TAG, "root pointer action=" + MotionEvent.actionToString(action)
                 + " point=" + Math.round(x) + "," + Math.round(y)
@@ -500,22 +513,30 @@ final class PortalHooks {
     private static void configureThumbCapture(Context context, DragShareSettings settings) {
         try {
             ThumbTriggerSettings thumb = ThumbTriggerSettings.readFromProvider(context);
-            if (thumbCaptureSource != null && thumb.enabled
-                    && Float.compare(thumbThreshold, thumb.threshold) == 0
-                    && Float.compare(thumbWidthThreshold, thumb.widthThreshold) == 0) return;
-            PortalThumbCaptureSource previous = thumbCaptureSource;
+            if (thumbCaptureSource != null && thumb.enabled) return;
+            PressCaptureSource previous = thumbCaptureSource;
             thumbCaptureSource = null;
             if (previous != null) previous.stop();
             if (thumb.enabled) {
-                thumbThreshold = thumb.threshold;
-                thumbWidthThreshold = thumb.widthThreshold;
-                thumbCaptureSource = new PortalThumbCaptureSource(
-                        context, rootTouchSource, controller, settings, thumb);
-                log("area trigger enabled touch=" + thumb.threshold
-                        + " width=" + thumb.widthThreshold + " custom=" + thumb.calibrated);
+                thumbCaptureSource = new PressCaptureSource(
+                        context, rootTouchSource, controller, settings, settings::isPortalCaptureMode);
+                log("reference press trigger enabled; no calibration required");
             }
+            updateHostIdleTimer(thumb.enabled);
         } catch (SecurityException | IllegalStateException error) {
-            log("cannot load area trigger settings", error);
+            log("cannot load press trigger settings", error);
+        }
+    }
+
+    private static void updateHostIdleTimer(boolean pressEnabled) {
+        android.app.Service service = portalService;
+        if (service == null) return;
+        try {
+            XposedHelpers.callMethod(service, pressEnabled ? "cancelStopSelfJob" : "scheduleStopSelfJob");
+        } catch (RuntimeException | LinkageError | XposedHelpers.InvocationTargetError error) {
+            log("cannot update Portal idle job", error);
+            new Handler(Looper.getMainLooper()).post(() -> android.widget.Toast.makeText(service,
+                    "传送门空闲管理不兼容，按压入口可能随服务退出", android.widget.Toast.LENGTH_LONG).show());
         }
     }
 

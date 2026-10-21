@@ -144,7 +144,7 @@ final class RootTouchSource {
             rawMaxWidthMajor = ranges[4];
             hasContactSize = rawMaxTouchMajor > 0 || rawMaxWidthMajor > 0;
             if (!hasContactSize) {
-                failureReason = "触摸设备未声明接触主轴或工具宽度主轴，无法进行拇指校准。";
+                failureReason = "触摸设备未声明尺寸轴，按压使用普通触发时机。";
             }
 
             InputStream stream = openDevice(devicePath);
@@ -353,13 +353,12 @@ final class RootTouchSource {
         parser.consume(type, code, value);
     }
 
-    double normalizedContactSize(int major, int widthMajor) {
-        return ThumbCalibration.contactSize(major, rawMaxTouchMajor, widthMajor, rawMaxWidthMajor);
+    float normalizedTouchMajor(int value) {
+        return value > 0 && rawMaxTouchMajor > 0 ? Math.min(1f, (float) value / rawMaxTouchMajor) : 0f;
     }
 
-    double contactTriggerLevel(int major, int widthMajor, ThumbTriggerSettings settings) {
-        return ThumbCalibration.triggerLevel(major, rawMaxTouchMajor, widthMajor, rawMaxWidthMajor,
-                settings.threshold, settings.widthThreshold);
+    float normalizedWidthMajor(int value) {
+        return value > 0 && rawMaxWidthMajor > 0 ? Math.min(1f, (float) value / rawMaxWidthMajor) : 0f;
     }
 
     private void onRawFrame(int action, float rawX, float rawY, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {

@@ -121,6 +121,19 @@ public final class RootNodeCaptureMain {
                 if (current != null) current.recycle();
             }
         }
+        if ("verify_source".equals(request.optString("operation"))) {
+            automation.clearCache();
+            AccessibilityNodeInfo current = automation.getRootInActiveWindow();
+            AccessibilityWindowInfo window = current == null ? null : current.getWindow();
+            try {
+                return new JSONObject().put("same_source", current != null && current.isVisibleToUser()
+                        && window != null && window.getType() == AccessibilityWindowInfo.TYPE_APPLICATION
+                        && request.getString("package").equals(string(current.getPackageName())));
+            } finally {
+                if (window != null) window.recycle();
+                if (current != null) current.recycle();
+            }
+        }
         Runnable timeout = () -> {
             System.err.println("Root node capture exceeded deadline");
             System.exit(2);
@@ -198,18 +211,34 @@ public final class RootNodeCaptureMain {
         for (int i = 0; i < blocked.length(); i++) {
             if (source.equals(blocked.getString(i))) return absent.put("reason", "excluded_app");
         }
+        boolean pressLookup = request.optBoolean("press_lookup", false);
+        boolean allowText = request.optBoolean("allow_text", true);
+        boolean allowImages = request.optBoolean("allow_images", false);
+        float x = (float) request.getDouble("x"), y = (float) request.getDouble("y");
+        Rect windowBounds = new Rect();
         AccessibilityWindowInfo window = root.getWindow();
+        if (pressLookup && (window == null || !root.isVisibleToUser())) {
+            if (window != null) window.recycle();
+            return absent.put("reason", "excluded_window");
+        }
         if (window != null) {
             try {
-                if (window.getType() == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return absent.put("reason", "excluded_window");
+                if (window.getType() == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+                        || (pressLookup && window.getType() != AccessibilityWindowInfo.TYPE_APPLICATION)) {
+                    return absent.put("reason", "excluded_window");
+                }
+                window.getBoundsInScreen(windowBounds);
+                if (pressLookup && !windowBounds.contains((int) x, (int) y)) {
+                    return absent.put("reason", "outside_window");
+                }
             } finally {
                 window.recycle();
             }
         }
-        float x = (float) request.getDouble("x"), y = (float) request.getDouble("y");
+        float density = (float) request.getDouble("density");
         AccessibilityNodeClassifier classifier = new AccessibilityNodeClassifier(
-                (float) request.getDouble("density"), request.getInt("width"), request.getInt("height"));
-        if (request.optBoolean("early_candidate", false) && request.optBoolean("allow_text", true)) {
+                density, request.getInt("width"), request.getInt("height"));
+        if ((pressLookup || request.optBoolean("early_candidate", false)) && allowText) {
             long started = SystemClock.uptimeMillis();
             List<AccessibilityNodeSnapshot> pointNodes = new ArrayList<>();
             List<Rect> pointPasswords = new ArrayList<>();
@@ -222,6 +251,7 @@ public final class RootNodeCaptureMain {
                     || pointNodes.stream().anyMatch(node -> node.bounds.equals(point.candidate.bounds)
                     && "android.widget.TextView".equals(node.className)
                     && java.util.Objects.equals(node.text, point.candidate.text)))) {
+                if (pressLookup) return contentResult(point, source, pointNodes.size());
                 System.out.println(new JSONObject().put("stage", "candidate")
                         .put("package", source)
                         .put("candidate_ms", SystemClock.uptimeMillis() - started));
@@ -233,16 +263,56 @@ public final class RootNodeCaptureMain {
         traverse(root, 0, false, snapshots, passwords, SystemClock.uptimeMillis(), false, x, y);
         AccessibilityCandidateSelector.Selection selection = selectContent(
                 classifier, snapshots, passwords, x, y, source,
-                request.optBoolean("allow_text", true), request.optBoolean("allow_images", false));
+                pressLookup || allowText, pressLookup || allowImages);
         absent.put("node_count", snapshots.size());
-        if (selection == null) return absent;
+        if (selection == null) {
+            if (!pressLookup || !allowImages) return absent;
+            Rect region = safeEmptyOcrRegion(x, y, windowBounds, request.getInt("width"),
+                    request.getInt("height"), density, request.optBoolean("press_early", false),
+                    source, snapshots, passwords);
+            if (region == null) return absent.put("reason", "unsafe_ocr_region");
+            return new JSONObject().put("found", true).put("package", source).put("kind", "ocr_region")
+                    .put("node_count", snapshots.size()).put("left", region.left).put("top", region.top)
+                    .put("right", region.right).put("bottom", region.bottom);
+        }
+        if (selection.isImage() ? !allowImages : !allowText) return absent.put("reason", "content_type_disabled");
+        return contentResult(selection, source, snapshots.size());
+    }
+
+    private static JSONObject contentResult(AccessibilityCandidateSelector.Selection selection,
+                                            String source, int nodeCount) throws org.json.JSONException {
         AccessibilityCandidate candidate = selection.candidate;
         return new JSONObject().put("found", true).put("package", source)
                 .put("kind", selection.isImage() ? "image" : "text")
-                .put("node_count", snapshots.size()).put("text", candidate.text).put("before", selection.beforeText)
+                .put("node_count", nodeCount).put("text", candidate.text).put("before", selection.beforeText)
                 .put("after", selection.afterText)
                 .put("left", candidate.bounds.left).put("top", candidate.bounds.top)
                 .put("right", candidate.bounds.right).put("bottom", candidate.bounds.bottom);
+    }
+
+    // Called only after a complete traversal of a visible application window containing the press.
+    static Rect safeEmptyOcrRegion(float x, float y, Rect window, int width, int height, float density,
+                                  boolean earlyCapture, String source,
+                                  List<AccessibilityNodeSnapshot> snapshots, List<Rect> passwords) {
+        if (window == null || !Float.isFinite(x) || !Float.isFinite(y) || width <= 0 || height <= 0
+                || x < window.left || x >= window.right || y < window.top || y >= window.bottom) return null;
+        Rect available = new Rect(window);
+        if (!available.intersect(0, 0, width, height)) return null;
+        int cropWidth = Math.min(available.width(), Math.max(1, Math.round(width * (earlyCapture ? .92f : .78f))));
+        int cropHeight = Math.min(available.height(), Math.max(1, Math.round(height * (earlyCapture ? .92f : .34f))));
+        int left = Math.max(available.left, Math.min(Math.round(x) - cropWidth / 2, available.right - cropWidth));
+        int top = Math.max(available.top, Math.min(Math.round(y) - cropHeight / 2, available.bottom - cropHeight));
+        Rect region = new Rect(left, top, left + cropWidth, top + cropHeight);
+        Rect protectedRegion = new Rect(region);
+        int margin = Math.max(1, Math.round(density));
+        protectedRegion.inset(-margin, -margin);
+        for (Rect password : passwords) {
+            if (Rect.intersects(protectedRegion, password)) return null;
+        }
+        for (AccessibilityNodeSnapshot node : snapshots) {
+            if (node.visible && Rect.intersects(region, node.bounds) && !source.equals(node.packageName)) return null;
+        }
+        return region;
     }
 
     static AccessibilityCandidateSelector.Selection selectContent(AccessibilityNodeClassifier classifier,

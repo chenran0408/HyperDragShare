@@ -93,10 +93,8 @@ public final class DragShareAccessibilityService extends AccessibilityService {
     private AccessibilityContentCaptureSource captureSource;
     private ExecutorService classifierExecutor;
     private AccessibilityScreenshotter screenshotter;
-    private ThumbCaptureSource thumbCaptureSource;
+    private PressCaptureSource thumbCaptureSource;
     private boolean runtimeThumbEnabled;
-    private float runtimeThumbThreshold;
-    private float runtimeThumbWidthThreshold;
     private long allowThumbAfter;
 
     @Override
@@ -134,7 +132,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
-        if (thumbCaptureSource != null) thumbCaptureSource.cancel();
+        if (thumbCaptureSource != null) thumbCaptureSource.cancelGesture();
         AccessibilityContentCaptureSource source = captureSource;
         if (source != null) {
             source.cancel();
@@ -317,8 +315,6 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         runtimeRecognitionSensitivityPercent = settings.accessibilityRecognitionSensitivityPercent;
         ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
         runtimeThumbEnabled = thumb.enabled;
-        runtimeThumbThreshold = thumb.threshold;
-        runtimeThumbWidthThreshold = thumb.widthThreshold;
         rootNotReadySince = 0L;
         rootRestartCount = 0;
         lastReportedRootReady = false;
@@ -341,9 +337,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                                 + " point=" + Math.round(x) + "," + Math.round(y));
                     }
                     mainHandler.post(() -> {
-                        ThumbCaptureSource areaSource = thumbCaptureSource;
+                        PressCaptureSource areaSource = thumbCaptureSource;
                         if (areaSource != null) {
-                            areaSource.onPointerEvent(action, x, y, eventTime, major, minor, widthMajor);
+                            areaSource.onPointerEvent(action, x, y, eventTime, major, widthMajor);
                         } else if (captureSource != null) {
                             captureSource.onPointerEvent(action, x, y, eventTime);
                         }
@@ -356,8 +352,8 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                 classifierExecutor,
                 screenshotter);
         if (runtimeThumbEnabled) {
-            thumbCaptureSource = new ThumbCaptureSource(
-                    this, rootTouchSource, classifierExecutor, screenshotter, thumb);
+            thumbCaptureSource = new PressCaptureSource(
+                    this, rootTouchSource, controller, settings, this::isThumbCaptureAllowed);
         }
         rootTouchSource.start();
         mainHandler.removeCallbacks(rootReadyReporter);
@@ -380,9 +376,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         mainHandler.removeCallbacks(rootReadyReporter);
         AccessibilityRuntimeStatus.setRootInputReady(false);
         AccessibilityContentCaptureSource source = captureSource;
-        ThumbCaptureSource areaSource = thumbCaptureSource;
+        PressCaptureSource areaSource = thumbCaptureSource;
         thumbCaptureSource = null;
-        if (areaSource != null) areaSource.cancel();
+        if (areaSource != null) areaSource.stop();
         captureSource = null;
         if (source != null) {
             source.cancel();
@@ -588,9 +584,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                         != runtimeLongPressTimeoutMillis
                         || settings.accessibilityRecognitionSensitivityPercent
                         != runtimeRecognitionSensitivityPercent
-                        || thumb.enabled != runtimeThumbEnabled
-                        || Float.compare(thumb.threshold, runtimeThumbThreshold) != 0
-                        || Float.compare(thumb.widthThreshold, runtimeThumbWidthThreshold) != 0)) {
+                        || thumb.enabled != runtimeThumbEnabled)) {
                     stopRuntime();
                 }
                 applyMode();

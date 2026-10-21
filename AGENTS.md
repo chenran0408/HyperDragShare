@@ -60,7 +60,8 @@
     仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
     `AicrCopyHooks` 和 `BackTapFrameworkHooks`；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
-14. 节点树只在一次明确请求后读取：无障碍长按超时、有效面积确认或用户主动点取。
+14. 节点树只在一次明确请求后读取：无障碍长按超时、用户已启用按压入口且单指静止按住120ms后的分类、有效面积确认或用户主动点取。
+    按压分类按MI行为仅缓存本次内容，到确认时才接管并打开窗口；松手、移位或多指取消，不在空闲时读取。
     准备点取时只连接 Root，不提前遍历；不得在 `onAccessibilityEvent()` 中持续遍历、
     截图或记录文字。密码节点、锁屏、黑名单和无障碍覆盖层必须忽略，图片只截取所选节点区域。
     UiAutomation 只有一个注册位，Root 取词连接存活时不能同时运行 `uiautomator dump`；
@@ -93,6 +94,7 @@
 - `SettingsScreen.kt`：Miuix 设置页（内容开关、目标可见性、批量操作、拖拽排序、外观和触摸参数）。
 - `ModuleActivation.java`：Root 探测、当前版本传送门注入握手和首页激活状态来源。
 - `DragAndDrop.kt`：参考 XiaomiHelper 的 LazyColumn 实时换位、边缘自动滚动和回弹状态。
+- `PressTriggerDetector.java`、`PressCaptureSource.java`：传送门/无障碍共用MI行为的按压时序与按需Root取词，不需要校准；零尺寸走普通按住分支，不冒称面积。
 - `PortalContentCaptureSource.java`：唯一读取传送门私有字段和初始触点的适配层。
 - `DragShareAccessibilityService.java`、`AccessibilityContentCaptureSource.java`：无障碍生命周期、长按协调和来源隔离。
 - `OcrFallbackRegion.java`：无障碍无候选节点时的有限区域截取几何与密码节点重叠检查。
