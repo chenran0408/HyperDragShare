@@ -269,10 +269,9 @@ public final class StashStoreTest {
             store.close();
             store = new StashStore(context);
 
-            List<StashStore.Entry> batch = store.listEntries().stream()
-                    .filter(entry -> batchId.equals(entry.batchId))
-                    .sorted(java.util.Comparator.comparingInt(entry -> entry.batchOrder))
-                    .toList();
+            List<StashStore.Entry> batch = StashBatchCardKt.stashBatches(store.listEntries()).stream()
+                    .filter(group -> batchId.equals(group.get(0).batchId))
+                    .findFirst().orElseThrow();
             assertEquals(5, store.listEntries().size());
             assertEquals(2, batch.size());
             assertEquals(0, batch.get(0).batchOrder);

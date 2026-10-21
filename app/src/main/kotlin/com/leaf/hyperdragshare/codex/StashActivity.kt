@@ -17,6 +17,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,15 +30,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -82,6 +90,7 @@ import java.util.Date
 
 /** Persistent in-app collection for text and images received from the share or drag flow. */
 class StashActivity : ComponentActivity() {
+    companion object { const val EXTRA_BATCH = "stash_batch" }
     private var entries by mutableStateOf<List<StashStore.Entry>>(emptyList())
     private var loading by mutableStateOf(true)
     private var message by mutableStateOf<String?>(null)
@@ -94,6 +103,7 @@ class StashActivity : ComponentActivity() {
     private var selectedIds by mutableStateOf<Set<String>>(emptySet())
     private var searchQuery by mutableStateOf("")
     private var kindFilter by mutableStateOf("all")
+    private var openedBatchId by mutableStateOf<String?>(null)
     private var pendingImport: Intent? = null
     private var shareImported = false
     private val importLock = Mutex()
@@ -107,6 +117,8 @@ class StashActivity : ComponentActivity() {
         shareImported = savedInstanceState?.getBoolean("share_imported") == true
         searchQuery = savedInstanceState?.getString("search_query").orEmpty()
         kindFilter = savedInstanceState?.getString("kind_filter") ?: "all"
+        openedBatchId = if (savedInstanceState == null) intent.getStringExtra(EXTRA_BATCH)
+            else savedInstanceState.getString("opened_batch")
         pendingImport = intent.takeIf { !shareImported && isSupportedShare(it) }
         if (receiveOnly) {
             window.setBackgroundDrawableResource(android.R.color.transparent)
@@ -119,24 +131,25 @@ class StashActivity : ComponentActivity() {
                 controller = remember(dark) { ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light) },
             ) {
                 val scope = rememberCoroutineScope()
-                BackHandler(enabled = isInMultiWindowMode && !selectionMode &&
+                BackHandler(enabled = (isInMultiWindowMode || openedBatchId != null) && !selectionMode &&
                     previewEntry == null && pendingDelete == null && !confirmBatchDelete) {
-                    returnToShelf()
+                    returnFromContents()
                 }
                 BackHandler(enabled = selectionMode) {
                     selectionMode = false
                     selectedIds = emptySet()
                 }
                 val visibleEntries = entries.filter {
-                    (kindFilter == "all" || it.kind == kindFilter) &&
+                    (openedBatchId == null || it.batchId == openedBatchId) &&
+                        (kindFilter == "all" || it.kind == kindFilter) &&
                         (searchQuery.isBlank() || it.text.orEmpty().contains(searchQuery.trim(), ignoreCase = true))
-                }
+                }.let { if (openedBatchId != null) it.sortedBy { entry -> entry.batchOrder } else it }
                 StashScreen(
                     entries = visibleEntries,
                     searchQuery = searchQuery,
                     kindFilter = kindFilter,
-                    onQueryChange = { searchQuery = it },
-                    onKindChange = { kindFilter = it },
+                    onQueryChange = { searchQuery = it; openedBatchId = null },
+                    onKindChange = { kindFilter = it; openedBatchId = null },
                     loading = loading,
                     copying = copying,
                     copyMessage = copyMessage,
@@ -146,7 +159,13 @@ class StashActivity : ComponentActivity() {
                     selectionMode = selectionMode,
                     selectedIds = selectedIds,
                     confirmBatchDelete = confirmBatchDelete,
-                    onBack = ::returnToShelf,
+                    onBack = ::returnFromContents,
+                    openedBatchId = openedBatchId,
+                    onOpenBatch = { openedBatchId = it },
+                    onToggleBatchSelection = { batch ->
+                        val ids = batch.map { it.id }.toSet()
+                        selectedIds = if (selectedIds.containsAll(ids)) selectedIds - ids else selectedIds + ids
+                    },
                     onDragStarted = ::hideForDrag,
                     onToggleSelectionMode = {
                         selectionMode = !selectionMode
@@ -198,6 +217,10 @@ class StashActivity : ComponentActivity() {
         pendingImport = intent.takeIf(::isSupportedShare)
     }
 
+    private fun returnFromContents() {
+        if (openedBatchId != null) openedBatchId = null else returnToShelf()
+    }
+
     private fun returnToShelf() {
         if (isInMultiWindowMode) StashOverlayPanel.showCollapsed(this)
         finish()
@@ -229,6 +252,7 @@ class StashActivity : ComponentActivity() {
         outState.putBoolean("share_imported", shareImported)
         outState.putString("search_query", searchQuery)
         outState.putString("kind_filter", kindFilter)
+        outState.putString("opened_batch", openedBatchId)
         super.onSaveInstanceState(outState)
     }
 
@@ -273,6 +297,7 @@ class StashActivity : ComponentActivity() {
             entries = withContext(Dispatchers.IO) {
                 StashStore(this@StashActivity).use { it.listEntries() }
             }
+            if (openedBatchId != null && entries.none { it.batchId == openedBatchId }) openedBatchId = null
             if (pendingImport == null) message = null
         } catch (error: IOException) {
             DragShareLog.w("DragShare/Stash", "unable to load stash entries", error)
@@ -292,6 +317,7 @@ class StashActivity : ComponentActivity() {
                 StashStore(this@StashActivity).use { it.delete(entry.id) }
             }
             entries = entries.filterNot { it.id == entry.id }
+            if (openedBatchId != null && entries.none { it.batchId == openedBatchId }) openedBatchId = null
             if (previewEntry?.id == entry.id) previewEntry = null
         } catch (error: IOException) {
             DragShareLog.w("DragShare/Stash", "unable to delete stash entry", error)
@@ -401,6 +427,7 @@ class StashActivity : ComponentActivity() {
                 StashStore(this@StashActivity).use { store -> ids.filter { store.delete(it) } }
             }
             entries = entries.filterNot { it.id in deletedIds }
+            if (openedBatchId != null && entries.none { it.batchId == openedBatchId }) openedBatchId = null
             if (previewEntry?.id?.let(deletedIds::contains) == true) previewEntry = null
             selectedIds = emptySet()
             selectionMode = false
@@ -452,6 +479,9 @@ private fun StashScreen(
     selectedIds: Set<String>,
     confirmBatchDelete: Boolean,
     onBack: () -> Unit,
+    openedBatchId: String?,
+    onOpenBatch: (String) -> Unit,
+    onToggleBatchSelection: (List<StashStore.Entry>) -> Unit,
     onDragStarted: () -> Unit,
     onToggleSelectionMode: () -> Unit,
     onToggleEntrySelection: (String) -> Unit,
@@ -472,19 +502,46 @@ private fun StashScreen(
     onPreviewDismiss: () -> Unit,
 ) {
     var searchExpanded by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    LaunchedEffect(openedBatchId, searchQuery, kindFilter) { listState.requestScrollToItem(0) }
+    val batches = if (openedBatchId == null) stashBatches(entries) else entries.map { listOf(it) }
+    val selectedEntries = batches.flatten().filter { it.id in selectedIds }
+    val title = if (selectionMode) "已选 ${selectedIds.size}" else if (openedBatchId != null) "图片组 · ${entries.size} 张" else "中转站"
     val compact = LocalConfiguration.current.screenWidthDp < 300
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val compactSearch = searchExpanded || searchQuery.isNotBlank() || kindFilter != "all"
+    val closeCompactSearch = {
+        searchExpanded = false
+        onQueryChange("")
+        onKindChange("all")
+        focusManager.clearFocus()
+        keyboard?.hide()
+        Unit
+    }
+    BackHandler(enabled = compact && compactSearch && !selectionMode && previewEntry == null &&
+        pendingDelete == null && !confirmBatchDelete, onBack = closeCompactSearch)
     Scaffold(topBar = {
-        Column {
+        Column(Modifier.background(MiuixTheme.colorScheme.background)) {
             if (compact) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
-                    Text(if (selectionMode) "已选 ${selectedIds.size}" else "中转站",
+                    Text(if (openedBatchId != null && !selectionMode) "${entries.size} 张图片" else title,
                         modifier = Modifier.weight(1f), fontSize = 14.sp, maxLines = 1)
                     TextButton(text = if (selectionMode) "完成" else "多选", onClick = onToggleSelectionMode)
+                    if (!selectionMode) OverlayIconAction(
+                        if (compactSearch) Icons.Outlined.Close else Icons.Outlined.Search,
+                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                        onClick = {
+                            if (compactSearch) closeCompactSearch() else {
+                                onQueryChange("")
+                                searchExpanded = true
+                            }
+                        }, contentDescription = if (compactSearch) "退出搜索" else "搜索已存文字")
                 }
             } else TopAppBar(
-                title = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
-                largeTitle = if (selectionMode) "已选 ${selectedIds.size} 项" else "中转站",
+                title = title,
+                largeTitle = title,
                 navigationIcon = {
                     BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
                 },
@@ -496,6 +553,16 @@ private fun StashScreen(
                     )
                 },
             )
+            if (compact && compactSearch && !selectionMode && openedBatchId == null) {
+                StashSearchInput(searchQuery, onQueryChange,
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+                StashKindFilters(kindFilter, entries.size, onKindChange)
+            }
+            if (selectionMode) {
+                StashDragHandle(selectedEntries, onDragStarted)
+                StashSelectionActions(selectedIds.size, selectedIds.size == entries.size,
+                    onToggleSelectAll, { onBatchShare(selectedEntries) }, onBatchDeleteRequest, compact)
+            }
             copyMessage?.let {
                 Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
@@ -504,10 +571,11 @@ private fun StashScreen(
     }) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (!selectionMode) {
+            if (!compact && !selectionMode && openedBatchId == null) {
                 item(key = "filters") {
                     Column {
                         SearchBar(
@@ -525,15 +593,7 @@ private fun StashScreen(
                             expanded = searchExpanded,
                             onExpandedChange = { searchExpanded = it },
                         ) {}
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            listOf("all" to "全部", StashStore.KIND_TEXT to "文字",
-                                StashStore.KIND_IMAGE to "图片").forEach { (kind, label) ->
-                                TextButton(
-                                    text = if (kind == kindFilter) "$label · ${entries.size}" else label,
-                                    onClick = { onKindChange(kind) },
-                                )
-                            }
-                        }
+                        StashKindFilters(kindFilter, entries.size, onKindChange)
                     }
                 }
             }
@@ -551,33 +611,31 @@ private fun StashScreen(
                         else "中转站还是空的。可从分享菜单发送文字或图片到这里。")
                 }
             } else {
-                if (selectionMode) {
-                    item(key = "selection-actions") {
-                        StashDragHandle(entries.filter { it.id in selectedIds }, onDragStarted)
-                        StashSelectionActions(
-                            selectedCount = selectedIds.size,
-                            allSelected = selectedIds.size == entries.size,
-                            onToggleSelectAll = onToggleSelectAll,
-                            onShare = { onBatchShare(entries.filter { it.id in selectedIds }) },
-                            onDelete = onBatchDeleteRequest,
+                items(batches, key = { if (openedBatchId == null) it.first().batchId else it.first().id }) { batch ->
+                    if (batch.size > 1) StashBatchCard(
+                        batch, Modifier.padding(horizontal = 12.dp),
+                        imageHeight = if (compact) 72.dp else 120.dp,
+                        selectionMode = selectionMode, selectedCount = batch.count { it.id in selectedIds },
+                        onDragStarted = onDragStarted, onClick = {
+                            if (selectionMode) onToggleBatchSelection(batch) else onOpenBatch(batch.first().batchId)
+                        },
+                    ) else {
+                        val entry = batch.first()
+                        StashEntryCard(
+                            entry = entry,
+                            compact = compact,
+                            onDragStarted = onDragStarted,
+                            selectionMode = selectionMode,
+                            selected = entry.id in selectedIds,
+                            onToggleSelection = { onToggleEntrySelection(entry.id) },
+                            onOpenText = onOpenText,
+                            onPreviewImage = onPreviewImage,
+                            onCopy = onCopy,
+                            copyEnabled = !copying,
+                            onShare = onShare,
+                            onDelete = onDeleteRequest,
                         )
                     }
-                }
-                items(entries, key = { it.id }) { entry ->
-                    StashEntryCard(
-                        entry = entry,
-                        compact = compact,
-                        onDragStarted = onDragStarted,
-                        selectionMode = selectionMode,
-                        selected = entry.id in selectedIds,
-                        onToggleSelection = { onToggleEntrySelection(entry.id) },
-                        onOpenText = onOpenText,
-                        onPreviewImage = onPreviewImage,
-                        onCopy = onCopy,
-                        copyEnabled = !copying,
-                        onShare = onShare,
-                        onDelete = onDeleteRequest,
-                    )
                 }
             }
         }
@@ -588,15 +646,8 @@ private fun StashScreen(
         summary = "删除后无法恢复。",
         onDismissRequest = onBatchDeleteDismiss,
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(text = "取消", onClick = onBatchDeleteDismiss, modifier = Modifier.weight(1f))
-            TextButton(
-                text = "删除 ${selectedIds.size} 项",
-                onClick = onBatchDeleteConfirm,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColorsPrimary(),
-            )
-        }
+        StashDialogActions(compact, "取消", if (compact) "删除" else "删除 ${selectedIds.size} 项",
+            onBatchDeleteDismiss, onBatchDeleteConfirm)
     }
 
     OverlayDialog(
@@ -605,15 +656,7 @@ private fun StashScreen(
         summary = "删除后无法恢复。",
         onDismissRequest = onDeleteDismiss,
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(text = "取消", onClick = onDeleteDismiss, modifier = Modifier.weight(1f))
-            TextButton(
-                text = "删除",
-                onClick = { pendingDelete?.let(onDeleteConfirm) },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColorsPrimary(),
-            )
-        }
+        StashDialogActions(compact, "取消", "删除", onDeleteDismiss, { pendingDelete?.let(onDeleteConfirm) })
     }
 
     OverlayDialog(
@@ -627,15 +670,26 @@ private fun StashScreen(
                 entry = entry,
                 edgeLimit = 1200,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().height(360.dp),
+                modifier = Modifier.fillMaxWidth().height(if (compact) 120.dp else 360.dp),
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(text = "关闭", onClick = onPreviewDismiss, modifier = Modifier.weight(1f))
-                TextButton(text = "识别文字", onClick = { onRecognizeImage(entry) },
-                    modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColorsPrimary())
-            }
+            StashDialogActions(compact, "关闭", if (compact) "识字" else "识别文字",
+                onPreviewDismiss, { onRecognizeImage(entry) })
         }
     }
+    }
+}
+
+@Composable
+private fun StashDialogActions(compact: Boolean, cancel: String, confirm: String,
+    onCancel: () -> Unit, onConfirm: () -> Unit) {
+    if (compact) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(cancel, onCancel, modifier = Modifier.fillMaxWidth())
+        TextButton(confirm, onConfirm, modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.textButtonColorsPrimary())
+    } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        TextButton(cancel, onCancel, modifier = Modifier.weight(1f))
+        TextButton(confirm, onConfirm, modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.textButtonColorsPrimary())
     }
 }
 
@@ -646,7 +700,19 @@ private fun StashSelectionActions(
     onToggleSelectAll: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    compact: Boolean,
 ) {
+    if (compact) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            OverlayIconAction(Icons.Outlined.SelectAll, MiuixTheme.colorScheme.primary,
+                onClick = onToggleSelectAll, contentDescription = if (allSelected) "取消全选" else "全选")
+            OverlayIconAction(Icons.Outlined.Share, MiuixTheme.colorScheme.onSurfaceVariantActions,
+                enabled = selectedCount > 0, onClick = onShare, contentDescription = "分享已选内容")
+            OverlayIconAction(Icons.Outlined.Delete, MiuixTheme.colorScheme.onSurfaceVariantActions,
+                enabled = selectedCount > 0, onClick = onDelete, contentDescription = "删除已选内容")
+        }
+        return
+    }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
@@ -701,6 +767,18 @@ private fun StashMessageCard(message: String, loading: Boolean = false, onRetry:
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun StashKindFilters(kindFilter: String, count: Int, onKindChange: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.SpaceEvenly) {
+        listOf("all" to "全部", StashStore.KIND_TEXT to "文字", StashStore.KIND_IMAGE to "图片")
+            .forEach { (kind, label) ->
+                TextButton(text = if (kind == kindFilter) "$label · $count" else label,
+                    onClick = { onKindChange(kind) })
+            }
     }
 }
 
@@ -771,6 +849,7 @@ internal fun StashEntryCard(
                         entry = entry,
                         edgeLimit = 480,
                         modifier = Modifier.fillMaxWidth().height(if (compact) 72.dp else 120.dp),
+                        contentScale = ContentScale.Fit,
                     )
                 }
             }
@@ -781,13 +860,6 @@ internal fun StashEntryCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    if (!compact) {
-                        TextButton(
-                            text = if (entry.kind == StashStore.KIND_TEXT) "分词" else "预览",
-                            onClick = openContent,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
                     if (compact) {
                         OverlayIconAction(Icons.Outlined.ContentCopy, MiuixTheme.colorScheme.primary,
                             enabled = copyEnabled, onClick = { onCopy(entry) }, contentDescription = "复制内容")

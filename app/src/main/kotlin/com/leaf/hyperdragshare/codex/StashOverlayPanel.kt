@@ -31,9 +31,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckBox
@@ -56,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
@@ -64,8 +60,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
@@ -172,12 +166,14 @@ object StashOverlayPanel {
 
         private fun openSystemWindow() {
             if (openingSystemWindow) return
+            val batchId = openedBatchId
             openingSystemWindow = true
             scope.launch {
                 try {
                     withContext(Dispatchers.IO) {
                         val command = "am start --user current --windowingMode 5 -n " +
-                            BuildConfig.APPLICATION_ID + "/.StashActivity --ez system_stash_window true"
+                            BuildConfig.APPLICATION_ID + "/.StashActivity --ez system_stash_window true" +
+                            if (batchId == null) "" else " --es ${StashActivity.EXTRA_BATCH} $batchId"
                         val process = ProcessBuilder("su", "-c", command).redirectErrorStream(true).start()
                         try {
                             if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -430,26 +426,16 @@ object StashOverlayPanel {
             }
             val ids = batch.map { it.id }.toSet()
             val selectedCount = ids.count { it in selectedIds }
-            Card(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                StashDraggableContent(batch, Modifier.fillMaxWidth().padding(6.dp),
-                    enabled = !deleting, draggable = !selectionMode, onStarted = ::collapse,
-                    onClick = {
-                        if (selectionMode) {
-                            selectedIds = if (selectedCount == batch.size) selectedIds - ids else selectedIds + ids
-                        } else {
-                            openedBatchId = batch.first().batchId
-                            listState.requestScrollToItem(0)
-                        }
-                    }) {
-                    Column {
-                        StashImage(batch.first(), 480, Modifier.fillMaxWidth().height(56.dp), ContentScale.Fit)
-                        Text(if (selectionMode) "已选 $selectedCount/${batch.size} 张"
-                            else "${batch.size} 张图片 · 点按展开",
-                            fontSize = 12.sp, maxLines = 1, color = if (selectedCount > 0)
-                                MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            StashBatchCard(batch, Modifier.padding(horizontal = 4.dp), imageHeight = 56.dp,
+                enabled = !deleting, selectionMode = selectionMode, selectedCount = selectedCount,
+                onDragStarted = ::collapse, onClick = {
+                    if (selectionMode) {
+                        selectedIds = if (selectedCount == batch.size) selectedIds - ids else selectedIds + ids
+                    } else {
+                        openedBatchId = batch.first().batchId
+                        listState.requestScrollToItem(0)
                     }
-                }
-            }
+                })
         }
 
         @Composable private fun Content() {
@@ -470,7 +456,8 @@ object StashOverlayPanel {
                         it.text.orEmpty().contains(query, ignoreCase = true)))
             }.let { if (openedBatchId != null) it.sortedBy { entry -> entry.batchOrder } else it }
             val visibleBatches = if (openedBatchId != null) visibleEntries.map { listOf(it) }
-                else visibleEntries.groupBy { it.batchId }.values.map { it.sortedBy { entry -> entry.batchOrder } }
+                else stashBatches(visibleEntries)
+            LaunchedEffect(openedBatchId, query) { listState.requestScrollToItem(0) }
             LaunchedEffect(expanded) {
                 if (!expanded) {
                     focusManager.clearFocus()
@@ -500,31 +487,15 @@ object StashOverlayPanel {
                                     OverlayIconAction(Icons.Outlined.ArrowBack,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         onClick = closeSearch, contentDescription = "退出搜索")
-                                    BasicTextField(
-                                        value = query,
-                                        onValueChange = {
+                                    StashSearchInput(
+                                        query = query,
+                                        onQueryChange = {
                                             query = it
                                             cancelSelection()
                                             preview = null
                                         },
                                         modifier = Modifier.weight(1f),
                                         enabled = !deleting && !confirmDelete,
-                                        singleLine = true,
-                                        textStyle = TextStyle(fontSize = 13.sp,
-                                            color = MiuixTheme.colorScheme.onSurface),
-                                        cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
-                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                        keyboardActions = KeyboardActions(onSearch = {
-                                            focusManager.clearFocus()
-                                            keyboard?.hide()
-                                        }),
-                                        decorationBox = { field ->
-                                            Box {
-                                                if (query.isEmpty()) Text("搜索文字", fontSize = 13.sp,
-                                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                                                field()
-                                            }
-                                        },
                                     )
                                     OverlayIconAction(Icons.Outlined.Close,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
@@ -607,7 +578,7 @@ object StashOverlayPanel {
                                 Text("正在删除…", Modifier.padding(6.dp), fontSize = 12.sp,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             } else if (selectionMode && !confirmDelete) {
-                                StashDragHandle(entries.filter { it.id in selectedIds }, ::collapse)
+                                StashDragHandle(visibleBatches.flatten().filter { it.id in selectedIds }, ::collapse)
                             }
                             if (!confirmDelete) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                 OverlayIconAction(Icons.Outlined.SelectAll,

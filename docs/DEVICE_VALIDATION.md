@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.123 / versionCode 147。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 147。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.124 / versionCode 148。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 148。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.123 / 147；187 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.124 / 148；187 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -672,3 +672,14 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 清理后停止模块取只读快照，hds123-after-stash.tar/snapshot.json与升级前比较：原7条id、正文/类型/时间/MIME整体哈希一致，4张图片字节哈希一致；所有旧条目batch_id=id/order0。未恢复旧库掩盖升级结果，设备当前确为schema2。debug缓存生成文件已删，诊断应用未安装，无Root helper/UiAutomation/活跃Instrumentation残留，设备临时XML已删除；原bilipai2183置前，未关闭提醒或播放。
 - 最终147原位安装，Portal注入147/Root147/granted=true，仅重载传送门。APK与设备base.apk SHA256一致9F59946AD7F9ED88AABF53D736F7D7D2EAFAA4F159DBDD79E2FA761BE33991E7，debug签名不变。交付outputs/HyperDragShare-1.7.123-debug.apk。
 - 待验：新增组的独立接收UID读取与图片顺序、相册ACTION_SEND_MULTIPLE实机授权、深色/横屏、组级选择及单成员删除退化。文字/混合手动分组、文件与跨设备未实现。面积/评论/115旧ANR仍未解决。回退schema1旧APK必须配套升级前中转站备份，详见STASH.md，不可仅降APK。
+
+## 2026-10-21：1.7.124 系统小窗分组与固定操作区
+
+- 共享StashBatchCard/stashBatches供侧窗、系统小窗和管理页使用；多选拖出/分享也按组内batch_order，修正数据库倒序进入多选输出。Store既有持久化顺序测试改用实际共用分组函数，187项测试0失败。最终构建250的testDebugUnitTest/lintDebug/assembleDebug通过；Lint0 errors/139 warnings/2 hints。schema2未改，本版可配合123代码回退；更早schema1备份仍须保留。
+- 通过已有debug生成器仅新增两张A/B测试图片，hds124-create-batch.txt accepted=true/saved=2。侧窗点开该组再按产品放大按钮，真实进入freeform任务2322并保持组内A/B；返回键先回组列表，长按原生组卡启动2项GLOBAL/URI_READ拖拽并将中转站任务退后。hds124-native-group.png/xml、hds124-native-back.png/xml、hds124-native-drag.log（08:07:40，flags0x101、2 items）。没有独立接收者读取证据，不计为跨UID接收通过；未重试此前受限的诊断安装。
+- 实测发现搜索框放在LazyColumn里，焦点滚动后可进入透明标题后方；换成BasicTextField仍复现，不能归咎于SearchBar动画。最终窄窗把共享StashSearchInput固定在不透明主题标题区，搜索/类型筛选默认隐藏，点搜索图标才展开；侧窗复用同一Miuix色板输入框。宽管理页保留原SearchBar。hds124-search-after-back.png为旧重叠，hds124-247-fixed-search.png为修正后输入框在标题下。
+- 最终248搜索验证：自己的EditText自动聚焦后输入生成查询HDS；返回并等待dump/IME收起后mInputShown=false，再返回清空查询/类型并隐藏搜索。清空后列表会重置到最新图片组，hds124-248-focus.xml、hds124-248-ime.xml、hds124-248-search-return.png/xml。早期连续两次Back间未等待IME动画，两次都被IME阶段处理，不把它当产品Back失败。原生小窗UI自动化逻辑坐标与屏幕物理缩放不同，点击按截图观察定位，未改产品坐标常量。
+- 旧多选工具栏同样被插在列表里，选中后会被旧首项锚点滚到标题背后。最终249移至固定操作区，窄窗为全选/分享/删除图标和按住拖出；hds124-249-selection-pinned.png/xml。250进一步将窄确认框按钮改为上下全宽，解决横排按钮挤成竖排文字；hds124-249-delete-confirm.png为旧样式，hds124-250-confirm.png/xml显示明确2项与正常“取消/删除”。单条删除/图片预览也复用该按钮布局，预览在窄窗限制为120dp；这两个新窄弹窗的实际操作尚未验。
+- 最终250实际打开本组，进入多选→全选，确认页明确仅2项→删除后自动返回全部列表；hds124-250-group-ready.xml、hds124-250-confirm.xml、hds124-250-cleaned.xml。停止模块保存hds124-after-stash.tar/snapshot.json，与123清理后的基线比较，原7条正文/类型/时间/MIME指纹、id及4张图片字节哈希均一致。不是恢复旧库来掩盖清理结果。生成缓存已删，截图/备份只留本机，不提交用户内容。
+- 交付outputs/HyperDragShare-1.7.124-debug.apk，设备base.apk与交付SHA256一致：1B8CCD26B3BC15750DAB13D1A00DE621DBCB277CF293973DE570C181C3DD5C84；签名不变。最终仅重载传送门，注入/Root148/granted=true；未重启android/AICR/整机，本批不改它们的Hook。恢复原bilipai任务2183，未关闭提醒或播放。
+- 仍未验：全屏管理页/横屏/深色的新布局、侧窗共享搜索框完整IME流程、原生小窗实际图片预览和单条删除、触摸手势返回、跨UID组接收和多选分享的具体目标。筛选类型仍横向滚动。面积、bilipai评论普通长按、115旧ANR及复制编辑浮层共存未解决。
