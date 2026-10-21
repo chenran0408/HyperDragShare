@@ -2,7 +2,7 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.135（versionCode 159）；传送门注入与Root握手均159，设置首页已显示当前版本激活。Root语义取词可独立读到bilipai评论，但长按后会命中原生菜单；面积路径仅源码接通，真实尺寸校准与取词延迟仍未解决，保持关闭。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。外部文字分享/选词处理通过透明接收桥打开独立分词窗；屏幕OCR选区和结果已由ScreenOcrSession独立窗口承载，内部追加不启动Activity。真机取消恢复7/16、AICR区域确认追加7/25保留旧选词通过；两引擎整屏返回与单行点选分词通过，ML Kit样本仍有漏字/错字。中转站侧窗新增直接按住内容拖出，文字/图片及混合六项由另一UID成功接收；新内容自动置顶已验。灰条注入手势左右拖动通过，但收尾出现一次输入ANR，打开设置后原通道恢复，根因未明；116设置往返、拖出后往返和安全页隐藏恢复均通过，但不据此宣称旧ANR修复，仍是开发节点。原生系统小窗已复用直接按住内容拖出，单条文字/PNG跨UID通过。真实手指与系统侧边栏共存待验。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
+当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.136（versionCode 160）；传送门注入与Root握手均160，设置首页已显示当前版本激活。Root语义取词可独立读到bilipai评论，但长按后会命中原生菜单；面积路径仅源码接通，真实尺寸校准与取词延迟仍未解决，保持关闭。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。外部文字分享/选词处理通过透明接收桥打开独立分词窗；屏幕OCR选区和结果已由ScreenOcrSession独立窗口承载，内部追加不启动Activity。真机取消恢复7/16、AICR区域确认追加7/25保留旧选词通过；两引擎整屏返回与单行点选分词通过，ML Kit样本仍有漏字/错字。中转站侧窗新增直接按住内容拖出，文字/图片及混合六项由另一UID成功接收；新内容自动置顶已验。灰条注入手势左右拖动通过，但收尾出现一次输入ANR，打开设置后原通道恢复，根因未明；116设置往返、拖出后往返和安全页隐藏恢复均通过，但不据此宣称旧ANR修复，仍是开发节点。原生系统小窗已复用直接按住内容拖出，单条文字/PNG跨UID通过。真实手指与系统侧边栏共存待验。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
 
 ## 1. 运行边界
 
@@ -86,6 +86,8 @@ Root/MIUI 输入源；已连接的无障碍服务收到无障碍模式时才启�
 
 AICR 与系统框架入口的静态依据、未验证项和目标设备记录见
 [HYPEROS4_ADAPTATION.md](HYPEROS4_ADAPTATION.md)。
+
+136还接入传送门5.1.5复制卡片：`TaplusSplashFloatView$13.onClick(View)`为已核实的“编辑所选文本”按钮，原本启动`clipboard.EditActivity`。设置“复制文字分词”复用copy_direct_enabled和默认关闭值，每次点击读取原Portal受限配置。仅接收与getClipboardContent逐字一致的当前单项、非敏感外部文字；接受原页窗口请求后跳过原Activity，再调用宿主hideSplashFloatView(true)收卡。请求失败保留原编辑；已接受后的收卡失败单独报告，不再启动另一编辑界面。私有访问在PortalContentCaptureSource中。匿名类编号绑定已核对的5.1.5，更新需重新定位；不增作用域，不绕过ClipboardReceiver黑名单。Via空白页真实复制→点击卡片→原页分词及关闭开关后的原编辑已验证，不等于所有应用都会显示卡片。AICR原监听还受能力1210启停约束，模块未强制开启。
 
 传送门 Hook 安装以下入口：
 

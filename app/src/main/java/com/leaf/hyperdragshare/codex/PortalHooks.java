@@ -64,9 +64,61 @@ final class PortalHooks {
             hookServiceLifecycle(serviceClass, classLoader);
             hookShareStart(serviceClass);
             hookKnownCallbackClass(classLoader);
+            hookClipboardCard(serviceClass, classLoader);
             log("portal hooks installed");
         } catch (Throwable error) {
             log("unable to install Taplus hooks", error);
+        }
+    }
+
+    private static void hookClipboardCard(Class<?> serviceClass, ClassLoader classLoader) {
+        String listener = "com.miui.contentextension.text.floatview.TaplusSplashFloatView$13";
+        try {
+            XposedHelpers.findAndHookMethod(listener, classLoader, "onClick", android.view.View.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            Context context = ((android.view.View) param.args[0]).getContext();
+                            Object owner;
+                            try {
+                                android.os.Bundle settings = context.getContentResolver().call(
+                                        ImageStagingClient.BASE_URI, DragShareSettings.METHOD_GET_SETTINGS,
+                                        null, null);
+                                if (settings == null || !settings.getBoolean(
+                                        IntegrationSettings.EXTRA_COPY_DIRECT_ENABLED, false)) return;
+                                String text = AicrClipboardText.read(context.getSystemService(
+                                        android.content.ClipboardManager.class).getPrimaryClip());
+                                if (text == null || !text.equals(
+                                        PortalContentCaptureSource.clipboardCardText(serviceClass))) return;
+                                owner = PortalContentCaptureSource.clipboardCardOwner(param.thisObject);
+                                android.os.Bundle input = new android.os.Bundle();
+                                input.putString("text", text);
+                                android.os.Bundle result = context.getContentResolver().call(
+                                        ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN,
+                                        null, input);
+                                if (result == null || !result.getBoolean("accepted")) {
+                                    throw new IllegalStateException("分词窗口未接受请求");
+                                }
+                            } catch (RuntimeException | LinkageError | XposedHelpers.InvocationTargetError error) {
+                                log("clipboard card handoff failed; keeping the host editor", error);
+                                android.widget.Toast.makeText(context, "无法打开分词窗口，保留原编辑操作："
+                                        + error.getMessage(), android.widget.Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                            param.setResult(null);
+                            log("opened original-page text window from portal clipboard card");
+                            try {
+                                PortalContentCaptureSource.dismissClipboardCard(owner);
+                            } catch (RuntimeException | LinkageError | XposedHelpers.InvocationTargetError error) {
+                                log("text window opened but the clipboard card could not close", error);
+                                android.widget.Toast.makeText(context, "分词窗口已打开，但复制卡片未能收起",
+                                        android.widget.Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    });
+            log("portal clipboard card hook installed");
+        } catch (RuntimeException | LinkageError error) {
+            log("clipboard card hook unavailable; keeping the host editor", error);
         }
     }
 

@@ -85,6 +85,8 @@ public final class ShareImageProvider extends ContentProvider {
             enforcePortalCaller();
             Bundle result = DragShareSettings.readLocal(contextOrThrow()).toBundle();
             ThumbTriggerSettings.appendToBundle(contextOrThrow(), result);
+            result.putBoolean(IntegrationSettings.EXTRA_COPY_DIRECT_ENABLED,
+                    IntegrationSettings.isCopyDirectEnabled(contextOrThrow()));
             return result;
         }
         if (IntegrationSettings.METHOD_GET_AICR_SETTINGS.equals(method)) {

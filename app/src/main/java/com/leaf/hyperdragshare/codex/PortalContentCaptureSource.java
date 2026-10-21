@@ -11,6 +11,18 @@ import de.robv.android.xposed.XposedHelpers;
 final class PortalContentCaptureSource {
     private PortalContentCaptureSource() {}
 
+    static String clipboardCardText(Class<?> serviceClass) {
+        return (String) XposedHelpers.callStaticMethod(serviceClass, "getClipboardContent");
+    }
+
+    static Object clipboardCardOwner(Object listener) {
+        return XposedHelpers.getObjectField(listener, "this$0");
+    }
+
+    static void dismissClipboardCard(Object owner) {
+        XposedHelpers.callMethod(owner, "hideSplashFloatView", true);
+    }
+
     static CapturedContent capture(Object taplusService, DragShareSettings settings) {
         if (taplusService == null) {
             return null;

@@ -807,3 +807,19 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 测试前UID1000只读剪贴板为空；写入前重复确认空、写后严格读回生成值，结束仅在仍匹配本次样本时清除，最终present=false/readable=false。第一次元数据helper使用了不存在的android-37路径，编译失败非设备无能力；改为实际android-37.0后成功。没有输出/保存用户剪贴板内容，不恢复旧数据掩盖结果。
 - 传送门也重载到159/Root159/granted=true；无android/整机重启。前后settings/integrations XML相同，未写收藏/改权限/启用无障碍；UI回原Bili2183，未点击休息提醒或播放。无Root取词helper，device诊断DEX/XML/PNG已清理，截图与日志只留本机。
 - 未验：真实应用自然复制入口、关闭开关/敏感文本/500ms重复的实机分支、Binder失败提示、深色/横屏。可见系统“编辑所选文本”浮层共存问题仍在，不当本批已修复。真实面积、Bili评论普通长按、四样式四边真实分享、115侧条旧ANR仍未完成。
+
+
+## 2026-10-21：1.7.136 复制卡片原页分词
+
+- 真机窗口证据：复制生成文字后TaplusSplashFloatView由Portal UID10128持有，frame[744,698][1440,1097]。设备Portal5.1.5与既有样本SHA256均E7810EF31917CD64C80BDD338D4434E9CB6C49F4C823CA9B8F7BE6688F0B9C5B。任务内安装droidasc，先索引EditActivity引用定位TaplusSplashFloatView$13.onClick，再定点JADX确认clipboard_data=getClipboardContent、启动EditActivity、hideSplashFloatView(true)。没有复制反编译实现。旧135实际点卡打开全屏EditActivity，hds136-before-click-activity.txt/xml/png。
+- 新Hook仅精确按钮，复用copy_direct_enabled（Miuix改名“复制文字分词”，默认关闭），点击时读取原Portal受限配置；复用135敏感/自复制/明确文本过滤，严格比对当前文字与卡片缓存。原Portal RPC只传文字；accepted前保留原方法，接受后跳过编辑并收卡，收卡失败独立提示。私有访问在PortalContentCaptureSource，不加作用域、不扩权、不改黑名单/系统权限。
+- 279全量构建、203项测试0失败、Lint0 errors139 warnings2 hints通过。复核本机API82确认XposedHelpers.InvocationTargetError直接继承Error，原RuntimeException/LinkageError捕获不到；仅在两处反射边界显式加入，未catch Throwable。最终280同三项通过，203项0失败。真实失败提示分支未另造故障，不能写成实机已验。
+- 279/160在Settings搜索框输入38字生成样本，Ctrl+A后点击原生复制；ClipboardReceiver明确top activity is blocked package: com.android.settings, skip clipboard，定点读Receiver确认名单只含Settings。未为测试删除限制；此尝试不算入口通过。
+- Via先由PackageManager解析VIEW组件mark.via/.Trampoline，再显式打开about:blank（隐式about:blank无法解析，不当设备故障）。新建空白标签，未加载测试网址或提交搜索。地址框输入38字生成样本，Ctrl+A/KEYCODE_COPY由真实应用复制（label null），原ClipboardReceiver→startClipboardTask→系统卡片，hds136-via-copy-log/full-log.txt和via-card.png。没有Root Provider.call或伪造Receiver广播。
+- 真点卡片后hds136-after-card.xml/png显示38字原页分词，topResumedActivity仍mark.via/.Shell t2181（after-card-activity.txt）；WindowManager中可见TaplusSplashFloatView数量0。11:06:15模块日志opened original-page text window from portal clipboard card。Back关闭仍浏览器（after-back-activity.txt）。证明真实应用复制→点击系统卡片→原页分词/收卡，不代表所有复制自动弹窗。
+- 实际Miuix开关true→false，setting-off.xml checked=false、integrations-off.xml为false；最初切换后立即读仍true，稍后落盘false，未误判保存失败。回Bili仅Root写同一生成文字准备卡片，点卡进入原clipboard.EditActivity（off-editor-activity.txt/xml），证明关闭分支保留原编辑，非第二次真实应用复制。返回、不点编辑确认；同一Miuix开关恢复true，最终integrations-after与原XML一致。
+- 最终280/160同debug证书原位安装。outputs/HyperDragShare-1.7.136-debug.apk与设备base.apk SHA256严格一致：E7299EBFFDD6A434D29341D8DA02E841106BB48D83A65F767F3EDECC076F3819（hds136-installed-hash.txt）。仅重载Portal，160/Root160/granted=true（activation.xml）；未重启AICR/android/整机，AICR与框架代码未变。
+- 280首次快测不通过：切回Bili后的宿主app watcher初始化通知触发quitByDefault，卡片已消失，固定坐标点击无分词（final-build-panel.xml/clipboard-log.txt），未改代码掩盖。来源稳定后重写生成样本，按实时WindowManager可见卡片frame定位，final-build-panel2.xml确有文本分词，11:11:12最终Hook日志确认；Back/仅匹配本次样本时清除通过。此短测确认最终异常捕获修订包正常路径；Via完整链在相同正常路径279完成，不能称280重复全链通过。
+- 测试前剪贴板空；每次Root生成写入前确认空、写后读回，最后为空，不导出用户剪贴板内容。浏览器生成空白标签点击专属关闭按钮，不关闭原标签；Settings生成查询已清空，原Bili2183休息提醒保持，未恢复播放。设置/集成前后XML相同，不写收藏，不启用无障碍或改权限。无Root取词helper；device hds136临时文件已清理，意外通知截图不提交。
+- AICR独立静态链：mu5.g监听→jp3 case9→mu5.a/c→非导出TextDirectProvider processText，eb1.z/A以能力1210 CRS_INTELLIGENT_CLIPBOARD_REDIRECT启停。copydirect.IntentActivity走确认/目标跳转，OpenCapabilityProvider有保护权限；同名ara日志属于网络指令。未重复读有反编译错误的mu5.d，未强制开启能力。Portal卡片与AICR自动链不能混写。
+- 未完成：真实面积、Bili评论普通长按、四样式四边完整实手指接收、115旧侧条ANR；AICR自动分词与独立复制卡片共存待处理，不能把本批主动点击后收卡当全局共存修复。深色/横屏、敏感/失配卡片、真实窗口拒绝新Hook分支未验。
