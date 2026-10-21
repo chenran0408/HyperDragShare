@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -63,6 +64,7 @@ private val OverlayBottomBarContentOffset = (-2).dp
 internal fun OverlayScene(
     scrimColor: Color,
     onDismiss: (() -> Unit)?,
+    scrimOpacity: () -> Float = { 1f },
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -78,7 +80,7 @@ internal fun OverlayScene(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(scrimColor)
+                .drawBehind { drawRect(scrimColor.copy(alpha = scrimColor.alpha * scrimOpacity())) }
                 .then(dismissModifier),
         )
         content()

@@ -80,10 +80,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     init {
         legacyContentView = LayoutInflater.from(context).inflate(R.layout.boom_activity_layout, null, false)
-        legacyContentView.findViewById<View>(R.id.boom_page).apply {
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            BoomAnimator.makeFadeIn(this, BoomAnimator.BOOM_DURATION)
-        }
         boomChipPage = BoomChipPage(context, legacyContentView, false, object : BoomChipPage.Actions {
             override fun dismiss() = requestAnimatedDismissFromLegacy()
             override fun copy(text: String) = copyText(text)

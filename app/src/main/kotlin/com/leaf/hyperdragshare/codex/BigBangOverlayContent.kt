@@ -28,7 +28,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -205,7 +204,6 @@ internal fun BigBangOverlayContent(
             )
         }
     }
-    val panelScale = 0.84f + (0.16f * enterProgress)
     val closePanel: () -> Unit = {
         if (!dismissing) {
             dismissing = true
@@ -229,7 +227,8 @@ internal fun BigBangOverlayContent(
         onDispose { onDismissRequesterChanged(null) }
     }
     LaunchedEffect(Unit) { panelVisible = true }
-    SideEffect {
+    DisposableEffect(legacyBackgroundColor, legacyTextColor, legacySummaryColor,
+        legacySurfaceColor, legacySelectionColor, legacyActionColor) {
         onLegacyThemeChanged(
             legacyBackgroundColor,
             legacyTextColor,
@@ -238,6 +237,7 @@ internal fun BigBangOverlayContent(
             legacySelectionColor,
             legacyActionColor,
         )
+        onDispose { }
     }
 
     BackHandler(onBack = requestDismiss)
@@ -247,7 +247,8 @@ internal fun BigBangOverlayContent(
         darkIcons = !dark,
     )
     OverlayScene(
-        scrimColor = scrimColor.copy(alpha = scrimColor.alpha * scrimProgress),
+        scrimColor = scrimColor,
+        scrimOpacity = { scrimProgress },
         onDismiss = requestDismiss,
     ) {
         FloatingPanel(
@@ -258,8 +259,8 @@ internal fun BigBangOverlayContent(
                 .onGloballyPositioned { coordinates -> panelBounds = coordinates.boundsInWindow() }
                 .graphicsLayer {
                     alpha = enterProgress
-                    scaleX = panelScale
-                    scaleY = panelScale
+                    scaleX = 0.84f + (0.16f * enterProgress)
+                    scaleY = scaleX
                     this.transformOrigin = transformOrigin
                 },
             shape = panelShape,
