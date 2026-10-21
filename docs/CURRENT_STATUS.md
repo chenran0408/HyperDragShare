@@ -6,7 +6,9 @@
 
 用户追加“大更新，再测试”：177检查/安装已完成并以222c716推送；此后小窗、分词、图片拖动和UI合成178，不按单按钮出包。三名Luna high代理负责独立范围，主任务统一接口、动画减负、构建及验收。当前178源码不等于设备已更新。
 
-源码178/202，设备仍177/201。build372在新增动画测试编译处失败：Robolectric Shadows重载解析引用当前compileSDK缺失的FingerprintManager；改用项目已有ShadowLooper入口，build373整批重跑成功。398项测试0失败/错误/跳过，Lint0错误184警告3提示（新增缩略图数量文案SetTextI18n提示），Debug/Release/R8与资源压缩通过。APK outputs/HyperDragShare-1.7.178-arm64-v8a.apk，21,475,042 bytes/20.48MiB，仅arm64，同证书，SHA256 `b8b26b0b7a06fa11ed067176e95b7375e905b23e4b5225210a8869b135110358`。检测手机近期持续触摸/正在模块设置，未覆盖或重载，等待空闲后集中安装。
+源码178/202，回退点85a10ef已推送，设备仍177/201。build372在新增动画测试编译处失败：Robolectric Shadows重载解析引用当前compileSDK缺失的FingerprintManager；改用项目已有ShadowLooper入口，build373整批重跑成功。398项测试0失败/错误/跳过，Lint0错误184警告3提示（新增缩略图数量文案SetTextI18n提示），Debug/Release/R8与资源压缩通过。APK outputs/HyperDragShare-1.7.178-arm64-v8a.apk，21,475,042 bytes/20.48MiB，仅arm64，同证书，SHA256 `b8b26b0b7a06fa11ed067176e95b7375e905b23e4b5225210a8869b135110358`。检测手机持续触摸，未覆盖或重载，等待空闲后集中安装。
+
+按用户此前的持续推进要求，已创建本对话heartbeat `hyperdragshare`（每小时，ACTIVE），仅在设备空闲适合测试时继续本包集中安装/验收；使用中/锁屏/离线则跳过且不反复提醒。完成验收或已明确仅缺用户物理输入后暂停心跳，防止重复。调度不等于保证无间断运行。当前未发布178正式Release。
 
 小窗从当前ROM handleTouchEvent返回对象取得实际触摸normal任务，排除mini/pin与模块/原生侧栏DOWN，优先于最近状态回调；退出normal、销毁、关闭与新启动匹配清理。接口失败记录原因，原生事件/几何不改写。
 
