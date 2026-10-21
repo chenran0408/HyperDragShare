@@ -973,4 +973,4 @@ APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null�
 
 手机未输入约70秒且前台微信、无模块窗时，只结束旧Portal21532并空query；PID21130，activation.xml的注入/Root171及授权true确认；前后微信LauncherUI/task2387不变。未打开设置、注入手势、截图、改私人内容或重启Android/AICR；不凭元数据宣称输入ready。新时长设置UI、Root完整手势接管/录音冲突和物理手感尚未实测；旧146文字拖出证据不替代147触发验收。
 
-用户要求公开GitHub。当前账号下已建立公开fork https://github.com/chenran0408/HyperDragShare ，保留上游Leaf-lsgtky/HyperDragShare关系。README按当前实装重写，不再宣称已删小窗/搜索或参考有真实面积能力。公开前检查当前跟踪文件、可达历史1424个blob的凭证与生成文件规则，未发现命中；本机签名和SDK文件不纳入Git。新增无签名secret依赖的Android检查工作流；远程推送/CI结果以GitHub实际状态为准，不能凭配置文件宣称云端已通过。
+用户要求公开GitHub。当前账号下已建立公开fork https://github.com/chenran0408/HyperDragShare ，保留上游Leaf-lsgtky/HyperDragShare关系。README按当前实装重写，不再宣称已删小窗/搜索或参考有真实面积能力。公开前检查当前跟踪文件、可达历史1424个blob的凭证与生成文件规则，未发现命中；本机签名和SDK文件不纳入Git。原计划加入Android检查，但GitHub当前OAuth凭据无workflow权限，首次推送被服务端拒绝且未创建开发分支。移除本分支工作流后继续发布源码，不扩大账号权限；不宣称有云端检查结果。开发APK由本地已通过的build304生成。

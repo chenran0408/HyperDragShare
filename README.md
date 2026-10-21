@@ -30,7 +30,7 @@
 
 允许模块悬浮窗权限，按所选来源给对应进程Root权限。传送门模式通过Root访问无障碍节点，不自动开启手机里的无障碍服务；主动选择无障碍来源时才需要手动启用本模块服务。
 
-这是开发预览分支。调试APK可从本仓库 [Actions构建产物](https://github.com/chenran0408/HyperDragShare/actions/workflows/android.yml) 获取，正式发布以Releases为准。图片/中转站存储格式有历史升级边界，降级前请看 [中转站说明](docs/STASH.md)，不要通过清数据回退。
+这是开发预览分支。APK见本仓库 [Releases](https://github.com/chenran0408/HyperDragShare/releases)，带开发预览标记的版本未完成全部验收。当前使用本地检查与构建，尚未启用云端自动构建。图片/中转站存储格式有历史升级边界，降级前请看 [中转站说明](docs/STASH.md)，不要通过清数据回退。
 
 ## 构建
 
