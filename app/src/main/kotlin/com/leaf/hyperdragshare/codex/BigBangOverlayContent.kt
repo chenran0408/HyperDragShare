@@ -76,16 +76,16 @@ import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.More
-import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Cut
+import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.Merge
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 internal enum class BigBangMoreAction {
     Dictionary,
+    Direct,
     Split,
     Merge,
-    ReopenOcr,
     Translate,
     UndoEdit,
     ReadQr,
@@ -130,6 +130,8 @@ internal fun BigBangOverlayContent(
     onClearSelection: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
     onPanelPositionChanged: (Float, Float) -> Unit,
+    directVisible: Boolean = false,
+    directContent: @Composable () -> Unit = {},
 ) {
     val dark = MiuixTheme.colorScheme.background.luminance() < 0.5f
     val maximumMetrics = rememberOverlayPanelMetrics(panelHeightFraction = panelHeightFraction)
@@ -150,7 +152,8 @@ internal fun BigBangOverlayContent(
     }
     // 52dp header + two 44dp action rows, their gap/padding, and the native body's 8dp.
     val naturalPanelHeight = (bodyHeightPx / density).dp + 168.dp +
-        if (copyFeedback == null) 0.dp else 24.dp
+        (if (copyFeedback == null) 0.dp else 24.dp) +
+        (if (directVisible) 120.dp else 0.dp)
     val panelMetrics = if (maximumMetrics.fullScreen) maximumMetrics else maximumMetrics.copy(
         height = minOf(maximumMetrics.height, naturalPanelHeight),
     )
@@ -315,10 +318,6 @@ internal fun BigBangOverlayContent(
                                 enabled = !isSegmenting,
                                 onClick = { showMoreMenu = true },
                             )
-                            BigBangIconAction(MiuixIcons.Close,
-                                label = "关闭分词窗口",
-                                onClick = closePanel,
-                                enabled = true)
                         },
                     )
                 },
@@ -360,8 +359,9 @@ internal fun BigBangOverlayContent(
                             BigBangIconAction(MiuixIcons.Undo, "撤销", { onMoreAction(BigBangMoreAction.UndoEdit) }, ready && canUndoEdit)
                             BigBangIconAction(MiuixIcons.Translate, "翻译", { onMoreAction(BigBangMoreAction.Translate) }, ready)
                             BigBangIconAction(DictionaryIcon, "词典查词", { onMoreAction(BigBangMoreAction.Dictionary) }, ready)
+                            BigBangIconAction(MiuixIcons.Link, "识别选中文字的直达动作",
+                                { onMoreAction(BigBangMoreAction.Direct) }, ready)
                             if (sourceImageAvailable) {
-                                BigBangToolAction("重新识字", { onMoreAction(BigBangMoreAction.ReopenOcr) }, ready)
                                 BigBangToolAction("二维码", { onMoreAction(BigBangMoreAction.ReadQr) }, ready)
                             }
                             if (hasTextSelection && !allTextSelected)
@@ -376,6 +376,7 @@ internal fun BigBangOverlayContent(
                         Text(it, color = MiuixTheme.colorScheme.onSurface,
                             fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                     }
+                    directContent()
                     AndroidView(
                         modifier = Modifier
                             .fillMaxWidth()

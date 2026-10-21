@@ -55,8 +55,11 @@ final class PressCaptureSource {
         blocker = new BackgroundTouchBlocker(context);
         ModuleActivation.reportPressReader(context, false, "");
         worker.execute(() -> {
+            long connectionStarted = SystemClock.elapsedRealtime();
             try {
                 SharedRootNodeCapture.Connection ready = SharedRootNodeCapture.open(context, false);
+                DragShareLog.i(TAG, "connection stage=press_reader_ready elapsed_ms="
+                        + (SystemClock.elapsedRealtime() - connectionStarted));
                 main.post(() -> {
                     if (stopped) ready.close();
                     else {
@@ -65,7 +68,9 @@ final class PressCaptureSource {
                         DragShareLog.i(TAG, "press reader ready; idle without reading nodes");
                     }
                 });
-            } catch (IOException | SecurityException error) {
+            } catch (IOException | SecurityException | IllegalStateException error) {
+                DragShareLog.w(TAG, "connection stage=press_reader_failed elapsed_ms="
+                        + (SystemClock.elapsedRealtime() - connectionStarted));
                 DragShareLog.w(TAG, "cannot prepare press reader", error);
                 main.post(() -> { if (!stopped) readerFailed(null, "取词连接未建立，请重载作用域。" + error.getMessage()); });
             }

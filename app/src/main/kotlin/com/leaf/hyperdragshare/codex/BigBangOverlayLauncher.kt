@@ -34,8 +34,9 @@ object BigBangOverlayLauncher {
         val before = input.getString("before_text")
         val after = input.getString("after_text")
         val pressConfirmedAt = input.getLong("press_confirmed_at")
+        val copyDirect = input.getBoolean("copy_direct_source")
         main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after,
-            pressConfirmedAt = pressConfirmedAt) }
+            pressConfirmedAt = pressConfirmedAt, copyDirect = copyDirect) }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
@@ -55,7 +56,7 @@ object BigBangOverlayLauncher {
     }
 
     private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null,
-        before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L) {
+        before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L, copyDirect: Boolean = false) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
@@ -70,14 +71,18 @@ object BigBangOverlayLauncher {
             override fun onReceive(context: Context, intent: Intent) = overlay.dismiss()
         }
         lateinit var session: BigBangPanelSession
-        val originalText = text
         session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
             override fun dismiss() = overlay.dismiss()
             override fun collapse() = overlay.dismiss()
+            override fun searchDirect(text: String) {
+                SearchOverlayWindow.show(context, overlay.window.decorView, text, BoomActionHandler.SEARCH_WEB,
+                    openExternal = { launch(CopyDirectBrowser.route(app, it)) })
+            }
             override fun search(text: String, type: Int) {
                 SearchOverlayWindow.show(context, overlay.window.decorView, text, type,
                     openExternal = { launch(it) })
             }
+            override fun openExternal(intent: Intent) = launch(CopyDirectBrowser.route(app, intent))
             override fun share(text: String) {
                 launch(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                     this.type = "text/plain"
@@ -121,19 +126,6 @@ object BigBangOverlayLauncher {
                 }
                 return started
             }
-            override fun reopenOcr(uri: Uri) {
-                val state = Bundle().also(session::saveState)
-                val accepted = ImageOcrOverlay.startWithResult(app, uri) { result ->
-                    if (generation == windowGeneration &&
-                        !app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
-                        if (result == null) open(app, originalText, x, y, sourceImage, state)
-                        else open(app, result, x, y, uri, Bundle().apply {
-                            putBundle(BigBangPanelSession.UNDO_EDIT, state)
-                        })
-                    }
-                }
-                if (accepted) overlay.dismiss()
-            }
             override fun readQr(uri: Uri) {
                 ImageOcrOverlay.startQr(app, uri, overlay.window.decorView)
             }
@@ -158,7 +150,10 @@ object BigBangOverlayLauncher {
         ) { session.Content() }
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
-        if (overlay.show(pressConfirmedAt)) session.open(text, x, y, sourceImage, savedState, before, after)
+        if (overlay.show(pressConfirmedAt)) {
+            session.open(text, x, y, sourceImage, savedState, before, after)
+            if (copyDirect) session.showDirectActions(text)
+        }
     }
 
     private fun report(context: Context, error: Exception) {

@@ -36,6 +36,8 @@ final class RootTouchSource {
 
     private static final String TAG = "DragShare/RootInput";
     private static final String READY_LINE = "HDS_INPUT_READY";
+    private static final String INVENTORY_MARKER = "HDS_INPUT_INVENTORY";
+    private static final String RANGES_MARKER = "HDS_INPUT_RANGES";
     private static final Pattern EVENT_HANDLER = Pattern.compile("\\b(event\\d+)\\b");
     private static final Pattern MAX_X = Pattern.compile("ABS_MT_POSITION_X\\s*:.*?max\\s+(\\d+)");
     private static final Pattern MAX_Y = Pattern.compile("ABS_MT_POSITION_Y\\s*:.*?max\\s+(\\d+)");
@@ -138,22 +140,25 @@ final class RootTouchSource {
     private void runLoop(Run run) {
         String failure = "";
         InputStream stream = null;
+        long connectionStarted = SystemClock.elapsedRealtime();
         try {
             run.parser = new EvdevTouchParser((action, x, y, major, minor, width) ->
                     onRawFrame(run, action, x, y, major, minor, width));
-            String devices = rootText(run, "cat /proc/bus/input/devices");
+            long probeStarted = SystemClock.elapsedRealtime();
+            String probe = rootText(run, probeCommand());
+            logConnectionStage("device_probe", probeStarted);
             checkRunning(run);
+            String devices = sectionBetween(probe, INVENTORY_MARKER, RANGES_MARKER);
+            String allRanges = substringAfter(probe, RANGES_MARKER);
             String devicePath = findTouchDevicePath(devices);
             if (devicePath == null) throw new IOException("未找到直接触摸屏设备。");
-            String ranges = rootText(run, "getevent -lp " + devicePath);
-            checkRunning(run);
+            String ranges = deviceRanges(allRanges, devicePath);
+            if (ranges == null) throw new IOException("无法读取触摸设备坐标范围。");
             run.rawMaxX = parseMaximum(MAX_X, ranges);
             run.rawMaxY = parseMaximum(MAX_Y, ranges);
             if (run.rawMaxX <= 0 || run.rawMaxY <= 0) {
                 throw new IOException("触摸设备没有可用的坐标范围。");
             }
-            DragShareDiagnostics.captureInputInventory(context,
-                    "root input range probe " + devicePath, devices, ranges);
             checkRunning(run);
             Process process = startProcess(run, readerCommand(devicePath));
             StringBuilder errors = drainErrors(process);
@@ -167,6 +172,7 @@ final class RootTouchSource {
             mainHandler.post(() -> {
                 if (currentRun == run && !run.cancelled) publishState(true, "");
             });
+            logConnectionStage("time_to_ready", connectionStarted);
             DragShareLog.i(TAG, "ready device=" + devicePath + " raw="
                     + run.rawMaxX + "x" + run.rawMaxY);
             readEvents(run, stream);
@@ -182,6 +188,7 @@ final class RootTouchSource {
         } catch (IOException | SecurityException error) {
             if (!run.cancelled) {
                 failure = "触摸输入不可用：" + error.getMessage();
+                logConnectionStage("time_to_failure", connectionStarted);
                 DragShareLog.w(TAG, failure, error);
             }
         } finally {
@@ -240,6 +247,46 @@ final class RootTouchSource {
         return "exec 4<" + devicePath + " || exit $?\n"
                 + "printf '" + READY_LINE + "\\n'\n"
                 + supervise("cat <&4 4<&-");
+    }
+
+    /** Reads the device inventory and all coordinate ranges under one root authorization. */
+    static String probeCommand() {
+        return "( printf '" + INVENTORY_MARKER + "\\n'; cat /proc/bus/input/devices || exit $?; "
+                + "printf '\\n" + RANGES_MARKER + "\\n'; getevent -lp )";
+    }
+
+    static String sectionBetween(CharSequence output, String startMarker, String endMarker)
+            throws IOException {
+        String value = output == null ? "" : output.toString();
+        int start = value.indexOf(startMarker);
+        if (start < 0) throw new IOException("Root 输入设备信息格式无效。");
+        start += startMarker.length();
+        int end = value.indexOf(endMarker, start);
+        if (end < 0) throw new IOException("Root 输入坐标信息格式无效。");
+        return value.substring(start, end).trim();
+    }
+
+    private static String substringAfter(CharSequence output, String marker) throws IOException {
+        String value = output == null ? "" : output.toString();
+        int position = value.indexOf(marker);
+        if (position < 0) throw new IOException("Root 输入坐标信息格式无效。");
+        return value.substring(position + marker.length()).trim();
+    }
+
+    static String deviceRanges(CharSequence allRanges, String devicePath) {
+        if (allRanges == null || devicePath == null) return null;
+        String value = allRanges.toString();
+        Pattern header = Pattern.compile("(?m)^add device \\d+: "
+                + Pattern.quote(devicePath) + "\\s*$");
+        Matcher matcher = header.matcher(value);
+        if (!matcher.find()) return null;
+        int end = value.indexOf("\nadd device ", matcher.end());
+        return end < 0 ? value.substring(matcher.start()) : value.substring(matcher.start(), end);
+    }
+
+    private static void logConnectionStage(String stage, long startedAt) {
+        DragShareLog.i(TAG, "connection stage=" + stage + " elapsed_ms="
+                + (SystemClock.elapsedRealtime() - startedAt));
     }
 
     private String rootText(Run run, String command) throws IOException, InterruptedException {

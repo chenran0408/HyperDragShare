@@ -11,9 +11,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -28,6 +33,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.leaf.hyperdragshare.gestures.config.ConfigContract as C
@@ -40,11 +47,20 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TabRow
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
+import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Help
+import top.yukonga.miuix.kmp.icon.extended.Report
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.leaf.hyperdragshare.gestures.diagnostics.CompatibilityReport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -150,6 +166,38 @@ fun GestureSettingsContent(
         )
     }
 
+    @Composable
+    fun action(title: String, summary: String, icon: ImageVector, onClick: () -> Unit) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics(mergeDescendants = true) {},
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.width(16.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
+                Text(text = title, color = MiuixTheme.colorScheme.onSurface)
+                Text(text = summary, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            }
+            Icon(
+                imageVector = MiuixIcons.ChevronForward,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(16.dp))
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -183,19 +231,22 @@ fun GestureSettingsContent(
                     bool("显示当前应用名称", "手势选择过程中显示应用名称", C.KEY_SHOW_SELECTED_APP_NAME, C.DEFAULT_SHOW_SELECTED_APP_NAME)
                     bool("强制圆形图标", "将目标图标裁切为圆形", C.KEY_FORCE_CIRCULAR_ICONS, C.DEFAULT_FORCE_CIRCULAR_ICONS)
                     chooser("图标旋转形变", listOf("关闭", "轻微", "标准", "明显"), C.KEY_SELECTION_TRANSFORM_LEVEL, C.DEFAULT_SELECTION_TRANSFORM_LEVEL)
-                    ArrowPreference(
+                    action(
                         title = "导出兼容性报告",
-                        summary = "生成设备与模块运行环境信息，不包含已选应用清单",
+                        summary = "生成设备与模块运行环境信息，不含已选应用",
+                        icon = MiuixIcons.Report,
                         onClick = { reportLauncher.launch(CompatibilityReport.FILE_NAME) },
                     )
-                    ArrowPreference(
-                        title = "恢复手势默认设置",
-                        summary = "恢复手势参数；已选应用与快捷方式保持不变",
+                    action(
+                        title = "恢复默认设置",
+                        summary = "恢复手势参数；保留已选应用和快捷方式",
+                        icon = MiuixIcons.Refresh,
                         onClick = { showResetConfirmation = true },
                     )
-                    ArrowPreference(
+                    action(
                         title = "问题反馈",
-                        summary = "打开 GitHub 新问题页面并附上兼容性报告，由你检查后提交",
+                        summary = "打开 GitHub 新问题页面，附上报告供你检查",
+                        icon = MiuixIcons.Help,
                         onClick = {
                             coroutineScope.launch {
                                 try {
@@ -228,9 +279,10 @@ fun GestureSettingsContent(
             item { SmallTitle(text = "底角触发与扇形布局") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
-                    ArrowPreference(
+                    action(
                         title = "应用与快捷方式",
                         summary = "选择底角扇形可打开的应用和快捷方式",
+                        icon = MiuixIcons.GridView,
                         onClick = { onManageTargets("bottom") },
                     )
                     bool("竖屏底角手势", "启用竖屏底部触发", C.KEY_BOTTOM_PORTRAIT_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_ENABLED)
@@ -260,9 +312,10 @@ fun GestureSettingsContent(
             item { SmallTitle(text = "侧滑触发与布局") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
-                    ArrowPreference(
+                    action(
                         title = "应用与快捷方式",
                         summary = "选择侧滑可打开的应用和快捷方式",
+                        icon = MiuixIcons.GridView,
                         onClick = { onManageTargets("side") },
                     )
                     bool("启用侧滑手势", "侧边向内长滑打开目标", C.KEY_SIDE_GESTURE_ENABLED, C.DEFAULT_SIDE_GESTURE_ENABLED)
@@ -293,9 +346,10 @@ fun GestureSettingsContent(
             item { SmallTitle(text = "蜂巢") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
-                    ArrowPreference(
+                    action(
                         title = "应用与快捷方式",
                         summary = "选择蜂巢可打开的应用和快捷方式",
+                        icon = MiuixIcons.GridView,
                         onClick = { onManageTargets("honeycomb") },
                     )
                     bool("启用蜂巢", "底角第二段或侧滑布局使用", C.KEY_HONEYCOMB_ENABLED, C.DEFAULT_HONEYCOMB_ENABLED)

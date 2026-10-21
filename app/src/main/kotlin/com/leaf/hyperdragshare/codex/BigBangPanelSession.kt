@@ -30,10 +30,11 @@ internal class BigBangPanelSession(private val context: Context, private val act
     interface Actions {
         fun dismiss()
         fun collapse()
+        fun searchDirect(text: String)
         fun search(text: String, type: Int)
         fun share(text: String)
         fun dragText(source: View, text: String): Boolean
-        fun reopenOcr(uri: Uri)
+        fun openExternal(intent: android.content.Intent)
         fun readQr(uri: Uri)
     }
     private val main = Handler(Looper.getMainLooper())
@@ -66,6 +67,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var undoEditState by mutableStateOf<Bundle?>(null)
     private var beforeText: String? = null
     private var afterText: String? = null
+    private var directText by mutableStateOf<String?>(null)
 
     private fun updateSelectionSummary() {
         if (!copying) copyFeedback = null
@@ -131,6 +133,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     originalText = { boomChipPage?.originalText.orEmpty() },
                     onEditText = { text ->
                         if (text != boomChipPage?.originalText) {
+                            directText = null
                             undoEditState = Bundle().also {
                                 saveState(it)
                                 it.remove(UNDO_EDIT)
@@ -158,6 +161,14 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     onClearSelection = { boomChipPage?.handleClick() },
                     onMoreAction = ::handleMoreAction,
                     onPanelPositionChanged = ::savePanelPosition,
+                    directVisible = directText != null,
+                    directContent = {
+                        directText?.let { text ->
+                            CopyDirectSuggestions(context, text, onDismiss = { directText = null },
+                                onOpenExternal = actions::openExternal,
+                                onSearch = actions::searchDirect)
+                        }
+                    },
                     )
             }
         }
@@ -167,6 +178,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     fun open(text: String, touchX: Int, touchY: Int, sourceImage: Uri?, savedState: Bundle? = null,
         before: String? = null, after: String? = null) {
         check(!closed) { "Create a new panel session after close" }
+        directText = null
         requests.invalidate()
         undoEditState = savedState?.getBundle(UNDO_EDIT)
         beforeText = (if (savedState != null) savedState.getString("before_text") else before)?.takeIf { it.isNotBlank() }
@@ -227,6 +239,10 @@ internal class BigBangPanelSession(private val context: Context, private val act
                 Toast.makeText(context, "扩展文字失败：${error.message}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    fun showDirectActions(text: String) {
+        directText = text
     }
 
     fun close() {
@@ -341,6 +357,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     private fun handleMoreAction(action: BigBangMoreAction) {
         when (action) {
+            BigBangMoreAction.Direct -> showDirectActions(selectedTextOrOriginal())
             BigBangMoreAction.Dictionary -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_DICTIONARY)
             BigBangMoreAction.Split, BigBangMoreAction.Merge -> {
                 val page = boomChipPage ?: return
@@ -352,7 +369,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     else page.mergeSelectedWords()
                 if (changed) undoEditState = previous
             }
-            BigBangMoreAction.ReopenOcr -> reopenOcr()
             BigBangMoreAction.ReadQr -> sourceImageUri?.let(actions::readQr)
             BigBangMoreAction.UndoEdit -> {
                 val state = undoEditState ?: return
@@ -402,15 +418,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
         panelOffsetXdp = xDp
         panelOffsetYdp = yDp
         BigBangSettings.setPanelPositionDp(context, xDp, yDp)
-    }
-
-    private fun reopenOcr() {
-        val uri = sourceImageUri
-        if (uri == null) {
-            Toast.makeText(context, R.string.bigbang_ocr_source_missing, Toast.LENGTH_SHORT).show()
-            return
-        }
-        actions.reopenOcr(uri)
     }
 
     fun saveState(outState: Bundle) {

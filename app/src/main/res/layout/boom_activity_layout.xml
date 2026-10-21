@@ -4,8 +4,7 @@
     android:id="@+id/boom_page"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/boom_background_color"
-    android:visibility="invisible">
+    android:background="@drawable/boom_background_color">
 
     <com.leaf.hyperdragshare.codex.CustomScrollView
         android:id="@+id/boom_scroller"

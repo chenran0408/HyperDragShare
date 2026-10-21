@@ -309,6 +309,24 @@ private fun MainPage(
     var copyDirectEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
     }
+    val copyDirectBrowserChoices = remember(context) { CopyDirectBrowser.choices(context) }
+    var copyDirectBrowserPackage by remember(context) {
+        mutableStateOf(IntegrationSettings.getCopyDirectBrowserPackage(context))
+    }
+    val copyDirectBrowserUnavailable = copyDirectBrowserPackage.isNotEmpty() &&
+        copyDirectBrowserChoices.none { it.packageName == copyDirectBrowserPackage }
+    val copyDirectBrowserItems = remember(copyDirectBrowserChoices, copyDirectBrowserUnavailable) {
+        buildList {
+            if (copyDirectBrowserUnavailable) add("已选浏览器不可用，请重新选择")
+            addAll(copyDirectBrowserChoices.map { it.label })
+        }
+    }
+    val copyDirectBrowserIndex = if (copyDirectBrowserUnavailable) {
+        0
+    } else {
+        copyDirectBrowserChoices.indexOfFirst { it.packageName == copyDirectBrowserPackage }
+            .coerceAtLeast(0)
+    }
     var backTapMode by remember(context) {
         mutableIntStateOf(IntegrationSettings.getBackTapMode(context))
     }
@@ -454,12 +472,29 @@ private fun MainPage(
                         },
                     )
                     SwitchPreference(
-                        title = "复制文字分词",
-                        summary = "点击传送门的“编辑所选文本”卡片，在原页面分词；也接入 AICR 文字操作。需启用对应 LSPosed 作用域；默认关闭",
+                        title = "复制直达与分词",
+                        summary = "复制卡片接入原页分词与实体直达；也可选词后点击直达图标。需启用传送门/AICR作用域；默认关闭",
                         checked = copyDirectEnabled,
                         onCheckedChange = { enabled ->
                             IntegrationSettings.setCopyDirectEnabled(context, enabled)
                             copyDirectEnabled = enabled
+                        },
+                    )
+                    OverlayDropdownPreference(
+                        title = "复制直达浏览器",
+                        summary = if (copyDirectBrowserUnavailable) {
+                            "当前已选浏览器未安装；请重新选择，不会自动切换"
+                        } else {
+                            "选择复制直达打开链接时使用的浏览器"
+                        },
+                        items = copyDirectBrowserItems,
+                        selectedIndex = copyDirectBrowserIndex,
+                        onSelectedIndexChange = { selected ->
+                            val choiceIndex = selected - if (copyDirectBrowserUnavailable) 1 else 0
+                            copyDirectBrowserChoices.getOrNull(choiceIndex)?.let { choice ->
+                                IntegrationSettings.setCopyDirectBrowserPackage(context, choice.packageName)
+                                copyDirectBrowserPackage = choice.packageName
+                            }
                         },
                     )
                     OverlayDropdownPreference(

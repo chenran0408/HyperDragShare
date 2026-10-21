@@ -39,6 +39,7 @@ final class RootNodeCaptureClient {
     }
 
     static Session open(Context context) throws IOException, InterruptedException {
+        long started = android.os.SystemClock.elapsedRealtime();
         String apk;
         try {
             apk = context.getPackageManager().getApplicationInfo(BuildConfig.APPLICATION_ID, 0).sourceDir;
@@ -53,6 +54,8 @@ final class RootNodeCaptureClient {
             if (!startup.getBoolean("ready")) {
                 throw new IOException(startup.optString("error", "界面取词服务未就绪"));
             }
+            DragShareLog.i(TAG, "connection ready elapsed_ms="
+                    + (android.os.SystemClock.elapsedRealtime() - started));
             return session;
         } catch (JSONException error) {
             session.close();

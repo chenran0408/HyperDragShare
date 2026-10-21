@@ -39,6 +39,14 @@ public final class IntegrationSettings {
         preferences(context).edit().putBoolean(KEY_COPY_DIRECT_ENABLED, enabled).apply();
     }
 
+    public static String getCopyDirectBrowserPackage(Context context) {
+        return preferences(context).getString("copy_direct_browser_package", "");
+    }
+
+    public static void setCopyDirectBrowserPackage(Context context, String packageName) {
+        preferences(context).edit().putString("copy_direct_browser_package", packageName).apply();
+    }
+
     public static int getBackTapMode(Context context) {
         return BackTapMode.normalize(preferences(context).getInt(KEY_BACK_TAP_MODE, BackTapMode.OFF));
     }

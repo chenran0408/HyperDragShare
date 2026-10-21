@@ -138,6 +138,7 @@ final class PortalHooks {
                                         PortalContentCaptureSource.clipboardCardText(serviceClass))) return;
                                 owner = PortalContentCaptureSource.clipboardCardOwner(param.thisObject);
                                 android.os.Bundle input = new android.os.Bundle();
+                                input.putBoolean("copy_direct_source", true);
                                 input.putString("text", text);
                                 android.os.Bundle result = context.getContentResolver().call(
                                         ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN,
@@ -503,10 +504,6 @@ final class PortalHooks {
         ContentObserver observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange) {
-                PressCaptureSource thumb = thumbCaptureSource;
-                thumbCaptureSource = null;
-                if (thumb != null) thumb.stop();
-                updateHostIdleTimer(false);
                 applyPortalRuntime();
             }
         };

@@ -46,6 +46,35 @@ public final class RootTouchSourceTest {
     }
 
     @Test
+    public void probeReadsInventoryAndRangesInOneRootCommand() {
+        String command = RootTouchSource.probeCommand();
+        assertTrue(command.contains("cat /proc/bus/input/devices"));
+        assertTrue(command.contains("getevent -lp"));
+        assertTrue(command.indexOf("HDS_INPUT_INVENTORY")
+                < command.indexOf("HDS_INPUT_RANGES"));
+    }
+
+    @Test
+    public void selectsRangesForTheDiscoveredTouchDeviceOnly() {
+        String ranges = ""
+                + "add device 1: /dev/input/event0\n"
+                + "  name: \"gpio-keys\"\n"
+                + "    ABS (0003): 0035 : value 0, min 0, max 255\n"
+                + "add device 2: /dev/input/event7\n"
+                + "  name: \"touchscreen\"\n"
+                + "    ABS (0003): 0035 : value 0, min 0, max 1220\n"
+                + "    ABS (0003): 0036 : value 0, min 0, max 2656\n";
+
+        String selected = RootTouchSource.deviceRanges(ranges, "/dev/input/event7");
+
+        assertTrue(selected.contains("/dev/input/event7"));
+        assertTrue(selected.contains("max 1220"));
+        assertTrue(selected.contains("max 2656"));
+        assertFalse(selected.contains("event0"));
+        assertNull(RootTouchSource.deviceRanges(ranges, "/dev/input/event9"));
+    }
+
+    @Test
     public void stopDuringDiscoveryRejectsTheProcessThatStartsLate() {
         RootTouchSource.Run run = new RootTouchSource.Run();
         assertNull(run.cancel());
