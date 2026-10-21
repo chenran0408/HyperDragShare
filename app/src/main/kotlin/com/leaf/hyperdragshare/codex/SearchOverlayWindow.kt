@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex
 
 import android.app.KeyguardManager
+import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -20,7 +21,8 @@ internal object SearchOverlayWindow {
             Toast.makeText(app, "请解锁后打开搜索窗口", Toast.LENGTH_SHORT).show()
             return false
         }
-        if (!Settings.canDrawOverlays(app)) {
+        val host = (context as? Activity)?.takeIf { !it.isFinishing && !it.isDestroyed }
+        if (host == null && !Settings.canDrawOverlays(app)) {
             Toast.makeText(app, "请先在模块设置中允许悬浮窗权限", Toast.LENGTH_LONG).show()
             return false
         }
@@ -39,7 +41,8 @@ internal object SearchOverlayWindow {
             override fun onViewAttachedToWindow(view: View) = Unit
             override fun onViewDetachedFromWindow(view: View) = overlay.dismiss()
         }
-        overlay = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
+        overlay = InteractiveOverlayWindow(context,
+            if (host != null) OverlayWindowPolicy.hosted() else OverlayWindowPolicy.application(),
             onDismissed = {
                 owner.removeOnAttachStateChangeListener(ownerListener)
                 app.unregisterReceiver(screenOff)

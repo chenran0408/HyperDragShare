@@ -52,6 +52,22 @@ public final class PressPreviewHandoffTest {
         controller.destroy();
     }
 
+    @Test public void confirmedPressOwnsHostWindowUntilHandoffOrRootRelease() {
+        DragShareController controller = controller();
+        down(controller, 100L);
+        controller.notePressPipeline(100L);
+        assertTrue(controller.isAwaitingRootRelease());
+        assertTrue(controller.shouldSuppressPortalHostFloatWindow());
+
+        controller.endPressPipeline(100L);
+        assertFalse(controller.isAwaitingRootRelease());
+        controller.notePressPipeline(100L);
+        controller.acceptPointerEvent(MotionEvent.ACTION_UP, 20f, 30f, 400L, "root");
+        ShadowLooper.shadowMainLooper().idle();
+        assertFalse(controller.isAwaitingRootRelease());
+        controller.destroy();
+    }
+
     @Test public void queuedNativeStartCannotReopenAfterEarlyAreaHandoff() throws Exception {
         DragShareController controller = controller();
         down(controller, 100L);

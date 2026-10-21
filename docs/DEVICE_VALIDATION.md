@@ -1,5 +1,11 @@
 # 目标设备验证记录
 
+## 2026-10-22：207 构建完成，设备待验
+
+- 源码 `repair-from-189` 为 1.7.207/231；415 项单测、Lint、R8 arm64 Release 构建通过。签名包 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.207-arm64-v8a.apk`，7,411,272 bytes，SHA256 `017A117500454CBBB02B7CC325EBC49E3D8B0EF581BF29B91F7FF543FE79D236`。
+- 本批按用户休息期间不操作设备的约定，仅完成源码验证。**未安装 207，未重载 Portal 或其他作用域，未实测系统设置透明桥、图片拖拽或微信分词。**设备最后已确认安装/Portal 运行版本仍为 206/230（见下条）。
+- WorkBuddy 的旧分支记录曾观察到系统设置页上应用悬浮窗 `shown=false/isVisibleByPolicy=false`；它支持本批选择 Activity 宿主的方向，但不是 207 的设备验收证据。
+
 ## 2026-10-22：206 从 189 基线恢复图片按压拖拽
 
 - 目标设备小米 15 Pro / HyperOS 4.0.0.17 / Android 17。`repair-from-189` 源码为 1.7.206 / 230；414 项测试与 Lint、R8 arm64 Release 构建通过，签名与 189 一致。包位于 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.206-arm64-v8a.apk`，SHA256 `25107F8F1D790651F25544665A946A946C8E4054DBE6AC1F1703BEE57B6A4E18`。

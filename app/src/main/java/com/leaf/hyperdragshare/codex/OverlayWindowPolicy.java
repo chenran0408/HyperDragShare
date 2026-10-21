@@ -24,4 +24,8 @@ final class OverlayWindowPolicy {
     static OverlayWindowPolicy application() {
         return new OverlayWindowPolicy(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, "module");
     }
+
+    static OverlayWindowPolicy hosted() {
+        return new OverlayWindowPolicy(WindowManager.LayoutParams.TYPE_APPLICATION, "module-activity");
+    }
 }

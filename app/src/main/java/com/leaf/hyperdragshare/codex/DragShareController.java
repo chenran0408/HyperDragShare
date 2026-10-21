@@ -131,6 +131,7 @@ final class DragShareController {
     private volatile boolean destroyed;
     private volatile long rootDownTime = -1L;
     private volatile long pressHandoffTime = -1L;
+    private volatile long pressPipelineDownTime = -1L;
     // startPick*Task can create Taplus' full-screen float view before this controller reaches
     // the main thread. Keep its window suppressed during that small handoff.
     private volatile boolean pendingPortalHostFloatWindowSuppression;
@@ -233,13 +234,23 @@ final class DragShareController {
     }
 
     boolean isAwaitingRootRelease() {
-        return active || (rootDownTime >= 0L && pressHandoffTime == rootDownTime);
+        return active || (rootDownTime >= 0L && (pressHandoffTime == rootDownTime
+                || pressPipelineDownTime == rootDownTime));
+    }
+
+    void notePressPipeline(long downTime) {
+        if (downTime >= 0L && rootDownTime == downTime) pressPipelineDownTime = downTime;
+    }
+
+    void endPressPipeline(long downTime) {
+        if (pressPipelineDownTime == downTime) pressPipelineDownTime = -1L;
     }
 
     /** Called on main only after the text/OCR provider has accepted the press. */
     void handoffToPress(long downTime) {
         if (downTime < 0L || rootDownTime != downTime) return;
         pressHandoffTime = downTime;
+        endPressPipeline(downTime);
         Session current = session;
         if (active && current != null && current.rootDownTime == downTime) {
             current.cancelled = true;
@@ -319,13 +330,16 @@ final class DragShareController {
         if ("root".equals(source) && action == MotionEvent.ACTION_DOWN) {
             rootDownTime = eventTime;
             pressHandoffTime = -1L;
+            pressPipelineDownTime = -1L;
         }
         long downTime = rootDownTime;
-        DragShareLog.d(TAG, "pointer received source=" + source
-                + " action=" + MotionEvent.actionToString(action)
-                + " point=" + Math.round(x) + "," + Math.round(y)
-                + " active=" + active
-                + " time=" + eventTime);
+        if (action != MotionEvent.ACTION_MOVE) {
+            DragShareLog.d(TAG, "pointer received source=" + source
+                    + " action=" + MotionEvent.actionToString(action)
+                    + " point=" + Math.round(x) + "," + Math.round(y)
+                    + " active=" + active
+                    + " time=" + eventTime);
+        }
         lastObservedX = x;
         lastObservedY = y;
         lastObservedEventTime = eventTime;
@@ -343,6 +357,7 @@ final class DragShareController {
                         && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
                     if (rootDownTime == downTime) rootDownTime = -1L;
                     if (pressHandoffTime == downTime) pressHandoffTime = -1L;
+                    endPressPipeline(downTime);
                 }
             }
         });
@@ -386,6 +401,7 @@ final class DragShareController {
         destroyed = true;
         rootDownTime = -1L;
         pressHandoffTime = -1L;
+        pressPipelineDownTime = -1L;
         pendingPortalHostFloatWindowSuppression = false;
         runOnMain(() -> {
             active = false;
@@ -1515,10 +1531,7 @@ final class DragShareController {
     private void launchShare(Session shareSession, ShareTarget target) {
         if (target.isImageOcr()) {
             try {
-                android.os.Bundle input = new android.os.Bundle();
-                input.putParcelable("image", shareSession.stagedUri);
-                context.getContentResolver().call(ImageStagingClient.BASE_URI,
-                        ImageOcrOverlay.METHOD_RECOGNIZE, null, input);
+                launchImageOcrHost(shareSession.stagedUri, false);
             } catch (RuntimeException error) {
                 log("image OCR window failed", error);
                 showToast("无法识别图片：" + error.getMessage());
@@ -1528,10 +1541,7 @@ final class DragShareController {
         }
         if (target.isQrScan()) {
             try {
-                android.os.Bundle input = new android.os.Bundle();
-                input.putParcelable("image", shareSession.stagedUri);
-                context.getContentResolver().call(ImageStagingClient.BASE_URI,
-                        ImageOcrOverlay.METHOD_QR_SCAN, null, input);
+                launchImageOcrHost(shareSession.stagedUri, true);
             } catch (RuntimeException error) {
                 log("image QR window failed", error);
                 showToast("无法扫描图片二维码：" + error.getMessage());
@@ -1571,6 +1581,18 @@ final class DragShareController {
             log("share launch failed", error);
         }
         shareSession.cancelled = true;
+    }
+
+    private void launchImageOcrHost(Uri image, boolean qr) {
+        android.content.Intent intent = new android.content.Intent(context, ImageOcrActivity.class);
+        intent.putExtra(ImageOcrActivity.EXTRA_HOSTED_URI, image);
+        intent.putExtra(ImageOcrActivity.EXTRA_QR, qr);
+        intent.setDataAndType(image, "image/*");
+        intent.setClipData(android.content.ClipData.newRawUri("image", image));
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                | android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        context.startActivity(intent);
+        log("image window handed to Activity qr=" + qr);
     }
 
     private void stashContent(CapturedContent payload, Uri stagedImage) {

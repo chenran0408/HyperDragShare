@@ -178,7 +178,10 @@ final class PortalHooks {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
                         DragShareController current = controller;
-                        if (current != null && current.shouldSuppressPortalHostFloatWindow()) {
+                        boolean suppress = current != null && current.shouldSuppressPortalHostFloatWindow();
+                        DragShareLog.i(TAG, "host float window addToWindow suppressed=" + suppress
+                                + " view=" + param.thisObject.getClass().getName());
+                        if (suppress) {
                             param.setResult(null);
                         }
                     }
@@ -277,6 +280,10 @@ final class PortalHooks {
                 applyPortalRuntime();
                 DragShareController current = controller;
                 if (current != null) {
+                    if (current.isAwaitingRootRelease()) {
+                        log("portal pick ignored while Root press owns the gesture");
+                        return;
+                    }
                     CapturedContent content = PortalContentCaptureSource.capture(param.thisObject, settings);
                     if (content == null) {
                         return;
@@ -366,9 +373,12 @@ final class PortalHooks {
             }
 
             Object motion = properties.get(MOTION_KEY);
-            DragShareLog.d(TAG, "portal callback keys=" + properties.keySet()
-                    + " motion=" + (motion instanceof MotionEvent)
-                    + " control=" + String.valueOf(properties.get(CONTROL_KEY)));
+            if (!(motion instanceof MotionEvent)
+                    || ((MotionEvent) motion).getActionMasked() != MotionEvent.ACTION_MOVE) {
+                DragShareLog.d(TAG, "portal callback keys=" + properties.keySet()
+                        + " motion=" + (motion instanceof MotionEvent)
+                        + " control=" + String.valueOf(properties.get(CONTROL_KEY)));
+            }
             if (motion instanceof MotionEvent) {
                 dispatchMotion(MotionEvent.obtain((MotionEvent) motion));
                 // A motion-only result is not valid Taplus pick content.

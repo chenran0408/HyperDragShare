@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import java.io.IOException
@@ -30,11 +29,20 @@ class ImageOcrActivity : ComponentActivity() {
 
     private fun receiveImage() {
         worker?.interrupt()
+        val bigBang = intent.getBundleExtra(EXTRA_BIGBANG_ARGS)
+        if (bigBang != null) {
+            if (!BigBangOverlayLauncher.requestHosted(this, bigBang)) finish()
+            return
+        }
+        val hosted = intent.getParcelableExtra(EXTRA_HOSTED_URI, Uri::class.java)
+        if (hosted != null) {
+            if (!ImageOcrOverlay.startHosted(this, hosted, intent.getBooleanExtra(EXTRA_QR, false))) finish()
+            return
+        }
         val request = requests.begin()
         val source = resolveImageUri(intent)
-        if (source == null || !Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, if (source == null) "没有收到可读取的图片"
-                else "请先在模块设置中允许悬浮窗权限", Toast.LENGTH_LONG).show()
+        if (source == null) {
+            Toast.makeText(this, "没有收到可读取的图片", Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -43,8 +51,7 @@ class ImageOcrActivity : ComponentActivity() {
                 val owned = IncomingImageCache.copy(this, source)
                 runOnUiThread {
                     if (requests.accepts(request) && !isFinishing && !isDestroyed) {
-                        ImageOcrOverlay.start(applicationContext, Uri.fromFile(owned))
-                        finish()
+                        if (!ImageOcrOverlay.startHosted(this, Uri.fromFile(owned), false)) finish()
                     } else if (!owned.delete()) DragShareLog.w(TAG, "unable to remove cancelled OCR input")
                 }
             } catch (error: IOException) {
@@ -68,11 +75,16 @@ class ImageOcrActivity : ComponentActivity() {
     override fun onDestroy() {
         requests.invalidate()
         worker?.interrupt()
+        ImageOcrOverlay.dismissHosted(this)
+        BigBangOverlayLauncher.dismissHosted(this)
         super.onDestroy()
     }
 
     companion object {
         private const val TAG = "DragShare/OCR"
+        const val EXTRA_HOSTED_URI = "hosted_uri"
+        const val EXTRA_QR = "qr"
+        const val EXTRA_BIGBANG_ARGS = "bigbang_args"
 
         @JvmStatic
         fun resolveImageUri(input: Intent): Uri? {

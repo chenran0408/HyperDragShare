@@ -45,7 +45,7 @@ import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
-/** Image decoding and recognition stay in the module; no Activity is started. */
+/** Image decoding and recognition stay in the module; an Activity is used only as a window host. */
 object ImageOcrOverlay {
     const val METHOD_RECOGNIZE = "recognize_image_window"
     const val METHOD_QR_SCAN = "qr_scan_image_window"
@@ -63,9 +63,48 @@ object ImageOcrOverlay {
     @JvmStatic fun startQr(context: Context, uri: Uri, owner: android.view.View? = null): Boolean =
         open(context, uri, true, owner)
 
+    /** Starts the image window inside the transparent share Activity. */
+    @JvmStatic fun startHosted(activity: android.app.Activity, uri: Uri, qr: Boolean): Boolean {
+        if (activity.isFinishing || activity.isDestroyed) return false
+        main.post { showHosted(activity, uri, qr) }
+        return true
+    }
+
+    /** Ends a hosted window when its Activity is destroyed. */
+    @JvmStatic fun dismissHosted(activity: android.app.Activity) {
+        main.post {
+            val current = active
+            if (current?.hostActivity === activity) {
+                active = null
+                current.window.dismiss()
+            }
+        }
+    }
+
+    private fun showHosted(activity: android.app.Activity, uri: Uri, qr: Boolean) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        replaceActive()
+        val app = activity.applicationContext
+        if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
+            activity.finish()
+            return
+        }
+        val job = Job(app, uri, qr, null, null, activity) { activity.finish() }
+        active = job
+        val shown = job.window.show()
+        DragShareLog.i("DragShare/ImageOcrWindow", "image window requested qr=$qr hosted=true shown=$shown")
+        if (shown) job.decode() else activity.finish()
+    }
+
+    private fun replaceActive() {
+        val previous = active
+        active = null
+        previous?.dismissForReplacement()
+    }
+
     private fun open(context: Context, uri: Uri, qr: Boolean, owner: android.view.View?,
         onResult: ((String?) -> Unit)? = null, pressConfirmedAt: Long = 0L): Boolean {
-        if (!Settings.canDrawOverlays(context)) {
+        if (!Settings.canDrawOverlays(context) && ForegroundActivity.resumed() == null) {
             main.post {
                 android.widget.Toast.makeText(context.applicationContext, "请先在模块设置中允许悬浮窗权限",
                     android.widget.Toast.LENGTH_LONG).show()
@@ -78,22 +117,28 @@ object ImageOcrOverlay {
                 onResult?.invoke(null)
                 return@post
             }
-            active?.dismissForReplacement()
+            replaceActive()
             if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
                 onResult?.invoke(null)
                 return@post
             }
-            val job = Job(app, uri, qr, owner, onResult)
+            val host = ForegroundActivity.resumed()
+            val job = Job(app, uri, qr, owner, onResult, host)
             active = job
-            if (job.window.show(pressConfirmedAt)) job.decode()
+            val shown = job.window.show(pressConfirmedAt)
+            DragShareLog.i("DragShare/ImageOcrWindow",
+                "image window requested qr=$qr owner=${owner != null} hosted=${job.hosted} shown=$shown")
+            if (shown) job.decode()
         }
         return true
     }
 
     private class Job(private val app: Context, private val uri: Uri, private val qr: Boolean,
-        private val owner: android.view.View?, private val onResult: ((String?) -> Unit)?) {
-        private val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
-        private val context = app.createDisplayContext(display)
+        private val owner: android.view.View?, private val onResult: ((String?) -> Unit)?,
+        val hostActivity: android.app.Activity? = null, private val onHostClosed: (() -> Unit)? = null) {
+        val hosted: Boolean get() = hostActivity != null
+        private val context: Context = hostActivity ?: app.createDisplayContext(
+            app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         private var errorText by mutableStateOf<String?>(null)
         private var codes by mutableStateOf<List<String>?>(null)
@@ -110,17 +155,20 @@ object ImageOcrOverlay {
             override fun onViewAttachedToWindow(view: android.view.View) = Unit
             override fun onViewDetachedFromWindow(view: android.view.View) = window.dismiss()
         }
-        val window: InteractiveOverlayWindow = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
+        val window: InteractiveOverlayWindow = InteractiveOverlayWindow(context,
+            if (hosted) OverlayWindowPolicy.hosted() else OverlayWindowPolicy.application(),
             onDismissed = {
                 cancelled = true
                 aicr?.cancel()
                 app.unregisterReceiver(screenOff)
                 owner?.removeOnAttachStateChangeListener(ownerListener)
-                if (active === this) active = null
+                val wasActive = active === this
+                if (wasActive) active = null
                 if (!resultDelivered) {
                     resultDelivered = true
                     onResult?.invoke(null)
                 }
+                if (wasActive) onHostClosed?.invoke()
             },
             onFailure = {
                 DragShareLog.w("DragShare/ImageOcrWindow", "window failed", it)
@@ -266,8 +314,20 @@ object ImageOcrOverlay {
 
         private fun restart(qr: Boolean) {
             // The next recognition owns the same result; dismissing this attempt is not cancellation.
+            val host = hostActivity
+            val closeHost = onHostClosed
+            if (active === this) active = null
             dismissForReplacement()
-            if (!open(app, uri, qr, owner, onResult)) onResult?.invoke(null)
+            if (host == null) {
+                if (!open(app, uri, qr, owner, onResult)) onResult?.invoke(null)
+                return
+            }
+            main.post {
+                if (host.isFinishing || host.isDestroyed) return@post
+                val next = Job(app, uri, qr, owner, onResult, host, closeHost)
+                active = next
+                if (next.window.show()) next.decode() else host.finish()
+            }
         }
 
         private fun copyCode(value: String) {
@@ -307,6 +367,14 @@ object ImageOcrOverlay {
                 return
             }
             resultDelivered = true
+            val host = hostActivity
+            if (host != null && onResult == null && active === this) {
+                active = null
+                window.dismiss()
+                val args = android.os.Bundle().apply { putString("text", text) }
+                if (!BigBangOverlayLauncher.requestHosted(host, args)) host.finish()
+                return
+            }
             window.dismiss()
             if (onResult != null) onResult.invoke(text)
             else BigBangOverlayLauncher.showText(app, text, -1, -1)

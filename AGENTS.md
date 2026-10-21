@@ -1,6 +1,6 @@
 # HyperDragShare Agent Guide
 
-本轮179以用户最新追加要求为准：四模块设置与共享目录搜索、Miuix和中转站布局、移除ML Kit仅系统AICR V2，并加入设置内检查更新及微信普通页面适配。旧文档的双引擎/仅LauncherUI限制不是当前产品方向。Bitmap OCR已验证普通应用UID，不需要Root/LSPosed；截图/取词/Hook权限独立。先读CURRENT_STATUS的179记录，不安装已被本批替代的178候选。旧178心跳已暂停，避免重复操作设备。
+当前源码版本与运行证据先核对 `app/build.gradle`、`docs/CURRENT_STATUS.md` 和 `docs/DEVICE_VALIDATION.md` 的最新条目。189 基线后的修复位于 `repair-from-189` 分支；`docs/189_BASELINE_PORT_NOTES.md` 是历史参考，不能代替源码验证。旧文档的双引擎/仅LauncherUI限制不是当前产品方向。Bitmap OCR已验证普通应用UID，不需要Root/LSPosed；截图/取词/Hook权限独立。
 
 本产品面向Root/LSPosed用户，保持简短说明、真实运行状态；不增加面向无Root使用的替代入口或多层引导。保留已有有效功能和必要权限失败反馈。普通模块页收起不满足前置开关的从属参数，完整目录仍参与搜索，搜到后可定位并解释前置条件。
 

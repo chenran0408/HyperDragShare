@@ -150,6 +150,7 @@ final class PressCaptureSource {
         long now = SystemClock.uptimeMillis();
         if (!detector.fire(now)) return;
         confirmedAt = now;
+        controller.notePressPipeline(downTime);
         DragShareLog.i(TAG, "press confirmed by duration/movement elapsedMs=" + (now - detector.downTime()));
         if (cached != null) display();
         else if (!lookupRunning) lookup();
@@ -164,6 +165,7 @@ final class PressCaptureSource {
         if (lookupRunning) return;
         lookupRunning = true;
         long request = generation;
+        long requestDownTime = downTime;
         float x = downX, y = downY;
         boolean earlyCapture = !detector.isFired();
         Set<String> excluded = new LinkedHashSet<>(settings.accessibilityBlacklistedPackages);
@@ -190,7 +192,7 @@ final class PressCaptureSource {
                                 + (content == null ? "none" : content.isImage() ? "image" : "text")
                                 + " reason=" + (stopped ? "stopped"
                                 : request != generation ? "superseded" : "source_unavailable")
-                                + " elapsedFromDownMs=" + (SystemClock.uptimeMillis() - downTime));
+                                + " elapsedFromDownMs=" + (SystemClock.uptimeMillis() - requestDownTime));
                         recycle(content);
                         return;
                     }
@@ -260,6 +262,26 @@ final class PressCaptureSource {
         text.putString("after_text", content.afterText);
         text.putInt("x", Math.round(downX));
         text.putInt("y", Math.round(downY));
+        if ("com.android.settings".equals(content.sourcePackage)) {
+            try {
+                android.content.Intent bridge = new android.content.Intent();
+                bridge.setComponent(new android.content.ComponentName(BuildConfig.APPLICATION_ID,
+                        BuildConfig.APPLICATION_ID + ".ImageOcrActivity"));
+                bridge.putExtra(ImageOcrActivity.EXTRA_BIGBANG_ARGS, text);
+                bridge.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(bridge);
+                DragShareLog.i(TAG, "Settings text panel handed to Activity window");
+                Bundle accepted = new Bundle();
+                accepted.putBoolean("accepted", true);
+                completeHandoff(accepted, request);
+            } catch (SecurityException | IllegalStateException error) {
+                DragShareLog.w(TAG, "cannot open Settings text panel", error);
+                showFailure("无法打开分词窗口：" + error.getMessage());
+                controller.endPressPipeline(downTime);
+                blocker.stopAsync();
+            }
+            return;
+        }
         try {
             Bundle result = context.getContentResolver().call(
                     ImageStagingClient.BASE_URI, "open_bigbang_window", null, text);
@@ -267,6 +289,7 @@ final class PressCaptureSource {
         } catch (SecurityException | IllegalStateException error) {
             DragShareLog.w(TAG, "cannot open press text window", error);
             showFailure("无法打开分词窗口：" + error.getMessage());
+            controller.endPressPipeline(downTime);
             blocker.stopAsync();
         }
     }
@@ -294,6 +317,7 @@ final class PressCaptureSource {
                     ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN, null, pending);
             if (result == null || !result.getBoolean("accepted")) {
                 recycle(content);
+                controller.endPressPipeline(downTime);
                 blocker.stopAsync();
                 showFailure("无法打开微信识字窗口");
                 return;
@@ -302,6 +326,7 @@ final class PressCaptureSource {
             controller.handoffToPress(downTime);
         } catch (SecurityException | IllegalStateException | IllegalArgumentException error) {
             recycle(content);
+            controller.endPressPipeline(downTime);
             blocker.stopAsync();
             DragShareLog.w(TAG, "cannot open WeChat OCR panel", error);
             showFailure("无法打开微信识字窗口：" + error.getMessage());
@@ -369,6 +394,7 @@ final class PressCaptureSource {
             controller.handoffToPress(downTime);
         } else {
             DragShareLog.w(TAG, "press window request was not accepted");
+            controller.endPressPipeline(downTime);
             blocker.stopAsync();
         }
     }
@@ -384,6 +410,7 @@ final class PressCaptureSource {
     }
 
     void cancelGesture() {
+        controller.endPressPipeline(downTime);
         generation++;
         pointerDown = false;
         if (activeOcrRequest != null) {

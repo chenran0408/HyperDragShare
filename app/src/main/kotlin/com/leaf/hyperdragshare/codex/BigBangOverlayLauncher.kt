@@ -24,6 +24,7 @@ object BigBangOverlayLauncher {
     private val main = Handler(Looper.getMainLooper())
     private var active: InteractiveOverlayWindow? = null
     private var activeSession: BigBangPanelSession? = null
+    private var activeHost: android.app.Activity? = null
     private var activePressId = -1L
     private var activeTouchX = -1
     private var activeTouchY = -1
@@ -46,6 +47,25 @@ object BigBangOverlayLauncher {
             pressConfirmedAt = pressConfirmedAt, copyDirect = copyDirect, ocrPending = ocrPending,
             pressId = pressId) }
         return Bundle().apply { putBoolean("accepted", true) }
+    }
+
+    /** Text captured over system Settings uses this Activity's window token. */
+    @JvmStatic fun requestHosted(activity: android.app.Activity, input: Bundle?): Boolean {
+        val args = input ?: return false
+        val text = args.getString("text").orEmpty()
+        if (text.isBlank() || activity.isFinishing || activity.isDestroyed) return false
+        main.post {
+            if (activity.isFinishing || activity.isDestroyed) return@post
+            open(activity, text, args.getInt("x", -1), args.getInt("y", -1),
+                before = args.getString("before_text"), after = args.getString("after_text"),
+                pressConfirmedAt = args.getLong("press_confirmed_at"),
+                copyDirect = args.getBoolean("copy_direct_source"), host = activity)
+        }
+        return true
+    }
+
+    @JvmStatic fun dismissHosted(activity: android.app.Activity) {
+        main.post { if (activeHost === activity) active?.dismiss() }
     }
 
     @JvmStatic fun completeOcr(input: Bundle?): Bundle {
@@ -90,15 +110,16 @@ object BigBangOverlayLauncher {
 
     private fun open(app: Context, text: String, x: Int, y: Int, savedState: Bundle? = null,
         before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L, copyDirect: Boolean = false,
-        ocrPending: Boolean = false, pressId: Long = -1L) {
+        ocrPending: Boolean = false, pressId: Long = -1L, host: android.app.Activity? = null) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
         }
+        if (activeHost === host) activeHost = null
         active?.dismiss()
         val windowGeneration = ++generation
         val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
-        val context = app.createDisplayContext(display)
+        val context: Context = host ?: app.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         lateinit var overlay: InteractiveOverlayWindow
         val screenOff = object : BroadcastReceiver() {
@@ -165,7 +186,8 @@ object BigBangOverlayLauncher {
                 }
             }
         })
-        overlay = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
+        overlay = InteractiveOverlayWindow(context,
+            if (host != null) OverlayWindowPolicy.hosted() else OverlayWindowPolicy.application(),
             onDismissed = {
                 session.close()
                 app.unregisterReceiver(screenOff)
@@ -174,12 +196,17 @@ object BigBangOverlayLauncher {
                     activeSession = null
                     activePressId = -1L
                 }
+                if (host != null && activeHost === host) {
+                    activeHost = null
+                    host.finish()
+                }
             },
             onFailure = { report(app, it) },
         ) { session.Content() }
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
         activeSession = session
+        activeHost = host
         activePressId = if (ocrPending) pressId else -1L
         activeTouchX = x
         activeTouchY = y
