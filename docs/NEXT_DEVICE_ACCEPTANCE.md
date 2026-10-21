@@ -36,3 +36,6 @@
 
 
 147依据作者经用户确认取消面积目标，Root evdev只按时长/位移判定；默认300ms（本fork策略），已有确认时间优先、下一次DOWN生效。208项检查与构建通过，已安装/Portal171/PID21130确认；未做新Root手势实测。不要再要求面积数据或校准，旧ADB普通输入不经过evdev、不能验证此入口。仍需关注录音等长按控件、滚动取消、真实接管与原页返回。公开GitHub fork已创建，首次推送因无workflow权限被拒，现移除工作流后发布；源代码推送状态从远端读取，无云端CI，不把建立fork当已上传最新代码。
+
+
+147已完成公开源码和开发APK：chenran0408/HyperDragShare，默认hyperos4-adaptation，v1.7.147-dev的APK服务器SHA256与本地一致。当前分支无自动工作流（OAuth无workflow权限），不要把云端检查写成通过。下一步仍是Root evdev时长/位移真实触发与复杂中转站取用，不重复建仓库/发布同一APK；新功能检查后沿现有origin正常推送，保留upstream。

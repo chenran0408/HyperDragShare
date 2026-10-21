@@ -130,6 +130,10 @@
 
 146中转站Back先退确认/预览/组内，再收起；多选是主面板状态，Back不清选区，只有清空选择按钮明确取消。收起保留预览，刷新保留现存选择并合并忙时新增通知；全局组卡顺序的同一选区用于拖出/分组/删除，范围全选用集合加减。实际两项文字跨UID与收起/返回重开保留选区已验，不重复相同样本；图片/物理移动等边界见DEVICE_VALIDATION。
 
+## 公开仓库
+
+本fork已公开：https://github.com/chenran0408/HyperDragShare ，默认分支hyperos4-adaptation。origin为本账号仓库，upstream为Leaf-lsgtky/HyperDragShare；不要向upstream推送本fork提交。v1.7.147-dev为开发预览，APK本地/服务器SHA256已核对。OAuth当前无workflow权限，本分支不含自动工作流；不自行扩大账号权限，也不把本地构建称为云端通过。签名、local.properties、原始APK/视频、私人截图与任务备份继续留在Git之外。后续代码批次公开前检查变更和真实验收范围，不重复建仓库。
+
 ## 修改流程
 
 修改前先读 `docs/DEVICE_VALIDATION.md`、`docs/MIBIGBANG_MIGRATION_PLAN.md`、

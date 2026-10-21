@@ -974,3 +974,8 @@ APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null�
 手机未输入约70秒且前台微信、无模块窗时，只结束旧Portal21532并空query；PID21130，activation.xml的注入/Root171及授权true确认；前后微信LauncherUI/task2387不变。未打开设置、注入手势、截图、改私人内容或重启Android/AICR；不凭元数据宣称输入ready。新时长设置UI、Root完整手势接管/录音冲突和物理手感尚未实测；旧146文字拖出证据不替代147触发验收。
 
 用户要求公开GitHub。当前账号下已建立公开fork https://github.com/chenran0408/HyperDragShare ，保留上游Leaf-lsgtky/HyperDragShare关系。README按当前实装重写，不再宣称已删小窗/搜索或参考有真实面积能力。公开前检查当前跟踪文件、可达历史1424个blob的凭证与生成文件规则，未发现命中；本机签名和SDK文件不纳入Git。原计划加入Android检查，但GitHub当前OAuth凭据无workflow权限，首次推送被服务端拒绝且未创建开发分支。移除本分支工作流后继续发布源码，不扩大账号权限；不宣称有云端检查结果。开发APK由本地已通过的build304生成。
+
+
+公开发布已完成：仓库 https://github.com/chenran0408/HyperDragShare 为PUBLIC fork，parent为Leaf-lsgtky/HyperDragShare，默认分支hyperos4-adaptation。源码7427e6bfef2a8d2f1ab8cbc28fa111e3cca9bffb已由GitHub API核对与本地一致。开发预览v1.7.147-dev指向该提交，Release API确认prerelease=true、APK uploaded/126716392字节；服务器digest与本地777F66FC16DDFE7D1E83D1467C3FE610D343E046A892B09763D6169D9F6DFC80一致。下载见https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.147-dev 。
+
+最终公开树的219个文本文件token/appkey/device/path扫描无命中；可达历史1444个blob的凭据/私钥/生成文件规则无命中。扫描不涵盖被忽略的本机签名等目录，这些未上传。当前分支移除工作流，OAuth未增加权限，未声称云端CI通过；原工作流仍在本地/公开历史供后续维护参考。origin改为本账号fork，upstream保留原仓库；未向上游推送、创建PR或改其他仓库。
