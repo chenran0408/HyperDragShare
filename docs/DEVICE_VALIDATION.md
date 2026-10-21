@@ -989,3 +989,19 @@ APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null�
 build305失败为运行约五小时的Gradle JVM native malloc失败，不是已建立的产品断言失败。改用新单次daemon、max-workers=2、CICompilerCount=2后build306完整testDebugUnitTest/lintDebug/assembleDebug成功；211项测试0失败/0错误，Lint0错误/151警告/2提示。新增三项回归覆盖单个语音按钮、描述/父级、普通正文及触点/来源/可见性限制。
 
 APK 1.7.148/172 SHA256 A0285A500FBA44133E228D7EE2755AC9D441B5E94D3460CC836C90CE206CBA2F；证书与已装开发版相同。单次adb install -r成功，PackageManager读回172/1.7.148。安装前Portal仍21130，未重载；不能据安装声称新Hook生效。用户正在使用手机，本轮没有点击、截图或制造样本；安装前后前台从文件管理器转为系统启动确认，未操作该确认页，不将前台变化归因于测试通过。实际evdev触发、录音按钮共存与连续取词仍未实测。
+
+## 2026-10-21：1.7.149 节点暂未就绪不再终止取词进程
+
+148后台重载后Portal19935/172、Root输入ready及reader ready确认；随后真实运行日志记录Root helper20025在13:59:26抛出IOException: Active window nodes not ready，main未处理导致退出。SharedNodes随即关闭租约，按压Source保留失效连接，后续取词持续失败。旧21244和21763也有相同异常，不是只有安装元数据的推断。没有为复现而操作用户正在使用的页面。
+
+修复根因：awaitRoot等待窗口的既有1200ms预算耗尽返回无节点，captureRequest明确回found=false/reason=window_not_ready，记录原因并只取消本次候选；服务循环继续，下一手势重新请求。没有重试该手势、重启helper、断开其他UiAutomation或改用OCR。其他真正协议/连接错误仍按原边界处理。新增真实captureRequest回归：同一UiAutomation先无窗口超时，再提供应用文字窗口，下一次按压成功读取，未替换生产请求逻辑。
+
+build307完整testDebugUnitTest/lintDebug/assembleDebug通过，212项0失败/0错误，Lint0错误/151警告/2提示。1.7.149/173 APK SHA256 66F3AC09295F70C8DA717CD194DBDC6F6BF53E4BCD0F19CEDB8367D738E7D5FE，包名和原开发签名已核对。单次覆盖安装成功，只强停Portal并空query根Provider唤醒；新PID4566、injected173/root173/授权true，Root input ready、press reader ready，helper5423与reader5436在查验时存活。前台微信LauncherUI及任务2387保持不变，未点击、截图、写暂存或剪贴板。
+
+这些证据证明构建、安装和后台启动；尚不能证明新进程遇到同一窗口空缺后的真机恢复、实际录音共存或完整原页手势。原用户正在操作，未抢占去跑专用页。临时独立receiver已增加生成的语音按钮并构建，尚未安装或打开；没有进行evdev注入。
+
+### GitHub自动构建首轮
+
+用户确认workflow权限后API读回含workflow；本地完成后提交android.yml，固定Action提交版本，JDK21、SDK37.0、build-tools36、NDK26.1和CMake3.22.1。默认开发分支push、PR与手动触发，单测/Lint/Debug APK及报告上传；contents仅read，不读本地签名或创建Release。
+
+首次运行 https://github.com/chenran0408/HyperDragShare/actions/runs/39552595165 ，对应7a71745/1.7.148，终态success，检出/环境/完整检查构建/两个上传步骤均success。Artifacts HyperDragShare-debug-1和Android-reports-1确实存在且未过期。云端临时调试签名与本地设备验收包分开说明；此轮成功不代表149已经云端通过。

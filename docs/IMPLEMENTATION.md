@@ -1109,3 +1109,7 @@ PressCaptureSource共用一次Root读取、缓存、确认、接管和原页文�
 ## 1.7.148：按住入口补充
 
 RootNodeCaptureMain在按压点遍历后、文字与图片选择前排除明确的录音长按控件，含文字关闭但图片开启的路径；PressCaptureSource旧文本子串过滤与四秒冷却已删。每次DOWN确认一次仍由PressTriggerDetector保证。RootTouchSource不再因缺失尺寸轴记录触发失败。211项检查、Lint和构建通过；172已安装，Portal尚未重载，新完整手势未实测，详见设备记录。
+
+## 1.7.149：暂未就绪窗口属于单次请求结果
+
+真实Root helper因awaitRoot的1200ms节点就绪等待抛出IOException退出，导致共享租约失效和后续取词持续失败。当前只将这个明确的无窗口结果改为found=false/window_not_ready；保留服务供下一次用户手势，不增加自动重连或本次请求回退。captureRequest单测覆盖同一服务对象的缺窗后成功请求，212项检查及构建通过，173安装并后台加载。真机空缺后恢复与完整手势仍待验。

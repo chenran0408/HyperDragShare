@@ -107,7 +107,7 @@ public final class RootNodeCaptureMain {
         System.exit(0);
     }
 
-    private static JSONObject captureRequest(JSONObject request, UiAutomation automation,
+    static JSONObject captureRequest(JSONObject request, UiAutomation automation,
                                             Object eventLock, int[] eventVersion, Handler watchdog)
             throws Exception {
         if ("verify_window".equals(request.optString("operation"))) {
@@ -145,6 +145,9 @@ public final class RootNodeCaptureMain {
                 return new JSONObject().put("found", false).put("reason", "excluded_input_method");
             }
             AccessibilityNodeInfo root = awaitRoot(automation, eventLock, eventVersion);
+            if (root == null) {
+                return new JSONObject().put("found", false).put("reason", "window_not_ready");
+            }
             long rootAt = SystemClock.uptimeMillis();
             try {
                 JSONObject result = capture(root, request);
@@ -199,11 +202,11 @@ public final class RootNodeCaptureMain {
     }
 
     private static AccessibilityNodeInfo awaitRoot(UiAutomation automation, Object lock,
-                                                   int[] version) throws Exception {
+                                                   int[] version) throws InterruptedException {
         long deadline = SystemClock.uptimeMillis() + 1200L;
         while (true) {
             if (SystemClock.uptimeMillis() >= deadline) {
-                throw new IOException("Active window nodes not ready");
+                return null;
             }
             int observed;
             synchronized (lock) { observed = version[0]; }
@@ -225,7 +228,7 @@ public final class RootNodeCaptureMain {
             synchronized (lock) {
                 while (observed == version[0]) {
                     long remaining = deadline - SystemClock.uptimeMillis();
-                    if (remaining <= 0) throw new IOException("Active window nodes not ready");
+                    if (remaining <= 0) return null;
                     lock.wait(remaining);
                 }
             }

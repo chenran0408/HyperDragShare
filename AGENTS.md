@@ -178,3 +178,5 @@ adb logcat -v time | Select-String "DragShare|AndroidRuntime"
 
 `probe/` 当前不是 `settings.gradle` 的模块，只可能残留历史验证构建缓存；除非用户明确要求，
 不要重新接入或围绕它改造正式实现。
+
+149运行证据：页面暂未就绪曾使RootNodeCaptureMain.awaitRoot抛IOException并使服务永久失效，现1200ms预算耗尽回window_not_ready，只结束该请求、保留helper，不自动重连或回退；同服务下一请求成功有回归。173已安装/Portal4566与Root ready确认，真实空缺后恢复未验。148已删除四秒冷却与录音子串筛选，在Root取词前排除触点明确录音控件；不得把这些源码检查写成实际录音体验通过。CI首轮39552595165对应148且success，后续版本按自己的run核对。
