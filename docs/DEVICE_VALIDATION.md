@@ -1070,3 +1070,21 @@ build318：212tests/0failures/0errors，Lint0errors/157warnings/2hints，assembl
 
 153云端run39559036559/head7f591a3已success；154待推送后按新run核对，不沿用153结果。
 154后台最终读回：Portal29641，injected178、root178true、root_input178true、press_reader178true，两error为空。15:06:46输入ready，reader随后ready；这是运行准备确认，不等同新界面或原生面积验收。
+
+## 2026-10-21 1.7.155：中转站拖放、连续选词与 Miuix 整批
+
+用户重启后实际加载证据：15:09:54 system_server 安装精确 phantom 数量裁剪 Hook；15:10:00 SystemUI 安装原生 EventReceiver 旁路。五个实际 ≥200ms 手势的 size/touchMajor/touchMinor 全零，178 不采 toolMajor，不能声称物理面积已恢复。AICR 三进程本次启动曾加载，不推定主进程一直存活。上述旧版安装日志无版本自报，按本次启动已安装178推定；155增加编译版本日志及toolMajor采样，未为此重启用户系统。
+
+针对用户“中转站长按即关、文字图片无法拖到微信”反馈：startDragAndDrop 成功只表示启动，旧 collapse 改变源 Compose 树与窗口。单条、组卡、多选及预览图改用同一个 attached 源窗：观察 STARTED 后透明并穿透，持有原树至 ENDED；accepted 才收起，取消恢复原窗/选区，启动失败清观察器。拖放期间跳过 resize/collapse。保持标准 ClipData/MIME/私有图片 URI 读 grant，不猜微信私有协议或扩大授权。
+
+SwipeSelectView/CustomScrollView：横向意图锁选词，纵向留给滚动；DOWN不先改选区；边缘每帧按固定手指重新命中词块继续扩选，限速并在边界停滚；回拉还原手势前原选区而非反转；CANCEL恢复。新增五个针对性回归，保留已有长按直接系统拖出与同步CANCEL。
+
+UI复用现有组件：去掉状态卡硬编码红绿与170dp图形；图片/二维码、点取、屏幕OCR统一18sp标题和单一关闭；搜索及共用操作44dp触区、22dp图形、Miuix图标/Tooltip/禁用态。未新增页面，不恢复分词中转站按钮或再次OCR，不改OCR引擎。中转站窗口面积仍≤16%。
+
+build319完整testDebugUnitTest/lintDebug/assembleDebug成功44s：217tests/0failures/0errors/0skips，Lint0errors/158warnings/2hints。包名com.leaf.hyperdragshare.codex，179/1.7.155；同证书b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0。APK SHA256 1A02B31D8AE0488484F700F66419E31E1ED8707B1EE665A3E4A250DCC5C45B31，任务outputs/HyperDragShare-1.7.155-debug.apk。
+
+单次覆盖安装成功、PM读回179。仅后台重载Portal，PID7778、注入/Root/输入/reader均179且true、错误空，15:25:31实际RootInput ready。前后微信LauncherUI/task2387保持；未点击会话/截图矩阵/写剪贴板或中转站，不修改私人内容。新方向滑选、边缘续选、拖放取消恢复、Miuix新界面和微信真实接收尚未操作验收。不能将安装或217单测称为这些行为实测通过。
+
+微信只读窄审计：当前8.0.79/3182/targetSdk35，APK静态有聊天View.OnDragListener/onDrag(DragEvent)；证明存在Android接收器，不证明会接受本源文字/图片或URI。旧UID10228独立接收器的成功不是微信证据。本轮不发送私人测试消息。
+
+154云端39559847714/head13aa390已success且两个Artifact上传成功；155按本次push的新run核验。

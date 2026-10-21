@@ -25,7 +25,7 @@ internal fun StashDraggableContent(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     draggable: Boolean = true,
-    onStarted: () -> Unit,
+    startDrag: (View, ClipData, View.DragShadowBuilder, Int) -> Boolean,
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -34,13 +34,13 @@ internal fun StashDraggableContent(
     val background = MiuixTheme.colorScheme.surfaceContainer.toArgb()
     Box(modifier.combinedClickable(enabled = enabled, onClick = onClick,
         onLongClickLabel = if (entries.size > 1) "拖出所选 ${entries.size} 项" else "拖出内容", onLongClick = if (draggable) ({
-            startStashDrag(view, entries, foreground, background, onStarted)
+            startStashDrag(view, entries, foreground, background, startDrag)
             Unit
         }) else null)) { content() }
 }
 
 private fun startStashDrag(view: View, entries: List<StashStore.Entry>, foreground: Int,
-    background: Int, onStarted: () -> Unit): Boolean {
+    background: Int, startDrag: (View, ClipData, View.DragShadowBuilder, Int) -> Boolean): Boolean {
     if (entries.isEmpty()) return false
     val hasImages = entries.any { it.kind == StashStore.KIND_IMAGE }
     val clip = clipForStash(entries)
@@ -66,10 +66,9 @@ private fun startStashDrag(view: View, entries: List<StashStore.Entry>, foregrou
         override fun onDrawShadow(canvas: Canvas) = preview.draw(canvas)
     }
     return try {
-        val started = view.startDragAndDrop(clip, shadow, null,
+        val started = startDrag(view, clip, shadow,
             View.DRAG_FLAG_GLOBAL or if (hasImages) View.DRAG_FLAG_GLOBAL_URI_READ else 0)
-        if (started) onStarted()
-        else Toast.makeText(view.context, "系统未能开始拖拽，请重试", Toast.LENGTH_SHORT).show()
+        if (!started) Toast.makeText(view.context, "系统未能开始拖拽，请重试", Toast.LENGTH_SHORT).show()
         started
     } catch (error: SecurityException) {
         DragShareLog.w("DragShare/Stash", "drag permission denied", error)

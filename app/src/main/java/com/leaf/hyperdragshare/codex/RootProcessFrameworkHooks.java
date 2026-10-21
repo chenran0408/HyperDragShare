@@ -56,7 +56,8 @@ final class RootProcessFrameworkHooks {
                     }
                 }
             });
-            XposedBridge.log(TAG + "installed exact phantom count-trim hook");
+            XposedBridge.log(TAG + "installed exact phantom count-trim hook build="
+                    + BuildConfig.VERSION_NAME + "/" + BuildConfig.VERSION_CODE);
         } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException | LinkageError error) {
             XposedBridge.log(TAG + "hook unavailable; original trimming retained: " + error);
         }

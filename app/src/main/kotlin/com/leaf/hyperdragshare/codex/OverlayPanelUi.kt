@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -53,6 +53,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import kotlin.math.ceil
 
 private val OverlayBottomBarContentOffset = (-2).dp
@@ -337,26 +339,24 @@ internal fun OverlayIconAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
     contentDescription: String,
-    touchSize: Dp = 36.dp,
+    touchSize: Dp = 44.dp,
 ) {
-    Box(
-        modifier = Modifier
-            .requiredWidth(touchSize)
-            .requiredHeight(touchSize)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                role = Role.Button,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = imageVector,
-            contentDescription = contentDescription,
-            tint = tint,
-        )
+    TooltipBox(text = contentDescription, enabled = enabled) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(touchSize),
+            minWidth = touchSize,
+            minHeight = touchSize,
+            cornerRadius = 12.dp,
+        ) {
+            Icon(
+                imageVector = imageVector,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(22.dp),
+                tint = if (enabled) tint else tint.copy(alpha = tint.alpha * 0.38f),
+            )
+        }
     }
 }
 

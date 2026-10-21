@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,9 +35,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircleOutline
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -99,6 +95,8 @@ import top.yukonga.miuix.kmp.basic.TopAppBarState
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -364,7 +362,6 @@ private fun MainPage(
             item(key = "activation-status") {
                 ActivationStatusCard(
                     context = context,
-                    dark = settings.isDarkThemeInComposition(),
                     contentCaptureMode = settings.contentCaptureMode,
                     onOpenAccessibilitySettings = if (settings.isAccessibilityCaptureMode) {
                         { openAccessibilitySettings(context) }
@@ -1053,7 +1050,6 @@ private fun openAccessibilitySettings(context: Context) {
 @Composable
 private fun ActivationStatusCard(
     context: Context,
-    dark: Boolean,
     contentCaptureMode: Int,
     onOpenAccessibilitySettings: (() -> Unit)?,
 ) {
@@ -1142,13 +1138,6 @@ private fun ActivationStatusCard(
     }
 
     val active = state == ActivationUiState.Active
-    val containerColor = when {
-        active && dark -> Color(0xFF1A3825)
-        active -> Color(0xFFDFFAE4)
-        state == ActivationUiState.Checking -> MiuixTheme.colorScheme.surfaceContainer
-        dark -> Color(0xFF381A1A)
-        else -> Color(0xFFFAEEEE)
-    }
     val title = when (state) {
         ActivationUiState.Checking -> "正在检测"
         ActivationUiState.NoRoot -> "未获取 Root 权限"
@@ -1202,68 +1191,26 @@ private fun ActivationStatusCard(
             "ROOT · LSPosed"
         }
     }
-    val textContentColor = MiuixTheme.colorScheme.onSurface
-    val descTextColor = textContentColor.copy(alpha = 0.8f)
-
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        colors = CardDefaults.defaultColors(color = containerColor),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
         onClick = onOpenAccessibilitySettings,
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .offset(x = 50.dp, y = 38.dp),
-                contentAlignment = Alignment.BottomEnd,
-            ) {
-                Icon(
-                    imageVector = if (active) {
-                        Icons.Rounded.CheckCircleOutline
-                    } else {
-                        Icons.Rounded.ErrorOutline
-                    },
-                    contentDescription = null,
-                    modifier = Modifier.size(170.dp),
-                    tint = when (state) {
-                        ActivationUiState.Active -> Color(0xFF36D167)
-                        ActivationUiState.Checking -> {
-                            MiuixTheme.colorScheme.onSurfaceVariantActions.copy(alpha = 0.35f)
-                        }
-                        else -> Color(0xFFD13636)
-                    },
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            ) {
-                Text(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = title,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = textContentColor,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = summary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = descTextColor,
-                )
-                Spacer(modifier = Modifier.height(36.dp))
-                Text(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = activationMethod,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = descTextColor,
-                )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                imageVector = if (active) MiuixIcons.Ok else MiuixIcons.Info,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = if (active) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onSurface)
+                Text(summary, fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text(activationMethod, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
         }
     }

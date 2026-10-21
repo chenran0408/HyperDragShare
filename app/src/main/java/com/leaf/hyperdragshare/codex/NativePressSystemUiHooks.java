@@ -19,6 +19,7 @@ final class NativePressSystemUiHooks {
     private static float maxSize;
     private static float maxTouchMajor;
     private static float maxTouchMinor;
+    private static float maxToolMajor;
     private static long downAt;
     private static int reports;
 
@@ -37,7 +38,8 @@ final class NativePressSystemUiHooks {
                 }
             });
             installed = true;
-            log("passive pre-filter MotionEvent sampling installed");
+            log("passive pre-filter MotionEvent sampling installed build="
+                    + BuildConfig.VERSION_NAME + "/" + BuildConfig.VERSION_CODE);
         } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException | LinkageError error) {
             log("passive sampling hook unavailable: " + error.getClass().getSimpleName()
                     + ": " + error.getMessage());
@@ -53,6 +55,7 @@ final class NativePressSystemUiHooks {
             maxSize = 0f;
             maxTouchMajor = 0f;
             maxTouchMinor = 0f;
+            maxToolMajor = 0f;
             downAt = event.getEventTime();
         }
         if (!tracking) return;
@@ -62,6 +65,7 @@ final class NativePressSystemUiHooks {
             maxSize = Math.max(maxSize, event.getSize(pointer));
             maxTouchMajor = Math.max(maxTouchMajor, event.getTouchMajor(pointer));
             maxTouchMinor = Math.max(maxTouchMinor, event.getTouchMinor(pointer));
+            maxToolMajor = Math.max(maxToolMajor, event.getToolMajor(pointer));
         }
 
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
@@ -70,7 +74,7 @@ final class NativePressSystemUiHooks {
                 reports++;
                 log("sample=" + reports + " action=" + action + " events=" + sampledEvents
                         + " durationMs=" + duration + " maxSize=" + maxSize + " maxTouchMajor=" + maxTouchMajor
-                        + " maxTouchMinor=" + maxTouchMinor);
+                        + " maxTouchMinor=" + maxTouchMinor + " maxToolMajor=" + maxToolMajor);
             }
             tracking = false;
         }

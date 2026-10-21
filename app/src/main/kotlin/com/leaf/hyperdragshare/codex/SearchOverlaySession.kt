@@ -40,12 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ArrowForward
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.OpenInBrowser
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -56,13 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -70,11 +65,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Forward
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.ThemeController
 
 /** One search state and WebView implementation shared by the overlay and legacy Activity host. */
@@ -355,7 +354,7 @@ private fun SearchPanel(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0x99000000))
+            .background(Color.Black.copy(alpha = if (MiuixTheme.colorScheme.background.luminance() < .5f) .62f else .48f))
             .clickable(onClick = close),
     ) {
         Column(
@@ -363,7 +362,7 @@ private fun SearchPanel(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .fillMaxHeight(panelFraction)
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
+                .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
                 .background(MiuixTheme.colorScheme.background)
                 .clickable(onClick = {})
                 .navigationBarsPadding()
@@ -395,13 +394,6 @@ private fun SearchPanel(
                     .padding(start = 8.dp, end = 12.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = close) {
-                    MiuixIcon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = stringResource(R.string.search_close),
-                        tint = MiuixTheme.colorScheme.onSurface,
-                    )
-                }
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -416,7 +408,7 @@ private fun SearchPanel(
                         onValueChange = onQueryChange,
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        textStyle = TextStyle(
+                        textStyle = MiuixTheme.textStyles.body2.copy(
                             color = MiuixTheme.colorScheme.onSurface,
                             fontSize = 16.sp,
                         ),
@@ -440,17 +432,14 @@ private fun SearchPanel(
                         },
                     )
                 }
-                IconButton(onClick = {
-                    focusManager.clearFocus()
-                    keyboard?.hide()
-                    onSubmit()
-                }) {
-                    MiuixIcon(
-                        imageVector = Icons.Outlined.Search,
-                        contentDescription = stringResource(R.string.search_submit),
-                        tint = MiuixTheme.colorScheme.primary,
-                    )
-                }
+                OverlayIconAction(MiuixIcons.Search, MiuixTheme.colorScheme.primary,
+                    onClick = {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                        onSubmit()
+                    }, contentDescription = stringResource(R.string.search_submit))
+                OverlayIconAction(MiuixIcons.Close, MiuixTheme.colorScheme.onSurface,
+                    onClick = close, contentDescription = stringResource(R.string.search_close))
             }
 
             Row(
@@ -464,7 +453,7 @@ private fun SearchPanel(
                 engines.forEach { engine ->
                     val selected = engine.id == selectedEngine.id
                     Card(
-                        modifier = Modifier.height(36.dp),
+                        modifier = Modifier.height(44.dp),
                         colors = CardDefaults.defaultColors(
                             color = if (selected) {
                                 MiuixTheme.colorScheme.primaryContainer
@@ -479,7 +468,7 @@ private fun SearchPanel(
                         },
                     ) {
                         Box(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
@@ -537,34 +526,16 @@ private fun SearchPanel(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack, enabled = canNavigateBack) {
-                    MiuixIcon(
-                        imageVector = Icons.Outlined.ArrowBack,
-                        contentDescription = stringResource(R.string.search_back),
-                        tint = MiuixTheme.colorScheme.onSurface,
-                    )
-                }
-                IconButton(onClick = onForward, enabled = canNavigateForward) {
-                    MiuixIcon(
-                        imageVector = Icons.Outlined.ArrowForward,
-                        contentDescription = stringResource(R.string.search_forward),
-                        tint = MiuixTheme.colorScheme.onSurface,
-                    )
-                }
-                IconButton(onClick = onRefresh) {
-                    MiuixIcon(
-                        imageVector = Icons.Outlined.Refresh,
-                        contentDescription = stringResource(R.string.search_refresh),
-                        tint = MiuixTheme.colorScheme.onSurface,
-                    )
-                }
-                IconButton(onClick = onOpenInBrowser) {
-                    MiuixIcon(
-                        imageVector = Icons.Outlined.OpenInBrowser,
-                        contentDescription = stringResource(R.string.search_open_browser),
-                        tint = MiuixTheme.colorScheme.onSurface,
-                    )
-                }
+                OverlayIconAction(MiuixIcons.Back, MiuixTheme.colorScheme.onSurface,
+                    enabled = canNavigateBack, onClick = onBack,
+                    contentDescription = stringResource(R.string.search_back))
+                OverlayIconAction(MiuixIcons.Forward, MiuixTheme.colorScheme.onSurface,
+                    enabled = canNavigateForward, onClick = onForward,
+                    contentDescription = stringResource(R.string.search_forward))
+                OverlayIconAction(MiuixIcons.Refresh, MiuixTheme.colorScheme.onSurface,
+                    onClick = onRefresh, contentDescription = stringResource(R.string.search_refresh))
+                OverlayIconAction(Icons.Outlined.OpenInBrowser, MiuixTheme.colorScheme.onSurface,
+                    onClick = onOpenInBrowser, contentDescription = stringResource(R.string.search_open_browser))
             }
         }
     }

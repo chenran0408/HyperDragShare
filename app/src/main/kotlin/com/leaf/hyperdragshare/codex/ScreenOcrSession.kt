@@ -14,6 +14,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -29,9 +30,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,12 +60,14 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.theme.ThemeController
 import java.io.IOException
 import java.util.concurrent.ExecutorService
@@ -283,20 +283,38 @@ internal class ScreenOcrSession(
                 RegionSelectionPage(screenshot, regionSelectionMessage, ::cancelRegion, ::recognizeRegion)
             } else {
                 val metrics = rememberOverlayPanelMetrics(panelHeightFraction = 0.68f)
-                OverlayScene(Color.Black.copy(alpha = 0.38f), onDismiss = { close() }) {
+                OverlayScene(Color.Black.copy(alpha = if (dark) .62f else .48f), onDismiss = { close() }) {
                     FloatingPanel(width = metrics.width, height = metrics.height,
                         fillMax = metrics.fullScreen,
                         modifier = overlayPanelPlacement(metrics),
+                        shape = RoundedCornerShape(metrics.cornerRadius),
                         backgroundColor = MiuixTheme.colorScheme.background) {
-                        Column(Modifier.fillMaxSize()) {
-                            copyMessage?.let { message ->
-                                Text(message, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                    fontSize = 13.sp)
+                        OverlayPanelScaffold(
+                            topBar = {
+                                OverlayHeaderBar(
+                                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                                    topInset = metrics.topSystemInset, leftInset = metrics.leftSystemInset,
+                                    rightInset = metrics.rightSystemInset,
+                                    leading = {
+                                        Text(stringResource(R.string.screen_ocr_title), fontSize = 18.sp,
+                                            fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface)
+                                    }, center = {}, trailing = {
+                                        OverlayIconAction(MiuixIcons.Close, MiuixTheme.colorScheme.onSurface,
+                                            onClick = { close() }, contentDescription = "关闭屏幕识字")
+                                    },
+                                )
+                            }, bottomBar = {},
+                        ) { bodyModifier ->
+                            Column(bodyModifier) {
+                                copyMessage?.let { message ->
+                                    Text(message, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                        fontSize = 13.sp)
+                                }
+                                ScreenOcrPage(resultText, statusMessage, isRecognizing,
+                                    screenshotForRegion != null, ::retryCapture, ::showRegionSelector,
+                                    ::openSegmentation, ::copyText, ::shareText)
                             }
-                            ScreenOcrPage(resultText, statusMessage, isRecognizing,
-                                screenshotForRegion != null, { close() }, ::retryCapture, ::showRegionSelector,
-                                ::openSegmentation, ::copyText, ::shareText)
                         }
                     }
                 }
@@ -396,7 +414,6 @@ internal class ScreenOcrSession(
         statusMessage: Int,
         isRecognizing: Boolean,
         canSelectRegion: Boolean,
-        onClose: () -> Unit,
         onRetry: () -> Unit,
         onSelectRegion: () -> Unit,
         onSegment: (String) -> Unit,
@@ -411,29 +428,10 @@ internal class ScreenOcrSession(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item(key = "screen-ocr-header") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 18.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.screen_ocr_title),
-                            color = MiuixTheme.colorScheme.onSurface,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = stringResource(R.string.screen_ocr_privacy),
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            fontSize = 13.sp,
-                        )
-                    }
-                    TextButton(text = stringResource(R.string.screen_ocr_close), onClick = onClose)
-                }
+            item(key = "screen-ocr-description") {
+                Text(stringResource(R.string.screen_ocr_privacy), fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
             }
             if (isRecognizing) {
                 item(key = "screen-ocr-progress") {
@@ -505,18 +503,16 @@ internal class ScreenOcrSession(
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(
                                     text = stringResource(R.string.screen_ocr_segment_all),
+                                    modifier = Modifier.height(44.dp), minHeight = 44.dp,
                                     onClick = { onSegment(allText) },
                                     colors = ButtonDefaults.textButtonColorsPrimary(),
                                 )
-                                TextButton(
-                                    text = stringResource(R.string.screen_ocr_copy_all),
-                                    onClick = { onCopy(allText) },
-                                    enabled = !copying,
-                                )
-                                TextButton(
-                                    text = stringResource(R.string.screen_ocr_share_all),
+                                OverlayIconAction(MiuixIcons.Copy, MiuixTheme.colorScheme.onSurface,
+                                    enabled = !copying, onClick = { onCopy(allText) },
+                                    contentDescription = stringResource(R.string.screen_ocr_copy_all))
+                                OverlayIconAction(MiuixIcons.Share, MiuixTheme.colorScheme.onSurface,
                                     onClick = { onShare(allText) },
-                                )
+                                    contentDescription = stringResource(R.string.screen_ocr_share_all))
                             }
                             if (canSelectRegion) {
                                 TextButton(
@@ -546,20 +542,12 @@ internal class ScreenOcrSession(
                                     .clickable(role = Role.Button) { onSegment(line) }
                                     .padding(vertical = 12.dp),
                             )
-                            IconButton(onClick = { onCopy(line) }, enabled = !copying) {
-                                MiuixIcon(
-                                    imageVector = Icons.Outlined.ContentCopy,
-                                    contentDescription = stringResource(R.string.screen_ocr_copy_line),
-                                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                )
-                            }
-                            IconButton(onClick = { onShare(line) }) {
-                                MiuixIcon(
-                                    imageVector = Icons.Outlined.Share,
-                                    contentDescription = stringResource(R.string.screen_ocr_share_line),
-                                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                )
-                            }
+                            OverlayIconAction(MiuixIcons.Copy, MiuixTheme.colorScheme.onSurface,
+                                enabled = !copying, onClick = { onCopy(line) },
+                                contentDescription = stringResource(R.string.screen_ocr_copy_line))
+                            OverlayIconAction(MiuixIcons.Share, MiuixTheme.colorScheme.onSurface,
+                                onClick = { onShare(line) },
+                                contentDescription = stringResource(R.string.screen_ocr_share_line))
                         }
                     }
                 }
@@ -684,6 +672,7 @@ internal class ScreenOcrSession(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.screen_ocr_region_title),
+                                fontSize = 18.sp,
                                 color = MiuixTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -693,10 +682,8 @@ internal class ScreenOcrSession(
                                 fontSize = 13.sp,
                             )
                         }
-                        TextButton(
-                            text = stringResource(R.string.screen_ocr_close),
-                            onClick = onCancel,
-                        )
+                        OverlayIconAction(MiuixIcons.Close, MiuixTheme.colorScheme.onSurface,
+                            onClick = onCancel, contentDescription = "退出区域选择")
                     }
                 }
                 Card(
@@ -718,11 +705,8 @@ internal class ScreenOcrSession(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             TextButton(
-                                text = stringResource(R.string.screen_ocr_close),
-                                onClick = onCancel,
-                            )
-                            TextButton(
                                 text = stringResource(R.string.screen_ocr_region_recognize),
+                                modifier = Modifier.height(44.dp), minHeight = 44.dp,
                                 enabled = selection != null && selection.width > 0f && selection.height > 0f,
                                 onClick = {
                                     val from = start

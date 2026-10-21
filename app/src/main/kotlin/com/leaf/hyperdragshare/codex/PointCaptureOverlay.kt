@@ -20,6 +20,8 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +29,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -40,6 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import top.yukonga.miuix.kmp.basic.Card
@@ -48,6 +54,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.theme.ThemeController
 import java.io.IOException
 import java.util.concurrent.Executors
@@ -288,25 +296,36 @@ object PointCaptureOverlay {
                             .pointerInput(Unit) { detectTapGestures { } }) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                Text("点选文字或图片", Modifier.weight(1f), fontSize = 16.sp)
-                                TextButton("取消", { close() })
+                                Text("点选文字或图片", Modifier.weight(1f), fontSize = 18.sp,
+                                    fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface)
+                                OverlayIconAction(MiuixIcons.Close, MiuixTheme.colorScheme.onSurface,
+                                    onClick = { close() }, contentDescription = "关闭点取")
                             }
                         }
                     }
                 } else {
-                    OverlayScene(Color.Black.copy(alpha = .26f), onDismiss = { close() }) {
-                        Card(Modifier.align(Alignment.Center).padding(24.dp).widthIn(max = 360.dp)) {
-                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("点取文字或图片")
-                                if (failure == null) {
-                                    CircularProgressIndicator()
-                                    Text("正在准备 Root 点取服务…")
-                                } else Text(requireNotNull(failure))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    if (failure != null && retryAllowed) {
-                                        TextButton("重选", { close(); PointCaptureOverlay.start(app) })
-                                    }
-                                    TextButton("关闭", { close() })
+                    OverlayScene(Color.Black.copy(alpha = if (dark) .62f else .48f), onDismiss = { close() }) {
+                        Card(Modifier.align(Alignment.Center).padding(16.dp).widthIn(max = 360.dp).fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("点取文字或图片", Modifier.weight(1f), fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface)
+                                    OverlayIconAction(MiuixIcons.Close, MiuixTheme.colorScheme.onSurface,
+                                        onClick = { close() }, contentDescription = "关闭点取")
+                                }
+                                Column(Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * .5f).dp)
+                                    .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (failure == null) {
+                                        CircularProgressIndicator()
+                                        Text("正在准备 Root 点取服务…", fontSize = 14.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                    } else Text(requireNotNull(failure), fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurface)
+                                }
+                                if (failure != null && retryAllowed) {
+                                    TextButton("重新点取", { close(); PointCaptureOverlay.start(app) },
+                                        modifier = Modifier.height(44.dp), minHeight = 44.dp)
                                 }
                             }
                         }

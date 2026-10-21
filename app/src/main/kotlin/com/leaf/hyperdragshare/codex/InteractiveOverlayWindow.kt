@@ -72,8 +72,12 @@ internal class InteractiveOverlayWindow(
         dispose()
     }
 
-    /** Keep the source attached so Android can deliver the real drag result. */
-    fun observeTextDrag(isCurrent: () -> Boolean) {
+    val isDragHandoffActive: Boolean get() = dragWindowAttributes != null
+
+    fun observeTextDrag(isCurrent: () -> Boolean) = observeDragHandoff(isCurrent, ::dismiss)
+
+    /** One lifecycle for text and stash sources; only a real accepted drop completes the handoff. */
+    fun observeDragHandoff(isCurrent: () -> Boolean, onDropped: () -> Unit) {
         check(!disposed && dragWindowAttributes == null)
         val original = WindowManager.LayoutParams().also { it.copyFrom(window.attributes) }
         dragWindowAttributes = original
@@ -90,16 +94,19 @@ internal class InteractiveOverlayWindow(
                     true
                 }
                 DragEvent.ACTION_DRAG_ENDED -> {
-                    DragShareLog.i("DragShare/InteractiveWindow", "text drag ended accepted=${event.result}")
+                    DragShareLog.i("DragShare/InteractiveWindow", "content drag ended accepted=${event.result}")
                     window.decorView.setOnDragListener(null)
                     dragWindowAttributes = null
                     if (!disposed) {
-                        if (event.result || !isCurrent()) dismiss()
-                        else window.attributes = original
+                        if (!isCurrent()) dismiss()
+                        else {
+                            window.attributes = original
+                            if (event.result) onDropped()
+                        }
                     }
                     true
                 }
-                // Observing the source must never count as accepting its own dropped text.
+                // Observing the source must never count as accepting its own dropped content.
                 DragEvent.ACTION_DROP -> false
                 else -> true
             }

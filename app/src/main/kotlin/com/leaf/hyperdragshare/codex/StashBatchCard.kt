@@ -1,5 +1,8 @@
 package com.leaf.hyperdragshare.codex
 
+import android.content.ClipData
+import android.view.View
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -57,12 +60,12 @@ internal fun StashBatchCard(
     selectedCount: Int,
     enabled: Boolean = true,
     dragEntries: List<StashStore.Entry> = batch,
-    onDragStarted: () -> Unit,
+    startDrag: (View, ClipData, View.DragShadowBuilder, Int) -> Boolean,
     onClick: () -> Unit,
 ) {
     Card(modifier.fillMaxWidth()) {
         StashDraggableContent(dragEntries, Modifier.fillMaxWidth().padding(6.dp), enabled = enabled,
-            draggable = !selectionMode || selectedCount > 0, onStarted = onDragStarted, onClick = onClick) {
+            draggable = !selectionMode || selectedCount > 0, startDrag = startDrag, onClick = onClick) {
             Column {
                 batch.firstOrNull { it.kind == StashStore.KIND_IMAGE }?.let {
                     StashImage(it, 480, Modifier.fillMaxWidth().height(imageHeight), ContentScale.Fit)

@@ -9,13 +9,14 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Display
-import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -23,15 +24,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.Link
+import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
@@ -118,32 +128,79 @@ object ImageOcrOverlay {
                 ThemeController(if (dark)
                     ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
-                Card {
-                    Column(Modifier.heightIn(max = (context.resources.configuration.screenHeightDp * 0.65f).dp)
-                        .verticalScroll(rememberScrollState()).padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (codes != null) "二维码内容" else errorText
-                            ?: if (qr) "正在识别二维码…" else "正在识别图片…",
-                            color = MiuixTheme.colorScheme.onSurface)
-                        actionError?.let { Text(it, color = MiuixTheme.colorScheme.onSurface) }
-                        codes?.forEach { value ->
-                            SelectionContainer { Text(value, color = MiuixTheme.colorScheme.onSurface) }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(if (copying) "复制中…" else if (copiedCode == value) "已复制" else "复制",
-                                    { copyCode(value) }, enabled = !copying)
-                                val engine = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_WEB)
-                                if (SearchEngineCatalog.destination(engine, value) != null) {
-                                    TextButton(if (value.startsWith("https://", ignoreCase = true)) "打开链接" else "搜索", {
-                                        SearchOverlayWindow.show(context, window.window.decorView, value,
-                                            BoomActionHandler.SEARCH_WEB, openExternal = ::openExternal)
-                                    })
+                BackHandler { window.dismiss() }
+                val metrics = rememberOverlayPanelMetrics(panelHeightFraction = if (codes == null) .32f else .5f)
+                OverlayScene(Color.Black.copy(alpha = if (dark) .62f else .48f), onDismiss = window::dismiss) {
+                    FloatingPanel(metrics.width, metrics.height, fillMax = metrics.fullScreen,
+                        modifier = overlayPanelPlacement(metrics), shape = RoundedCornerShape(metrics.cornerRadius),
+                        backgroundColor = MiuixTheme.colorScheme.background) {
+                        OverlayPanelScaffold(
+                            topBar = {
+                                OverlayHeaderBar(
+                                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                                    topInset = metrics.topSystemInset,
+                                    leftInset = metrics.leftSystemInset,
+                                    rightInset = metrics.rightSystemInset,
+                                    leading = {
+                                        Text(if (qr) "二维码" else "图片识字", fontSize = 18.sp,
+                                            fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface)
+                                    },
+                                    center = {},
+                                    trailing = {
+                                        OverlayIconAction(MiuixIcons.Close, MiuixTheme.colorScheme.onSurface,
+                                            onClick = window::dismiss, contentDescription = "关闭识别窗口")
+                                    },
+                                )
+                            },
+                            bottomBar = {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp,
+                                    vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (errorText != null) OverlayIconAction(MiuixIcons.Refresh,
+                                        MiuixTheme.colorScheme.onSurface, onClick = { restart(qr) },
+                                        contentDescription = "重试识别")
+                                    if (!qr) OverlayIconAction(MiuixIcons.Scan,
+                                        MiuixTheme.colorScheme.onSurface, onClick = { restart(true) },
+                                        contentDescription = "识别二维码")
+                                }
+                            },
+                        ) { bodyModifier ->
+                            Column(bodyModifier.verticalScroll(rememberScrollState()).padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                errorText?.let { Text(it, fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface) }
+                                actionError?.let { Text(it, fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface) }
+                                if (errorText == null && codes == null) {
+                                    Row(verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        CircularProgressIndicator()
+                                        Text(if (qr) "正在识别二维码…" else "正在识别图片…", fontSize = 14.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                    }
+                                }
+                                codes?.forEach { value ->
+                                    SelectionContainer {
+                                        Text(value, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        OverlayIconAction(MiuixIcons.Copy, MiuixTheme.colorScheme.onSurface,
+                                            enabled = !copying, onClick = { copyCode(value) },
+                                            contentDescription = "复制二维码内容")
+                                        val engine = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_WEB)
+                                        if (SearchEngineCatalog.destination(engine, value) != null) {
+                                            val link = value.startsWith("https://", ignoreCase = true)
+                                            OverlayIconAction(if (link) MiuixIcons.Link else MiuixIcons.Search,
+                                                MiuixTheme.colorScheme.onSurface,
+                                                onClick = {
+                                                    SearchOverlayWindow.show(context, window.window.decorView, value,
+                                                        BoomActionHandler.SEARCH_WEB, openExternal = ::openExternal)
+                                                }, contentDescription = if (link) "打开链接" else "搜索内容")
+                                        }
+                                        if (copiedCode == value) Text("已复制", fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                    }
                                 }
                             }
                         }
-                        if (errorText == null && codes == null) CircularProgressIndicator()
-                        if (errorText != null) TextButton("重试", { restart(qr) })
-                        if (!qr) TextButton("识别二维码", { restart(true) })
-                        TextButton(if (codes != null) "关闭" else "取消", window::dismiss)
                     }
                 }
             }
@@ -153,12 +210,6 @@ object ImageOcrOverlay {
             app.registerReceiver(screenOff, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF),
                 Context.RECEIVER_NOT_EXPORTED)
             owner?.addOnAttachStateChangeListener(ownerListener)
-            window.window.attributes = window.window.attributes.apply {
-                width = (300 * context.resources.displayMetrics.density).toInt()
-                height = WindowManager.LayoutParams.WRAP_CONTENT
-                gravity = Gravity.CENTER
-                flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-            }
         }
 
         fun decode() {

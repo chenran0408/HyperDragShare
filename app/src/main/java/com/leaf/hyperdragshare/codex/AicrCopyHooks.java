@@ -66,7 +66,7 @@ final class AicrCopyHooks {
                     }
                 }
             });
-            log("text-direct copy hook installed");
+            log("text-direct copy hook installed build=" + BuildConfig.VERSION_NAME + "/" + BuildConfig.VERSION_CODE);
         } catch (RuntimeException | LinkageError error) {
             log("text-direct copy hook unavailable: " + error.getClass().getSimpleName()
                     + ": " + error.getMessage());

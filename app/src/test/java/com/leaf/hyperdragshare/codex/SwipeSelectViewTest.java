@@ -108,6 +108,98 @@ public class SwipeSelectViewTest {
         assertNull(dragged);
         assertEquals(new TreeSet<>(List.of(2)), page.mBoomActionHandler.mSelectedId);
     }
+    @Test public void verticalMotionDoesNotSelectWordsOrStartGlobalDrag() {
+        open();
+        page.restoreSelectionNow(new TreeSet<>(List.of(2)));
+        LinearLayout row = (LinearLayout) words.getChildAt(0);
+        View chip = row.getChildAt(0);
+        float x = row.getLeft() + chip.getLeft() + chip.getWidth() / 2f;
+        float y = row.getTop() + chip.getHeight() / 2f;
+        event(MotionEvent.ACTION_DOWN, x, y);
+        event(MotionEvent.ACTION_MOVE, x, y + 100);
+        ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(ViewConfiguration.getLongPressTimeout()));
+        event(MotionEvent.ACTION_UP, x, y + 100);
+        assertNull(dragged);
+        assertEquals(new TreeSet<>(List.of(2)), page.mBoomActionHandler.mSelectedId);
+    }
+
+    @Test public void shrinkingSelectionKeepsWordsSelectedBeforeThisGesture() {
+        open();
+        page.restoreSelectionNow(new TreeSet<>(List.of(2)));
+        touch(MotionEvent.ACTION_DOWN, 0);
+        touch(MotionEvent.ACTION_MOVE, 2);
+        touch(MotionEvent.ACTION_MOVE, 1);
+        touch(MotionEvent.ACTION_UP, 1);
+        assertEquals(new TreeSet<>(List.of(0, 1, 2)), page.mBoomActionHandler.mSelectedId);
+    }
+
+    @Test public void shrinkingDeselectionDoesNotSelectPreviouslyUnselectedWords() {
+        open();
+        page.restoreSelectionNow(new TreeSet<>(List.of(0)));
+        touch(MotionEvent.ACTION_DOWN, 0);
+        touch(MotionEvent.ACTION_MOVE, 2);
+        touch(MotionEvent.ACTION_MOVE, 1);
+        touch(MotionEvent.ACTION_UP, 1);
+        assertTrue(page.mBoomActionHandler.mSelectedId.isEmpty());
+    }
+
+    @Test public void horizontalIntentIsNotStolenByTheVerticalScrollView() {
+        open();
+        page.mScroller.setEdgeDragEnabled(false);
+        int slop = ViewConfiguration.get(context).getScaledTouchSlop();
+        long now = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 20, 20, 0);
+        MotionEvent move = MotionEvent.obtain(now, now + 16, MotionEvent.ACTION_MOVE,
+                20 + slop * 4, 20 + slop * 2, 0);
+        page.mScroller.onInterceptTouchEvent(down);
+        assertFalse(page.mScroller.onInterceptTouchEvent(move));
+        down.recycle();
+        move.recycle();
+    }
+
+    @Test public void stationaryFingerAtEdgeKeepsSelectingAsContentScrolls() {
+        open();
+        int count = 300;
+        int[] segments = new int[count * 2 + 1];
+        for (int i = 0; i < count; i++) segments[i * 2] = segments[i * 2 + 1] = i;
+        segments[segments.length - 1] = -1;
+        assertTrue(page.initWords(segments, "甲".repeat(count), -1, -1, -1));
+        root.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(400, View.MeasureSpec.EXACTLY));
+        root.layout(0, 0, 1080, 400);
+        assertTrue(page.mScroller.canScrollVertically(1));
+        touch(MotionEvent.ACTION_DOWN, 0);
+        touch(MotionEvent.ACTION_MOVE, 1);
+
+        int[] scrollLocation = new int[2];
+        int[] wordsLocation = new int[2];
+        page.mScroller.getLocationOnScreen(scrollLocation);
+        words.getLocationOnScreen(wordsLocation);
+        LinearLayout row = (LinearLayout) words.getChildAt(0);
+        View chip = row.getChildAt(1);
+        float screenX = wordsLocation[0] + row.getLeft() + chip.getLeft() + chip.getWidth() / 2f;
+        float screenY = scrollLocation[1] + page.mScroller.getHeight() - 2;
+        screenEvent(MotionEvent.ACTION_MOVE, screenX, screenY);
+        int lastBeforeScroll = page.mBoomActionHandler.mSelectedId.last();
+        ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(250));
+        assertTrue(page.mScroller.getScrollY() > 0);
+        assertTrue(page.mBoomActionHandler.mSelectedId.last() > lastBeforeScroll);
+        screenEvent(MotionEvent.ACTION_UP, screenX, screenY);
+        int stoppedAt = page.mScroller.getScrollY();
+        ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(100));
+        assertEquals(stoppedAt, page.mScroller.getScrollY());
+    }
+
+    private void screenEvent(int action, float screenX, float screenY) {
+        int[] location = new int[2];
+        words.getLocationOnScreen(location);
+        long now = SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, action, screenX, screenY, 0);
+        event.offsetLocation(-location[0], -location[1]);
+        words.onTouchEvent(event);
+        event.recycle();
+    }
+
     @Test public void cancelledEdgePullNeverConfirmsAdjacentInsertion() {
         open();
         boolean[] released = {false};

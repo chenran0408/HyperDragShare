@@ -1150,3 +1150,15 @@ Launcher.showReturnTab及所有三处调用整段删除，不留空窗。主窗B
 文字拖出不再以startDrag成功冒充完成：临时decor listener接受STARTED后alpha0/不可触摸聚焦，原窗口仍attached、session/选区不销毁；真实ENDED失败恢复同窗，成功关闭；不接受源窗DROP。启动失败、dismiss、锁屏清理listener，generation/active阻止旧窗恢复。该状态流程基于目标ROM DragState/ViewRoot/ViewGroup契约核对，仍未物理验收。
 
 build318完整212tests/0failures/0errors，Lint0errors/157warnings/2hints与assembleDebug通过；没有新增镜像按钮测试。154集中覆盖安装一次，同签名，前台微信t2387保持；后台只重载Portal，不开新测试页、不动私人内容。
+
+## 2026-10-21 1.7.155：中转站拖放、连续选词与 Miuix 整批
+
+用户重启后实际加载证据：15:09:54 system_server 安装精确 phantom 数量裁剪 Hook；15:10:00 SystemUI 安装原生 EventReceiver 旁路。五个实际 ≥200ms 手势的 size/touchMajor/touchMinor 全零，178 不采 toolMajor，不能声称物理面积已恢复。AICR 三进程本次启动曾加载，不推定主进程一直存活。上述旧版安装日志无版本自报，按本次启动已安装178推定；155增加编译版本日志及toolMajor采样，未为此重启用户系统。
+
+针对用户“中转站长按即关、文字图片无法拖到微信”反馈：startDragAndDrop 成功只表示启动，旧 collapse 改变源 Compose 树与窗口。单条、组卡、多选及预览图改用同一个 attached 源窗：观察 STARTED 后透明并穿透，持有原树至 ENDED；accepted 才收起，取消恢复原窗/选区，启动失败清观察器。拖放期间跳过 resize/collapse。保持标准 ClipData/MIME/私有图片 URI 读 grant，不猜微信私有协议或扩大授权。
+
+SwipeSelectView/CustomScrollView：横向意图锁选词，纵向留给滚动；DOWN不先改选区；边缘每帧按固定手指重新命中词块继续扩选，限速并在边界停滚；回拉还原手势前原选区而非反转；CANCEL恢复。新增五个针对性回归，保留已有长按直接系统拖出与同步CANCEL。
+
+UI复用现有组件：去掉状态卡硬编码红绿与170dp图形；图片/二维码、点取、屏幕OCR统一18sp标题和单一关闭；搜索及共用操作44dp触区、22dp图形、Miuix图标/Tooltip/禁用态。未新增页面，不恢复分词中转站按钮或再次OCR，不改OCR引擎。中转站窗口面积仍≤16%。
+
+完整构建/安装/未实测范围见 DEVICE_VALIDATION 最新155记录和 CURRENT_STATUS。

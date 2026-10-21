@@ -53,9 +53,6 @@ public class CustomScrollView extends ScrollView{
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
-        if (!mEdgeDragEnabled) {
-            return super.onInterceptTouchEvent(ev);
-        }
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 mDownX = ev.getX();
@@ -69,7 +66,9 @@ public class CustomScrollView extends ScrollView{
                 }
                 float totalDx = ev.getX() - mDownX;
                 float totalDy = ev.getY() - mDownY;
-                if (Math.abs(totalDy) >= mEdgeStartDistance
+                // Let the word view claim horizontal selection before ScrollView checks dy alone.
+                if (Math.abs(totalDx) > mTouchSlop && Math.abs(totalDx) > Math.abs(totalDy)) return false;
+                if (mEdgeDragEnabled && Math.abs(totalDy) >= mEdgeStartDistance
                         && Math.abs(totalDy) > Math.abs(totalDx)
                         && shouldStartEdgeDrag(totalDy)) {
                     return true;

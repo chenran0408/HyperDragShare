@@ -2,6 +2,7 @@ package com.leaf.hyperdragshare.codex
 
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -12,6 +13,7 @@ import android.provider.Settings
 import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.WindowInsets
@@ -188,15 +190,30 @@ object StashOverlayPanel {
         }
 
         fun expand() {
+            if (overlay.isDragHandoffActive) return
             expanded = true
             resize()
             if (overlay.show()) reload()
         }
 
         fun collapse() {
+            if (overlay.isDragHandoffActive) return
             confirmDelete = false
             expanded = false
             resize()
+        }
+
+        private fun startContentDrag(source: View, clip: ClipData,
+            shadow: View.DragShadowBuilder, flags: Int): Boolean {
+            overlay.observeDragHandoff({ active === this@Shelf }, ::collapse)
+            var started = false
+            try {
+                started = source.startDragAndDrop(clip, shadow, null, flags)
+                return started
+            } finally {
+                // Failed startup has no ENDED event; leave the original content and selection visible.
+                if (!started) overlay.cancelTextDragObservation()
+            }
         }
 
         private fun back() {
@@ -209,6 +226,7 @@ object StashOverlayPanel {
         }
 
         private fun resize() {
+            if (overlay.isDragHandoffActive) return
             val windowMetrics = context.getSystemService(WindowManager::class.java).maximumWindowMetrics
             val metrics = windowMetrics.bounds
             val insets = windowMetrics.windowInsets.getInsetsIgnoringVisibility(
@@ -425,7 +443,7 @@ object StashOverlayPanel {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StashDraggableContent(if (selectionMode) dragSelection else listOf(entry), Modifier.weight(1f),
                             enabled = !updating, draggable = !selectionMode || selected,
-                            onStarted = ::collapse, onClick = open) {
+                            startDrag = ::startContentDrag, onClick = open) {
                             if (entry.kind == StashStore.KIND_IMAGE) {
                                 StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp), ContentScale.Fit)
                             } else {
@@ -456,7 +474,7 @@ object StashOverlayPanel {
             StashBatchCard(batch, Modifier.padding(horizontal = 4.dp), imageHeight = 56.dp,
                 enabled = !updating, selectionMode = selectionMode, selectedCount = selectedCount,
                 dragEntries = if (selectionMode) dragSelection else batch,
-                onDragStarted = ::collapse, onClick = {
+                startDrag = ::startContentDrag, onClick = {
                     if (selectionMode) {
                         selectedIds = if (selectedCount == batch.size) selectedIds - ids else selectedIds + ids
                     } else {
@@ -520,7 +538,7 @@ object StashOverlayPanel {
                                 image != null -> Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
                                     StashDraggableContent(if (selectionMode && image.id in selectedIds) selected else listOf(image),
                                         Modifier.fillMaxWidth().weight(1f),
-                                        enabled = !updating, onStarted = ::collapse, onClick = {}) {
+                                        enabled = !updating, startDrag = ::startContentDrag, onClick = {}) {
                                         StashImage(image, 1200, Modifier.fillMaxSize(), ContentScale.Fit)
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
