@@ -133,14 +133,6 @@ object StashOverlayPanel {
         main.post { active?.overlay?.dismiss() }
     }
 
-    internal fun textDropFinished(source: View, error: Exception?) {
-        val shelf = active?.takeIf { source.rootView === it.overlay.window.decorView } ?: return
-        if (error == null) {
-            shelf.collapse()
-            Toast.makeText(source.context, "已填入输入框", Toast.LENGTH_SHORT).show()
-        } else shelf.report("未填入文字，内容已保留", error)
-    }
-
     private class Shelf(private val app: Context) {
         private val position = app.getSharedPreferences("stash_window_position", Context.MODE_PRIVATE)
         private var onLeft by mutableStateOf(position.getBoolean("left", false))
@@ -222,7 +214,7 @@ object StashOverlayPanel {
         private fun startContentDrag(source: View, clip: ClipData,
             shadow: View.DragShadowBuilder, flags: Int): Boolean {
             overlay.observeDragHandoff({ active === this@Shelf },
-                onDropped = { if (!StashTextDropWindow.handles(clip)) collapse() },
+                onDropped = ::collapse,
                 onStarted = {
                     val density = context.resources.displayMetrics.density
                     dragContentWidthDp = overlay.window.attributes.width / density
@@ -230,8 +222,7 @@ object StashOverlayPanel {
                     draggingContent = true
                     resize(allowDuringDrag = true)
                 },
-                onFinished = { draggingContent = false },
-                restoreOnAcceptedDrop = StashTextDropWindow.handles(clip))
+                onFinished = { draggingContent = false })
             var started = false
             try {
                 started = source.startDragAndDrop(clip, shadow, null, flags)

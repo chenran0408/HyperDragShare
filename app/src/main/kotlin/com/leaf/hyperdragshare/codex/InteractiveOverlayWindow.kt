@@ -103,7 +103,6 @@ internal class InteractiveOverlayWindow(
         onDropped: () -> Unit,
         onStarted: (() -> Unit)? = null,
         onFinished: ((Boolean) -> Unit)? = null,
-        restoreOnAcceptedDrop: Boolean = false,
     ) {
         check(!disposed && dragWindowAttributes == null)
         val original = WindowManager.LayoutParams().also { it.copyFrom(window.attributes) }
@@ -130,7 +129,7 @@ internal class InteractiveOverlayWindow(
                     onDragFinished = null
                     if (!disposed) {
                         // A successful drop hands focus to the target; restoring the source first closes its editor.
-                        if (!event.result || restoreOnAcceptedDrop) window.attributes = original
+                        if (!event.result) window.attributes = original
                         finished?.invoke(event.result)
                         if (!isCurrent()) dismiss()
                         else if (event.result) onDropped()

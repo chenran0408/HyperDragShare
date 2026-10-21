@@ -59,7 +59,7 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
     if (entries.isEmpty()) return
     val hasImages = entries.any { it.kind == StashStore.KIND_IMAGE }
     if (hasImages && entries.any { it.kind == StashStore.KIND_TEXT }) {
-        Toast.makeText(view.context, "文字和图片请分别选取后拖出，避免目标应用直接发送文字", Toast.LENGTH_LONG).show()
+        Toast.makeText(view.context, "文字和图片请分别选取后拖出", Toast.LENGTH_LONG).show()
         return
     }
     val density = view.resources.displayMetrics.density
@@ -83,19 +83,19 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
         }
         override fun onDrawShadow(canvas: Canvas) = preview.draw(canvas)
     }
-    if (!hasImages) {
-        StashTextDropWindow.start(view, entries.joinToString("\n") { it.text.orEmpty() }, shadow, startDrag)
-        return
-    }
     try {
-        val uris = withContext(Dispatchers.IO) {
-            StashStore(view.context.applicationContext).use { store ->
-                entries.map { StashDragImageCache.uri(view.context.applicationContext, it, store.openImage(it.id)) }
+        val clip = if (!hasImages) ClipData.newPlainText("中转站文字", entries.joinToString("\n") { it.text.orEmpty() })
+        else {
+            val uris = withContext(Dispatchers.IO) {
+                StashStore(view.context.applicationContext).use { store ->
+                    entries.map { StashDragImageCache.uri(view.context.applicationContext, it, store.openImage(it.id)) }
+                }
             }
+            if (!isHeld() || !view.isAttachedToWindow) return
+            clipForStash(entries, uris)
         }
-        if (!isHeld() || !view.isAttachedToWindow) return
-        val started = startDrag(view, clipForStash(entries, uris), shadow,
-            View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ)
+        val started = startDrag(view, clip, shadow,
+            View.DRAG_FLAG_GLOBAL or if (hasImages) View.DRAG_FLAG_GLOBAL_URI_READ else 0)
         if (!started) Toast.makeText(view.context, "系统未能开始拖拽，请重试", Toast.LENGTH_SHORT).show()
     } catch (error: IOException) {
         DragShareLog.w("DragShare/Stash", "Unable to prepare drag image", error)
