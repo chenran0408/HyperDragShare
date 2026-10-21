@@ -11,13 +11,14 @@ import de.robv.android.xposed.XposedHelpers;
 final class PortalContentCaptureSource {
     private PortalContentCaptureSource() {}
 
-    static CapturedContent capture(Object taplusService) {
+    static CapturedContent capture(Object taplusService, DragShareSettings settings) {
         if (taplusService == null) {
             return null;
         }
         Class<?> serviceClass = taplusService.getClass();
         try {
             String sourcePackage = (String) XposedHelpers.callStaticMethod(serviceClass, "getInjectorPackage");
+            if (GameCapturePolicy.shouldPause((android.content.Context) taplusService, settings, sourcePackage)) return null;
             Rect sourceBounds = (Rect) XposedHelpers.callMethod(taplusService, "getContentRect");
             Object textMode = XposedHelpers.getStaticObjectField(serviceClass, "sIsTextMode");
             if (Boolean.TRUE.equals(textMode)) {

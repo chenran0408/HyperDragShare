@@ -575,6 +575,14 @@ private fun MainPage(
             item(key = "thumb-trigger-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
                     ThumbTriggerPreference(context, onOpenBlacklist, settings.isPortalCaptureMode)
+                    SwitchPreference(
+                        title = "游戏内暂停自动触发",
+                        summary = "按应用声明的游戏类别暂停；手动点取、识屏仍可用，未标记的游戏可单独加入黑名单",
+                        checked = settings.pauseAutomaticInGames,
+                        onCheckedChange = { enabled ->
+                            persist(copySettings(settings, pauseAutomaticInGames = enabled))
+                        },
+                    )
                 }
             }
             item(key = "text-panel-preferences") {
@@ -2091,6 +2099,7 @@ private fun copySettings(
         current.accessibilityRecognitionSensitivityPercent,
     logLevel: Int = current.logLevel,
     logDestination: Int = current.logDestination,
+    pauseAutomaticInGames: Boolean = current.pauseAutomaticInGames,
 ): DragShareSettings = DragShareSettings(
     colorMode,
     uiStyle,
@@ -2117,6 +2126,7 @@ private fun copySettings(
     modernGlassOpacityPercent,
     logLevel,
     logDestination,
+    pauseAutomaticInGames,
 )
 
 @Suppress("DEPRECATION")

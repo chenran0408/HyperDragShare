@@ -683,3 +683,14 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 最终250实际打开本组，进入多选→全选，确认页明确仅2项→删除后自动返回全部列表；hds124-250-group-ready.xml、hds124-250-confirm.xml、hds124-250-cleaned.xml。停止模块保存hds124-after-stash.tar/snapshot.json，与123清理后的基线比较，原7条正文/类型/时间/MIME指纹、id及4张图片字节哈希均一致。不是恢复旧库来掩盖清理结果。生成缓存已删，截图/备份只留本机，不提交用户内容。
 - 交付outputs/HyperDragShare-1.7.124-debug.apk，设备base.apk与交付SHA256一致：1B8CCD26B3BC15750DAB13D1A00DE621DBCB277CF293973DE570C181C3DD5C84；签名不变。最终仅重载传送门，注入/Root148/granted=true；未重启android/AICR/整机，本批不改它们的Hook。恢复原bilipai任务2183，未关闭提醒或播放。
 - 仍未验：全屏管理页/横屏/深色的新布局、侧窗共享搜索框完整IME流程、原生小窗实际图片预览和单条删除、触摸手势返回、跨UID组接收和多选分享的具体目标。筛选类型仍横向滚动。面积、bilipai评论普通长按、115旧ANR及复制编辑浮层共存未解决。
+
+## 2026-10-21：1.7.125 游戏暂停开关与捕获来源
+
+- 新增可选“游戏内暂停自动触发”，默认关闭；接入既有传送门/无障碍/面积自动捕获入口，在模块接管原手势前判断Android声明CATEGORY_GAME。手动点取、OCR不受此新开关限制，原安全限制仍保留。未声明分类游戏需使用相应黑名单，不按包名猜测。
+- 构建251仅新测试辅助API编译失败：Robolectric通用Shadows.shadowOf的Java重载引用compileSdk37已删除的FingerprintManager；改为现有ShadowLooper/明确ShadowPackageManager。最终252的testDebugUnitTest、lintDebug、assembleDebug通过，189项测试0失败，Lint0 errors/139 warnings/2 hints。新增2个策略用例验证默认关闭、明确游戏暂停/非游戏继续，以及来源不存在时保留原操作并提示；设置保存/Bundle往返扩展原测试。
+- 包名com.leaf.hyperdragshare.codex，149原位升级成功；debug证书仍b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0。最终交付outputs/HyperDragShare-1.7.125-debug.apk SHA256 F182BDAB0BCF24D927D66506C4B1CE56BED539511C04570239908FB9F73231C0。
+- 实际Miuix设置点击开启，XML checked=true，真实偏好true；重启模块后debug-only GameCaptureProbe读回savedEnabled=true。hds125-game-off.xml、game-on.xml/png、settings-enabled.xml、metadata-enabled.txt。第一次立即读取文件早于SharedPreferences.apply落盘，未误判保存失败；随后读回true。探针按真实已安装ApplicationInfo查询声明游戏数为0，因此未进行游戏内手指触发，不能写成真实游戏暂停通过。
+- Root协议早期候选现在带来源包，面积入口可在接管前判断；实机debug显式点取原bilipai休息提醒标题，candidateSourceMatches=true、nonGameRemainsAvailable=true、textLength=8，Root读取11ms，hds125-root-source.txt、game.log。这只验证来源协议/非游戏策略，不是面积触发或普通长按/评论验收。未截整屏OCR、未打开新分词窗口，未关闭提醒或播放。
+- 再次经真实设置UI关闭新开关；前后XML按键比较只有新增pause_automatic_in_games=false，其余值不变。hds125-after-settings.xml、restoring.xml。中转站未增删/读写，schema2未变，沿用既有备份回退约束。Root助手退出、无取词会话残留；终态原bilipai任务2183置前。
+- 仅重载传送门（启动其已有设置Activity和原服务），等待实际报告injected_version=149、portal_root_version=149、portal_root_granted=true，hds125-activation.xml。未重启android/AICR/整机；未新增作用域或尝试绕过此前受限的额外APK安装。持续设备授权继续有效，无需重复询问。
+- 未验：真实游戏内自动暂停/切出恢复、游戏里手动点取、Portal UID分类失败提示、无障碍模式实机动作。当前手机未发现声明类别的游戏；无该类别的应用仍不暂停。真实拇指尺寸、bilipai评论普通长按、完整四样式四边真实手势、115旧ANR与复制浮层共存仍未解决。

@@ -149,6 +149,7 @@ public final class DragShareSettings {
             "accessibility_recognition_sensitivity_percent";
     private static final String KEY_LOG_LEVEL = "log_level";
     private static final String KEY_LOG_DESTINATION = "log_destination";
+    private static final String KEY_PAUSE_AUTOMATIC_IN_GAMES = "pause_automatic_in_games";
 
     public final int colorMode;
     public final int contentCaptureMode;
@@ -175,6 +176,7 @@ public final class DragShareSettings {
     public final int accessibilityRecognitionSensitivityPercent;
     public final int logLevel;
     public final int logDestination;
+    public final boolean pauseAutomaticInGames;
 
     /** Backward-compatible constructor for callers using the original settings shape. */
     public DragShareSettings(int colorMode, int edgeTriggerDp, int scrollSpeedDpPerSecond) {
@@ -600,10 +602,11 @@ public final class DragShareSettings {
                 modernBlurRadiusDp,
                 modernGlassOpacityPercent,
                 DEFAULT_LOG_LEVEL,
-                DEFAULT_LOG_DESTINATION);
+                DEFAULT_LOG_DESTINATION,
+                false);
     }
 
-    /** Full constructor including diagnostic logging configuration. */
+    /** Full constructor including diagnostic logging and automatic game capture preference. */
     public DragShareSettings(
             int colorMode,
             int uiStyle,
@@ -629,7 +632,8 @@ public final class DragShareSettings {
             int modernBlurRadiusDp,
             int modernGlassOpacityPercent,
             int logLevel,
-            int logDestination) {
+            int logDestination,
+            boolean pauseAutomaticInGames) {
         this.colorMode = colorMode == COLOR_DARK || colorMode == COLOR_SYSTEM
                 ? colorMode : COLOR_LIGHT;
         this.contentCaptureMode = normalizeContentCaptureMode(contentCaptureMode);
@@ -690,6 +694,7 @@ public final class DragShareSettings {
                 MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT);
         this.logLevel = normalizeLogLevel(logLevel);
         this.logDestination = normalizeLogDestination(logDestination);
+        this.pauseAutomaticInGames = pauseAutomaticInGames;
     }
 
     public static DragShareSettings defaults() {
@@ -784,7 +789,8 @@ public final class DragShareSettings {
                         KEY_MODERN_GLASS_OPACITY,
                         DEFAULT_MODERN_GLASS_OPACITY_PERCENT),
                 preferences.getInt(KEY_LOG_LEVEL, DEFAULT_LOG_LEVEL),
-                preferences.getInt(KEY_LOG_DESTINATION, DEFAULT_LOG_DESTINATION));
+                preferences.getInt(KEY_LOG_DESTINATION, DEFAULT_LOG_DESTINATION),
+                preferences.getBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, false));
     }
 
     public void saveLocal(Context context) {
@@ -830,6 +836,7 @@ public final class DragShareSettings {
                         accessibilityRecognitionSensitivityPercent)
                 .putInt(KEY_LOG_LEVEL, logLevel)
                 .putInt(KEY_LOG_DESTINATION, logDestination)
+                .putBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, pauseAutomaticInGames)
                 .apply();
         DragShareLog.configure(this);
         DragShareLog.i("DragShare/Settings", "logging configured level=" + logLevel
@@ -895,6 +902,7 @@ public final class DragShareSettings {
                 accessibilityRecognitionSensitivityPercent);
         result.putInt(KEY_LOG_LEVEL, logLevel);
         result.putInt(KEY_LOG_DESTINATION, logDestination);
+        result.putBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, pauseAutomaticInGames);
         return result;
     }
 
@@ -973,7 +981,8 @@ public final class DragShareSettings {
                         KEY_MODERN_GLASS_OPACITY,
                         DEFAULT_MODERN_GLASS_OPACITY_PERCENT),
                 bundle.getInt(KEY_LOG_LEVEL, DEFAULT_LOG_LEVEL),
-                bundle.getInt(KEY_LOG_DESTINATION, DEFAULT_LOG_DESTINATION));
+                bundle.getInt(KEY_LOG_DESTINATION, DEFAULT_LOG_DESTINATION),
+                bundle.getBoolean(KEY_PAUSE_AUTOMATIC_IN_GAMES, false));
     }
 
     public boolean isDarkTheme(Context context) {

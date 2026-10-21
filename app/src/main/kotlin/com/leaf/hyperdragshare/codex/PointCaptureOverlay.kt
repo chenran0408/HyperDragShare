@@ -151,7 +151,7 @@ object PointCaptureOverlay {
                         val excluded = settings.accessibilityBlacklistedPackages.toMutableSet()
                         excluded.addAll(AccessibilityBlacklist.builtInPackages(app))
                         val content = root.capture(x, y, excluded,
-                            settings.isSharingEnabled(false), settings.isSharingEnabled(true)) { !closed }
+                            settings.isSharingEnabled(false), settings.isSharingEnabled(true)) { _ -> !closed }
                         main.post {
                             nodeSession = null
                             if (closed || !available()) {

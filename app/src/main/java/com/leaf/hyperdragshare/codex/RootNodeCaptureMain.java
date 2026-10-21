@@ -223,6 +223,7 @@ public final class RootNodeCaptureMain {
                     && "android.widget.TextView".equals(node.className)
                     && java.util.Objects.equals(node.text, point.candidate.text)))) {
                 System.out.println(new JSONObject().put("stage", "candidate")
+                        .put("package", source)
                         .put("candidate_ms", SystemClock.uptimeMillis() - started));
                 System.out.flush();
             }

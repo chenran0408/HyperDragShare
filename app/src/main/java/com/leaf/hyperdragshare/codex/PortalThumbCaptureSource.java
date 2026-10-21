@@ -143,8 +143,9 @@ final class PortalThumbCaptureSource {
                 if (request != generation || !pointerDown) return;
                 boolean[] cancelledOriginal = {false};
                 CapturedContent content = session.capture(px, py, excluded,
-                        settings.isSharingEnabled(false), settings.isSharingEnabled(true), () -> {
+                        settings.isSharingEnabled(false), settings.isSharingEnabled(true), sourcePackage -> {
                     if (request != generation || !pointerDown || !allowed()) return false;
+                    if (GameCapturePolicy.shouldPause(context, settings, sourcePackage)) return false;
                     if (SystemClock.uptimeMillis() >= deadline) {
                         DragShareLog.w(TAG, "candidate arrived after long-press deadline; preserving original gesture");
                         main.post(() -> {

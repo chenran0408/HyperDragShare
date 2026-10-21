@@ -97,7 +97,7 @@ public final class OverlayInteractionProbe extends Instrumentation {
             CapturedContent content;
             try (RootNodeCaptureClient.Session session = RootNodeCaptureClient.open(getTargetContext())) {
                 content = session.capture(x, y, AccessibilityBlacklist.builtInPackages(getTargetContext()),
-                        true, true, () -> true);
+                        true, true, sourcePackage -> true);
             }
             if (content == null || !content.isImage()) {
                 throw new IOException("Root capture did not return an image; target the generated ImageView");

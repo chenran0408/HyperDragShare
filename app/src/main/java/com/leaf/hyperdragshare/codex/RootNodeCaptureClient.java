@@ -29,7 +29,7 @@ final class RootNodeCaptureClient {
     private RootNodeCaptureClient() {}
 
     interface CandidateHandler {
-        boolean onCandidate() throws IOException;
+        boolean onCandidate(String sourcePackage) throws IOException;
     }
 
     static Session open(Context context) throws IOException, InterruptedException {
@@ -99,7 +99,7 @@ final class RootNodeCaptureClient {
                 process.getOutputStream().flush();
                 JSONObject result = awaitResponse();
                 boolean notified = "candidate".equals(result.optString("stage"));
-                boolean accepted = notified && handler.onCandidate();
+                boolean accepted = notified && handler.onCandidate(result.getString("package"));
                 if (notified) result = awaitResponse();
                 DragShareLog.i(TAG, "semantic lookup elapsedMs=" + result.getLong("elapsed_ms"));
                 if (keyguard.isKeyguardLocked()) return null;
@@ -107,7 +107,7 @@ final class RootNodeCaptureClient {
                     DragShareLog.i(TAG, "no content candidate reason=" + result.optString("reason", "unknown"));
                     return null;
                 }
-                if (!notified) accepted = handler.onCandidate();
+                if (!notified) accepted = handler.onCandidate(result.getString("package"));
                 if (!accepted) return null;
                 source = result.getString("package");
                 if (blockedPackages.contains(source)) return null;

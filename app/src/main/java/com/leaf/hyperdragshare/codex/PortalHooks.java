@@ -170,7 +170,7 @@ final class PortalHooks {
                 applyPortalRuntime();
                 DragShareController current = controller;
                 if (current != null) {
-                    CapturedContent content = PortalContentCaptureSource.capture(param.thisObject);
+                    CapturedContent content = PortalContentCaptureSource.capture(param.thisObject, settings);
                     if (content == null) {
                         return;
                     }

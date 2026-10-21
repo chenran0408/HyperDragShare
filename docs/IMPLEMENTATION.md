@@ -938,3 +938,12 @@ StashBatchCard和stashBatches由侧窗/系统小窗/管理共用，选择输出�
 窄窗默认只显示内容，搜索按需展开。共享StashSearchInput自动聚焦，使用Miuix Card/色板；原生窄窗把搜索、筛选及多选操作固定在不透明标题区，修正焦点/旧锚点滚动到标题背后的原因。查询、类型或组变化请求首项，不堆延迟重试。小确认框全宽上下按钮，预览缩短；普通图片Fit，删除冗余预览/分词按钮，正文点击保留同一动作。宽管理页仍用SearchBar。
 
 187项测试、Lint、构建及148安装/Portal/Root通过。实际产品放大保留组、freeform整组拖拽启动、搜索IME/Back、清空回首项、固定多选和2项删除清理均有对应证据；原7条/4图哈希保留。跨UID接收、宽页面/深色及新单条预览/删除弹窗未全部验收。详见DEVICE_VALIDATION.md。
+## 2026-10-21：1.7.125 游戏内暂停自动触发
+
+新增默认关闭的 pause_automatic_in_games，SharedPreferences/受限设置Provider/SettingsScreen使用同一值。Miuix开关说明仅按Android声明的游戏分类暂停，未声明游戏使用相应黑名单。GameCapturePolicy仅在明确自动捕获请求时读取ApplicationInfo.category，不在每次MOVE或无障碍事件中查分类/读树。
+
+作用范围没有新增Hook：com.miui.contentextension的既有Portal入口在getInjectorPackage后、读取正文或复制图片前判断，返回null时不接管系统手势；同进程面积候选在BackgroundTouchBlocker.start前判断；模块进程无障碍在根节点进入候选树前判断。Root候选早期通知新增实际来源包名，使面积路径无需猜前台或先取消原手势。手动PointCapture和显式OCR不调用该策略，仍遵守其原有锁屏、密码和黑名单限制。
+
+仅明确PackageManager不存在/权限失败边界记录原因并提示“本次保留原操作”，本次跳过模块，保留系统原动作；不改权限、不猜游戏名单、不设置多级回退。普通分类或未声明分类按非游戏处理，因此不承诺识别全部游戏。默认关闭避免升级改变原手势。目标传送门5.1.5和模块均声明QUERY_ALL_PACKAGES；仍需真实游戏及权限失败验证。
+
+最终构建252：189项单测0失败，Lint0 errors/139 warnings/2 hints，assembleDebug通过；真机设置开/关、重启后保存和Root来源包名回传通过。设备当前声明CATEGORY_GAME的应用为0，不能据元数据实验宣称真实游戏手势已验证。面积输入为0、bilipai评论普通长按仍未修复。详见设备记录。

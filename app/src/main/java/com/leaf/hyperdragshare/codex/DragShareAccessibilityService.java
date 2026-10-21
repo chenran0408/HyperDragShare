@@ -481,7 +481,8 @@ public final class DragShareAccessibilityService extends AccessibilityService {
             recycleNode(root);
             return;
         }
-        if (AccessibilityBlacklist.isBlocked(this, settings, packageName)) {
+        if (AccessibilityBlacklist.isBlocked(this, settings, packageName)
+                || GameCapturePolicy.shouldPause(this, settings, packageName)) {
             recycleNode(root);
             return;
         }
