@@ -79,7 +79,7 @@ public final class OverlayInteractionProbe extends Instrumentation {
             sample = paragraphs.toString();
         }
         Bundle report = new Bundle();
-        boolean accepted = BigBangOverlayLauncher.showText(getTargetContext(), sample, -1, -1, null);
+        boolean accepted = BigBangOverlayLauncher.showText(getTargetContext(), sample, -1, -1);
         report.putBoolean("accepted", accepted);
         report.putBoolean("longText", longText);
         report.putInt("syntheticLength", sample.length());

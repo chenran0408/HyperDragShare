@@ -62,20 +62,21 @@
 10. 菜单统一跟随拖拽触达的屏幕边缘；四种外观共用四边选边，不再提供固定位置或倾斜选边。布局刷新必须保留本次选中的边。
 11. “手指移开时关闭分享菜单”是四种拖拽样式的公共行为。简洁/现代/流光离开菜单与触发带时移除
     线性菜单，环形离开展开面板区域时折叠；同一手势重新进入触发区后都应允许再次展开。
-12. 首页激活状态必须按当前来源解释：传送门模式按“无 Root → 当前版本未注入传送门 →
-   传送门 Root 通道不可用 → 实际Root输入未就绪/失败 → 已启用按压但取词未就绪/失败 → 已激活”，
-    无障碍模式按“无 Root → 服务未启用 → 服务/Root 输入连接中 → 已启用按压但取词未就绪/失败 → 已激活”。传送门 Hook 必须通过
+12. 首页激活状态固定按 Root＋传送门解释：“无 Root → 当前版本未注入传送门 →
+   传送门 Root 通道不可用 → 实际Root输入未就绪/失败 → 已启用按压但取词未就绪/失败 → 已激活”。
+   传送门 Hook 必须通过
     `ModuleActivation.reportInjected()` 上报其编译时 `BuildConfig.VERSION_CODE`；不要把普通的
     `get_settings` 调用当作注入证明，否则 APK 更新后仍运行旧代码的传送门进程会被误报为已激活。
-13. 内容获取方式默认是传送门。无障碍模式只由 `DragShareAccessibilityService` 在模块进程中
-    工作，仍依赖 Root evdev，不得因此新增 LSPosed 作用域或静默启用无障碍服务。Xposed API
+13. 产品只支持 Root＋LSPosed，不提供系统无障碍服务或无 Root 来源。长按取词固定使用传送门
+    Hook、Root evdev、Root helper 与 AICR；不得重新声明 `BIND_ACCESSIBILITY_SERVICE`，也不得在
+    设置中恢复“传送门／无障碍”选择。旧 `content_capture_mode` 值不得改变运行来源。Xposed API
     仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
     `AicrCopyHooks`、`BackTapFrameworkHooks`、`RootProcessFrameworkHooks`、`NativeSidebarHooks` 和合并后的 `gestures.xposed` 包；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
-14. 节点树只在一次明确请求后读取：无障碍长按超时、用户已启用按压入口且单指静止按住120ms后的分类、按住时长确认或用户主动点取。
+14. 节点树只在一次明确请求后读取：用户已启用按压入口且单指静止按住120ms后的分类、按住时长确认或用户主动点取。
     按压分类按MI行为仅缓存本次内容，到确认时才接管并打开窗口；松手、移位或多指取消，不在空闲时读取。
-    准备点取时只连接 Root，不提前遍历；不得在 `onAccessibilityEvent()` 中持续遍历、
-    截图或记录文字。密码节点、锁屏、黑名单和无障碍覆盖层必须忽略，图片默认只截取所选节点区域。
+    准备点取时只连接 Root，不提前遍历；不得持续遍历、截图或记录文字。密码节点、锁屏、黑名单和
+    Root helper 已报告的安全遮挡窗口必须忽略，图片默认只截取所选节点区域。
     微信不暴露节点时使用按压局部OCR：179按实际WMS可见句柄与窗口所属包覆盖普通页面，不再限制LauncherUI；仍以WMS前台窗口身份与可见范围核验，排除安全窗口、遮挡、锁屏和黑名单，截图后和展示前复核来源，不把它描述成节点取词或完整小爱识屏。
     UiAutomation 只有一个注册位，Root 取词连接存活时不能同时运行 `uiautomator dump`；
     用截图观察，取词完成并确认释放后才 dump。占用失败要明确报告，不能断开别的会话或自动重试。
@@ -93,7 +94,7 @@
 - `PortalHooks.java`：安装传送门 Hook、管理生命周期、输入源仲裁和宿主取消信号。
 - `RootTouchSource.java`、`EvdevTouchParser.java`：发现触摸设备、解析 evdev 多点触控帧，稳定生成 DOWN/MOVE/UP/CANCEL。
 - `MiuiMotionSource.java`：MIUI 系统监听回退。
-- `CapturedContent.java`、`OverlayWindowPolicy.java`：来源无关的文字/图片模型和传送门/无障碍窗口类型。
+- `CapturedContent.java`、`OverlayWindowPolicy.java`：文字/图片模型和传送门悬浮窗口类型。
 - `DragShareController.java`：拖拽会话、悬浮预览、方向菜单、边缘滚动、近手传感器和落点选择；不依赖 Xposed。
 - `PortalGlowView.java`：流光样式的全屏不可触摸光效、下拉进度和托盘展开绘制。
 - `CircleMenuOverlayView.java`、`CircleMenuGeometry.java`：四边环形菜单，240dp 面板跨度、56dp 条目；预览需避让四边面板。
@@ -107,14 +108,12 @@
 - `SettingsScreen.kt`：Miuix 设置页（内容开关、目标可见性、批量操作、拖拽排序、外观和触摸参数）。
 - `ModuleActivation.java`：Root 探测、当前版本传送门注入握手和首页激活状态来源。
 - `DragAndDrop.kt`：参考 XiaomiHelper 的 LazyColumn 实时换位、边缘自动滚动和回弹状态。
-- `PressTriggerDetector.java`、`PressCaptureSource.java`：传送门/无障碍共用MI行为的按压时序与按需Root取词，不需要校准；零尺寸走普通按住分支，不冒称面积。
+- `PressTriggerDetector.java`、`PressCaptureSource.java`：Root evdev 按压时长/位移判定与按需 Root 取词，不需要校准，不冒称触摸面积。
 - `PortalContentCaptureSource.java`：唯一读取传送门私有字段和初始触点的适配层。
-- `DragShareAccessibilityService.java`、`AccessibilityContentCaptureSource.java`：无障碍生命周期、长按协调和来源隔离。
-- `OcrFallbackRegion.java`：无障碍无候选节点时的有限区域截取几何与密码节点重叠检查。
-- `LongPressGestureDetector.java`、`AccessibilityNodeClassifier.java`、`AccessibilityCandidateSelector.java`：可单测的长按、节点分类和命中优先级。
+- `AccessibilityNodeClassifier.java`、`AccessibilityCandidateSelector.java`：Root helper 共用的节点分类和命中优先级。
 - `SharedRootNodeCapture.java`、`IRootNodeLease.aidl`、`IRootNodeCandidate.aidl`：模块进程唯一持有Root取词helper，Provider授权引导、每租约校验所属UID。手动租约暂停自动捕获，IO忙直接报告，不排队错过长按截止；候选同步回调不得等待主线程。最后租约/客户端死亡释放，不抢断其他UiAutomation。图片元数据跨Binder，截图裁剪留在调用方，仍核验窗口。
 - `PointCaptureOverlay.kt`、`PointCaptureActivity.kt`、`PointCaptureTileService.java`：控制中心主动点取，透明桥结束后在原页选点，再复用 Root 语义取词/所选图片 OCR。与面积触发分开验收，不能把点取通过写成面积或普通长按修复。范围见 `docs/POINT_CAPTURE.md`。
-- `AccessibilityScreenshotter.java`、`RootScreenshotter.java`、`ScreenshotRectMapper.java`：安全的一次性区域截图与 API 28/29 回退。
+- `RootScreenshotter.java`、`ScreenshotRectMapper.java`：Root 安全区域截图与坐标映射。
 - `ShareTargetRepository.java`：查询可处理对应 MIME 的导出 Activity，并克隆/着色内置目标的旧矢量图标。
 - `BitmapEncoder.java`、`ImageStagingClient.java`、`ShareImageProvider.java`：图片压缩、
   跨 UID 暂存、能力 URI 和授权。

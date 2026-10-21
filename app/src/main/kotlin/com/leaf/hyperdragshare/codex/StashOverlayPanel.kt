@@ -515,7 +515,7 @@ object StashOverlayPanel {
         private fun selectedEntries() = stashBatches(entries).flatten().filter { it.id in selectedIds }
 
         private fun openText(entry: StashStore.Entry) {
-            if (BigBangOverlayLauncher.showText(app, entry.text.orEmpty(), -1, -1, null)) collapse()
+            if (BigBangOverlayLauncher.showText(app, entry.text.orEmpty(), -1, -1)) collapse()
         }
 
         fun report(label: String, error: Exception) {
@@ -712,7 +712,7 @@ object StashOverlayPanel {
                                                                 expand()
                                                             }
                                                         } else {
-                                                            BigBangOverlayLauncher.showText(app, text, -1, -1, uri)
+                                                            BigBangOverlayLauncher.showText(app, text, -1, -1)
                                                             collapse()
                                                         }
                                                     }

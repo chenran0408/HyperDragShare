@@ -155,7 +155,7 @@ internal class ScreenOcrSession(
                 if (error != null) {
                     reportFailure(R.string.screen_ocr_failed, error)
                 } else {
-                    recognitionCompleted(result.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() })
+                    recognitionCompleted(result.orEmpty().lines().filter { it.isNotBlank() })
                 }
             }
         }
@@ -184,7 +184,7 @@ internal class ScreenOcrSession(
         resultText = lines
         isRecognizing = false
         if (selectRegion &&
-            BigBangOverlayLauncher.showText(context, lines.joinToString("\n"), -1, -1, null)) {
+            BigBangOverlayLauncher.showText(context, lines.joinToString("\n"), -1, -1)) {
             close()
         } else renderResults()
     }
@@ -327,7 +327,7 @@ internal class ScreenOcrSession(
 
     private fun openSegmentation(text: String) {
         if (text.isBlank()) return
-        if (BigBangOverlayLauncher.showText(context, text, -1, -1, null)) close()
+        if (BigBangOverlayLauncher.showText(context, text, -1, -1)) close()
     }
 
     private fun copyText(text: String) {

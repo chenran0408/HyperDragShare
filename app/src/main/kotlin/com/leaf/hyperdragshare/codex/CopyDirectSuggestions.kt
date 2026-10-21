@@ -4,18 +4,13 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -26,17 +21,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Email
 import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.Phone
@@ -56,9 +48,9 @@ private data class CopyDirectUiState(
 internal fun CopyDirectSuggestions(
     context: Context,
     text: String,
-    onDismiss: () -> Unit,
     onOpenExternal: (Intent) -> Unit,
     onSearch: (String) -> Unit,
+    onDismiss: () -> Unit = {},
 ) {
     val requestActive = remember(context, text) { AtomicBoolean(true) }
     var uiState by remember(context, text) { mutableStateOf(CopyDirectUiState()) }
@@ -67,13 +59,20 @@ internal fun CopyDirectSuggestions(
     DisposableEffect(context, text, requestActive) {
         requestActive.set(true)
         val value = text.trim()
-        val direct = if (validHttpUrl(value) != null) {
-            AicrNerClient.Entity(value, AicrNerClient.Entity.TYPE_URL, 0, value.length)
-        } else null
+        val normalizedUrl = CopyDirectText.findHttpUrl(value)?.takeIf { validHttpUrl(it) != null }
+        val normalizedEmail = CopyDirectText.findEmail(value)
+        val directValue = normalizedUrl ?: normalizedEmail ?: value
+        val direct = when {
+            validHttpUrl(directValue) != null ->
+                AicrNerClient.Entity(directValue, AicrNerClient.Entity.TYPE_URL, 0, directValue.length)
+            validEmail(directValue) != null ->
+                AicrNerClient.Entity(directValue, AicrNerClient.Entity.TYPE_MAIL, 0, directValue.length)
+            else -> null
+        }
         val request = if (direct != null) {
             uiState = CopyDirectUiState(loading = false, entities = listOf(direct))
             null
-        } else AicrNerClient.extract(context, text) { entities, error ->
+        } else AicrNerClient.extract(context, directValue) { entities, error ->
             if (requestActive.get()) {
                 uiState = when {
                     error != null -> CopyDirectUiState(
@@ -93,122 +92,72 @@ internal fun CopyDirectSuggestions(
         }
     }
 
-    val dismiss = {
-        requestActive.set(false)
-        onDismiss()
-    }
-    BackHandler(enabled = true, onBack = dismiss)
-
-    Card(modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 120.dp)) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 100.dp, max = 120.dp)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp, max = 44.dp),
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.55f).dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        actionError?.let {
+            Text(text = it, color = MiuixTheme.colorScheme.error, maxLines = 2)
+        }
+        when {
+            uiState.loading -> Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "直达",
-                    modifier = Modifier.weight(1f),
-                    color = MiuixTheme.colorScheme.onSurface,
-                )
-                IconButton(
-                    onClick = dismiss,
-                    modifier = Modifier.size(44.dp),
-                    minWidth = 44.dp,
-                    minHeight = 44.dp,
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Close,
-                        contentDescription = "关闭实体建议",
-                        tint = MiuixTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                Text("正在识别…", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
-
-            Box(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp, max = 64.dp),
-                contentAlignment = Alignment.CenterStart,
+            uiState.error != null -> Text(
+                text = "识别失败：${uiState.error}",
+                color = MiuixTheme.colorScheme.error,
+                maxLines = 3,
+            )
+            uiState.entities.isEmpty() -> Text(
+                text = "未识别到可操作实体",
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+            else -> Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                when {
-                    actionError != null -> Text(
-                        text = actionError.orEmpty(),
-                        color = MiuixTheme.colorScheme.error,
-                        maxLines = 2,
-                    )
-                    uiState.loading -> Row(
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                        Text("正在识别…", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                    }
-                    uiState.error != null -> Text(
-                        text = "识别失败：${uiState.error}",
-                        color = MiuixTheme.colorScheme.error,
-                        maxLines = 2,
-                    )
-                    uiState.entities.isEmpty() -> Text(
-                        text = "未识别到可操作实体",
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                    else -> Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        uiState.entities.forEach { entity ->
-                            val destination = directEntityDestination(entity)
-                            val actionLabel = destination?.label ?: "搜索"
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 44.dp)
-                                    .clickable(role = Role.Button) {
-                                        actionError = null
-                                        if (destination == null) {
-                                            onSearch(entity.text)
-                                        } else {
-                                            try {
-                                                onOpenExternal(destination.intent)
-                                            } catch (error: ActivityNotFoundException) {
-                                                DragShareLog.w(TAG, "No activity for direct entity action", error)
-                                                actionError = "没有可处理“$actionLabel”的应用。"
-                                            } catch (error: SecurityException) {
-                                                DragShareLog.w(TAG, "Direct entity action was denied", error)
-                                                actionError = "系统拒绝了“$actionLabel”操作。"
-                                            }
-                                        }
-                                    }
-                                    .semantics { contentDescription = "$actionLabel：${entity.text}" }
-                                    .padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                uiState.entities.forEach { entity ->
+                    val destination = directEntityDestination(entity)
+                    val actionLabel = destination?.label ?: "搜索"
+                    Card {
+                        BasicComponent(
+                            title = entity.text,
+                            summary = actionLabel,
+                            startAction = {
                                 Icon(
                                     imageVector = destination?.icon ?: MiuixIcons.Search,
                                     contentDescription = null,
                                     tint = MiuixTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier.size(22.dp),
                                 )
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    text = entity.text,
-                                    modifier = Modifier.weight(1f),
-                                    color = MiuixTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                )
-                                Text(
-                                    text = actionLabel,
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                )
-                            }
-                        }
+                            },
+                            onClick = {
+                                actionError = null
+                                if (destination == null) {
+                                    onDismiss()
+                                    onSearch(entity.text)
+                                } else {
+                                    try {
+                                        onDismiss()
+                                        onOpenExternal(destination.intent)
+                                    } catch (error: ActivityNotFoundException) {
+                                        DragShareLog.w(TAG, "No activity for direct entity action", error)
+                                        actionError = "没有可处理“$actionLabel”的应用。"
+                                    } catch (error: SecurityException) {
+                                        DragShareLog.w(TAG, "Direct entity action was denied", error)
+                                        actionError = "系统拒绝了“$actionLabel”操作。"
+                                    }
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -216,31 +165,42 @@ internal fun CopyDirectSuggestions(
     }
 }
 
-private data class DirectEntityDestination(
+internal enum class DirectTextKind {
+    Url,
+    Email,
+    Phone,
+}
+
+internal data class DirectEntityDestination(
+    val kind: DirectTextKind,
     val intent: Intent,
     val label: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
 )
 
-private fun directEntityDestination(entity: AicrNerClient.Entity): DirectEntityDestination? {
+internal fun directEntityDestination(entity: AicrNerClient.Entity): DirectEntityDestination? {
     val value = entity.text.trim()
     return when (entity.type) {
         AicrNerClient.Entity.TYPE_TEL -> normalizedPhone(value)?.let { phone ->
             DirectEntityDestination(
+                kind = DirectTextKind.Phone,
                 intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null)),
                 label = "拨号",
                 icon = MiuixIcons.Phone,
             )
         }
-        AicrNerClient.Entity.TYPE_MAIL -> validEmail(value)?.let { email ->
+        AicrNerClient.Entity.TYPE_MAIL -> validEmail(CopyDirectText.normalizeEmail(value))?.let { email ->
             DirectEntityDestination(
+                kind = DirectTextKind.Email,
                 intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")),
                 label = "发邮件",
                 icon = MiuixIcons.Email,
             )
         }
-        AicrNerClient.Entity.TYPE_URL -> validHttpUrl(value)?.let { uri ->
+        AicrNerClient.Entity.TYPE_URL ->
+            validHttpUrl(CopyDirectText.findHttpUrl(value) ?: value)?.let { uri ->
             DirectEntityDestination(
+                kind = DirectTextKind.Url,
                 intent = Intent(Intent.ACTION_VIEW, uri),
                 label = "查看链接",
                 icon = MiuixIcons.Link,
@@ -248,6 +208,45 @@ private fun directEntityDestination(entity: AicrNerClient.Entity): DirectEntityD
         }
         else -> null
     }
+}
+
+internal fun directTextDestination(value: String): DirectEntityDestination? {
+    val text = value.trim()
+    if (text.isEmpty()) return null
+    CopyDirectText.findHttpUrl(text)?.let { url ->
+        validHttpUrl(url)?.let {
+            return DirectEntityDestination(
+                kind = DirectTextKind.Url,
+                intent = Intent(Intent.ACTION_VIEW, it),
+                label = "查看链接",
+                icon = MiuixIcons.Link,
+            )
+        }
+    }
+    CopyDirectText.findEmail(text)?.let { email ->
+        validEmail(email)?.let {
+            return DirectEntityDestination(
+                kind = DirectTextKind.Email,
+                intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$it")),
+                label = "发邮件",
+                icon = MiuixIcons.Email,
+            )
+        }
+    }
+    val phoneValue = if (text.startsWith("tel:", ignoreCase = true)) {
+        text.substringAfter(':')
+    } else {
+        text
+    }
+    normalizedPhone(phoneValue)?.let { phone ->
+        return DirectEntityDestination(
+            kind = DirectTextKind.Phone,
+            intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null)),
+            label = "拨号",
+            icon = MiuixIcons.Phone,
+        )
+    }
+    return null
 }
 
 private fun normalizedPhone(value: String): String? {

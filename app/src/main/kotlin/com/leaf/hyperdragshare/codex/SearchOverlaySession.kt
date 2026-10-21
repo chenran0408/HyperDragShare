@@ -96,6 +96,7 @@ internal class SearchOverlaySession(
     private var pageError by mutableStateOf<String?>(null)
     private var webView: WebView? = null
     private var restoredWebState: Bundle? = null
+    private var directUrls = searchType == BoomActionHandler.SEARCH_WEB
 
     init {
         query = savedState?.getString("query") ?: text
@@ -107,7 +108,7 @@ internal class SearchOverlaySession(
         panelFraction = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .getFloat(PANEL_HEIGHT_KEY, DEFAULT_PANEL_FRACTION)
             .coerceIn(MIN_PANEL_FRACTION, MAX_PANEL_FRACTION)
-        navigationTarget = SearchEngineCatalog.destination(selectedEngine, query)
+        navigationTarget = SearchEngineCatalog.destination(selectedEngine, query, directUrls)
         restoredWebState = savedState?.getBundle("web")
     }
 
@@ -162,6 +163,7 @@ internal class SearchOverlaySession(
     fun open(text: String, searchType: Int) {
         restoredWebState = null
         query = text
+        directUrls = searchType == BoomActionHandler.SEARCH_WEB
         selectedEngine = SearchEngineCatalog.defaultForType(searchType)
         submitSearch()
     }
@@ -197,7 +199,7 @@ internal class SearchOverlaySession(
             Toast.makeText(context, R.string.search_no_query, Toast.LENGTH_SHORT).show()
             return
         }
-        val destination = SearchEngineCatalog.destination(selectedEngine, value)
+        val destination = SearchEngineCatalog.destination(selectedEngine, value, directUrls)
         if (destination == null) {
             Toast.makeText(context, R.string.search_https_only, Toast.LENGTH_SHORT).show()
             return

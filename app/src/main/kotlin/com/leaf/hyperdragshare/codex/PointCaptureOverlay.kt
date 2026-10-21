@@ -114,9 +114,6 @@ object PointCaptureOverlay {
             if (!settings.isSharingEnabled(false) && !settings.isSharingEnabled(true)) {
                 failure = "文字和图片内容均已关闭，请先在模块设置中开启需要的内容。"
                 retryAllowed = false
-            } else if (!settings.isAccessibilityRecognitionEnabledForOrientation(app.resources.configuration.orientation)) {
-                failure = "当前方向的内容识别已关闭，请先在模块设置中开启横屏识别。"
-                retryAllowed = false
             }
             if (!showWindow()) return false
             if (failure == null) prepareRoot()

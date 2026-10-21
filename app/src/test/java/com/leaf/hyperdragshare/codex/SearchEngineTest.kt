@@ -55,11 +55,14 @@ class SearchEngineTest {
     }
 
     @Test
-    fun nonHttpsSchemesAndCredentialedUrlsAreRejected() {
+    fun nonHttpsAndCredentialedUrlsAreHandled() {
         val engine = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_WEB)
 
         assertNull(SearchEngineCatalog.destination(engine, "http://example.com"))
-        assertNull(SearchEngineCatalog.destination(engine, "javascript:alert(1)"))
+        assertEquals(
+            "https://www.baidu.com/s?wd=javascript%3Aalert%281%29",
+            SearchEngineCatalog.destination(engine, "javascript:alert(1)"),
+        )
         assertNull(SearchEngineCatalog.destination(engine, "https://user@example.com"))
     }
 
@@ -72,5 +75,51 @@ class SearchEngineTest {
             SearchEngineCatalog.destination(engine, "  hello world  "),
         )
         assertTrue(SearchEngineCatalog.engines.size >= 8)
+    }
+
+    @Test
+    fun emailAndFilenameLikeTextStayInSearch() {
+        val engine = SearchEngineCatalog.engines.first { it.id == "bing" }
+
+        assertEquals(
+            "https://www.bing.com/search?q=name%40example.com",
+            SearchEngineCatalog.destination(engine, "name@example.com"),
+        )
+        assertEquals(
+            "https://www.bing.com/search?q=readme.txt",
+            SearchEngineCatalog.destination(engine, "readme.txt"),
+        )
+        assertEquals(
+            "https://www.bing.com/search?q=v1.2.3",
+            SearchEngineCatalog.destination(engine, "v1.2.3"),
+        )
+    }
+
+    @Test
+    fun separatedHttpsUrlIsReconstructed() {
+        val engine = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_WEB)
+
+        assertEquals(
+            "https://github.com/chenran0408/HyperDragShare",
+            SearchEngineCatalog.destination(
+                engine,
+                "https : / / github . com / chenran0408 / HyperDragShare",
+            ),
+        )
+    }
+
+    @Test
+    fun dictionaryAndTranslationKeepTheirRequestedEngineForUrls() {
+        val dictionary = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_DICTIONARY)
+        val translation = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_TRANSLATE)
+
+        assertEquals(
+            "https://dict.youdao.com/result?word=https%3A%2F%2Fexample.com%2Fpath",
+            SearchEngineCatalog.destination(dictionary, "https://example.com/path", directUrls = false),
+        )
+        assertEquals(
+            "https://m.youdao.com/translate?inputtext=https%3A%2F%2Fexample.com%2Fpath",
+            SearchEngineCatalog.destination(translation, "https://example.com/path", directUrls = false),
+        )
     }
 }

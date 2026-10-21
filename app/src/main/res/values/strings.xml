@@ -13,8 +13,6 @@
     <string name="ocr_no_text">没有识别到文字，请换一张更清晰的图片</string>
     <string name="app_name">HyperDragShare</string>
     <string name="xposed_description">HyperDragShare：增强传送门拖拽分享，提供文字分词、图片与屏幕识字和可选系统集成</string>
-    <string name="accessibility_service_label">HyperDragShare</string>
-    <string name="accessibility_service_description">长按时读取当前界面的文字，并在识别为图片时截取对应区域用于 HyperDragShare 分享。</string>
     <string name="copy_tips">已复制所选文字</string>
     <string name="a_msg_no_words">没有可分词的文字</string>
     <string name="launcher_icon_change_failed">无法更改桌面图标显示状态</string>

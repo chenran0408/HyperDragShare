@@ -160,7 +160,7 @@ object ImageOcrOverlay {
                                         contentDescription = "重试识别")
                                     if (!qr) OverlayIconAction(MiuixIcons.Scan,
                                         MiuixTheme.colorScheme.onSurface, onClick = { restart(true) },
-                                        contentDescription = "识别二维码")
+                                        contentDescription = "扫描此图二维码")
                                 }
                             },
                         ) { bodyModifier ->
@@ -185,16 +185,22 @@ object ImageOcrOverlay {
                                         OverlayIconAction(MiuixIcons.Copy, MiuixTheme.colorScheme.onSurface,
                                             enabled = !copying, onClick = { copyCode(value) },
                                             contentDescription = "复制二维码内容")
-                                        val engine = SearchEngineCatalog.defaultForType(BoomActionHandler.SEARCH_WEB)
-                                        if (SearchEngineCatalog.destination(engine, value) != null) {
-                                            val link = value.startsWith("https://", ignoreCase = true)
-                                            OverlayIconAction(if (link) MiuixIcons.Link else MiuixIcons.Search,
-                                                MiuixTheme.colorScheme.onSurface,
-                                                onClick = {
-                                                    SearchOverlayWindow.show(context, window.window.decorView, value,
-                                                        BoomActionHandler.SEARCH_WEB, openExternal = ::openExternal)
-                                                }, contentDescription = if (link) "打开链接" else "搜索内容")
-                                        }
+                                        val direct = directTextDestination(value)
+                                        OverlayIconAction(direct?.icon ?: MiuixIcons.Search,
+                                            MiuixTheme.colorScheme.onSurface,
+                                            onClick = {
+                                                if (direct != null && direct.kind != DirectTextKind.Url) {
+                                                    openExternal(direct.intent)
+                                                } else {
+                                                    SearchOverlayWindow.show(
+                                                        context,
+                                                        window.window.decorView,
+                                                        value,
+                                                        BoomActionHandler.SEARCH_WEB,
+                                                        openExternal = ::openExternal,
+                                                    )
+                                                }
+                                            }, contentDescription = direct?.label ?: "搜索内容")
                                         if (copiedCode == value) Text("已复制", fontSize = 12.sp,
                                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                     }
@@ -294,7 +300,7 @@ object ImageOcrOverlay {
             resultDelivered = true
             window.dismiss()
             if (onResult != null) onResult.invoke(text)
-            else BigBangOverlayLauncher.showText(app, text, -1, -1, uri)
+            else BigBangOverlayLauncher.showText(app, text, -1, -1)
         }
 
         private fun failed(error: Exception) {

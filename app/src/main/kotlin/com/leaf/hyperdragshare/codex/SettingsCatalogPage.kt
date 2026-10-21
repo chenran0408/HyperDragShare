@@ -78,9 +78,7 @@ internal fun SettingsHomePage(
                     }
                 } else {
                     item("status") {
-                        ActivationStatusCard(context, settings.contentCaptureMode,
-                            onOpenAccessibilitySettings = if (settings.isAccessibilityCaptureMode)
-                                ({ openAccessibilitySettings(context) }) else null)
+                        ActivationStatusCard(context)
                     }
                     items(SettingModule.entries.filter { it != SettingModule.GENERAL }, key = { it.name }) { module ->
                         Card(Modifier.padding(horizontal = 12.dp)) {

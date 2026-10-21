@@ -1,5 +1,10 @@
 # HyperDragShare 完整实现说明
 
+> 187 当前边界：产品只支持 Root＋LSPosed。系统 `AccessibilityService`、`BIND_ACCESSIBILITY_SERVICE`、
+> 无障碍内容来源和授权页面已从发布包删除。下文出现的“无障碍模式”“识别灵敏度”等章节是早期设计记录，
+> 仅用于说明历史；当前长按取词固定使用传送门 Hook、Root evdev、Root helper 与 AICR V2。
+> Root helper 内部的 `UiAutomation` 节点读取不是用户可启用的系统无障碍服务。
+
 ## 微信按住识字的直达路径（1.7.184）
 
 Root press 捕获返回 `ocr_region` 时附带明确的来源标记。仅该类按住识字截图直接调用现有 `AicrOcrClient`，立即显示分词浮窗的识别进度，再把AICR文本更新到同一面板；跳过图片暂存、图片识字中间浮窗和第二次开窗。常规用户选择图片识字不变。截图交给AICR前已经按微信窗口身份与可见区域复核；全屏交互浮窗出现后不再核对焦点，因为焦点会转移给模块自身。图片生命周期由AICR回调结束后释放，取消请求不会提前回收Binder仍在使用的Bitmap。
@@ -546,7 +551,7 @@ Binder transaction code、触摸设备节点或分辨率。root 调用只接受�
 
 | 键 | 含义 | 默认值 |
 | --- | --- | --- |
-| `content_capture_mode` | `0` 为传送门，`1` 为无障碍 | `0` |
+| `content_capture_mode` | 停止使用；旧值被忽略，产品固定使用传送门 | `0` |
 | `text_sharing_enabled` | 是否创建文字拖拽会话 | `true` |
 | `image_sharing_enabled` | 是否创建图片拖拽会话 | `true` |
 | `ui_style` | 拖拽样式：`0` 简洁、`1` 流光、`2` 环形、`3` 现代 | 现代（`3`） |
@@ -560,15 +565,14 @@ Binder transaction code、触摸设备节点或分辨率。root 调用只接受�
 | `modern_blur_radius_dp` | 现代预览/菜单 View 的原生局部模糊半径 | `60 dp` |
 | `modern_glass_opacity_percent` | 现代 View 底板混合不透明度（最低 68%） | `72` |
 | `close_menu_when_pointer_leaves` | 四种样式离开菜单/触发区域后暂时收起 | `true` |
-| `accessibility_landscape_recognition_enabled` | 无障碍模式在横屏时是否允许长按识别 | `false` |
-| `accessibility_blacklisted_packages` | 无障碍模式用户选择的应用包名集合 | 空集合 |
-| `accessibility_long_press_timeout_millis` | 无障碍长按超时；`0` 代表沿用系统默认 | `0` |
-| `accessibility_recognition_sensitivity_percent` | 无障碍长按期间移动容差倍率 | `100` |
+| `accessibility_landscape_recognition_enabled` | 历史键，当前不参与 Root 按压判定 | `false` |
+| `accessibility_blacklisted_packages` | 取词与 Hyper 手势共用的应用排除集合 | 空集合 |
+| `accessibility_long_press_timeout_millis` | Root 按压确认时间；`0` 代表使用 300ms 默认值 | `0` |
+| `accessibility_recognition_sensitivity_percent` | 历史键，当前不参与 Root 按压判定 | `100` |
 | `log_level` | `0` 禁用、`1` 信息、`2` 调试 | `1` |
 | `log_destination` | `0` 系统日志、`1` root 保护的文件 | `0` |
 
-设置页只写模块 UID 的 SharedPreferences；`get_settings` Bundle 将这些集合传给注入进程，
-模块进程的无障碍服务直接读取本地设置。
+设置页只写模块 UID 的 SharedPreferences；`get_settings` Bundle 将这些集合传给注入进程。
 控制器在查询当前 MIME 的目标后先过滤隐藏键，再按 `target_order` 排序，最后追加本次新发现
 的目标。关闭某一种内容时，传送门的对应 `startPick*Task` 不会创建 DragShare 悬浮层，另一
 种内容不受影响。
@@ -736,7 +740,9 @@ grant。URI 和文件实际存在，但 Provider 因调用 UID 不匹配拒绝�
 - 命中“复制文本/复制图片”：文字立即写入剪贴板；图片等待同一暂存 URI 后写入图片 `ClipData`，成功或失败均显示 Toast。
 - 分享成功：文件保留到后续机会清理，便于目标应用延迟读取。
 
-## 11. 无障碍内容获取
+## 11. 无障碍内容获取（1.7.187 已删除的历史设计）
+
+> 整个系统无障碍服务路径已于 1.7.187 删除。以下内容仅保留为设计历史，不对应当前可启用功能。
 
 `DragShareAccessibilityService` 不声明独立进程，并且只在当前模式为“无障碍”、屏幕可交互且
 设备未锁定时启动运行时。横屏默认保持 Root 输入运行时但拒绝创建长按识别，只有开启
@@ -1248,3 +1254,15 @@ Stash标题压成单行；统一44dp点击区/22dp图形，正常态不放底部
 - 首次说明复用主设置的 Miuix Scaffold/主题和弹窗；独立确认键只在“知道了”后保存，升级用户首次未读也展示一次。关于页可重新查看，没有新建操作页面。
 - `PressWindowSnapshot` 的 WINDOW/FOCUS 字面量闭花括号转义，修复Android ICU正则初始化错误；JDK单测通过不能代替Android引擎验证。
 - 实际构建、安装和操作结果以CURRENT_STATUS/DEVICE_VALIDATION记录为准。首次正式R8发布必须在侧栏具体故障修复确认后继续，不把Hook加载当成界面验收。
+
+## 187 分词直达与图片二维码边界
+
+分词面板按“内容就是入口”收敛为单行五项：全选／取消、拆词、合并、复制、搜索。分享后端、旧清除部分选词入口和文字二维码动作已删除。编辑、撤销、词典、翻译、链接／邮箱／电话直达与窗口外观保留在现有“更多”Miuix弹层。直达结果使用浮层显示，取消或返回不丢失原分词与选区；复制确认在标题状态区短暂显示。
+
+选词摘要若可明确解析为一个链接、邮箱或电话，主栏按需增加对应直达图标，点击后直接交给已有目标。没有选区时不增加图标，避免把整段普通正文当链接或增加常驻控件。混合文本仍可打开现有直达结果层查看多个实体。结果动作会先关闭直达层，搜索关闭后直接回到原分词和选区。
+
+文字实体只在明确执行直达、搜索或词典动作时规范化。连续空格分隔的HTTP(S)、Unicode路径以及邮箱、电话可交给已有目标处理；正文显示、复制、拖出和中转站继续保存原始字符串。摘要状态在分词结果生成前以空字符串表示，避免Java平台空值进入Kotlin非空状态。
+
+二维码从文字面板移除。`TextSegmentationActivity`不再接收或转存OCR来源图片，`BigBangOverlayLauncher`与`BigBangPanelSession`也不再有文字二维码接口。图片识字预览的`ImageOcrOverlay.startQr`继续使用当前原图，按钮说明为“扫描此图二维码”；实现没有新增扫码页面、相机、Provider或Hook作用域。该路径要求来源窗口仍在，关闭图片预览会同步关闭扫码窗。
+
+本轮构建和真机最小界面的证据见`DEVICE_VALIDATION.md`。真机验证了显式合成文字的主栏、按需URL直达图标和页面启动；未点击外部链接，真实图片二维码和物理手指操作未重测。

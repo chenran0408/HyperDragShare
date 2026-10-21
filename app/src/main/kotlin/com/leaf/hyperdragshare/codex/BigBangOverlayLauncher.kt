@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
-import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -38,13 +37,12 @@ object BigBangOverlayLauncher {
         check(Settings.canDrawOverlays(context)) { "请先在模块设置中允许悬浮窗权限" }
         val x = args.getInt("x", -1)
         val y = args.getInt("y", -1)
-        val sourceImage = args.getParcelable("source_image", Uri::class.java)
         val before = args.getString("before_text")
         val after = args.getString("after_text")
         val pressConfirmedAt = args.getLong("press_confirmed_at")
         val copyDirect = args.getBoolean("copy_direct_source")
         val pressId = args.getLong("press_id", -1L)
-        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after,
+        main.post { open(context.applicationContext, text, x, y, before = before, after = after,
             pressConfirmedAt = pressConfirmedAt, copyDirect = copyDirect, ocrPending = ocrPending,
             pressId = pressId) }
         return Bundle().apply { putBoolean("accepted", true) }
@@ -59,7 +57,7 @@ object BigBangOverlayLauncher {
             if (activePressId != pressId || session == null) return@post
             activePressId = -1L
             DragShareLog.i("DragShare/Press", "WeChat OCR result delivered to existing panel characters=${text.length}")
-            session.open(text, activeTouchX, activeTouchY, null)
+            session.open(text, activeTouchX, activeTouchY)
         }
         return Bundle().apply { putBoolean("accepted", true) }
     }
@@ -75,22 +73,22 @@ object BigBangOverlayLauncher {
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
-    @JvmStatic fun showText(context: Context, text: String, x: Int, y: Int, sourceImage: Uri?): Boolean {
-        return showTextWithAdjacent(context, text, x, y, sourceImage, null, null)
+    @JvmStatic fun showText(context: Context, text: String, x: Int, y: Int): Boolean {
+        return showTextWithAdjacent(context, text, x, y, null, null)
     }
 
     @JvmStatic fun showTextWithAdjacent(context: Context, text: String, x: Int, y: Int,
-        sourceImage: Uri?, before: String?, after: String?): Boolean {
+        before: String?, after: String?): Boolean {
         if (!Settings.canDrawOverlays(context)) {
             Toast.makeText(context, "请先在模块设置中允许悬浮窗权限", Toast.LENGTH_LONG).show()
             return false
         }
         if (text.isBlank()) return false
-        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after) }
+        main.post { open(context.applicationContext, text, x, y, before = before, after = after) }
         return true
     }
 
-    private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null,
+    private fun open(app: Context, text: String, x: Int, y: Int, savedState: Bundle? = null,
         before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L, copyDirect: Boolean = false,
         ocrPending: Boolean = false, pressId: Long = -1L) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
@@ -119,12 +117,6 @@ object BigBangOverlayLauncher {
                     openExternal = { launch(it) })
             }
             override fun openExternal(intent: Intent) = launch(CopyDirectBrowser.route(app, intent))
-            override fun share(text: String) {
-                launch(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                    this.type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, text)
-                }, null))
-            }
             override fun dragText(source: View, text: String): Boolean {
                 val density = context.resources.displayMetrics.density
                 val colors = OverlayThemeColors.colors(DragShareSettings.readLocal(context).isDarkTheme(context))
@@ -162,9 +154,6 @@ object BigBangOverlayLauncher {
                 }
                 return started
             }
-            override fun readQr(uri: Uri) {
-                ImageOcrOverlay.startQr(app, uri, overlay.window.decorView)
-            }
             private fun launch(intent: Intent) {
                 try {
                     context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -197,7 +186,7 @@ object BigBangOverlayLauncher {
         if (overlay.show(pressConfirmedAt)) {
             if (ocrPending) session.showOcrProgress(x, y)
             else {
-                session.open(text, x, y, sourceImage, savedState, before, after)
+                session.open(text, x, y, savedState, before, after)
                 if (copyDirect) session.showDirectActions(text)
             }
         }

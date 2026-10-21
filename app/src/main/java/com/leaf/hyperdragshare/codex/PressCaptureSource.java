@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BooleanSupplier;
 
 /** One press pipeline for both hosts: classify once, then use the confirmed gesture's result. */
 final class PressCaptureSource {
@@ -26,7 +25,6 @@ final class PressCaptureSource {
     private final RootTouchSource input;
     private final DragShareController controller;
     private volatile DragShareSettings settings;
-    private final BooleanSupplier hostAllowed;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final BackgroundTouchBlocker blocker;
@@ -46,13 +44,15 @@ final class PressCaptureSource {
     private float downX;
     private float downY;
 
-    PressCaptureSource(Context context, RootTouchSource input, DragShareController controller,
-                       DragShareSettings settings, BooleanSupplier hostAllowed) {
+    PressCaptureSource(
+            Context context,
+            RootTouchSource input,
+            DragShareController controller,
+            DragShareSettings settings) {
         this.context = context;
         this.input = input;
         this.controller = controller;
         this.settings = settings;
-        this.hostAllowed = hostAllowed;
         blocker = new BackgroundTouchBlocker(context);
         ModuleActivation.reportPressReader(context, false, "");
         worker.execute(() -> {
@@ -125,11 +125,9 @@ final class PressCaptureSource {
     }
 
     private boolean allowed() {
-        return !stopped && nodeSession != null && input.isReady() && hostAllowed.getAsBoolean()
+        return !stopped && nodeSession != null && input.isReady()
                 && (settings.isSharingEnabled(false) || settings.isSharingEnabled(true))
                 && controller.canContinuePress(downTime)
-                && settings.isAccessibilityRecognitionEnabledForOrientation(
-                        context.getResources().getConfiguration().orientation)
                 && context.getSystemService(PowerManager.class).isInteractive()
                 && !context.getSystemService(KeyguardManager.class).isKeyguardLocked();
     }

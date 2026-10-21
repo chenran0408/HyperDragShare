@@ -47,15 +47,22 @@ internal object SearchEngineCatalog {
             else -> baidu
         }
 
-    fun destination(engine: SearchEngine, input: String): String? {
+    fun destination(engine: SearchEngine, input: String, directUrls: Boolean = true): String? {
         val value = input.trim()
         if (value.isEmpty()) return null
+        if (!directUrls) return engine.searchUrl(value)
 
-        if (looksLikeAddress(value)) {
-            return normalizeHttpsAddress("https://$value")
+        CopyDirectText.findHttpUrl(value)?.let {
+            return normalizeHttpsAddress(it)
         }
-        if (SCHEME_PREFIX.containsMatchIn(value)) {
+
+        val scheme = SCHEME_PREFIX.find(value)?.groupValues?.get(1)?.lowercase()
+        if (scheme == "http" || scheme == "https") {
             return normalizeHttpsAddress(value)
+        }
+
+        bareHttpsAddress(value)?.let {
+            return it
         }
         return engine.searchUrl(value)
     }
@@ -74,12 +81,25 @@ internal object SearchEngineCatalog {
         null
     }
 
-    private fun looksLikeAddress(value: String): Boolean {
-        if (value.any(Char::isWhitespace)) return false
-        val host = value.substringBefore('/')
-        return host.startsWith("www.", ignoreCase = true)
-            || host.count { it == '.' } >= 1
+    private fun bareHttpsAddress(value: String): String? {
+        if (value.any { Character.isWhitespace(it) || Character.isSpaceChar(it) }
+            || '@' in value
+        ) return null
+        val authority = value.substringBefore('/').substringBefore('?').substringBefore('#')
+        if (!authority.startsWith("www.", ignoreCase = true)
+            && authority.count { it == '.' } < 1
+        ) return null
+        val destination = normalizeHttpsAddress("https://$value") ?: return null
+        val host = URI(destination).host.orEmpty()
+        if (host.substringAfterLast('.').all(Char::isDigit)) return null
+        val lastLabel = host.substringAfterLast('.').lowercase()
+        if (lastLabel in FILE_EXTENSIONS) return null
+        return destination
     }
 
-    private val SCHEME_PREFIX = Regex("^[A-Za-z][A-Za-z0-9+.-]*:")
+    private val SCHEME_PREFIX = Regex("^([A-Za-z][A-Za-z0-9+.-]*):")
+    private val FILE_EXTENSIONS = setOf(
+        "apk", "doc", "docx", "gif", "jpeg", "jpg", "json", "md", "mp3", "mp4",
+        "pdf", "png", "ppt", "pptx", "rar", "txt", "webp", "xls", "xlsx", "xml", "zip",
+    )
 }

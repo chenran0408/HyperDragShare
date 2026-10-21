@@ -73,7 +73,6 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.ui.NavDisplay
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox
@@ -91,7 +90,6 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBarState
@@ -307,7 +305,6 @@ private fun portalSettingEntries(
     onOpenAbout: () -> Unit,
     persist: (DragShareSettings) -> Unit,
 ): List<SettingEntry> {
-    var showAccessibilityDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var copyDirectEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
@@ -388,9 +385,6 @@ private fun portalSettingEntries(
     }
     var modernGlassOpacity by remember(settings.modernGlassOpacityPercent) {
         mutableFloatStateOf(settings.modernGlassOpacityPercent.toFloat())
-    }
-    var accessibilitySensitivity by remember(settings.accessibilityRecognitionSensitivityPercent) {
-        mutableFloatStateOf(settings.accessibilityRecognitionSensitivityPercent.toFloat())
     }
     val cleanupPrefs = remember(context) { context.getSharedPreferences(SharedImageCleanupJob.PREFS, Context.MODE_PRIVATE) }
     var cleanupError by remember(cleanupPrefs) { mutableStateOf(cleanupPrefs.getString(SharedImageCleanupJob.LAST_ERROR, null)) }
@@ -485,112 +479,6 @@ private fun portalSettingEntries(
                         ).show()
                     }
                 }
-            },
-            enabled = enabled,
-        )
-    }
-
-    row("capture.source", "内容获取方式", SettingModule.PORTAL, "触发与识别",
-        summary = if (settings.isPortalCaptureMode) {
-            "由传送门识别长按内容"
-        } else {
-            "由无障碍读取文字并截取图片区域"
-        },
-        keywords = "无障碍 传送门 来源",
-    ) { title, summary, enabled ->
-        OverlayDropdownPreference(
-            title = title,
-            summary = summary,
-            items = listOf("传送门", "无障碍"),
-            selectedIndex = settings.contentCaptureMode.coerceIn(0, 1),
-            onSelectedIndexChange = { selected ->
-                val mode = if (selected == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
-                    DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
-                } else {
-                    DragShareSettings.CONTENT_CAPTURE_PORTAL
-                }
-                persist(copySettings(settings, contentCaptureMode = mode))
-                if (mode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
-                    && !AccessibilityRuntimeStatus.isServiceEnabled(context)
-                ) {
-                    showAccessibilityDialog = true
-                }
-            },
-            enabled = enabled,
-        )
-        OverlayDialog(
-            show = showAccessibilityDialog,
-            title = "开启无障碍服务",
-            summary = "无障碍内容获取需要开启“HyperDragShare”服务。",
-            onDismissRequest = { showAccessibilityDialog = false },
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                TextButton(
-                    text = "暂不",
-                    onClick = { showAccessibilityDialog = false },
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(
-                    text = "打开设置",
-                    onClick = {
-                        showAccessibilityDialog = false
-                        openAccessibilitySettings(context)
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
-                )
-            }
-        }
-    }
-
-    row("capture.landscape", "横屏启用识别", SettingModule.PORTAL, "触发与识别",
-        summary = "横屏时也允许无障碍读取长按内容",
-        keywords = "横屏 无障碍", enabled = settings.isAccessibilityCaptureMode, prerequisite = "仅在内容获取方式为无障碍时可用",
-    ) { title, summary, enabled ->
-        SwitchPreference(
-            title = title,
-            summary = summary,
-            checked = settings.accessibilityLandscapeRecognitionEnabled,
-            onCheckedChange = { checked ->
-                persist(
-                    copySettings(
-                        settings,
-                        accessibilityLandscapeRecognitionEnabled = checked,
-                    ),
-                )
-            },
-            enabled = enabled,
-        )
-    }
-
-    row("capture.sensitivity", "识别灵敏度", SettingModule.PORTAL, "触发与识别",
-        summary = "提高后允许长按期间有更大的手指位移",
-        keywords = "无障碍 位移 灵敏度", enabled = settings.isAccessibilityCaptureMode, prerequisite = "仅在内容获取方式为无障碍时可用",
-    ) { title, summary, enabled ->
-        SliderPreference(
-            title = title,
-            summary = summary,
-            value = accessibilitySensitivity,
-            valueText = "${accessibilitySensitivity.roundToInt()}%",
-            valueRange = DragShareSettings
-                    .MIN_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT.toFloat()
-            ..DragShareSettings
-                        .MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT.toFloat(),
-            steps = 5,
-            showKeyPoints = true,
-            keyPoints = listOf(50f, 75f, 100f, 125f, 150f, 175f, 200f),
-            onValueChange = { accessibilitySensitivity = it },
-            onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        accessibilityRecognitionSensitivityPercent =
-                            accessibilitySensitivity.roundToInt(),
-                    ),
-                )
             },
             enabled = enabled,
         )
@@ -1204,8 +1092,6 @@ private enum class ActivationUiState {
     NoRoot,
     NotInjected,
     PortalRootUnavailable,
-    AccessibilityDisabled,
-    AccessibilityConnecting,
     RootInputConnecting,
     RootInputUnavailable,
     PressReaderConnecting,
@@ -1213,19 +1099,15 @@ private enum class ActivationUiState {
     Active,
 }
 
-private fun runtimeActivation(context: Context, accessibility: Boolean): ActivationUiState {
-    val inputReady = if (accessibility) AccessibilityRuntimeStatus.isRootInputReady()
-        else ModuleActivation.isRootInputReady(context)
+private fun runtimeActivation(context: Context): ActivationUiState {
+    val inputReady = ModuleActivation.isRootInputReady(context)
     if (!inputReady) {
-        val error = if (accessibility) AccessibilityRuntimeStatus.rootInputError()
-            else ModuleActivation.rootInputError(context)
+        val error = ModuleActivation.rootInputError(context)
         return if (error.isEmpty()) ActivationUiState.RootInputConnecting else ActivationUiState.RootInputUnavailable
     }
     if (!ThumbTriggerSettings.read(context).enabled) return ActivationUiState.Active
-    val ready = if (accessibility) AccessibilityRuntimeStatus.isPressReaderReady()
-        else ModuleActivation.isPressReaderReady(context)
-    val error = if (accessibility) AccessibilityRuntimeStatus.pressReaderError()
-        else ModuleActivation.pressReaderError(context)
+    val ready = ModuleActivation.isPressReaderReady(context)
+    val error = ModuleActivation.pressReaderError(context)
     return when {
         ready -> ActivationUiState.Active
         error.isNotEmpty() -> ActivationUiState.PressReaderUnavailable
@@ -1236,32 +1118,22 @@ private fun runtimeActivation(context: Context, accessibility: Boolean): Activat
 private fun portalActivation(context: Context): ActivationUiState = when {
     !ModuleActivation.isCurrentBuildInjected(context) -> ActivationUiState.NotInjected
     !ModuleActivation.isCurrentBuildPortalRootGranted(context) -> ActivationUiState.PortalRootUnavailable
-    else -> runtimeActivation(context, false)
-}
-
-internal fun openAccessibilitySettings(context: Context) {
-    context.startActivity(
-        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-    )
+    else -> runtimeActivation(context)
 }
 
 @Composable
 internal fun ActivationStatusCard(
     context: Context,
-    contentCaptureMode: Int,
-    onOpenAccessibilitySettings: (() -> Unit)?,
 ) {
     var refreshGeneration by remember { mutableIntStateOf(0) }
     var state by remember { mutableStateOf(ActivationUiState.Checking) }
     val lifecycleOwner = LocalView.current.context as? LifecycleOwner
 
-    DisposableEffect(context, contentCaptureMode) {
+    DisposableEffect(context) {
         val preferences = context.getSharedPreferences(ModuleActivation.PREFS_NAME, Context.MODE_PRIVATE)
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
             // Death/status reports update the card. Only entering settings requests a handshake.
-            if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_PORTAL
-                && state != ActivationUiState.Checking && state != ActivationUiState.NoRoot) {
+            if (state != ActivationUiState.Checking && state != ActivationUiState.NoRoot) {
                 state = portalActivation(context)
             }
         }
@@ -1283,25 +1155,13 @@ internal fun ActivationStatusCard(
         }
     }
 
-    LaunchedEffect(refreshGeneration, contentCaptureMode) {
+    LaunchedEffect(refreshGeneration) {
         state = ActivationUiState.Checking
         val rootAvailable = withContext(Dispatchers.IO) {
             ModuleActivation.hasRootAccess()
         }
         if (!rootAvailable) {
             state = ActivationUiState.NoRoot
-            return@LaunchedEffect
-        }
-        if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
-            state = when {
-                !AccessibilityRuntimeStatus.isServiceEnabled(context) -> {
-                    ActivationUiState.AccessibilityDisabled
-                }
-                !AccessibilityRuntimeStatus.isConnected() -> {
-                    ActivationUiState.AccessibilityConnecting
-                }
-                else -> runtimeActivation(context, true)
-            }
             return@LaunchedEffect
         }
         var injected = ModuleActivation.isCurrentBuildInjected(context)
@@ -1323,25 +1183,12 @@ internal fun ActivationStatusCard(
         state = portalActivation(context)
     }
 
-    LaunchedEffect(state, contentCaptureMode) {
-        if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
-            && (state == ActivationUiState.PressReaderConnecting || state == ActivationUiState.RootInputConnecting)) {
-            while (state == ActivationUiState.PressReaderConnecting || state == ActivationUiState.RootInputConnecting) {
-                delay(300L)
-                state = runtimeActivation(context,
-                    contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY)
-            }
-        }
-    }
-
     val active = state == ActivationUiState.Active
     val title = when (state) {
         ActivationUiState.Checking -> "正在检测"
         ActivationUiState.NoRoot -> "未获取 Root 权限"
         ActivationUiState.NotInjected -> "未连接传送门"
         ActivationUiState.PortalRootUnavailable -> "传送门 Root 通道不可用"
-        ActivationUiState.AccessibilityDisabled -> "无障碍服务未启用"
-        ActivationUiState.AccessibilityConnecting -> "无障碍服务正在连接"
         ActivationUiState.RootInputConnecting -> "Root 输入正在连接"
         ActivationUiState.RootInputUnavailable -> "Root 输入不可用"
         ActivationUiState.PressReaderConnecting -> "按压取词正在连接"
@@ -1353,44 +1200,23 @@ internal fun ActivationStatusCard(
         ActivationUiState.NoRoot -> "Root 输入通道当前不可用"
         ActivationUiState.NotInjected -> "确认作用域已启用，在通用设置中重载模块"
         ActivationUiState.PortalRootUnavailable -> "传送门的 Root 检测未完成或未成功，请检查作用域运行状态"
-        ActivationUiState.AccessibilityDisabled -> "请在系统设置中手动开启“HyperDragShare”服务"
-        ActivationUiState.AccessibilityConnecting -> "正在等待无障碍服务和 Root 输入就绪"
         ActivationUiState.RootInputConnecting -> "正在连接触摸输入，连接成功后才能按住取词"
-        ActivationUiState.RootInputUnavailable -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
-            AccessibilityRuntimeStatus.rootInputError()
-        } else {
-            ModuleActivation.rootInputError(context)
-        }
+        ActivationUiState.RootInputUnavailable -> ModuleActivation.rootInputError(context)
         ActivationUiState.PressReaderConnecting -> "正在准备取词连接，就绪后才能按住取词"
-        ActivationUiState.PressReaderUnavailable -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
-            AccessibilityRuntimeStatus.pressReaderError()
-        } else {
-            ModuleActivation.pressReaderError(context)
-        }
-        ActivationUiState.Active -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
-            "无障碍服务与 Root 输入均已就绪"
-        } else {
-            "传送门已加载当前模块"
-        }
+        ActivationUiState.PressReaderUnavailable -> ModuleActivation.pressReaderError(context)
+        ActivationUiState.Active -> "传送门已加载当前模块"
     }
     val activationMethod = when (state) {
         ActivationUiState.Checking -> "正在检测"
         ActivationUiState.NoRoot -> "ROOT"
         ActivationUiState.NotInjected -> "LSPosed"
         ActivationUiState.PortalRootUnavailable -> "传送门 ROOT"
-        ActivationUiState.AccessibilityDisabled -> "无障碍"
-        ActivationUiState.AccessibilityConnecting -> "ROOT · 无障碍"
         ActivationUiState.RootInputConnecting, ActivationUiState.RootInputUnavailable -> "ROOT · 输入"
         ActivationUiState.PressReaderConnecting, ActivationUiState.PressReaderUnavailable -> "ROOT · 取词"
-        ActivationUiState.Active -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
-            "ROOT · 无障碍"
-        } else {
-            "ROOT · LSPosed"
-        }
+        ActivationUiState.Active -> "ROOT · LSPosed"
     }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-        onClick = onOpenAccessibilitySettings,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),

@@ -1325,3 +1325,13 @@ build375共404项单测0失败/错误/跳过；修复Lint缩进后build376的lin
 检查更新首轮实际HTTP403，正确请求头的手机curl响应证实X-RateLimit-Remaining=0，匿名API配额耗尽；随后改用官方正式Release页面，不加入多级回退或凭据。该具体失败修复后的最终包与最小复核在CURRENT_STATUS本批收尾记录，下载/系统安装新版本仍未验收。证据仅存任务work/settings179，不提交设备原始截图和日志。
 
 最终179同版本修复包第二次覆盖安装完成，SHA256 88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb，7,429,983 bytes；设备base.apk同哈希。build377 Lint/Release通过；Portal PID25488与SystemUI PID25885均有203运行证据（Portal输入/reader就绪，SystemUI合并手势及Hook诊断）。安全服务:ui旧进程已结束但未打开侧栏，不称新Hook加载；其他作用域未重载。手机锁屏，未唤醒重复页面验收。详细已验/未验见CURRENT_STATUS的179收尾。
+
+## 187 分词直达、界面边界与R8空值回归（2026-10-22）
+
+- 构建：`testDebugUnitTest lintDebug assembleRelease` 成功，406项测试0失败/错误/跳过；Lint0错误188警告2提示；Release启用R8、资源压缩并仅打包arm64-v8a。
+- APK：7,409,447 bytes，SHA256 `100E7E101DE5A19B004446BB0B4D89E69B90E3C85421E213658340059A586ED7`；设备`base.apk`哈希相同，PackageManager读回1.7.187/211。
+- 分词UI：使用显式`TextSegmentationActivity`和合成文字验证。普通文本主栏实际显示全选、拆词、合并、复制、搜索五个图标；分享与“清除部分选词”不在界面。“更多”实际显示Miuix“文本工具／窗口外观”，不含二维码。返回顺序为先关闭子层、再退出分词。
+- 直达交互：选中内容能明确解析为URL、邮箱或电话时，主栏按需增加对应Miuix图标；没有选区时不增加。合成`https://example.com`未选词时保持五项；点全选后显示“已选19/19”，实际增加链接图标并保留搜索图标，未点击外跳，未联网。
+- R8回归：首次加入动态直达状态后，显式分词页在选词摘要首帧崩溃。R8 stack映射到`BigBangPanelSession.updateSelectionSummary()`；根因是在分词结果尚未生成时，Java正文返回空值并赋给Kotlin非空状态。改为显式`.orEmpty()`后重新构建、签名和安装，合成URL面板正常显示，最近日志无本模块FATAL EXCEPTION。没有添加重试或吞异常。
+- 二维码：文字分词不再携带OCR来源图片，也不展示二维码入口；图片识字预览仍保留原图二维码扫描。本轮未重跑真实二维码图片，不能称为实机扫码通过。
+- Hook边界：安装没有重载Portal/SystemUI/AICR或系统框架；显式分词Activity由新安装包加载，但运行中的旧Hook不能据安装本身认定更新。测试未读取、搜索或发送私人页面内容，未修改中转站条目。

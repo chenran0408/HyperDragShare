@@ -2,11 +2,8 @@ package com.leaf.hyperdragshare.codex
 
 import android.content.Context
 import android.content.ComponentName
-import android.content.Intent
 import android.app.StatusBarManager
 import android.graphics.drawable.Icon
-import android.view.ViewConfiguration
-import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,20 +21,16 @@ import kotlin.math.roundToInt
 @Composable
 internal fun thumbTriggerEntries(context: Context,
     settings: DragShareSettings, onDurationChanged: (Int) -> Unit): List<SettingEntry> {
-    val portalMode = settings.isPortalCaptureMode
     var addingTile by remember { mutableStateOf(false) }
     var tileMessage by remember { mutableStateOf<String?>(null) }
     var thumb by remember { mutableStateOf(ThumbTriggerSettings.read(context)) }
-    var duration by remember(settings.accessibilityLongPressTimeoutMillis, thumb.enabled, portalMode) {
-        mutableFloatStateOf((if (portalMode || thumb.enabled) settings.resolvePressConfirmationTimeoutMillis()
-            else settings.resolveAccessibilityLongPressTimeoutMillis(ViewConfiguration.getLongPressTimeout())).toFloat())
+    var duration by remember(settings.accessibilityLongPressTimeoutMillis, thumb.enabled) {
+        mutableFloatStateOf(settings.resolvePressConfirmationTimeoutMillis().toFloat())
     }
-    var serviceEnabled by remember { mutableStateOf(AccessibilityRuntimeStatus.isServiceEnabled(context)) }
     var portalInjected by remember { mutableStateOf(ModuleActivation.isCurrentBuildInjected(context)) }
     var portalRootGranted by remember { mutableStateOf(ModuleActivation.isCurrentBuildPortalRootGranted(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         thumb = ThumbTriggerSettings.read(context)
-        serviceEnabled = AccessibilityRuntimeStatus.isServiceEnabled(context)
         portalInjected = ModuleActivation.isCurrentBuildInjected(context)
         portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
     }
@@ -46,12 +39,11 @@ internal fun thumbTriggerEntries(context: Context,
     val tileTitle = "添加“点取内容”磁贴"
     val keywords = "按压 长按 evdev 点取 识字"
     val triggerSummary = when {
-        portalMode && !portalInjected -> "请先重载传送门"
-        portalMode && !portalRootGranted -> "请先为传送门授予 Root 权限"
-        !portalMode && !serviceEnabled -> "需要 Root 与无障碍服务"
+        !portalInjected -> "请先重载传送门"
+        !portalRootGranted -> "请先为传送门授予 Root 权限"
         else -> "静止按住取词，移动取消"
     }
-    val durationEnabled = thumb.enabled || !portalMode
+    val durationEnabled = thumb.enabled
     val durationPrerequisite = if (durationEnabled) null else "请先开启按住取词与识字"
     val tileSummary = tileMessage ?: "从控制中心点取文字或图片"
 
@@ -64,9 +56,8 @@ internal fun thumbTriggerEntries(context: Context,
             summary = triggerSummary,
             keywords = keywords,
             prerequisite = when {
-                portalMode && !portalInjected -> "请先重载传送门"
-                portalMode && !portalRootGranted -> "请先为传送门授予 Root 权限"
-                !portalMode && !serviceEnabled -> "需要 Root 与无障碍服务"
+                !portalInjected -> "请先重载传送门"
+                !portalRootGranted -> "请先为传送门授予 Root 权限"
                 else -> null
             },
             content = { enabled ->
@@ -76,17 +67,13 @@ internal fun thumbTriggerEntries(context: Context,
                     enabled = enabled,
                     checked = thumb.enabled,
                     onCheckedChange = { checked ->
-                        if (checked && portalMode && (!portalInjected || !portalRootGranted)) {
+                        if (checked && (!portalInjected || !portalRootGranted)) {
                             Toast.makeText(context,
                                 if (!portalInjected) "请先重载传送门" else "请先为传送门授予 Root 权限",
                                 Toast.LENGTH_LONG).show()
                         } else {
                             ThumbTriggerSettings.setEnabled(context, checked)
                             thumb = ThumbTriggerSettings.read(context)
-                            if (checked && !portalMode && !serviceEnabled) {
-                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                            }
                         }
                     },
                 )

@@ -59,8 +59,6 @@ final class ModuleActivation {
             extras.putBoolean(EXTRA_PRESS_READER_READY, ready);
             extras.putString(EXTRA_PRESS_READER_ERROR, error);
             reportPortalStatus(context, extras);
-        } else if (BuildConfig.APPLICATION_ID.equals(context.getPackageName())) {
-            AccessibilityRuntimeStatus.setPressReader(ready, error);
         }
     }
 

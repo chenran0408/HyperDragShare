@@ -60,14 +60,11 @@ public final class ImageOcrInputTest {
     }
 
     @Test
-    public void ocrResultIntentCarriesTheSourceImageForRerun() {
-        Uri uri = Uri.parse("content://test.images/selected");
+    public void textResultIntentDoesNotCarryAnOcrImage() {
+        Intent result = TextSegmentationActivity.createIntent("recognized", -1, -1);
 
-        Intent result = TextSegmentationActivity.createIntent("recognized", -1, -1, uri);
-
-        assertEquals(uri, result.getParcelableExtra("dragshare_source_image_uri", Uri.class));
-        assertEquals(uri, result.getClipData().getItemAt(0).getUri());
-        assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                result.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        assertNull(result.getParcelableExtra("dragshare_source_image_uri", Uri.class));
+        assertNull(result.getClipData());
+        assertEquals(0, result.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
     }
 }

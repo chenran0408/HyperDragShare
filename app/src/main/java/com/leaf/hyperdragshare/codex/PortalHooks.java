@@ -274,9 +274,6 @@ final class PortalHooks {
                 }
                 Context context = ((Context) param.thisObject).getApplicationContext();
                 DragShareSettings settings = DragShareSettings.readFromProvider(context);
-                if (!settings.isPortalCaptureMode()) {
-                    return;
-                }
                 applyPortalRuntime();
                 DragShareController current = controller;
                 if (current != null) {
@@ -447,10 +444,9 @@ final class PortalHooks {
         }
         DragShareSettings settings = DragShareSettings.readFromProvider(context);
         DragShareLog.configure(settings);
-        DragShareLog.d(TAG, "portal runtime settings captureMode=" + settings.contentCaptureMode
-                + " logLevel=" + settings.logLevel
+        DragShareLog.d(TAG, "portal runtime settings logLevel=" + settings.logLevel
                 + " logDestination=" + settings.logDestination);
-        if (!settings.isPortalCaptureMode() || (portalService == null
+        if ((portalService == null
                 && !ThumbTriggerSettings.readFromProvider(context).enabled)) {
             stopPortalRuntime(true);
             return;
@@ -565,7 +561,7 @@ final class PortalHooks {
             if (previous != null) previous.stop();
             if (thumb.enabled) {
                 thumbCaptureSource = new PressCaptureSource(
-                        context, rootTouchSource, controller, settings, settings::isPortalCaptureMode);
+                        context, rootTouchSource, controller, settings);
                 log("reference press trigger enabled; no calibration required");
                 if (appIdleHookError != null) {
                     new Handler(Looper.getMainLooper()).post(() -> android.widget.Toast.makeText(context,

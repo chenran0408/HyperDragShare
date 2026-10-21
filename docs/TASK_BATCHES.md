@@ -1,6 +1,16 @@
 # 当前任务目录
 
-## 当前批次186及后续Root-only收敛
+## 当前批次187：Root-only、分词直达与界面收敛
+
+用户已确定产品只面向 Root 用户。187 删除系统无障碍服务声明、服务配置、运行时、截图适配、状态卡分支、授权入口和“传送门／无障碍”选择；旧模式值不再改变运行来源。传送门、Root evdev、Root helper、WMS 核验和 AICR V2 主链保持不变。
+
+整批 `testDebugUnitTest lintDebug assembleRelease` 已通过：406 项测试，Lint 0 错误，R8/资源压缩/arm64 Release 成功。签名包已覆盖安装，设备 APK 哈希一致：`100E7E101DE5A19B004446BB0B4D89E69B90E3C85421E213658340059A586ED7`。分词面板已实际确认未选词时只有全选、拆词、合并、复制、搜索五个一级图标；分享、清除部分选词和二维码均已从主栏与“更多”删除。选中内容明确是链接、邮箱或电话时，主栏按需增加直达图标；`https://example.com` 全选后实际出现链接图标，未执行外跳。
+
+首次直达 UI 真机启动复现了选词摘要空值崩溃，已按 R8 映射定位到 `BigBangPanelSession.updateSelectionSummary()`，用显式空字符串修正根因。重新构建并安装后，合成 URL 面板正常显示，返回不再崩溃。该修复不是新增异常重试或兜底。
+
+本轮未重载 Root/Portal Hook，也没有重新运行真实图片二维码或物理手指矩阵；这些范围沿用旧运行证据，不能把 UI 安装写成 Hook 新版本或所有交互通过。
+
+## 历史批次186
 
 186 已完成微信 `ocr_region` 直达同一分词浮窗的 Root helper 截图改造，并在小米 15 Pro / HyperOS 4.0.0.17 / Android 17 上用 Root evdev 注入验证两次完整结果回填。下一步按用户最新约束清理系统无障碍服务作为非 Root 来源的整条产品路径：保留 Root helper 使用的 `UiAutomation`、节点分类器和框架 Hook，只删除“传送门／无障碍来源”二选一、BIND_ACCESSIBILITY_SERVICE 声明、服务运行时及对应页面分支。此项以完整批次构建、集中安装和真机核对 Portal/Root 状态后再提交，不按单按钮增版。
 

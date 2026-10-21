@@ -5,11 +5,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
@@ -64,22 +62,26 @@ import androidx.compose.ui.viewinterop.AndroidView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Search
-import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.icon.extended.Translate
-import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Cut
 import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.Merge
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.extended.Tasks
+import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 internal enum class BigBangMoreAction {
@@ -89,7 +91,6 @@ internal enum class BigBangMoreAction {
     Merge,
     Translate,
     UndoEdit,
-    ReadQr,
     TextSize,
     PanelHeight,
     PanelOpacity,
@@ -101,7 +102,6 @@ internal fun BigBangOverlayContent(
     contentView: View,
     touchX: Int,
     touchY: Int,
-    sourceImageAvailable: Boolean,
     textSizeSp: Float,
     panelHeightFraction: Float,
     panelOpacity: Float,
@@ -118,7 +118,8 @@ internal fun BigBangOverlayContent(
     onSelectAll: () -> Unit,
     onCopy: () -> Unit,
     onSearch: () -> Unit,
-    onShare: () -> Unit,
+    directAction: DirectEntityDestination?,
+    onDirectAction: (DirectEntityDestination) -> Unit,
     copying: Boolean,
     canSplit: Boolean,
     canMerge: Boolean,
@@ -129,9 +130,9 @@ internal fun BigBangOverlayContent(
     isSegmenting: Boolean,
     isRecognizing: Boolean,
     copyFeedback: String?,
-    onClearSelection: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
     onPanelPositionChanged: (Float, Float) -> Unit,
+    onDismissDirect: () -> Unit = {},
     directVisible: Boolean = false,
     directContent: @Composable () -> Unit = {},
 ) {
@@ -152,11 +153,10 @@ internal fun BigBangOverlayContent(
         words.addOnLayoutChangeListener(listener)
         onDispose { words.removeOnLayoutChangeListener(listener) }
     }
-    // 52dp header + two 44dp action rows, their gap/padding, and the native body's 8dp.
-    val naturalPanelHeight = (bodyHeightPx / density).dp + 168.dp +
+    // 52dp header + one 44dp action row, their padding, and the native body's 8dp.
+    val naturalPanelHeight = (bodyHeightPx / density).dp + 116.dp +
         (if (isRecognizing) 88.dp else 0.dp) +
-        (if (copyFeedback == null) 0.dp else 24.dp) +
-        (if (directVisible) 120.dp else 0.dp)
+        (if (copyFeedback == null) 0.dp else 24.dp)
     val panelMetrics = if (maximumMetrics.fullScreen) maximumMetrics else maximumMetrics.copy(
         height = minOf(maximumMetrics.height, naturalPanelHeight),
     )
@@ -223,6 +223,7 @@ internal fun BigBangOverlayContent(
                 keyboard?.hide()
                 showEditor = false
             }
+            directVisible -> onDismissDirect()
             showMoreMenu -> showMoreMenu = false
             !dismissing -> { collapsing = true; closePanel() }
         }
@@ -307,6 +308,7 @@ internal fun BigBangOverlayContent(
                                 Text(
                                     text = if (isRecognizing) "正在识别…"
                                         else if (isSegmenting) "正在分词…"
+                                        else if (copyFeedback != null) copyFeedback.orEmpty()
                                         else if (hasTextSelection) "已选 $selectedCharacterCount / $totalCharacterCount"
                                         else "共 $totalCharacterCount 字符",
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -318,7 +320,7 @@ internal fun BigBangOverlayContent(
                         trailing = {
                             BigBangIconAction(
                                 icon = MiuixIcons.More,
-                                label = "更多操作与窗口外观",
+                                label = "更多文本工具和窗口外观",
                                 enabled = !isSegmenting,
                                 onClick = { showMoreMenu = true },
                             )
@@ -330,57 +332,47 @@ internal fun BigBangOverlayContent(
                     Column(
                         modifier = Modifier.fillMaxWidth()
                             .background(bottomBarColor.copy(alpha = panelOpacity))
-                            .padding(start = 12.dp + panelMetrics.leftSystemInset,
-                                end = 12.dp + panelMetrics.rightSystemInset,
-                                top = 8.dp, bottom = 8.dp + panelMetrics.bottomSystemInset),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                            .padding(start = 8.dp + panelMetrics.leftSystemInset,
+                                end = 8.dp + panelMetrics.rightSystemInset,
+                                top = 6.dp, bottom = 6.dp + panelMetrics.bottomSystemInset),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            BigBangIconAction(SelectAllWordsIcon,
-                                if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
-                                primary = allTextSelected,
-                                modifier = Modifier.semantics { selected = allTextSelected })
-                            BigBangIconAction(MiuixIcons.Cut, "拆词",
-                                { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
-                            BigBangIconAction(MiuixIcons.Copy, if (copying) "正在复制" else "复制", onCopy,
-                                ready && !copying, primary = true)
-                            BigBangIconAction(MiuixIcons.Search, "搜索", onSearch, ready)
-                            BigBangIconAction(MiuixIcons.Share, "分享", onShare, ready)
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            BigBangIconAction(MiuixIcons.Edit, "编辑原文", {
-                                editorText = originalText()
-                                showEditor = true
-                            }, ready)
-                            BigBangIconAction(MiuixIcons.Merge, "合并选词",
-                                { onMoreAction(BigBangMoreAction.Merge) }, ready && canMerge)
-                            BigBangIconAction(MiuixIcons.Undo, "撤销", { onMoreAction(BigBangMoreAction.UndoEdit) }, ready && canUndoEdit)
-                            BigBangIconAction(MiuixIcons.Translate, "翻译", { onMoreAction(BigBangMoreAction.Translate) }, ready)
-                            BigBangIconAction(DictionaryIcon, "词典查词", { onMoreAction(BigBangMoreAction.Dictionary) }, ready)
-                            BigBangIconAction(MiuixIcons.Link, "识别选中文字的直达动作",
-                                { onMoreAction(BigBangMoreAction.Direct) }, ready)
-                            if (sourceImageAvailable) {
-                                BigBangToolAction("二维码", { onMoreAction(BigBangMoreAction.ReadQr) }, ready)
+                        Row(modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                BigBangIconAction(MiuixIcons.Tasks,
+                                    if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
+                                    toggled = allTextSelected,
+                                    modifier = Modifier.semantics { selected = allTextSelected })
                             }
-                            if (hasTextSelection && !allTextSelected)
-                                BigBangToolAction("清选", onClearSelection, ready)
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                BigBangIconAction(MiuixIcons.Cut, "拆词",
+                                    { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
+                            }
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                BigBangIconAction(MiuixIcons.Merge, "合并选词",
+                                    { onMoreAction(BigBangMoreAction.Merge) }, ready && canMerge)
+                            }
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                BigBangIconAction(MiuixIcons.Copy,
+                                    if (copying) "正在复制" else "复制", onCopy,
+                                    ready && !copying, primary = true)
+                            }
+                            directAction?.takeIf { ready }?.let { action ->
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    BigBangIconAction(action.icon, action.label,
+                                        { onDirectAction(action) }, true)
+                                }
+                            }
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                BigBangIconAction(MiuixIcons.Search, "搜索", onSearch, ready)
+                            }
                         }
                     }
                 },
             ) { bodyModifier ->
                 Column(modifier = bodyModifier.fillMaxSize()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    copyFeedback?.let {
-                        Text(it, color = MiuixTheme.colorScheme.onSurface,
-                            fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-                    }
-                    directContent()
                     if (isRecognizing) {
                         Column(
                             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -404,6 +396,14 @@ internal fun BigBangOverlayContent(
                 }
             }
         }
+    }
+
+    OverlayDialog(
+        show = directVisible,
+        title = "直达",
+        onDismissRequest = onDismissDirect,
+    ) {
+        directContent()
     }
 
     OverlayDialog(
@@ -463,75 +463,116 @@ internal fun BigBangOverlayContent(
                 .heightIn(max = (configuration.screenHeightDp * 0.55f).dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            val actions = listOf(
-                BigBangMoreAction.TextSize to stringResource(R.string.bigbang_more_text_size, textSizeSp),
-                BigBangMoreAction.PanelHeight to stringResource(
-                    R.string.bigbang_more_panel_height,
-                    (panelHeightFraction * 100).toInt(),
-                ),
-                BigBangMoreAction.PanelOpacity to stringResource(
-                    R.string.bigbang_more_panel_opacity,
-                    (panelOpacity * 100).toInt(),
-                ),
-                BigBangMoreAction.PanelAdjustment to stringResource(
-                    if (panelAdjustmentEnabled) R.string.bigbang_more_panel_adjustment_on
-                    else R.string.bigbang_more_panel_adjustment_off,
-                ),
-            )
-            actions.forEach { (action, label) ->
-                TextButton(
-                    text = label,
-                    onClick = {
-                        showMoreMenu = false
-                        onMoreAction(action)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            val ready = !isSegmenting && totalCharacterCount > 0
+            val runAction: (BigBangMoreAction, Boolean) -> Unit = { action, close ->
+                if (close) showMoreMenu = false
+                onMoreAction(action)
+            }
+
+            SmallTitle("文本工具", insideMargin = PaddingValues(start = 8.dp))
+            Card {
+                Column {
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Edit,
+                        title = "编辑原文",
+                        enabled = ready,
+                        onClick = {
+                            showMoreMenu = false
+                            editorText = originalText()
+                            showEditor = true
+                        },
+                    )
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Undo,
+                        title = "撤销上次拆分、合并或编辑",
+                        enabled = ready && canUndoEdit,
+                        onClick = { runAction(BigBangMoreAction.UndoEdit, true) },
+                    )
+                    BigBangMoreRow(
+                        icon = DictionaryIcon,
+                        title = "词典查词",
+                        enabled = ready,
+                        onClick = { runAction(BigBangMoreAction.Dictionary, true) },
+                    )
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Translate,
+                        title = "翻译",
+                        enabled = ready,
+                        onClick = { runAction(BigBangMoreAction.Translate, true) },
+                    )
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Link,
+                        title = "链接、邮箱与电话直达",
+                        enabled = ready,
+                        onClick = { runAction(BigBangMoreAction.Direct, true) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            SmallTitle("窗口外观", insideMargin = PaddingValues(start = 8.dp))
+            Card {
+                Column {
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Tune,
+                        title = stringResource(R.string.bigbang_more_text_size, textSizeSp),
+                        enabled = ready,
+                        onClick = { runAction(BigBangMoreAction.TextSize, false) },
+                    )
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Tune,
+                        title = stringResource(
+                            R.string.bigbang_more_panel_height,
+                            (panelHeightFraction * 100).toInt(),
+                        ),
+                        enabled = ready,
+                        onClick = { runAction(BigBangMoreAction.PanelHeight, false) },
+                    )
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Tune,
+                        title = stringResource(
+                            R.string.bigbang_more_panel_opacity,
+                            (panelOpacity * 100).toInt(),
+                        ),
+                        enabled = ready,
+                        onClick = { runAction(BigBangMoreAction.PanelOpacity, false) },
+                    )
+                    BigBangMoreRow(
+                        icon = MiuixIcons.Tune,
+                        title = stringResource(
+                            if (panelAdjustmentEnabled) R.string.bigbang_more_panel_adjustment_on
+                            else R.string.bigbang_more_panel_adjustment_off,
+                        ),
+                        enabled = ready,
+                        onClick = { runAction(BigBangMoreAction.PanelAdjustment, false) },
+                    )
+                }
             }
         }
     }
 }
 
-private val SelectAllWordsIcon = ImageVector.Builder(
-    name = "SelectAllWords", defaultWidth = 24.dp, defaultHeight = 24.dp,
-    viewportWidth = 24f, viewportHeight = 24f,
-).apply {
-    path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
-        strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
-        moveTo(3f, 8f)
-        lineTo(3f, 3f)
-        lineTo(8f, 3f)
-        moveTo(16f, 3f)
-        lineTo(21f, 3f)
-        lineTo(21f, 8f)
-        moveTo(21f, 16f)
-        lineTo(21f, 21f)
-        lineTo(16f, 21f)
-        moveTo(8f, 21f)
-        lineTo(3f, 21f)
-        lineTo(3f, 16f)
-        moveTo(7f, 7f)
-        lineTo(11f, 7f)
-        lineTo(11f, 10f)
-        lineTo(7f, 10f)
-        close()
-        moveTo(14f, 7f)
-        lineTo(17f, 7f)
-        lineTo(17f, 10f)
-        lineTo(14f, 10f)
-        close()
-        moveTo(7f, 14f)
-        lineTo(10f, 14f)
-        lineTo(10f, 17f)
-        lineTo(7f, 17f)
-        close()
-        moveTo(13f, 14f)
-        lineTo(17f, 14f)
-        lineTo(17f, 17f)
-        lineTo(13f, 17f)
-        close()
-    }
-}.build()
+@Composable
+private fun BigBangMoreRow(
+    icon: ImageVector,
+    title: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    BasicComponent(
+        title = title,
+        enabled = enabled,
+        startAction = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = MiuixTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else 0.38f),
+            )
+        },
+        onClick = onClick,
+    )
+}
 
 // Miuix 0.9.3 has no dictionary icon. An outlined book with an A distinguishes lookup from translation.
 private val DictionaryIcon = ImageVector.Builder(
@@ -569,13 +610,21 @@ private fun BigBangIconAction(
     onClick: () -> Unit,
     enabled: Boolean,
     primary: Boolean = false,
+    toggled: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     TooltipBox(text = label, enabled = enabled) {
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = modifier.size(44.dp),
+            modifier = modifier
+                .size(44.dp)
+                .background(
+                    color = if (enabled && (primary || toggled)) {
+                        MiuixTheme.colorScheme.primary.copy(alpha = 0.13f)
+                    } else Color.Transparent,
+                    shape = RoundedCornerShape(12.dp),
+                ),
             minWidth = 44.dp,
             minHeight = 44.dp,
             cornerRadius = 12.dp,
@@ -584,32 +633,11 @@ private fun BigBangIconAction(
                 imageVector = icon,
                 contentDescription = label,
                 modifier = Modifier.size(22.dp),
-                tint = (if (primary) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
+                tint = (if (primary || toggled) MiuixTheme.colorScheme.primary
+                    else MiuixTheme.colorScheme.onSurface)
                     .copy(alpha = if (enabled) 1f else 0.38f),
             )
         }
     }
-}
-
-@Composable
-private fun BigBangToolAction(
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    primary: Boolean = false,
-) {
-    TextButton(
-        text = text,
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.height(44.dp),
-        minWidth = 56.dp,
-        minHeight = 44.dp,
-        cornerRadius = 12.dp,
-        insideMargin = PaddingValues(horizontal = 10.dp),
-        textStyle = MiuixTheme.textStyles.body2.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
-        colors = if (primary) ButtonDefaults.textButtonColorsPrimary() else ButtonDefaults.textButtonColors(),
-    )
 }
 

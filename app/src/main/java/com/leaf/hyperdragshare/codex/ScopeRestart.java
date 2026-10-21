@@ -15,8 +15,7 @@ final class ScopeRestart {
 
     static void reloadAppScopes(Context context) throws IOException {
         long started = SystemClock.elapsedRealtime();
-        boolean readerRequired = DragShareSettings.readLocal(context).isPortalCaptureMode()
-                && ThumbTriggerSettings.read(context).enabled;
+        boolean readerRequired = ThumbTriggerSettings.read(context).enabled;
         int oldPid = ModuleActivation.injectedProcessId(context);
         ModuleActivation.clearPortalReport(context);
         runRoot("am force-stop --user current com.miui.contentextension && "
