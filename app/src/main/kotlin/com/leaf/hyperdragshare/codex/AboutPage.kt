@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -61,10 +63,13 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
+import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
 
-private const val PROJECT_URL = "https://github.com/Leaf-lsgtky/HyperDragShare"
+private const val PROJECT_URL = "https://github.com/chenran0408/HyperDragShare"
 
 @Composable
 fun DragShareAboutPage(
@@ -76,6 +81,7 @@ fun DragShareAboutPage(
     val listState = rememberLazyListState()
     val scrollBehavior = MiuixScrollBehavior()
     var logoSpacerHeightPx by remember { mutableIntStateOf(0) }
+    var showGuide by remember { mutableStateOf(false) }
     val scrollProgress by remember {
         derivedStateOf {
             when {
@@ -131,6 +137,13 @@ fun DragShareAboutPage(
                 scrollProgress = scrollProgress,
                 onLogoSpacerHeightChanged = { logoSpacerHeightPx = it },
                 onOpenLicenses = onOpenLicenses,
+                onOpenGuide = { showGuide = true },
+            )
+            FirstRunGuide(
+                context = context,
+                showOnFirstRun = false,
+                requested = showGuide,
+                onDismiss = { showGuide = false },
             )
         }
     }
@@ -146,6 +159,7 @@ private fun DragShareAboutContent(
     scrollProgress: Float,
     onLogoSpacerHeightChanged: (Int) -> Unit,
     onOpenLicenses: () -> Unit,
+    onOpenGuide: () -> Unit,
 ) {
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(240.dp) }
@@ -284,6 +298,35 @@ private fun DragShareAboutContent(
                         .fillParentMaxHeight()
                         .padding(bottom = paddingValues.calculateBottomPadding()),
                 ) {
+                    Card(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp)
+                            .dragShareGlass(cardBackdrop, glassColors),
+                        colors = CardDefaults.defaultColors(color = cardColor),
+                    ) {
+                        BasicComponent(
+                            title = "使用说明",
+                            summary = "查看启用步骤和常用操作",
+                            startAction = {
+                                Icon(
+                                    imageVector = MiuixIcons.Info,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(22.dp),
+                                    tint = MiuixTheme.colorScheme.primary,
+                                )
+                            },
+                            endActions = {
+                                Icon(
+                                    imageVector = MiuixIcons.ChevronForward,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(22.dp),
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                            },
+                            onClick = onOpenGuide,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                     Card(
                         modifier = Modifier
                             .padding(horizontal = 12.dp)

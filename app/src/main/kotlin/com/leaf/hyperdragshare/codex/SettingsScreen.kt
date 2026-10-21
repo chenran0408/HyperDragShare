@@ -1107,6 +1107,7 @@ private fun MainPage(
             }
             }
         }
+        FirstRunGuide(context = context)
         }
         OverlayDialog(
             show = showAccessibilityDialog,

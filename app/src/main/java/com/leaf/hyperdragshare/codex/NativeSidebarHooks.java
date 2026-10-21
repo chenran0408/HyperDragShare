@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Binder;
 import android.os.IBinder;
@@ -16,7 +18,10 @@ import android.view.SurfaceControlViewHost;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -39,17 +44,30 @@ final class NativeSidebarHooks {
     private static final Map<View, android.view.ViewTreeObserver.OnGlobalLayoutListener> listeners = new IdentityHashMap<>();
     private static final Binder reporter = new Binder();
     private static int[] lastRegions = new int[0];
+    private static boolean extensionFailed;
     private static final ExecutorService ipc = Executors.newSingleThreadExecutor(r -> new Thread(r, "sidebar-stash"));
 
     static void install(ClassLoader loader) {
         try {
             Class<?> wrapper = XposedHelpers.findClass(WRAPPER, loader);
             Class<?> turbo = XposedHelpers.findClass(TURBO, loader);
-            // Validate the measured APK's accessors before installing any UI mutation.
+            Class<?> dockSize = XposedHelpers.findClass(
+                    "com.miui.gamebooster.windowmanager.newbox.y2", loader);
+            // Native layout and animation must reserve the same space before either measures the dock.
             for (String method : new String[]{"B", "C", "H", "o"}) wrapper.getDeclaredMethod(method);
             for (String method : new String[]{"getDockLayout", "getAppsLayout", "getBoxView", "F", "D", "G", "e0"})
                 turbo.getDeclaredMethod(method);
+            dockSize.getDeclaredMethod("c");
+            XposedHelpers.findClass("com.miui.gamebooster.windowmanager.newbox.p0", loader).getDeclaredMethod("J");
             turbo.getDeclaredField("j"); turbo.getDeclaredField("s");
+            XposedHelpers.findAndHookMethod(dockSize, "c", new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable() || extensionFailed || watched.isEmpty()) return;
+                    Context context = watched.values().iterator().next()[0].getContext();
+                    int header = Math.round(48 * context.getResources().getDisplayMetrics().density);
+                    param.setResult((int) param.getResult() + header);
+                }
+            });
             XposedBridge.hookAllConstructors(wrapper, new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam param) {
                     Object owner = param.thisObject;
@@ -95,8 +113,8 @@ final class NativeSidebarHooks {
                     }
                     Object owner = param.thisObject;
                     View view = (View) XposedHelpers.callMethod(owner, "C");
-                    // Wait for the original Home->dock handoff animation, without holding its callback.
-                    view.postDelayed(() -> attach(owner), 700);
+                    // Join the original opening transaction before its first measured frame.
+                    view.post(() -> attach(owner));
                 }
             });
             XposedHelpers.findAndHookMethod(turbo, "e0", new XC_MethodHook() {
@@ -121,7 +139,9 @@ final class NativeSidebarHooks {
         // sidebar.p.B is the full window container. Only w() is the real edge handle.
         for (View[] views : watched.values()) candidates.add(views[0]);
         for (Panel panel : panels.values()) {
-            candidates.add(panel.rail);
+            candidates.add(panel.dock);
+            View nativeApps = (View) XposedHelpers.callMethod(panel.turbo, "getAppsLayout");
+            if (nativeApps != null) candidates.add(nativeApps);
             View active = panel.activeRegion();
             if (active != null) candidates.add(active);
         }
@@ -147,7 +167,7 @@ final class NativeSidebarHooks {
     }
 
     private static void attach(Object owner) {
-        if (panels.containsKey(owner) || !(boolean) XposedHelpers.callMethod(owner, "H")) return;
+        if (extensionFailed || panels.containsKey(owner) || !(boolean) XposedHelpers.callMethod(owner, "H")) return;
         RelativeLayout turbo = (RelativeLayout) XposedHelpers.callMethod(owner, "C");
         try {
             long version = turbo.getContext().getPackageManager().getPackageInfo("com.miui.securitycenter", 0).getLongVersionCode();
@@ -159,6 +179,7 @@ final class NativeSidebarHooks {
             panels.put(owner, panel);
             panel.attach();
         } catch (PackageManager.NameNotFoundException | RuntimeException error) {
+            extensionFailed = true;
             Panel panel = panels.remove(owner);
             if (panel != null) panel.dispose();
             DragShareLog.w(TAG, "Unable to attach sidebar rail; native behavior restored", error);
@@ -172,18 +193,20 @@ final class NativeSidebarHooks {
         final RelativeLayout turbo;
         final Context context;
         final View dock;
+        final View dockApps;
+        final FrameLayout.LayoutParams dockAppsLayoutParams;
         final View apps;
         final View tools;
         final int scene;
         final boolean left;
-        final int[] padding;
         final LinearLayout rail;
         final FrameLayout pane;
         final Map<View, Integer> hidden = new IdentityHashMap<>();
-        final Map<Section, TextView> buttons = new java.util.EnumMap<>(Section.class);
+        ImageButton stashButton;
         Section selected;
         boolean switching, disposed;
         int generation;
+        final int railHeight;
         ISidebarContent content;
         IBinder.DeathRecipient contentDeath;
         SurfaceView surface;
@@ -202,51 +225,48 @@ final class NativeSidebarHooks {
             this.owner = owner; this.turbo = turbo; context = turbo.getContext();
             dock = (View) XposedHelpers.callMethod(turbo, "getDockLayout");
             apps = (View) XposedHelpers.callMethod(turbo, "getAppsLayout");
-            if (dock == null || dock.getParent() != turbo) throw new IllegalStateException("Native dock is not ready");
+            if (!(dock instanceof FrameLayout) || dock.getParent() != turbo)
+                throw new IllegalStateException("Native dock is not ready");
+            dockApps = findDockApps((FrameLayout) dock);
+            if (dockApps == null || !(dockApps.getLayoutParams() instanceof FrameLayout.LayoutParams))
+                throw new IllegalStateException("Native dock app strip is not ready");
+            dockAppsLayoutParams = new FrameLayout.LayoutParams((FrameLayout.LayoutParams) dockApps.getLayoutParams());
             tools = (View) XposedHelpers.callMethod(turbo, "getBoxView");
             scene = (int) XposedHelpers.callMethod(XposedHelpers.getObjectField(turbo, "j"), "c");
             if (scene != 1 && scene != 3 && scene != 4 && scene != 5)
                 throw new IllegalStateException("Unverified sidebar scene " + scene);
             left = (boolean) XposedHelpers.callMethod(turbo, "G");
-            padding = new int[]{turbo.getPaddingLeft(), turbo.getPaddingTop(), turbo.getPaddingRight(), turbo.getPaddingBottom()};
+            railHeight = dp(48);
             rail = new LinearLayout(context); rail.setOrientation(LinearLayout.VERTICAL);
-            rail.setGravity(Gravity.CENTER); rail.setElevation(dp(4));
-            rail.setBackground(background(color(android.R.attr.colorBackground), 20));
+            rail.setGravity(Gravity.CENTER); rail.setElevation(0);
             pane = new FrameLayout(context);
             pane.setBackground(background(color(android.R.attr.colorBackground), 20));
         }
 
         void attach() {
-            turbo.setPadding(padding[0] + (left ? dp(52) : 0), padding[1],
-                    padding[2] + (left ? 0 : dp(52)), padding[3]);
-            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(dp(48), dp(224));
-            params.addRule(left ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-            if (left) params.leftMargin = -dp(52); else params.rightMargin = -dp(52);
-            turbo.addView(rail, params);
-            addButton(Section.APPS, "应用"); addButton(Section.SEARCH, "搜索");
+            applyDockLayout();
             addButton(Section.STASH, "中转站");
-            addButton(Section.TOOLS, scene == 1 ? "游戏" : scene == 3 ? "视频" : scene == 5 ? "美颜" : "工具");
+            XposedHelpers.callMethod(dock, "J");
             turbo.addOnAttachStateChangeListener(this);
             selected = nativeSearchOpen() ? Section.SEARCH : scene == 4 ? Section.APPS : Section.TOOLS;
             apply();
-            DragShareLog.i(TAG, "native rail attached scene=" + scene + " build=" + BuildConfig.VERSION_CODE);
+            DragShareLog.i(TAG, "native stash entry attached scene=" + scene + " build=" + BuildConfig.VERSION_CODE);
         }
 
         void addButton(Section section, String label) {
-            TextView button = new TextView(context);
-            button.setText(label); button.setTextSize(11);
-            RailIcon icon = new RailIcon(section);
-            icon.setBounds(0, 0, dp(22), dp(22));
-            button.setCompoundDrawables(null, icon, null, null);
-            button.setCompoundDrawablePadding(dp(3)); button.setPadding(0, dp(6), 0, 0);
-            button.setGravity(Gravity.CENTER); button.setContentDescription(label);
-            button.setOnClickListener(v -> select(section));
-            rail.addView(button, new LinearLayout.LayoutParams(dp(48), dp(56)));
-            buttons.put(section, button);
+            stashButton = new ImageButton(context);
+            stashButton.setImageDrawable(new RailIcon(dp(28)));
+            stashButton.setScaleType(ImageView.ScaleType.CENTER);
+            stashButton.setPadding(0, 0, 0, 0);
+            stashButton.setContentDescription(label);
+            stashButton.setTooltipText(label);
+            stashButton.setOnClickListener(v -> select(section));
+            rail.addView(stashButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         }
 
         void select(Section section) {
-            if (disposed || switching || section == selected || XposedHelpers.getBooleanField(turbo, "s")) return;
+            if (disposed || switching || XposedHelpers.getBooleanField(turbo, "s")) return;
+            if (section == selected) section = scene == 4 ? Section.APPS : Section.TOOLS;
             try {
                 releaseContent(); restoreVisibility();
                 selected = section;
@@ -297,12 +317,9 @@ final class NativeSidebarHooks {
                 if (selected == Section.STASH) openStash();
                 else message("当前应用没有原生场景工具");
             } else if (pane.getParent() == turbo) turbo.removeView(pane);
-            for (Map.Entry<Section, TextView> entry : buttons.entrySet()) {
-                int tint = color(entry.getKey() == selected ? android.R.attr.colorAccent : android.R.attr.textColorPrimary);
-                entry.getValue().setTextColor(tint);
-                ((RailIcon) entry.getValue().getCompoundDrawables()[1]).tint(tint);
-            }
-            rail.bringToFront();
+            GradientDrawable tile = background(selected == Section.STASH ? 0x44ffffff : 0x18ffffff, 12);
+            stashButton.setBackground(new RippleDrawable(ColorStateList.valueOf(0x44ffffff), tile,
+                    background(android.graphics.Color.WHITE, 12)));
             reportRegions(context);
         }
 
@@ -403,6 +420,7 @@ final class NativeSidebarHooks {
 
         void fail(Exception error) {
             if (disposed) { DragShareLog.w(TAG, "Previous sidebar session failed after closing", error); return; }
+            extensionFailed = true;
             DragShareLog.w(TAG, "Sidebar integration failed; restoring native UI", error);
             panels.remove(owner); dispose();
             Toast.makeText(context, "侧边栏扩展暂不可用，已保留原生功能", Toast.LENGTH_LONG).show();
@@ -412,9 +430,32 @@ final class NativeSidebarHooks {
             if (disposed) return;
             disposed = true; releaseContent(); restoreVisibility();
             turbo.removeOnAttachStateChangeListener(this);
-            turbo.removeView(rail);
-            turbo.setPadding(padding[0], padding[1], padding[2], padding[3]);
+            if (rail.getParent() == dock) ((FrameLayout) dock).removeView(rail);
+            dockApps.setLayoutParams(new FrameLayout.LayoutParams(dockAppsLayoutParams));
+            XposedHelpers.callMethod(dock, "J");
             reportRegions(context);
+        }
+
+        void applyDockLayout() {
+            FrameLayout.LayoutParams railParams = rail.getLayoutParams() instanceof FrameLayout.LayoutParams
+                    ? (FrameLayout.LayoutParams) rail.getLayoutParams()
+                    : new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, railHeight,
+                            Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+            railParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            railParams.height = railHeight;
+            rail.setLayoutParams(railParams);
+            FrameLayout.LayoutParams appsParams = new FrameLayout.LayoutParams(dockAppsLayoutParams);
+            appsParams.topMargin += railHeight;
+            dockApps.setLayoutParams(appsParams);
+            if (rail.getParent() != dock) ((FrameLayout) dock).addView(rail, railParams);
+        }
+
+        private View findDockApps(FrameLayout nativeDock) {
+            for (int i = 0; i < nativeDock.getChildCount(); i++) {
+                View child = nativeDock.getChildAt(i);
+                if ("com.miui.dock.base.FadingEdgeRecyclerView".equals(child.getClass().getName())) return child;
+            }
+            return null;
         }
 
         @Override public void onViewAttachedToWindow(View view) {}
@@ -431,32 +472,22 @@ final class NativeSidebarHooks {
 
     /** Small stroke icons use the native theme; no module resource IDs are resolved in the host. */
     private static final class RailIcon extends android.graphics.drawable.Drawable {
-        private final Section section;
         private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        RailIcon(Section section) {
-            this.section = section; paint.setStyle(android.graphics.Paint.Style.STROKE);
+        private final int size;
+        RailIcon(int size) {
+            this.size = size;
+            paint.setColor(android.graphics.Color.WHITE);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
             paint.setStrokeWidth(1.7f); paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
         }
-        void tint(int color) { paint.setColor(color); invalidateSelf(); }
+        @Override public int getIntrinsicWidth() { return size; }
+        @Override public int getIntrinsicHeight() { return size; }
         @Override public void draw(android.graphics.Canvas canvas) {
             canvas.save(); canvas.translate(getBounds().left, getBounds().top);
             canvas.scale(getBounds().width() / 24f, getBounds().height() / 24f);
-            switch (section) {
-                case APPS -> {
-                    for (int x : new int[]{4, 14}) for (int y : new int[]{4, 14})
-                        canvas.drawRoundRect(x, y, x + 6, y + 6, 1.5f, 1.5f, paint);
-                }
-                case SEARCH -> { canvas.drawCircle(10, 10, 6, paint); canvas.drawLine(15, 15, 21, 21, paint); }
-                case STASH -> {
-                    canvas.drawRoundRect(3, 7, 21, 20, 2, 2, paint);
-                    canvas.drawLine(7, 4, 17, 4, paint); canvas.drawLine(3, 12, 21, 12, paint);
-                    canvas.drawLine(9, 15, 15, 15, paint);
-                }
-                case TOOLS -> {
-                    for (int x : new int[]{5, 12, 19}) canvas.drawLine(x, 3, x, 21, paint);
-                    canvas.drawCircle(5, 8, 2, paint); canvas.drawCircle(12, 16, 2, paint); canvas.drawCircle(19, 10, 2, paint);
-                }
-            }
+            canvas.drawRoundRect(3, 7, 21, 20, 2, 2, paint);
+            canvas.drawLine(7, 4, 17, 4, paint); canvas.drawLine(3, 12, 21, 12, paint);
+            canvas.drawLine(9, 15, 15, 15, paint);
             canvas.restore();
         }
         @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); }

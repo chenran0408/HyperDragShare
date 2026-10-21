@@ -9,8 +9,8 @@ import java.util.regex.Pattern;
 
 /** A small, fail-closed view of the focused application window and windows above it. */
 final class PressWindowSnapshot {
-    private static final Pattern WINDOW = Pattern.compile("Window #\\d+ Window\\{([^ ]+) ([^ ]+) ([^}]+)}:");
-    private static final Pattern FOCUS = Pattern.compile("mCurrentFocus=Window\\{([^ ]+) ([^ ]+) ([^}]+)}");
+    private static final Pattern WINDOW = Pattern.compile("Window #\\d+ Window\\{([^ ]+) ([^ ]+) ([^}]+)\\}:");
+    private static final Pattern FOCUS = Pattern.compile("mCurrentFocus=Window\\{([^ ]+) ([^ ]+) ([^}]+)\\}");
     private static final Pattern DISPLAY = Pattern.compile("\\bmDisplayId=(\\d+)\\b");
     private static final Pattern FRAME_PAIR = Pattern.compile(
             "\\bframe=\\[\\s*(-?\\d+)\\s*,\\s*(-?\\d+)\\s*]\\[\\s*(-?\\d+)\\s*,\\s*(-?\\d+)\\s*]");
