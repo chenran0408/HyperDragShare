@@ -18,7 +18,6 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.WindowInsets
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.Box
@@ -273,9 +272,8 @@ object StashOverlayPanel {
                 y = (centerY * metrics.height() - height / 2f).toInt()
                     .coerceIn(insets.top, (metrics.height() - insets.bottom - height).coerceAtLeast(insets.top))
                 flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    if (draggingContent) WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                    else if (expanded) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    if (draggingContent) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0
             }
         }
 
@@ -532,7 +530,6 @@ object StashOverlayPanel {
             MiuixTheme(controller = remember(dark) {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
-                BackHandler(enabled = expanded && !draggingContent, onBack = ::back)
                 Box(Modifier.fillMaxSize()) {
                     if (expanded) Scaffold(
                         // Resizing the window must not detach or remeasure the active drag source.
