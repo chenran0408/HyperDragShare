@@ -1030,6 +1030,11 @@ public final class DragShareSettings {
                 MAX_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS);
     }
 
+    public int resolvePressConfirmationTimeoutMillis() {
+        return accessibilityLongPressTimeoutMillis == DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS
+                ? 300 : accessibilityLongPressTimeoutMillis;
+    }
+
     public float accessibilityTouchSlopMultiplier() {
         return accessibilityRecognitionSensitivityPercent / 100f;
     }

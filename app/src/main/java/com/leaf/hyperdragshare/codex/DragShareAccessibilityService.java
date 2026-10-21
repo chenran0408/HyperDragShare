@@ -337,9 +337,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                                 + " point=" + Math.round(x) + "," + Math.round(y));
                     }
                     mainHandler.post(() -> {
-                        PressCaptureSource areaSource = thumbCaptureSource;
-                        if (areaSource != null) {
-                            areaSource.onPointerEvent(action, x, y, eventTime, major, widthMajor);
+                        PressCaptureSource pressSource = thumbCaptureSource;
+                        if (pressSource != null) {
+                            pressSource.onPointerEvent(action, x, y, eventTime);
                         } else if (captureSource != null) {
                             captureSource.onPointerEvent(action, x, y, eventTime);
                         }

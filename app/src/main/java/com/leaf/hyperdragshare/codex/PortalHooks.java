@@ -552,13 +552,16 @@ final class PortalHooks {
                             : null);
         }
         PressCaptureSource thumb = thumbCaptureSource;
-        if (thumb != null) thumb.onPointerEvent(action, x, y, eventTime, rawTouchMajor, rawWidthMajor);
+        if (thumb != null) thumb.onPointerEvent(action, x, y, eventTime);
     }
 
     private static void configureThumbCapture(Context context, DragShareSettings settings) {
         try {
             ThumbTriggerSettings thumb = ThumbTriggerSettings.readFromProvider(context);
-            if (thumbCaptureSource != null && thumb.enabled) return;
+            if (thumbCaptureSource != null && thumb.enabled) {
+                thumbCaptureSource.updateSettings(settings);
+                return;
+            }
             PressCaptureSource previous = thumbCaptureSource;
             thumbCaptureSource = null;
             if (previous != null) previous.stop();

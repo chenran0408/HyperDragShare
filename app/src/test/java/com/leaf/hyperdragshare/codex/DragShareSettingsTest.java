@@ -96,6 +96,7 @@ public final class DragShareSettingsTest {
         assertEquals(DragShareSettings.LOG_DESTINATION_SYSTEM, settings.logDestination);
         assertFalse(settings.pauseAutomaticInGames);
         assertEquals(650, settings.resolveAccessibilityLongPressTimeoutMillis(650));
+        assertEquals(300, settings.resolvePressConfirmationTimeoutMillis());
         assertEquals(1f, settings.accessibilityTouchSlopMultiplier(), 0f);
         assertFalse(settings.isAccessibilityRecognitionEnabledForOrientation(
                 Configuration.ORIENTATION_LANDSCAPE));
@@ -509,6 +510,7 @@ public final class DragShareSettingsTest {
                 Configuration.ORIENTATION_LANDSCAPE));
         assertTrue(settings.isAccessibilityPackageBlacklisted("pkg.accessibility.blacklisted"));
         assertEquals(700, settings.accessibilityLongPressTimeoutMillis);
+        assertEquals(700, settings.resolvePressConfirmationTimeoutMillis());
         assertEquals(150, settings.accessibilityRecognitionSensitivityPercent);
         assertEquals(1.5f, settings.accessibilityTouchSlopMultiplier(), 0f);
         assertEquals(

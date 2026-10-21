@@ -29,7 +29,7 @@ final class PressCaptureSource {
     private final Context context;
     private final RootTouchSource input;
     private final DragShareController controller;
-    private final DragShareSettings settings;
+    private volatile DragShareSettings settings;
     private final BooleanSupplier hostAllowed;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -75,16 +75,21 @@ final class PressCaptureSource {
         });
     }
 
-    void onPointerEvent(int action, float x, float y, long time, int major, int width) {
-        if (Looper.myLooper() == Looper.getMainLooper()) handlePointer(action, x, y, time, major, width);
-        else main.post(() -> handlePointer(action, x, y, time, major, width));
+    void updateSettings(DragShareSettings updated) {
+        settings = updated;
     }
 
-    private void handlePointer(int action, float x, float y, long time, int major, int width) {
+    void onPointerEvent(int action, float x, float y, long time) {
+        if (Looper.myLooper() == Looper.getMainLooper()) handlePointer(action, x, y, time);
+        else main.post(() -> handlePointer(action, x, y, time));
+    }
+
+    private void handlePointer(int action, float x, float y, long time) {
         if (stopped) return;
         if (action == MotionEvent.ACTION_DOWN) {
             cancelGesture();
             downTime = time;
+            detector.start(x, y, time, settings.resolvePressConfirmationTimeoutMillis());
             pointerDown = true;
             downX = x;
             downY = y;
@@ -95,8 +100,7 @@ final class PressCaptureSource {
             return;
         }
         boolean hadFired = detector.isFired();
-        detector.onPointerEvent(action, x, y, time,
-                input.normalizedTouchMajor(major), input.normalizedWidthMajor(width), 1);
+        if (action != MotionEvent.ACTION_DOWN) detector.onPointerEvent(action, x, y, 1);
         if (action == MotionEvent.ACTION_UP) pointerDown = false;
         if (action == MotionEvent.ACTION_UP && hadFired) {
             main.removeCallbacks(classify);
@@ -144,8 +148,7 @@ final class PressCaptureSource {
             return;
         }
         lastTrigger = now;
-        DragShareLog.i(TAG, "press confirmed path=" + (detector.isAreaPress() ? "area" : "ordinary")
-                + " elapsedMs=" + (now - detector.downTime()));
+        DragShareLog.i(TAG, "press confirmed by duration/movement elapsedMs=" + (now - detector.downTime()));
         if (cached != null) display();
         else if (!lookupRunning) lookup();
     }
@@ -187,7 +190,6 @@ final class PressCaptureSource {
                         return;
                     }
                     cached = content;
-                    detector.onClassification(!content.isImage());
                     if (detector.isFired()) display();
                     else schedule();
                 });

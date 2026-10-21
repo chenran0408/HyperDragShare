@@ -5,7 +5,7 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 
-/** Settings shared by the app and the injected process for the optional thumb trigger. */
+/** Press entry settings; the legacy preference key is retained to preserve the user's switch. */
 public final class ThumbTriggerSettings {
     private static final String PREFS_NAME = "drag_share_settings";
     private static final String KEY_ENABLED = "thumb_trigger_enabled";
@@ -23,7 +23,7 @@ public final class ThumbTriggerSettings {
     public static ThumbTriggerSettings readFromProvider(Context portalContext) {
         Bundle result = portalContext.getContentResolver().call(
                 ImageStagingClient.BASE_URI, DragShareSettings.METHOD_GET_SETTINGS, null, null);
-        if (result == null) throw new IllegalStateException("模块未返回拇指触发设置");
+        if (result == null) throw new IllegalStateException("模块未返回按压触发设置");
         return fromBundle(result);
     }
 

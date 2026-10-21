@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.146 / versionCode170。同包名/debug签名原位升级成功；Portal PID21532，注入/Root版本170、Root授权true。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.147 / versionCode171。同包名/debug签名覆盖安装；Portal PID21130，注入/Root171、Root授权true。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装1.7.146 / 170；211项单测0失败/0错误，Lint0错误/151警告/2提示，assembleDebug通过。最新批次见文末。
+- 当前已安装1.7.147 / 171；208项单测0失败/错误，Lint0错误/151警告/2提示，构建通过。147依据作者反馈改为时长/位移，新真实手势未验；最新批次见文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -964,3 +964,13 @@ APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null�
 - 13:27:14.408接收器PID27309/UID10228记录DROP OK、items=2、顺序HDS146-B/HDS146-A；源模块UID10270。实际系统DRAG_STARTED/DROP/接收完成后托盘收灰条。点灰条展开，两个生成条目仍勾选；一次系统Back收起且焦点回接收器，重新展开仍选2条。日志只含生成文字，位于任务work/hds146-drop-result.log。
 - 清理：明确选择仍是A/B两条，删除确认显示2项后，仅删除这两条，界面11→9；未对原条目执行修改。明确关闭模块窗后核对接收器前台，再卸载临时包；pm path无包，窗口无模块残留，前台回原微信LauncherUI/task2387。未发送额外Back或强制恢复旧任务，未操作Bili/剪贴板/系统权限。8张可能含用户中转内容的本机截图按确切路径全部删除，未提交图片或私人内容。
 - 范围：证明当前浮窗内容直接多选拖出到另一UID、收起/返回后重开保留选择；不是所有接收应用、图片/混合/组卡或物理手指面积验收。移动CANCEL、刷新竞态与预览层级本批仅源码回归，尚无物理手指/新图实测。未重跑OCR样本、截图矩阵或无数据校准。
+
+## 2026-10-21：1.7.147 纠正触发机制与公开准备
+
+用户补充参考作者明确反馈：其手机尺寸同样无数据，实际Root evdev加时长/位移；不再将视频快速触发当有效面积证据。删除本fork面积阈值和尺寸归一化触发API、700/300内容分类切换；改为统一配置时长、固定36px轴向位移、多指/松手取消。保留一次120ms分类缓存和真实来源/隐私检查；默认300ms为本fork选择，非作者原话。已存确认时间优先，新设置由Portal存活Source更新，下次DOWN生效。复用已有设置、改正拇指命名；详细边界见CONTACT_AREA_TRIGGER。
+
+最终build304全检查通过：208测试0失败/错误、Lint0错误/151警告/2提示。5项新时长用例替换已删除面积能力的8项测试，配置断言覆盖默认300和保存700；没有通过删失败用例掩盖问题。模块只覆盖安装一次；同包/证书，1.7.147/171，APK任务outputs/HyperDragShare-1.7.147-debug.apk，SHA256 777F66FC16DDFE7D1E83D1467C3FE610D343E046A892B09763D6169D9F6DFC80。
+
+手机未输入约70秒且前台微信、无模块窗时，只结束旧Portal21532并空query；PID21130，activation.xml的注入/Root171及授权true确认；前后微信LauncherUI/task2387不变。未打开设置、注入手势、截图、改私人内容或重启Android/AICR；不凭元数据宣称输入ready。新时长设置UI、Root完整手势接管/录音冲突和物理手感尚未实测；旧146文字拖出证据不替代147触发验收。
+
+用户要求公开GitHub。当前账号下已建立公开fork https://github.com/chenran0408/HyperDragShare ，保留上游Leaf-lsgtky/HyperDragShare关系。README按当前实装重写，不再宣称已删小窗/搜索或参考有真实面积能力。公开前检查当前跟踪文件、可达历史1424个blob的凭证与生成文件规则，未发现命中；本机签名和SDK文件不纳入Git。新增无签名secret依赖的Android检查工作流；远程推送/CI结果以GitHub实际状态为准，不能凭配置文件宣称云端已通过。

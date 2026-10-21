@@ -5,10 +5,12 @@ import android.content.ComponentName
 import android.content.Intent
 import android.app.StatusBarManager
 import android.graphics.drawable.Icon
+import android.view.ViewConfiguration
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -16,12 +18,20 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.SliderPreference
+import kotlin.math.roundToInt
 
 @Composable
-internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Unit, portalMode: Boolean) {
+internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Unit,
+    settings: DragShareSettings, onDurationChanged: (Int) -> Unit) {
+    val portalMode = settings.isPortalCaptureMode
     var addingTile by remember { mutableStateOf(false) }
     var tileMessage by remember { mutableStateOf<String?>(null) }
     var thumb by remember { mutableStateOf(ThumbTriggerSettings.read(context)) }
+    var duration by remember(settings.accessibilityLongPressTimeoutMillis, thumb.enabled, portalMode) {
+        mutableFloatStateOf((if (portalMode || thumb.enabled) settings.resolvePressConfirmationTimeoutMillis()
+            else settings.resolveAccessibilityLongPressTimeoutMillis(ViewConfiguration.getLongPressTimeout())).toFloat())
+    }
     var serviceEnabled by remember { mutableStateOf(AccessibilityRuntimeStatus.isServiceEnabled(context)) }
     var portalInjected by remember { mutableStateOf(ModuleActivation.isCurrentBuildInjected(context)) }
     var portalRootGranted by remember { mutableStateOf(ModuleActivation.isCurrentBuildPortalRootGranted(context)) }
@@ -68,12 +78,12 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         },
     )
     SwitchPreference(
-        title = "拇指按压触发",
+        title = "按住取词与识字",
         summary = when {
             portalMode && !portalInjected -> "请先重载传送门，让当前版本的设置生效"
             portalMode && !portalRootGranted -> "请先为传送门授予 Root 权限"
-            !portalMode && !serviceEnabled -> "需要 Root 与无障碍服务；无需校准"
-            else -> "拇指快速按压，普通按住也可触发；在原页面分词或识字，无需校准"
+            !portalMode && !serviceEnabled -> "需要 Root 与无障碍服务"
+            else -> "单指按住后在原页面分词或识字；移动取消，不检测接触面积"
         },
         checked = thumb.enabled,
         onCheckedChange = { enabled ->
@@ -91,8 +101,22 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
             }
         },
     )
+    SliderPreference(
+        title = "按住确认时间",
+        summary = "越短越灵敏，也更容易误触；修改后下一次按压生效",
+        enabled = thumb.enabled || !portalMode,
+        value = duration,
+        valueText = "${duration.roundToInt()} ms",
+        valueRange = DragShareSettings.MIN_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS.toFloat()
+            ..DragShareSettings.MAX_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS.toFloat(),
+        steps = 18,
+        showKeyPoints = true,
+        keyPoints = listOf(250f, 300f, 400f, 500f, 600f, 800f, 1000f, 1200f),
+        onValueChange = { duration = it },
+        onValueChangeFinished = { onDurationChanged(duration.roundToInt()) },
+    )
     ArrowPreference(
-        title = "拇指触发应用黑名单",
+        title = "按压触发应用黑名单",
         summary = "在指定应用中暂停触发，桌面和输入法自动排除",
         onClick = onOpenBlacklist,
     )

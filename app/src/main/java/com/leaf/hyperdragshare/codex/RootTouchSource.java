@@ -353,14 +353,6 @@ final class RootTouchSource {
         parser.consume(type, code, value);
     }
 
-    float normalizedTouchMajor(int value) {
-        return value > 0 && rawMaxTouchMajor > 0 ? Math.min(1f, (float) value / rawMaxTouchMajor) : 0f;
-    }
-
-    float normalizedWidthMajor(int value) {
-        return value > 0 && rawMaxWidthMajor > 0 ? Math.min(1f, (float) value / rawMaxWidthMajor) : 0f;
-    }
-
     private void onRawFrame(int action, float rawX, float rawY, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
         if (rawMaxX <= 0 || rawMaxY <= 0) {
             return;

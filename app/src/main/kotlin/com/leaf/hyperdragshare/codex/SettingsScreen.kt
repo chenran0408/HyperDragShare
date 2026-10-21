@@ -8,7 +8,6 @@ import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.provider.Settings
-import android.view.ViewConfiguration
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -302,13 +301,6 @@ private fun MainPage(
     var modernGlassOpacity by remember(settings.modernGlassOpacityPercent) {
         mutableFloatStateOf(settings.modernGlassOpacityPercent.toFloat())
     }
-    var accessibilityLongPressTimeout by remember(settings.accessibilityLongPressTimeoutMillis) {
-        mutableFloatStateOf(
-            settings.resolveAccessibilityLongPressTimeoutMillis(
-                ViewConfiguration.getLongPressTimeout(),
-            ).toFloat(),
-        )
-    }
     var accessibilitySensitivity by remember(settings.accessibilityRecognitionSensitivityPercent) {
         mutableFloatStateOf(settings.accessibilityRecognitionSensitivityPercent.toFloat())
     }
@@ -455,27 +447,6 @@ private fun MainPage(
                             },
                         )
                         SliderPreference(
-                            title = "长按时间",
-                            summary = "按住超过设定时间后开始识别",
-                            value = accessibilityLongPressTimeout,
-                            valueText = "${accessibilityLongPressTimeout.roundToInt()} ms",
-                            valueRange = DragShareSettings.MIN_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS.toFloat()
-                                ..DragShareSettings.MAX_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS.toFloat(),
-                            steps = 18,
-                            showKeyPoints = true,
-                            keyPoints = listOf(250f, 400f, 500f, 600f, 800f, 1000f, 1200f),
-                            onValueChange = { accessibilityLongPressTimeout = it },
-                            onValueChangeFinished = {
-                                persist(
-                                    copySettings(
-                                        settings,
-                                        accessibilityLongPressTimeoutMillis =
-                                            accessibilityLongPressTimeout.roundToInt(),
-                                    ),
-                                )
-                            },
-                        )
-                        SliderPreference(
                             title = "识别灵敏度",
                             summary = "提高后允许长按期间有更大的手指位移",
                             value = accessibilitySensitivity,
@@ -590,7 +561,9 @@ private fun MainPage(
             }
             item(key = "thumb-trigger-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ThumbTriggerPreference(context, onOpenBlacklist, settings.isPortalCaptureMode)
+                    ThumbTriggerPreference(context, onOpenBlacklist, settings) { timeout ->
+                        persist(copySettings(settings, accessibilityLongPressTimeoutMillis = timeout))
+                    }
                     SwitchPreference(
                         title = "游戏内暂停自动触发",
                         summary = "按应用声明的游戏类别暂停；手动点取、识屏仍可用，未标记的游戏可单独加入黑名单",
