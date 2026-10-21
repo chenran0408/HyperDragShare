@@ -8,7 +8,7 @@
 
 APK outputs/HyperDragShare-1.7.176-arm64-v8a.apk，21,475,042 bytes（20.48MiB），比175通用包小60.5%。签名证书不变；aapt/ZIP确认唯一ABI为arm64-v8a，3个原生库及28个OCR模型/词典文件逐字节与175一致。首次全assets相同断言发现生成的assets/dexopt/baseline.prof随版本变化，改为核对真实模型/词典，未忽略产品文件差异。SHA256 fc48775c88e5c620715da9b017c9a59ca9f4e3dcc701f9c0c62ae08a48d7f2a9。
 
-一次后台覆盖安装成功，未切换用户页面；设备ABI也确认为arm64-v8a。仅重载Portal1670，输入223ms/reader576ms就绪。其他系统Hook保持此前版本，未宣称全部作用域200或重新完成功能实测。正式发布结果待核对后追加；175历史通用包保留为回退点，后续构建仅生成arm64。
+一次后台覆盖安装成功，未切换用户页面；设备ABI也确认为arm64-v8a。仅重载Portal1670，输入223ms/reader576ms就绪。其他系统Hook保持此前版本，未宣称全部作用域200或重新完成功能实测。正式v1.7.176已发布并标记Latest，tag源089bb95，APK服务端digest/大小与本地一致：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.176 。175历史通用包保留为回退点，后续构建仅生成arm64。
 
 ## 175 原生Dock、首次说明与首个正式R8发布（2026-10-21）
 

@@ -1290,3 +1290,5 @@ build359图标导入缺失失败，补齐后360全套通过；361显示修复检
 build369 lintDebug/assembleRelease及R8成功，Lint0错误183警告3提示；打包修改未重复单测/截图矩阵。目标设备getprop唯一ABI为arm64-v8a；APK ZIP/aapt也仅该ABI。3个native库和28个OCR模型/词典逐字节保留，生成的baseline.prof因版本改变而更新，不将生成物差异误称功能被移除。
 
 1.7.176/200同证书一次后台覆盖安装，APK21,475,042 bytes/20.48MiB，比175减少60.5%，SHA256 fc48775c88e5c620715da9b017c9a59ca9f4e3dcc701f9c0c62ae08a48d7f2a9。未切换页面/改设置/动私人内容。Portal1670重载后Root输入223ms、reader576ms ready；其他Hook未重载。本轮确认安装/架构/文件保留/连接，功能实测范围沿用175，不称新增操作通过。
+
+176发布确认：正式Release/Latest v1.7.176，tag源089bb95；服务端APK大小及SHA256与本地相同。地址：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.176 。
