@@ -2,7 +2,7 @@
 
 基于 [Leaf-lsgtky/HyperDragShare](https://github.com/Leaf-lsgtky/HyperDragShare) 的开源分支，为 Xiaomi HyperOS 增加拖拽手势、原页分词、OCR 和临时中转站。
 
-[下载正式版 APK](https://github.com/chenran0408/HyperDragShare/releases/latest) · Release 使用 **R8 压缩**。
+[下载正式版 APK](https://github.com/chenran0408/HyperDragShare/releases/latest) · 仅 **arm64-v8a**，使用 **R8 压缩**。
 
 ## 用户使用
 
@@ -58,4 +58,4 @@ Release 启用 R8；自行构建需配置自己的签名。构建 APK 位于 `ap
 
 ## English
 
-HyperDragShare is an open-source HyperOS fork for drag gestures, in-page text selection, OCR, and a temporary drag-and-drop stash. It requires Root and LSPosed. The verified target is Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17; other ROMs are unverified. AICR V2 is an OCR service, not Xiaomi's screen-recognition feature. Release APKs are optimized with R8; check [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) for the APK. Licensed under GPL-3.0-only; upstream attribution is preserved.
+HyperDragShare is an open-source HyperOS fork for drag gestures, in-page text selection, OCR, and a temporary drag-and-drop stash. It requires an arm64-v8a device, Root and LSPosed. The verified target is Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17; other ROMs are unverified. AICR V2 is an OCR service, not Xiaomi's screen-recognition feature. Release APKs are optimized with R8; check [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) for the APK. Licensed under GPL-3.0-only; upstream attribution is preserved.

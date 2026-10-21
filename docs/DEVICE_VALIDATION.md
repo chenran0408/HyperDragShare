@@ -1284,3 +1284,9 @@ build359图标导入缺失失败，补齐后360全套通过；361显示修复检
 最终21:16安全服务:ui559 Hook199，Portal645输入220ms、reader334ms ready。SystemUI保持198相同代码，框架/桌面/AICR本批未重载。截图/参考分析仅本机work/sidebar175。未更改私人内容。正式R8发布另记结果。
 
 175发布确认：正式tag v1.7.175 指向代码ff66401；GitHub Release非草稿/非预发布，APK与校验文件均上传成功，服务端APK digest与本地0B8DDF479D2DBBA77FADC5DE2C9EFAE853CAF5E93F97368785A9724F6CE8BFA5一致。Actions39606816340登记时仍运行，未借本地结果写云端通过。下载：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.175 。
+
+## 176 arm64包 / 2026-10-21
+
+build369 lintDebug/assembleRelease及R8成功，Lint0错误183警告3提示；打包修改未重复单测/截图矩阵。目标设备getprop唯一ABI为arm64-v8a；APK ZIP/aapt也仅该ABI。3个native库和28个OCR模型/词典逐字节保留，生成的baseline.prof因版本改变而更新，不将生成物差异误称功能被移除。
+
+1.7.176/200同证书一次后台覆盖安装，APK21,475,042 bytes/20.48MiB，比175减少60.5%，SHA256 fc48775c88e5c620715da9b017c9a59ca9f4e3dcc701f9c0c62ae08a48d7f2a9。未切换页面/改设置/动私人内容。Portal1670重载后Root输入223ms、reader576ms ready；其他Hook未重载。本轮确认安装/架构/文件保留/连接，功能实测范围沿用175，不称新增操作通过。
