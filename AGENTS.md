@@ -182,3 +182,7 @@ adb logcat -v time | Select-String "DragShare|AndroidRuntime"
 149运行证据：页面暂未就绪曾使RootNodeCaptureMain.awaitRoot抛IOException并使服务永久失效，现1200ms预算耗尽回window_not_ready，只结束该请求、保留helper，不自动重连或回退；同服务下一请求成功有回归。173已安装/Portal4566与Root ready确认，真实空缺后恢复未验。148已删除四秒冷却与录音子串筛选，在Root取词前排除触点明确录音控件；不得把这些源码检查写成实际录音体验通过。CI首轮39552595165对应148且success，后续版本按自己的run核对。
 
 150目标ROM元数据探针：UiAutomation默认flags65554/caps11，窗口列表0；只增FLAG_RETRIEVE_INTERACTIVE_WINDOWS得到2/3个窗口及应用root。产品已在ready前配置此标志。212项本地检查与build308通过，174已安装；最新Portal12882取词reader ready，但Root输入探测命令退出137并报false。首次4541节点准备退出无stderr，直接Shell Root相同APK可ready；原因未定，不能用重试/修改授权掩盖。149缺窗后helper两次存活有真机证据；完整按住/录音手感仍未验。元数据探针均退出、设备jar已删、未接触私人内容。当前用户仍使用手机，避免开测试页。149 CI39553180987 success。
+
+151依最新用户要求：二次爆炸不是拆分，主操作第二行首位复用CaptureMore→原页区域识屏→前后插入快照，未删此链路。清晰动作改Miuix图标/44dp触区/22dp图形/Tooltip与无障碍说明；有歧义的中转站、合并/拆分等保留短标签。编辑/全选也一级，不重复拖出/划选/返回收起按钮，更多只外观。build311完整212pass/Lint0errors153warnings2hints，175单次安装，Portal15214注入175/input ready，节点reader准备失败；前台微信保持，无新UI验收。系统日志已精确确认Trimming phantom processes杀Portal和模块su，不是Root未授权；下一批依ROOT_PROCESS_LIFECYCLE.md实现窄Hook，不能全局关phantom。归属应使用已持phantom锁保护的mPhantomToAppProcessMap，不读裸PidMap造成锁/数据风险；映射缺失原行为，不补查。当前框架Hook尚未加入151，不能称已解决。
+
+151云端run39555560460对应8f013d0，推送后已启动但此条写入时尚未完成。150run39554086189已success并有两个Artifact。末次继续工作应先核对该live run，不能把150通过当151通过。

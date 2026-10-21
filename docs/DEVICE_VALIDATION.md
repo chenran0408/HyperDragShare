@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.150 / versionCode174。同包名/debug签名覆盖安装；最新Portal PID12882，注入174，Root输入探测退出137、Root授权状态false，取词helper另已连接。当前按住入口不可据启动元数据称可用。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.151 / versionCode175。同包名/debug签名覆盖安装；最新Portal PID15214、注入/Root175true，输入reader15961存活，取词reader准备失败。系统phantom裁剪会影响两个宿主的su，当前按住入口仍不能称可用。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装1.7.150 / 174；212项本地单测0失败/错误，Lint0错误/151警告/2提示，构建通过。147后入口使用Root时长/位移；149已有真实缺窗后helper持续存活证据，150窗口配置及当前Root初始化失败见文末。完整手势未验。
+- 当前已安装1.7.151 / 175；212项本地单测0失败/错误，Lint0错误/153警告/2提示，build311通过。分词一级图标/二次爆炸入口及手势去重已接线，新UI未实测；Root进程裁剪详见文末与ROOT_PROCESS_LIFECYCLE.md。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
