@@ -1,5 +1,7 @@
 # 当前功能与验证状态
 
+最新发布：**v1.7.179 正式版 / Latest**，源码tag指向 `87fd4957eff3d093f856a83d74bf7ed62288367b`。已上传arm64 R8 APK及SHA256文件，服务端APK大小7,429,983bytes、digest `88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb` 与本地一致。发布地址：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.179 。下文“Latest仍176”是发布前历史状态，不再代表最新正式版；发布没有增加新的功能实测结论。
+
 事实来源为当前源码、具体构建报告、安装元数据与对应运行日志；构建通过、已安装、Hook加载和实际操作分别记账。旧逐版记录的“当前”仅代表当时。
 
 ## 179 设置重整、单引擎精简、更新检查与微信修复
