@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.124 / versionCode 148。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 148。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.132 / versionCode 156。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 156。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.124 / 148；187 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.132 / 156；197 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
