@@ -95,6 +95,7 @@ internal class ScreenOcrSession(
     private var selectedLines by mutableStateOf<Set<Int>>(emptySet())
     private var nearbySelection by mutableStateOf(false)
     private var insertionSource: android.graphics.Rect? = null
+    private var insertionReferenceHeight = 0
     private var resultBounds: List<android.graphics.Rect?> = emptyList()
     private var statusMessage by mutableIntStateOf(R.string.screen_ocr_capturing)
     private var isRecognizing by mutableStateOf(true)
@@ -164,6 +165,10 @@ internal class ScreenOcrSession(
         selectedLines = emptySet()
         nearbySelection = nearbySource != null
         insertionSource = nearbySource
+        val referenceHeight = nearbySource?.let {
+            sourceArea?.getInt("distance_height", it.height()) ?: it.height()
+        } ?: 0
+        insertionReferenceHeight = referenceHeight
         resultBounds = emptyList()
         failureDetail = null
         if (IntegrationSettings.isAicrOcrEnabled(context)) {
@@ -184,7 +189,8 @@ internal class ScreenOcrSession(
                                     reportFailure(R.string.screen_ocr_region_unavailable,
                                         IllegalStateException("AICR 未返回可定位的文字行，请返回后手动框选"))
                                 } else {
-                                    recognitionCompleted(lines.map { it.text.trim() }, nearbyOcrLines(bounds, nearbySource), bounds)
+                                    recognitionCompleted(lines.map { it.text.trim() },
+                                        nearbyOcrLines(bounds, nearbySource, referenceHeight), bounds)
                                 }
                             } catch (error: IllegalArgumentException) {
                                 reportFailure(R.string.screen_ocr_region_unavailable, error)
@@ -211,7 +217,7 @@ internal class ScreenOcrSession(
                         val recognizedLines = task.result.textBlocks.flatMap { it.lines }
                             .filter { it.text.isNotBlank() }
                         val suggested = nearbySource?.let { source ->
-                            nearbyOcrLines(recognizedLines.map { it.boundingBox }, source)
+                            nearbyOcrLines(recognizedLines.map { it.boundingBox }, source, referenceHeight)
                         }
                         recognitionCompleted(recognizedLines.map { it.text.trim() }, suggested,
                             recognizedLines.map { it.boundingBox })
@@ -389,6 +395,17 @@ internal class ScreenOcrSession(
                 val (before, after) = splitNearbyOcrSelection(resultText, resultBounds, selectedLines, source)
                 result.putString("prepend_text", before)
                 result.putString("text", after)
+                screenshotForRegion?.let { screenshot ->
+                    expandedNearbyOcrBounds(source, resultBounds, selectedLines,
+                        screenshot.width, screenshot.height)?.let { expanded ->
+                        result.putBundle("source_area", Bundle().apply {
+                            putParcelable("bounds", expanded)
+                            putInt("width", screenshot.width)
+                            putInt("height", screenshot.height)
+                            putInt("distance_height", insertionReferenceHeight)
+                        })
+                    }
+                }
             }
             resultReceiver.send(Activity.RESULT_OK, result)
             close()

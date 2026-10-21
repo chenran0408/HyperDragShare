@@ -12,6 +12,36 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class OcrNearbyLinesTest {
+    @Test fun consecutiveNearbySelectionsAdvanceBeyondAlreadyInsertedRows() {
+        val source = Rect(100, 200, 300, 240)
+        val lines = listOf(Rect(100, 80, 300, 110), Rect(100, 140, 300, 170),
+            Rect(100, 200, 300, 240), Rect(100, 270, 300, 300), Rect(100, 330, 300, 360))
+        val first = nearbyOcrLines(lines, source)
+        assertEquals(setOf(1, 3), first)
+        val expanded = expandedNearbyOcrBounds(source, lines, first, 400, 500)!!
+        assertEquals(Rect(100, 140, 300, 300), expanded)
+        val next = nearbyOcrLines(lines, expanded, source.height())
+        assertEquals(setOf(0, 4), next)
+        assertEquals(Rect(100, 80, 300, 360), expandedNearbyOcrBounds(expanded, lines, next, 400, 500))
+    }
+
+    @Test fun expandingTheRangeDoesNotIncreaseTheOriginalDistanceLimit() {
+        val expanded = Rect(100, 400, 1340, 900)
+        assertEquals(setOf(1), nearbyOcrLines(listOf(
+            Rect(80, 20, 220, 80), Rect(480, 930, 960, 970)), expanded, 40))
+    }
+
+    @Test fun onlySelectedLocatedImageRowsAdvanceWithoutChangingInputBounds() {
+        val source = Rect(100, 100, 300, 140)
+        val partlyOutside = Rect(-20, 20, 200, 80)
+        val lines = listOf(partlyOutside, null, Rect(5, 5, 5, 10),
+            Rect(500, 500, 600, 530), Rect(100, 300, 300, 340))
+        assertEquals(Rect(0, 20, 300, 140), expandedNearbyOcrBounds(source, lines, setOf(0, 1, 2, 3), 400, 400))
+        assertEquals(Rect(100, 100, 300, 140), source)
+        assertEquals(Rect(-20, 20, 200, 80), partlyOutside)
+        assertNull(expandedNearbyOcrBounds(source, lines, setOf(1, 2, 3), 400, 400))
+    }
+
     @Test fun selectedRowsArePartitionedInOcrOrderRatherThanSelectionOrder() {
         val texts = listOf("上方第一行", "上方第二行", "未选择", "下方第一行", "下方第二行")
         val bounds = listOf(Rect(100, 80, 300, 110), Rect(100, 150, 300, 180),

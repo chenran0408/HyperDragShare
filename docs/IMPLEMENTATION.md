@@ -1023,3 +1023,8 @@ SharedImageCleanupJob由模块Application启动时安排同一Job ID133，12小�
 PortalContentCaptureSource在读取getInjectorPackage后，来源为BuildConfig.APPLICATION_ID直接返回null，早于正文/Bitmap复制与窗口抑制，宿主原逻辑继续。不要比较宿主Context.getPackageName()，它属于传送门。无障碍rootsAtPoint若实际activeRoot属于本模块，回收并返回空，避免addRootIfUsable丢弃自身后继续枚举底层窗口；无候选的OCR入口也复用该方法。Root原有按active root包及完成后窗口核验保持。
 
 两条新自身隔离分支未完成真机触发验收；不能说已全面覆盖自身Activity前台，更不能把残留Portal来源别包当当前前台证据。没有前后台Provider/计数/轮询，也没有新增Hook或开启无障碍。277构建/199项测试/Lint通过，未为一行判断扩张mock或写镜像测试。
+
+
+## 2026-10-21：1.7.137 连续追加原文附近文字
+
+修正确认插入后仍沿用旧原文区域的问题：仅成功插入时合并选中行的位置，下一次从已扩展区域查找相邻文字。默认距离继续使用初始原文高度，避免范围越大越误选远处状态栏。取消或插入失败保留原选区与范围，复用原有菜单和窗口，没有新增用户界面。

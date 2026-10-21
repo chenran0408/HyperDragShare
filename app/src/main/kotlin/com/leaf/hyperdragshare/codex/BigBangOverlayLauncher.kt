@@ -174,8 +174,10 @@ object BigBangOverlayLauncher {
                         return
                     }
                     Thread({
+                        var nextSourceArea = sourceArea
                         try {
                             BigBangPanelSession.insertIntoSavedState(app, state, before.orEmpty(), extra.orEmpty())
+                            nextSourceArea = resultData?.getBundle("source_area") ?: sourceArea
                         } catch (error: IllegalStateException) {
                             main.post { report(app, error) }
                         } catch (error: UnsatisfiedLinkError) {
@@ -185,7 +187,7 @@ object BigBangOverlayLauncher {
                         } finally {
                             main.post {
                                 if (generation == windowGeneration) open(app, text, x, y, sourceImage, state,
-                                    sourceArea = sourceArea)
+                                    sourceArea = nextSourceArea)
                             }
                         }
                     }, "bigbang-append-screen").start()

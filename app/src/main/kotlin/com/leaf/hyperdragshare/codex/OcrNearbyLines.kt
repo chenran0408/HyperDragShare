@@ -15,11 +15,11 @@ internal fun aicrLineBounds(line: AicrOcrResult.Line): Rect? {
 }
 
 /** Select nearby rows in the same column; a distant status bar is not a neighboring paragraph. */
-internal fun nearbyOcrLines(bounds: List<Rect?>, source: Rect): Set<Int> {
+internal fun nearbyOcrLines(bounds: List<Rect?>, source: Rect, referenceHeight: Int = source.height()): Set<Int> {
     val sameColumn = bounds.indices.filter { index ->
         bounds[index]?.let { it.left < source.right && it.right > source.left && !it.isEmpty } == true
     }
-    fun closeEnough(index: Int, gap: Int) = gap <= 2 * maxOf(source.height(), bounds[index]!!.height())
+    fun closeEnough(index: Int, gap: Int) = gap <= 2 * maxOf(referenceHeight, bounds[index]!!.height())
     val before = sameColumn.filter { bounds[it]!!.bottom <= source.top &&
         closeEnough(it, source.top - bounds[it]!!.bottom) }
         .minByOrNull { source.top - bounds[it]!!.bottom }
@@ -27,6 +27,21 @@ internal fun nearbyOcrLines(bounds: List<Rect?>, source: Rect): Set<Int> {
         closeEnough(it, bounds[it]!!.top - source.bottom) }
         .minByOrNull { bounds[it]!!.top - source.bottom }
     return listOfNotNull(before, after).toSet()
+}
+
+/** Advance only through selected, located rows in this screenshot; keep the supplied bounds intact. */
+internal fun expandedNearbyOcrBounds(source: Rect, bounds: List<Rect?>,
+    selected: Set<Int>, width: Int, height: Int): Rect? {
+    var expanded: Rect? = null
+    for (index in selected) {
+        val row = bounds[index] ?: continue
+        if (row.isEmpty) continue
+        val clipped = Rect(row)
+        if (!clipped.intersect(0, 0, width, height)) continue
+        if (expanded == null) expanded = Rect(source)
+        expanded.union(clipped)
+    }
+    return expanded?.apply { intersect(0, 0, width, height) }
 }
 
 /** Preserve OCR reading order; only rows clearly above the source belong before the original text. */
