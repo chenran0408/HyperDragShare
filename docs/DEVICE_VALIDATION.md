@@ -1292,3 +1292,11 @@ build369 lintDebug/assembleRelease及R8成功，Lint0错误183警告3提示；�
 1.7.176/200同证书一次后台覆盖安装，APK21,475,042 bytes/20.48MiB，比175减少60.5%，SHA256 fc48775c88e5c620715da9b017c9a59ca9f4e3dcc701f9c0c62ae08a48d7f2a9。未切换页面/改设置/动私人内容。Portal1670重载后Root输入223ms、reader576ms ready；其他Hook未重载。本轮确认安装/架构/文件保留/连接，功能实测范围沿用175，不称新增操作通过。
 
 176发布确认：正式Release/Latest v1.7.176，tag源089bb95；服务端APK大小及SHA256与本地相同。地址：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.176 。
+
+## 177 Flyme参考首批 / 2026-10-21
+
+build371 testDebugUnitTest/lintDebug/assembleDebug/assembleRelease成功，394测试0失败/错误/跳过，Lint0错误183警告3提示，R8及资源压缩启用。177/201仅arm64包21,475,042 bytes，SHA256 9472c897a0d7a99e69d71aaf7c3a82b3b2310c41d4943b063be7672d3c1d1859；同证书一次安装，设备base.apk哈希一致。
+
+ADB起初离线后恢复，preflight确认Root和SDK37/arm64；桌面闲置后操作。只重载SystemUI/Portal，PID8688日志明确合并手势201；PID8761 Portal/Root输入/reader报告201且ready=true。Miuix底角页实际显示左右开关；左角关后偏好false/true，待配置落盘后在桌面左(50,3130)、右(1390,3130)分别注入点击，仅右角armed。首次即时点击使用了落盘前旧配置，不纳入生效后证据；日志epoch行首空格解析错误已修正，保留原始证据。最后恢复两角true和桌面；未改变原方向/应用目标、未操作私人内容。截图和日志在work/flyme018，不入Git。
+
+本地Miui-WindowManager-Shell.jar与设备/system_ext/framework同文件SHA256 6a03b772d0fbf16b9305f34da4c2006dec8d5cef66c4df99810c2fad0771eeb6，静态确认原生底部上滑mini及快速上甩关闭分支；不冒称本批真实手指操作通过。新装AICR默认只经源码/构建确认，本机旧选择不变；备用捕获单侧窗口、横屏/游戏、侧栏拖出及参考动画未本批实测。未发布177正式Release。

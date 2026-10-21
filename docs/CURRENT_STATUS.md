@@ -2,11 +2,19 @@
 
 事实来源为当前源码、具体构建报告、安装元数据与对应运行日志；构建通过、已安装、Hook加载和实际操作分别记账。旧逐版记录的“当前”仅代表当时。
 
-## 下一批已改：默认系统AICR V2（未打包）
+## 177 Flyme参考首批 / 系统OCR默认值（2026-10-21）
 
-IntegrationSettings在aicr_ocr_enabled键不存在时默认true；已有显式true/false不覆盖，ML Kit仍可手选。设置选项改为“ML Kit／系统 AICR V2（默认）”，不改识别客户端或错误处理。build370 compileDebugKotlin/compileDebugJavaWithJavac/lintDebug成功；未新增镜像默认值的测试，未执行OCR样本。
+源码/安装1.7.177/201。静态核对FlymeFreeform 0.1.8后复用现有扇形扫选、应用/快捷方式、小窗桥及原生侧栏，不复制参考反编译实现。新增左右底角独立开关，沿用现有Miuix设置组；配置保存、Provider Bundle、运行时DOWN与备用捕获窗全部接通，关闭的一侧不创建捕获窗，两侧均关则释放。补缺省保留已有false/目标列表，未新增操作页面。详见FLYME_FREEFORM_PORT.md。
 
-按完整批次发布的要求，本项不独立增版、安装或发布；随下一批APK生效。当前已发布/已安装仍为176/200，其新装默认仍是ML Kit；本机此前保存AICR=true，不受影响。README继续描述当前发布版本的双引擎选择，下一批发布时同步默认说明。
+上一批默认AICR变更本次已打包：aicr_ocr_enabled不存在时默认true，已有显式选择不覆盖，ML Kit仍可手选；不改识别客户端或重复OCR样本。本机原有AICR=true不变，未通过清数据模拟新装。
+
+build371一次整批testDebugUnitTest/lintDebug/assembleDebug/assembleRelease通过，394项测试0失败/错误/跳过，Lint0错误183警告3提示，明确执行minifyReleaseWithR8及资源压缩。APK outputs/HyperDragShare-1.7.177-arm64-v8a.apk，21,475,042 bytes/20.48MiB，仅arm64-v8a，SHA256 `9472c897a0d7a99e69d71aaf7c3a82b3b2310c41d4943b063be7672d3c1d1859`；证书不变，设备base.apk哈希相同。
+
+本批一次覆盖安装。起初ADB无设备，随后只读preflight确认Root/SDK37/arm64恢复，页面在桌面后才开始操作。仅重载SystemUI及Portal：SystemUI PID8688日志明确合并手势version201；Portal PID8761，激活/Root输入/按压reader版本均201且ready=true。其他Hook未重载，不称全作用域201。
+
+实机Miuix底角组显示左右新开关，UI关闭左角后持久化left=false/right=true。待异步配置生效，分别在桌面(50,3130)/(1390,3130)注入点击，只记录右角armed；已恢复两角true，保留原横屏关闭和目标。第一次点击发生在偏好异步落盘前，两角仍按旧值工作；不将该次旧配置结果混入生效后的证据。测试用日志时间解析曾漏掉epoch行首空格，修正解析后从原始日志提取证据，未据空输出判断通过。没有操作或提交私人内容。截图/日志仅存work/flyme018，不重复页面矩阵。
+
+静态确认当前小米系统已实现底部拖条上滑mini（快速上甩另有关闭分支），SystemUI版本及窗口管理JAR哈希与设备一致；本批保留系统原生行为，没有追加与之竞争的识别器。顶部拖条额外上滑改写未实现；参考ColorOS返回码不能直接映射。真实手指扫选、备用捕获路径的单侧禁用、横屏/游戏及侧栏拖出未在本批重新实测。当前GitHub正式Latest仍为176，不将177本地候选写为已发布或Flyme全部交互验收完成。
 
 ## 176 仅arm64-v8a打包（2026-10-21）
 

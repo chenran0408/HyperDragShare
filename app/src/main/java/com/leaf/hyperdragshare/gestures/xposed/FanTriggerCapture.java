@@ -55,6 +55,8 @@ final class FanTriggerCapture {
     private int leftInset;
     private int rightInset;
     private boolean desiredEnabled;
+    private boolean desiredLeftEnabled;
+    private boolean desiredRightEnabled;
     private int desiredHotWidthPercent;
     private int desiredHotHeightPercent;
     private int desiredLeftInset;
@@ -70,9 +72,11 @@ final class FanTriggerCapture {
         windowManager = context.getSystemService(WindowManager.class);
     }
 
-    void update(boolean enabled, int hotWidthPercent, int hotHeightPercent,
+    void update(boolean enabled, boolean leftEnabled, boolean rightEnabled,
+                int hotWidthPercent, int hotHeightPercent,
                 int leftInset, int rightInset) {
-        runOnMain(() -> updateNow(enabled, hotWidthPercent, hotHeightPercent,
+        runOnMain(() -> updateNow(enabled, leftEnabled, rightEnabled,
+                hotWidthPercent, hotHeightPercent,
                 leftInset, rightInset));
     }
 
@@ -114,15 +118,18 @@ final class FanTriggerCapture {
         runOnMain(() -> dispatchKeyCodeNow(keyCode, displayId));
     }
 
-    private void updateNow(boolean enabled, int hotWidthPercent, int hotHeightPercent,
+    private void updateNow(boolean enabled, boolean leftEnabled, boolean rightEnabled,
+                           int hotWidthPercent, int hotHeightPercent,
                            int leftInset, int rightInset) {
-        desiredEnabled = enabled;
+        desiredLeftEnabled = enabled && leftEnabled;
+        desiredRightEnabled = enabled && rightEnabled;
+        desiredEnabled = desiredLeftEnabled || desiredRightEnabled;
         desiredHotWidthPercent = hotWidthPercent;
         desiredHotHeightPercent = hotHeightPercent;
         desiredLeftInset = Math.max(0, leftInset);
         desiredRightInset = Math.max(0, rightInset);
         if (passthroughInProgress) return;
-        if (!enabled) {
+        if (!desiredEnabled) {
             removeNow();
             return;
         }
@@ -131,7 +138,9 @@ final class FanTriggerCapture {
         int nextHeight = Math.max(1, bounds.height() * hotHeightPercent / 100);
         if (capturing && nextWidth == width && nextHeight == height
                 && this.leftInset == desiredLeftInset
-                && this.rightInset == desiredRightInset) return;
+                && this.rightInset == desiredRightInset
+                && (leftView != null) == desiredLeftEnabled
+                && (rightView != null) == desiredRightEnabled) return;
         removeNow();
         width = nextWidth;
         height = nextHeight;
@@ -254,14 +263,16 @@ final class FanTriggerCapture {
         clearCapturedEvents();
         boolean restored = !capturing || !desiredEnabled || setCaptureTouchable(true);
         if (!restored) removeNow();
-        updateNow(desiredEnabled, desiredHotWidthPercent, desiredHotHeightPercent,
+        updateNow(desiredEnabled, desiredLeftEnabled, desiredRightEnabled,
+                desiredHotWidthPercent, desiredHotHeightPercent,
                 desiredLeftInset, desiredRightInset);
         Log.i("Corner non-fan gesture handoff finished");
     }
 
     private void finishTapPassthrough(boolean accepted) {
         passthroughInProgress = false;
-        updateNow(desiredEnabled, desiredHotWidthPercent, desiredHotHeightPercent,
+        updateNow(desiredEnabled, desiredLeftEnabled, desiredRightEnabled,
+                desiredHotWidthPercent, desiredHotHeightPercent,
                 desiredLeftInset, desiredRightInset);
         Log.i("Corner application tap passthrough accepted=" + accepted
                 + " captureRestored=" + (desiredEnabled && capturing));
@@ -338,13 +349,17 @@ final class FanTriggerCapture {
     }
 
     private boolean attach(int type) {
-        View left = captureView("LEFT");
-        View right = captureView("RIGHT");
+        View left = desiredLeftEnabled ? captureView("LEFT") : null;
+        View right = desiredRightEnabled ? captureView("RIGHT") : null;
         try {
-            windowManager.addView(left, params(type, Gravity.BOTTOM | Gravity.START,
-                    "FanFreeformTriggerLeft", leftInset));
-            windowManager.addView(right, params(type, Gravity.BOTTOM | Gravity.END,
-                    "FanFreeformTriggerRight", rightInset));
+            if (left != null) {
+                windowManager.addView(left, params(type, Gravity.BOTTOM | Gravity.START,
+                        "FanFreeformTriggerLeft", leftInset));
+            }
+            if (right != null) {
+                windowManager.addView(right, params(type, Gravity.BOTTOM | Gravity.END,
+                        "FanFreeformTriggerRight", rightInset));
+            }
             leftView = left;
             rightView = right;
             capturing = true;
@@ -450,7 +465,7 @@ final class FanTriggerCapture {
     }
 
     private boolean setViewTouchable(View view, boolean touchable) {
-        if (view == null) return false;
+        if (view == null) return true;
         try {
             if (!(view.getLayoutParams() instanceof WindowManager.LayoutParams)) return false;
             WindowManager.LayoutParams params =

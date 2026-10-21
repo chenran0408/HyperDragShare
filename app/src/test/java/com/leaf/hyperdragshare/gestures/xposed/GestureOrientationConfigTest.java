@@ -2,12 +2,19 @@ package com.leaf.hyperdragshare.gestures.xposed;
 
 import com.leaf.hyperdragshare.gestures.config.ConfigContract;
 
+import android.os.Bundle;
+
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(RobolectricTestRunner.class)
+@Config(sdk = 35)
 public final class GestureOrientationConfigTest {
     @Test
     public void bottomStagesAndLaunchModesAreIndependentByOrientation() {
@@ -43,5 +50,23 @@ public final class GestureOrientationConfigTest {
         assertEquals(ConfigContract.SIDE_LAYOUT_TASKS, config.sideLayoutModeFor(true));
         assertFalse(config.sideFullscreenFor(false));
         assertTrue(config.sideFullscreenFor(true));
+    }
+
+    @Test
+    public void bottomCornerSettingsDefaultOnAndLoadIndependently() {
+        GestureConfig defaults = GestureConfig.from(new Bundle());
+        assertTrue(defaults.bottomLeftEnabled);
+        assertTrue(defaults.bottomRightEnabled);
+
+        Bundle values = new Bundle();
+        values.putBoolean(ConfigContract.KEY_BOTTOM_LEFT_ENABLED, false);
+        GestureConfig config = GestureConfig.from(values);
+        assertFalse(config.bottomCornerEnabled(GestureGeometry.Corner.LEFT));
+        assertTrue(config.bottomCornerEnabled(GestureGeometry.Corner.RIGHT));
+
+        values.putBoolean(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED, false);
+        config = GestureConfig.from(values);
+        assertFalse(config.bottomCornerEnabled(GestureGeometry.Corner.LEFT));
+        assertFalse(config.bottomCornerEnabled(GestureGeometry.Corner.RIGHT));
     }
 }

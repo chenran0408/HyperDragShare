@@ -85,6 +85,8 @@ final class GestureConfig {
     int fanCustomInnerCount = ConfigContract.DEFAULT_FAN_CUSTOM_INNER_COUNT;
     boolean bottomPortraitEnabled = ConfigContract.DEFAULT_BOTTOM_PORTRAIT_ENABLED;
     boolean bottomLandscapeEnabled = ConfigContract.DEFAULT_BOTTOM_LANDSCAPE_ENABLED;
+    boolean bottomLeftEnabled = ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED;
+    boolean bottomRightEnabled = ConfigContract.DEFAULT_BOTTOM_RIGHT_ENABLED;
     boolean bottomPortraitSecondStageEnabled =
             ConfigContract.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED;
     boolean bottomLandscapeSecondStageEnabled =
@@ -487,6 +489,10 @@ final class GestureConfig {
         result.bottomLandscapeEnabled = bundle.getBoolean(
                 ConfigContract.KEY_BOTTOM_LANDSCAPE_ENABLED,
                 ConfigContract.DEFAULT_BOTTOM_LANDSCAPE_ENABLED);
+        result.bottomLeftEnabled = bundle.getBoolean(ConfigContract.KEY_BOTTOM_LEFT_ENABLED,
+                ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED);
+        result.bottomRightEnabled = bundle.getBoolean(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED,
+                ConfigContract.DEFAULT_BOTTOM_RIGHT_ENABLED);
         result.bottomPortraitSecondStageEnabled = bundle.getBoolean(
                 ConfigContract.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED,
                 ConfigContract.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED);
@@ -776,6 +782,12 @@ final class GestureConfig {
 
     boolean bottomEnabledFor(boolean landscape) {
         return landscape ? bottomLandscapeEnabled : bottomPortraitEnabled;
+    }
+
+    boolean bottomCornerEnabled(GestureGeometry.Corner corner) {
+        if (corner == GestureGeometry.Corner.LEFT) return bottomLeftEnabled;
+        if (corner == GestureGeometry.Corner.RIGHT) return bottomRightEnabled;
+        return false;
     }
 
     boolean sideEnabledFor(boolean landscape) {

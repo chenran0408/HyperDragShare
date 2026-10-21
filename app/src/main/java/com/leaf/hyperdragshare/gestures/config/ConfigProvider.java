@@ -162,6 +162,12 @@ public final class ConfigProvider extends ContentProvider {
             out.putBoolean(ConfigContract.KEY_BOTTOM_LANDSCAPE_ENABLED, prefs.getBoolean(
                     ConfigContract.KEY_BOTTOM_LANDSCAPE_ENABLED,
                     ConfigContract.DEFAULT_BOTTOM_LANDSCAPE_ENABLED));
+            out.putBoolean(ConfigContract.KEY_BOTTOM_LEFT_ENABLED, prefs.getBoolean(
+                    ConfigContract.KEY_BOTTOM_LEFT_ENABLED,
+                    ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED));
+            out.putBoolean(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED, prefs.getBoolean(
+                    ConfigContract.KEY_BOTTOM_RIGHT_ENABLED,
+                    ConfigContract.DEFAULT_BOTTOM_RIGHT_ENABLED));
             out.putBoolean(ConfigContract.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED,
                     prefs.getBoolean(ConfigContract.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED,
                             ConfigContract.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED));

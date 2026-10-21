@@ -890,7 +890,8 @@ final class FanRuntime {
             if (triggerCapture.isCapturing()) {
                 int displayId = context.getDisplay() == null ? 0 : context.getDisplay().getDisplayId();
                 triggerCapture.passthroughCapturedGesture(displayId);
-                triggerCapture.update(false, config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+                triggerCapture.update(false, config.bottomLeftEnabled, config.bottomRightEnabled,
+                        config.hotWidthPercent, config.hotHeightPercent, 0, 0);
             }
             outsideCapture.remove();
             outsideGestures.clearAll();
@@ -935,16 +936,24 @@ final class FanRuntime {
             float hotWidth = width * config.hotWidthPercent / 100f;
             float hotHeight = height * config.hotHeightPercent / 100f;
             Insets systemSides = systemSideGestureInsets();
-            GestureGeometry.Corner downCorner = config.bottomEnabledFor(landscape) ? GestureGeometry.cornerAt(x, y, width, height, hotWidth, hotHeight) : null;
+            GestureGeometry.Corner cornerAtDown = GestureGeometry.cornerAt(
+                    x, y, width, height, hotWidth, hotHeight);
+            GestureGeometry.Corner downCorner = config.bottomEnabledFor(landscape)
+                    && config.bottomCornerEnabled(cornerAtDown) ? cornerAtDown : null;
             float sideSafeTop = sideSafeTop(height);
             float sideSafeBottom = sideSafeBottom(height, hotHeight);
-            GestureGeometry.Corner systemEdgeSide = downCorner == null ? GestureGeometry.sideAt(x, width, systemSides.left, systemSides.right) : null;
+            GestureGeometry.Corner systemEdgeSide = downCorner == null
+                    ? GestureGeometry.sideAt(x, width, systemSides.left, systemSides.right) : null;
             int sideLayoutMode = config.sideLayoutModeFor(landscape);
             boolean sideSourceAvailable = sideLayoutMode == ConfigContract.SIDE_LAYOUT_TASKS || sideLayoutMode == ConfigContract.SIDE_LAYOUT_SYSTEM_RECENTS || (sideLayoutMode == ConfigContract.SIDE_LAYOUT_HONEYCOMB ? config.honeycombEnabledFor(landscape) && !honeycombTargets.isEmpty() : !sideTargets.isEmpty());
-            GestureGeometry.Corner listSide = config.sideEnabledFor(landscape) && sideSourceAvailable && downCorner == null ? GestureGeometry.sideAt(x, y, width, systemSides.left, systemSides.right, sideSafeTop, sideSafeBottom, 96 * density) : null;
+            GestureGeometry.Corner listSide = config.sideEnabledFor(landscape)
+                    && sideSourceAvailable && downCorner == null
+                    ? GestureGeometry.sideAt(x, y, width, systemSides.left, systemSides.right,
+                            sideSafeTop, sideSafeBottom, 96 * density) : null;
             GestureGeometry.Corner downSide = listSide;
             if (!inputSources.usesNativeInput() && !triggerCapture.isCapturing() && canStartBottom()) {
-                triggerCapture.update(true, config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+                triggerCapture.update(true, config.bottomLeftEnabled, config.bottomRightEnabled,
+                        config.hotWidthPercent, config.hotHeightPercent, 0, 0);
             }
             Rect pendingLaunch = freeform.pendingLaunchBounds();
             Rect tracked = freeform.trackedBounds();
@@ -1862,7 +1871,9 @@ final class FanRuntime {
     }
 
     private boolean canStartBottom() {
-        return runtimeReady() && !imeVisible && targets.size() >= 3 && config.bottomEnabledFor(isLandscape());
+        return runtimeReady() && !imeVisible && targets.size() >= 3
+                && config.bottomEnabledFor(isLandscape())
+                && (config.bottomLeftEnabled || config.bottomRightEnabled);
     }
 
     private boolean canStartSide() {
@@ -1886,14 +1897,18 @@ final class FanRuntime {
 
     private void refreshTriggerCapture() {
         if (foregroundGestureExcluded) {
-            triggerCapture.update(false, config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+            triggerCapture.update(false, config.bottomLeftEnabled, config.bottomRightEnabled,
+                    config.hotWidthPercent, config.hotHeightPercent, 0, 0);
             return;
         }
         if (inputSources.usesNativeInput()) {
-            triggerCapture.update(false, config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+            triggerCapture.update(false, config.bottomLeftEnabled, config.bottomRightEnabled,
+                    config.hotWidthPercent, config.hotHeightPercent, 0, 0);
             return;
         }
-        triggerCapture.update(canStartBottom(), config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+        triggerCapture.update(canStartBottom(), config.bottomLeftEnabled,
+                config.bottomRightEnabled, config.hotWidthPercent,
+                config.hotHeightPercent, 0, 0);
     }
 
     private void refreshGeometryAndCaptures(String reason) {

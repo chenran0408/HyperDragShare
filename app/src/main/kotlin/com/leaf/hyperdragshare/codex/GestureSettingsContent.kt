@@ -285,6 +285,8 @@ fun GestureSettingsContent(
                         icon = MiuixIcons.GridView,
                         onClick = { onManageTargets("bottom") },
                     )
+                    bool("左底角触发", "启用屏幕左下角的底角手势", C.KEY_BOTTOM_LEFT_ENABLED, C.DEFAULT_BOTTOM_LEFT_ENABLED)
+                    bool("右底角触发", "启用屏幕右下角的底角手势", C.KEY_BOTTOM_RIGHT_ENABLED, C.DEFAULT_BOTTOM_RIGHT_ENABLED)
                     bool("竖屏底角手势", "启用竖屏底部触发", C.KEY_BOTTOM_PORTRAIT_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_ENABLED)
                     bool("横屏底角手势", "启用横屏底部触发", C.KEY_BOTTOM_LANDSCAPE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_ENABLED)
                     bool("竖屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED)

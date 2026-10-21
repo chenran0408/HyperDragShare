@@ -41,6 +41,8 @@ public final class ConfigContract {
     public static final String KEY_FAN_CUSTOM_INNER_COUNT = "fan_custom_inner_count";
     public static final String KEY_BOTTOM_PORTRAIT_ENABLED = "bottom_portrait_enabled";
     public static final String KEY_BOTTOM_LANDSCAPE_ENABLED = "bottom_landscape_enabled";
+    public static final String KEY_BOTTOM_LEFT_ENABLED = "bottom_left_enabled";
+    public static final String KEY_BOTTOM_RIGHT_ENABLED = "bottom_right_enabled";
     public static final String KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED =
             "bottom_portrait_second_stage_enabled";
     public static final String KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED =
@@ -333,6 +335,8 @@ public final class ConfigContract {
     public static final int MAX_FAN_CUSTOM_OUTER_COUNT = 14;
     public static final boolean DEFAULT_BOTTOM_PORTRAIT_ENABLED = true;
     public static final boolean DEFAULT_BOTTOM_LANDSCAPE_ENABLED = true;
+    public static final boolean DEFAULT_BOTTOM_LEFT_ENABLED = true;
+    public static final boolean DEFAULT_BOTTOM_RIGHT_ENABLED = true;
     public static final boolean DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED = true;
     public static final boolean DEFAULT_BOTTOM_PORTRAIT_FIRST_PRESSURE_LAUNCH = true;
     public static final boolean DEFAULT_BOTTOM_PORTRAIT_SECOND_PRESSURE_LAUNCH = true;

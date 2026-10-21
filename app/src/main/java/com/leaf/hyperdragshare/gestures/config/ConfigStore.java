@@ -404,6 +404,10 @@ public final class ConfigStore {
                         ConfigContract.DEFAULT_BOTTOM_PORTRAIT_ENABLED)
                 .putBoolean(ConfigContract.KEY_BOTTOM_LANDSCAPE_ENABLED,
                         ConfigContract.DEFAULT_BOTTOM_LANDSCAPE_ENABLED)
+                .putBoolean(ConfigContract.KEY_BOTTOM_LEFT_ENABLED,
+                        ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED)
+                .putBoolean(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED,
+                        ConfigContract.DEFAULT_BOTTOM_RIGHT_ENABLED)
                 .putBoolean(ConfigContract.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED,
                         ConfigContract.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED)
                 .putBoolean(ConfigContract.KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED,
@@ -1168,7 +1172,9 @@ public final class ConfigStore {
         boolean needBottom = !preferences.contains(ConfigContract.KEY_COMPONENTS);
         boolean needHoneycomb = !preferences.contains(ConfigContract.KEY_HONEYCOMB_COMPONENTS);
         boolean needSide = !preferences.contains(ConfigContract.KEY_SIDE_COMPONENTS);
-        if (!needBottom && !needHoneycomb && !needSide) return;
+        boolean needBottomCorners = !preferences.contains(ConfigContract.KEY_BOTTOM_LEFT_ENABLED)
+                || !preferences.contains(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED);
+        if (!needBottom && !needHoneycomb && !needSide && !needBottomCorners) return;
         MissingPreferenceEditor editor = MissingPreferenceEditor.edit(preferences);
         if (needBottom) editor.putString(ConfigContract.KEY_COMPONENTS,
                 randomInstalledTargets(context, ConfigContract.DEFAULT_FAN_MAX_TARGETS).toString());
@@ -1176,6 +1182,10 @@ public final class ConfigStore {
                 randomInstalledTargets(context, ConfigContract.DEFAULT_HONEYCOMB_MAX_TARGETS).toString());
         if (needSide) editor.putString(ConfigContract.KEY_SIDE_COMPONENTS,
                 randomInstalledTargets(context, ConfigContract.DEFAULT_SIDE_MAX_TARGETS).toString());
+        editor.putBoolean(ConfigContract.KEY_BOTTOM_LEFT_ENABLED,
+                        ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED)
+                .putBoolean(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED,
+                        ConfigContract.DEFAULT_BOTTOM_RIGHT_ENABLED);
         editor.commit();
     }
 
@@ -1323,6 +1333,10 @@ public final class ConfigStore {
         MissingPreferenceEditor.edit(preferences)
                 .putBoolean(ConfigContract.KEY_BOTTOM_PORTRAIT_ENABLED, bottomPortrait)
                 .putBoolean(ConfigContract.KEY_BOTTOM_LANDSCAPE_ENABLED, bottomLandscape)
+                .putBoolean(ConfigContract.KEY_BOTTOM_LEFT_ENABLED,
+                        ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED)
+                .putBoolean(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED,
+                        ConfigContract.DEFAULT_BOTTOM_RIGHT_ENABLED)
                 .putBoolean(ConfigContract.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED,
                         honeycomb && bottomPortrait)
                 .putBoolean(ConfigContract.KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED,

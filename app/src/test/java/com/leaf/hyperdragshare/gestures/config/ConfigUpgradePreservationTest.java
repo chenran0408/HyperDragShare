@@ -64,15 +64,19 @@ public class ConfigUpgradePreservationTest {
         assertEquals("Repeated startup must be idempotent", firstUpgrade, data);
     }
 
-    @Test public void existingTargetListsSkipFreshInstallSeeding() {
+    @Test public void existingTargetListsSkipReseedingAndReceiveMissingCornerDefaults() {
         Map<String, Object> data = new HashMap<>();
         data.put(ConfigContract.KEY_COMPONENTS, "[]");
         data.put(ConfigContract.KEY_HONEYCOMB_COMPONENTS, "[saved-honeycomb]");
         data.put(ConfigContract.KEY_SIDE_COMPONENTS, "[saved-side]");
-        Map<String, Object> before = new HashMap<>(data);
+        data.put(ConfigContract.KEY_BOTTOM_LEFT_ENABLED, false);
         // Null Context deliberately proves that no app query or reseeding occurs.
         ConfigStore.seedDefaultsIfNeeded(null, preferences(data));
-        assertEquals(before, data);
+        assertEquals("[]", data.get(ConfigContract.KEY_COMPONENTS));
+        assertEquals("[saved-honeycomb]", data.get(ConfigContract.KEY_HONEYCOMB_COMPONENTS));
+        assertEquals("[saved-side]", data.get(ConfigContract.KEY_SIDE_COMPONENTS));
+        assertEquals(false, data.get(ConfigContract.KEY_BOTTOM_LEFT_ENABLED));
+        assertEquals(true, data.get(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED));
     }
 
     private static void migrate(SharedPreferences prefs) {

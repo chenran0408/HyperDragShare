@@ -73,6 +73,8 @@ public final class ConfigContractTest {
     public void orientationDefaultsMatchTheReferencePhone() {
         assertEquals(true, ConfigContract.DEFAULT_BOTTOM_PORTRAIT_ENABLED);
         assertEquals(true, ConfigContract.DEFAULT_BOTTOM_LANDSCAPE_ENABLED);
+        assertEquals(true, ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED);
+        assertEquals(true, ConfigContract.DEFAULT_BOTTOM_RIGHT_ENABLED);
         assertEquals(true, ConfigContract.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED);
         assertEquals(false, ConfigContract.DEFAULT_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED);
         assertEquals(true, ConfigContract.DEFAULT_SIDE_PORTRAIT_ENABLED);
