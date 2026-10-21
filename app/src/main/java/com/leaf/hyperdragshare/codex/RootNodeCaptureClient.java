@@ -45,6 +45,10 @@ final class RootNodeCaptureClient {
         Bundle capture(String source, int windowId, Rect requestedBounds) throws IOException, InterruptedException;
     }
 
+    interface ImageRegionCapture {
+        Bundle capture(String source, int windowId, Rect requestedBounds) throws IOException, InterruptedException;
+    }
+
     static Session open(Context context) throws IOException, InterruptedException {
         long started = android.os.SystemClock.elapsedRealtime();
         String apk;
@@ -96,7 +100,7 @@ final class RootNodeCaptureClient {
                                              CandidateHandler handler)
                 throws IOException, InterruptedException {
             return contentFromNode(context, captureNode(x, y, blockedPackages, allowText, allowImages, handler),
-                    this::currentBounds, this::captureOcrRegion);
+                    this::currentBounds, this::captureOcrRegion, this::captureImage);
         }
 
         synchronized Bundle captureNode(float x, float y, Set<String> blockedPackages,
@@ -281,6 +285,34 @@ final class RootNodeCaptureClient {
             }
         }
 
+        synchronized Bundle captureImage(String source, int windowId, Rect requestedBounds)
+                throws IOException, InterruptedException {
+            try {
+                JSONObject request = new JSONObject().put("operation", "capture_image")
+                        .put("package", source).put("window_id", windowId)
+                        .put("left", requestedBounds.left).put("top", requestedBounds.top)
+                        .put("right", requestedBounds.right).put("bottom", requestedBounds.bottom);
+                process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
+                process.getOutputStream().flush();
+                JSONObject result = awaitResponse();
+                if (!result.getBoolean("same_window")) return null;
+                byte[] encoded = Base64.decode(result.getString("image_base64"), Base64.DEFAULT);
+                Bitmap bitmap = BitmapFactory.decodeByteArray(encoded, 0, encoded.length);
+                if (bitmap == null) throw new IOException("系统截取了无效图片");
+                Bundle image = new Bundle();
+                image.putParcelable("bitmap", bitmap);
+                image.putParcelable("bounds", new Rect(result.getInt("left"), result.getInt("top"),
+                        result.getInt("right"), result.getInt("bottom")));
+                return image;
+            } catch (JSONException error) {
+                close();
+                throw new IOException("Invalid Root image response", error);
+            } catch (IOException | InterruptedException error) {
+                close();
+                throw error;
+            }
+        }
+
         synchronized boolean isCurrentSource(String source) throws IOException, InterruptedException {
             if (closed) throw new IOException("Root node process has stopped; reload the Portal scope");
             try {
@@ -350,7 +382,8 @@ final class RootNodeCaptureClient {
     }
 
     static CapturedContent contentFromNode(Context context, Bundle node, WindowVerifier verifier,
-                                           PressRegionCapture pressRegionCapture)
+                                           PressRegionCapture pressRegionCapture,
+                                           ImageRegionCapture imageCapture)
             throws IOException, InterruptedException {
         if (node == null || context.getSystemService(KeyguardManager.class).isKeyguardLocked()) return null;
         String source = node.getString("package");
@@ -374,8 +407,20 @@ final class RootNodeCaptureClient {
                         + captured.getLong("screenshot_ms") + " verify_ms="
                         + captured.getLong("verify_ms"));
             } else {
-                verifiedBounds = verifier.currentBounds(source, node.getInt("window_id"), bounds);
-                if (verifiedBounds != null) screen = new RootScreenshotter().capture();
+                Bundle captured = imageCapture == null ? null
+                        : imageCapture.capture(source, node.getInt("window_id"), bounds);
+                if (captured != null) {
+                    screen = captured.getParcelable("bitmap", Bitmap.class);
+                    verifiedBounds = captured.getParcelable("bounds", Rect.class);
+                    imageCropped = true;
+                    DragShareLog.i(TAG, "image helper screenshot_ms="
+                            + captured.getLong("screenshot_ms") + " verify_ms="
+                            + captured.getLong("verify_ms"));
+                } else {
+                    DragShareLog.i(TAG, "image helper unavailable; using Root screencap");
+                    verifiedBounds = verifier.currentBounds(source, node.getInt("window_id"), bounds);
+                    if (verifiedBounds != null) screen = new RootScreenshotter().capture();
+                }
             }
             if (verifiedBounds == null || screen == null) {
                 DragShareLog.i(TAG, "image capture rejected source=" + source + " reason=window_or_region_changed");
@@ -388,7 +433,9 @@ final class RootNodeCaptureClient {
             if (imageCropped) {
                 Bitmap image = screen;
                 screen = null;
-                return CapturedContent.pressOcrRegion(image, source, verifiedBounds);
+                return pressOcrRegion
+                        ? CapturedContent.pressOcrRegion(image, source, verifiedBounds)
+                        : CapturedContent.image(image, source, verifiedBounds, true);
             }
             int width = node.getInt("width"), height = node.getInt("height");
             if (screen.getWidth() != width || screen.getHeight() != height) {

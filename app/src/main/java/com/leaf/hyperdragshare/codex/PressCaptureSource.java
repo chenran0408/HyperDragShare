@@ -186,6 +186,11 @@ final class PressCaptureSource {
                 if (result.policyExcluded) excludedByPolicy.set(true);
                 main.post(() -> {
                     if (request != generation || !allowed()) {
+                        DragShareLog.i(TAG, "press payload dropped kind="
+                                + (content == null ? "none" : content.isImage() ? "image" : "text")
+                                + " reason=" + (stopped ? "stopped"
+                                : request != generation ? "superseded" : "source_unavailable")
+                                + " elapsedFromDownMs=" + (SystemClock.uptimeMillis() - downTime));
                         recycle(content);
                         return;
                     }
@@ -236,6 +241,8 @@ final class PressCaptureSource {
         cached = null;
         long request = generation;
         if (request != generation || !allowed()) {
+            DragShareLog.i(TAG, "press handoff dropped reason="
+                    + (stopped ? "stopped" : "source_unavailable"));
             recycle(content);
             return;
         }

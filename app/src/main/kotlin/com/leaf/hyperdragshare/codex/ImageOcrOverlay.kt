@@ -20,17 +20,20 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
@@ -178,6 +181,11 @@ object ImageOcrOverlay {
                                     }
                                 }
                                 codes?.forEach { value ->
+                                    val wifi = WifiQrPayload.parse(value)
+                                    if (wifi != null) {
+                                        WifiQrCodeContent(wifi, value, copying, copiedCode, ::copyCode)
+                                        return@forEach
+                                    }
                                     SelectionContainer {
                                         Text(value, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface)
                                     }
@@ -309,6 +317,37 @@ object ImageOcrOverlay {
             DragShareLog.w("DragShare/ImageOcrWindow", "image recognition failed", error)
             if (codes != null) actionError = "无法打开：${error.message}"
             else errorText = "识别失败：${error.message}"
+        }
+    }
+}
+
+@Composable
+private fun WifiQrCodeContent(
+    wifi: WifiQrPayload,
+    rawValue: String,
+    copying: Boolean,
+    copiedCode: String?,
+    onCopy: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(wifi.describe(), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        SelectionContainer {
+            Text("SSID：${wifi.ssid}", fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface)
+        }
+        wifi.password?.let { password ->
+            SelectionContainer {
+                Text("密码：$password", fontSize = 16.sp, fontFamily = FontFamily.Monospace,
+                    color = MiuixTheme.colorScheme.onSurface)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            wifi.password?.let { password ->
+                TextButton(text = "复制密码", enabled = !copying, onClick = { onCopy(password) })
+            }
+            TextButton(text = "复制全部", enabled = !copying, onClick = { onCopy(rawValue) })
+            if (copiedCode == rawValue || (wifi.password != null && copiedCode == wifi.password)) {
+                Text("已复制", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            }
         }
     }
 }

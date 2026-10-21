@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -15,12 +17,34 @@ import java.util.concurrent.TimeoutException;
 /** One explicit in-memory Root screenshot, with a deadline covering process and output pipes. */
 final class RootScreenshotter {
     private static final long COMMAND_TIMEOUT_MILLIS = 4000L;
+    private static final int RAW_HEADER_BYTES = 16;
+    private static final int RGBA_8888 = 1;
 
     Bitmap capture() throws IOException {
-        Process process = new ProcessBuilder("su", "-c", "/system/bin/screencap -p").start();
-        byte[] bytes = readPng(process, COMMAND_TIMEOUT_MILLIS);
-        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-        if (bitmap == null) throw new IOException("Root screencap returned invalid PNG");
+        Bitmap bitmap = decodeRaw(run(false));
+        if (bitmap != null) return bitmap;
+        byte[] png = run(true);
+        bitmap = BitmapFactory.decodeByteArray(png, 0, png.length);
+        if (bitmap == null) throw new IOException("Root screencap returned invalid image");
+        return bitmap;
+    }
+
+    private static byte[] run(boolean png) throws IOException {
+        Process process = new ProcessBuilder("su", "-c",
+                png ? "/system/bin/screencap -p" : "/system/bin/screencap").start();
+        return readPng(process, COMMAND_TIMEOUT_MILLIS);
+    }
+
+    private static Bitmap decodeRaw(byte[] bytes) {
+        if (bytes.length <= RAW_HEADER_BYTES) return null;
+        ByteBuffer header = ByteBuffer.wrap(bytes, 0, RAW_HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        int width = header.getInt();
+        int height = header.getInt();
+        if (header.getInt() != RGBA_8888) return null;
+        long pixelBytes = (long) width * height * 4L;
+        if (width <= 0 || height <= 0 || pixelBytes != bytes.length - RAW_HEADER_BYTES) return null;
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(bytes, RAW_HEADER_BYTES, (int) pixelBytes));
         return bitmap;
     }
 

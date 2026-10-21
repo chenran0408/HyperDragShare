@@ -1,5 +1,11 @@
 # 目标设备验证记录
 
+## 2026-10-22：206 从 189 基线恢复图片按压拖拽
+
+- 目标设备小米 15 Pro / HyperOS 4.0.0.17 / Android 17。`repair-from-189` 源码为 1.7.206 / 230；414 项测试与 Lint、R8 arm64 Release 构建通过，签名与 189 一致。包位于 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.206-arm64-v8a.apk`，SHA256 `25107F8F1D790651F25544665A946A946C8E4054DBE6AC1F1703BEE57B6A4E18`。
+- 同包名覆盖安装成功，`dumpsys package` 显示 versionCode 230、versionName 1.7.206。无副作用查询重启 Portal 后 PID 25068，Root evdev 216ms ready、取词连接 449ms ready。安装前后前台为微信 LauncherUI；本批未触碰聊天内容。
+- 真正的图片按住拖动、四边菜单、扫码展示及微信长按识字未在本包完成手指验收，不能把 Hook 已加载写成操作通过。只在用户实际触发后按时间点查状态日志，不批量截取私人界面。
+
 ## 2026-10-22：1.7.186 微信直达 OCR 真机通过
 
 - 源码/安装 APK 为 1.7.186 / 210，设备 2410DPN6CC、HyperOS 4.0.0.17、Android 17。01:44:26 同包名覆盖安装，未清数据；Portal PID 23660 的注入、Root 输入、PressReader 与 Portal Root 均报告 210。

@@ -33,6 +33,9 @@ public final class RootLeaseFailureTest {
             @Override public Bundle captureOcrRegion(String source, int windowId, Bundle requestedBounds) {
                 throw new AssertionError("Excluded content must not be captured");
             }
+            @Override public Bundle captureImage(String source, int windowId, Bundle requestedBounds) {
+                throw new AssertionError("Excluded content must not be captured");
+            }
             @Override public boolean verifySource(String source) { return true; }
             @Override public Bundle insertTextAt(float x, float y, String text) { return null; }
             @Override public boolean isOpen() { return true; }
@@ -59,6 +62,9 @@ public final class RootLeaseFailureTest {
                 return requestedBounds;
             }
             @Override public Bundle captureOcrRegion(String source, int windowId, Bundle requestedBounds) {
+                return requestedBounds;
+            }
+            @Override public Bundle captureImage(String source, int windowId, Bundle requestedBounds) {
                 return requestedBounds;
             }
             @Override public boolean verifySource(String source) { return true; }

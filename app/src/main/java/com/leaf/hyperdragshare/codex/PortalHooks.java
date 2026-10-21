@@ -401,9 +401,11 @@ final class PortalHooks {
     }
 
     private static void dispatchMotion(MotionEvent event) {
-        DragShareLog.d(TAG, "MIUI motion action="
-                + MotionEvent.actionToString(event.getActionMasked())
-                + " point=" + Math.round(event.getRawX()) + "," + Math.round(event.getRawY()));
+        if (event.getActionMasked() != MotionEvent.ACTION_MOVE) {
+            DragShareLog.d(TAG, "MIUI motion action="
+                    + MotionEvent.actionToString(event.getActionMasked())
+                    + " point=" + Math.round(event.getRawX()) + "," + Math.round(event.getRawY()));
+        }
         if (hasReadyRootSource()) {
             event.recycle();
             if (!rootAuthorityLogged) {
@@ -530,9 +532,11 @@ final class PortalHooks {
 
     private static void dispatchRootPointer(
             int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
-        DragShareLog.d(TAG, "root pointer action=" + MotionEvent.actionToString(action)
-                + " point=" + Math.round(x) + "," + Math.round(y)
-                + " time=" + eventTime);
+        if (action != MotionEvent.ACTION_MOVE) {
+            DragShareLog.d(TAG, "root pointer action=" + MotionEvent.actionToString(action)
+                    + " point=" + Math.round(x) + "," + Math.round(y)
+                    + " time=" + eventTime);
+        }
         DragShareController current = controller;
         if (current != null) {
             current.acceptPointerEvent(

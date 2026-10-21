@@ -178,6 +178,21 @@ final class SharedRootNodeCapture {
             } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
         }
 
+        @Override public Bundle captureImage(String source, int windowId, Bundle requestedBounds) {
+            enforceOwner();
+            if (!io.tryLock()) throw new IllegalStateException("取词服务正忙，本次图片读取已取消");
+            long identity = Binder.clearCallingIdentity();
+            try {
+                Rect bounds = requestedBounds.getParcelable("bounds", Rect.class);
+                return root.captureImage(source, windowId, bounds);
+            } catch (IOException | InterruptedException error) {
+                if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+                invalidate(root);
+                DragShareLog.w("DragShare/SharedNodes", "Root image capture failed", error);
+                throw new IllegalStateException(error.getMessage());
+            } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
+        }
+
         @Override public boolean verifySource(String source) {
             enforceOwner();
             if (!manual && manualActive()) return false;
@@ -305,6 +320,19 @@ final class SharedRootNodeCapture {
                                 return lease.captureOcrRegion(source, windowId, requestBounds);
                             } catch (RemoteException | IllegalStateException error) {
                                 throw requestFailure("截取按压区域失败", error);
+                            }
+                        },
+                        (source, windowId, bounds) -> {
+                            try {
+                                if (closed) return null;
+                                Bundle requestBounds = new Bundle();
+                                requestBounds.putParcelable("bounds", bounds);
+                                return lease.captureImage(source, windowId, requestBounds);
+                            } catch (RemoteException error) {
+                                throw requestFailure("读取图片失败", error);
+                            } catch (IllegalStateException error) {
+                                DragShareLog.w("DragShare/SharedNodes", "image capture unavailable", error);
+                                return null;
                             }
                         });
                 return new PressResult(content, false, content == null ? rejectionReason : null);

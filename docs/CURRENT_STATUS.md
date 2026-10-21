@@ -1,5 +1,13 @@
 # 当前功能与验证状态
 
+## 206 从 189 恢复图片拖拽主链（源码、构建、安装和 Portal 就绪；物理拖拽待验）
+
+分支 `repair-from-189` 从 `5970268` / 1.7.189 建立，没有把 190–205 的整段历史直接合入。核对 `189_BASELINE_PORT_NOTES.md` 后，保留微信 `ocr_region → AICR V2 → 分词浮窗`；普通图片优先由 Root helper 在目标窗口截图、复核包名和窗口 ID、裁剪后交给既有拖拽预览。helper 不可用时，Root `screencap` 优先读取 raw RGBA，设备不返回该格式时使用原 PNG。日志只记录触摸状态变化，异步取词结果丢弃时记录原因，不记录正文。图片扫码结果新增 Wi‑Fi 二维码信息和复制入口，仍使用 189 的 ZXing 识别链。
+
+源码 `1.7.206` / versionCode 230。`testDebugUnitTest lintDebug assembleRelease` 一次完整构建成功：414 项测试、0 失败、0 错误；Release 执行 R8、资源压缩和 arm64-v8a。签名包 `outputs/HyperDragShare-1.7.206-arm64-v8a.apk` 为 7,411,276 bytes，SHA256 `25107F8F1D790651F25544665A946A946C8E4054DBE6AC1F1703BEE57B6A4E18`，证书与 189 相同。设备同包名覆盖安装成功；仅重启 Portal 后 PID 25068 的 Root 输入 216ms ready、取词 reader 449ms ready。设备仍停留微信 LauncherUI，没有自动发送内容、截图或改动聊天。
+
+尚未实测：物理手指在图片上按住并拖到四边、菜单落点、目标应用接收、Wi‑Fi 扫码展示，以及本包微信识字无回归。Portal ready 只证明运行入口就绪，不代表这些交互通过。系统框架、SystemUI 和原生侧栏的当前 Hook 版本未因本轮热重载核验。
+
 ## 189 图片按压接入拖拽预览（已构建、已安装，物理拖拽待验）
 
 用户在小屏 WLAN 分享页反馈“当前界面无法拖拽”。日志显示 Root 取词已经成功取得二维码附近图片，但非微信图片路径固定调用 `ImageOcrOverlay`，因此只能进入图片识字，未创建可移动预览，也没有机会到达四边分享菜单。本批修正的是这条实际可达的工作流。

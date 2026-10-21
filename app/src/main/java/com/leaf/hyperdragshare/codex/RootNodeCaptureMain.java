@@ -135,6 +135,9 @@ public final class RootNodeCaptureMain {
             if ("capture_ocr_region".equals(request.optString("operation"))) {
                 return capturePressOcrRegion(request, automation);
             }
+            if ("capture_image".equals(request.optString("operation"))) {
+                return captureImageRegion(request, automation);
+            }
             if ("verify_window".equals(request.optString("operation"))) {
                 if (request.getInt("window_id") == WINDOW_MANAGER_CAPTURE) {
                     Rect region = verifyPressRegion(request.getString("package"));
@@ -348,6 +351,61 @@ public final class RootNodeCaptureMain {
                     .put("left", crop.left).put("top", crop.top)
                     .put("right", crop.right).put("bottom", crop.bottom)
                     .put("image_cropped", true)
+                    .put("screenshot_ms", screenshotMs).put("verify_ms", verifyMs)
+                    .put("image_base64", Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP));
+        } finally {
+            if (cropped != null && cropped != screenshot) cropped.recycle();
+            screenshot.recycle();
+        }
+    }
+
+    /** Captures and crops an image node inside the helper to avoid a slow full-screen su screencap. */
+    private static JSONObject captureImageRegion(JSONObject request, UiAutomation automation)
+            throws Exception {
+        long screenshotStarted = SystemClock.uptimeMillis();
+        Bitmap screenshot;
+        try {
+            screenshot = automation.takeScreenshot();
+        } catch (RuntimeException error) {
+            System.err.println("Image screenshot failed: " + error.getClass().getSimpleName());
+            return new JSONObject().put("same_window", false).put("reason", "系统无法截取当前页面");
+        }
+        long screenshotMs = SystemClock.uptimeMillis() - screenshotStarted;
+        if (screenshot == null) {
+            return new JSONObject().put("same_window", false).put("reason", "系统未返回屏幕图像");
+        }
+        Bitmap cropped = null;
+        try {
+            long verifyStarted = SystemClock.uptimeMillis();
+            String source = request.getString("package");
+            int windowId = request.getInt("window_id");
+            automation.clearCache();
+            AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+            boolean same;
+            try {
+                same = root != null && root.getWindowId() == windowId
+                        && source.equals(string(root.getPackageName()));
+            } finally {
+                if (root != null) root.recycle();
+            }
+            long verifyMs = SystemClock.uptimeMillis() - verifyStarted;
+            if (!same) {
+                return new JSONObject().put("same_window", false).put("reason", "按压窗口已变化")
+                        .put("screenshot_ms", screenshotMs).put("verify_ms", verifyMs);
+            }
+            Rect crop = new Rect(request.getInt("left"), request.getInt("top"),
+                    request.getInt("right"), request.getInt("bottom"));
+            if (!crop.intersect(0, 0, screenshot.getWidth(), screenshot.getHeight())) {
+                return new JSONObject().put("same_window", false).put("reason", "图片区域已移出屏幕");
+            }
+            cropped = Bitmap.createBitmap(screenshot, crop.left, crop.top, crop.width(), crop.height());
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            if (!cropped.compress(Bitmap.CompressFormat.JPEG, 95, bytes)) {
+                return new JSONObject().put("same_window", false).put("reason", "系统无法编码屏幕图像");
+            }
+            return new JSONObject().put("same_window", true)
+                    .put("left", crop.left).put("top", crop.top)
+                    .put("right", crop.right).put("bottom", crop.bottom)
                     .put("screenshot_ms", screenshotMs).put("verify_ms", verifyMs)
                     .put("image_base64", Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP));
         } finally {
