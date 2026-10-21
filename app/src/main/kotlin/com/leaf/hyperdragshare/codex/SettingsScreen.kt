@@ -832,7 +832,7 @@ private fun MainPage(
                     )
                     SwitchPreference(
                         title = "手指移开时关闭分享菜单",
-                        summary = "适用于简洁、流光和环形样式，可重新移入触发",
+                        summary = "四种样式均适用，可重新移入屏幕边缘触发",
                         checked = settings.closeMenuWhenPointerLeaves,
                         onCheckedChange = { checked ->
                             persist(

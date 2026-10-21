@@ -1148,16 +1148,17 @@ final class DragShareController {
         View previousMenuView = menuView;
         if (wasShown) {
             hideLinearMenu();
-            if (!isModernStyle()) {
-                cancelLinearMenuFadeOut();
-                removeLinearMenuImmediately(previousMenuView);
-            }
         }
         if (isModernStyle()) {
             // The old exit callback belongs to these references. Replacing them would
             // cancel that callback and strand its window and blur listener.
             cancelModernMenuDispose();
             removeOverlayView(previousMenuView, modernMenuView, modernMenuWindow);
+        } else {
+            // Leaving an edge may already have started its exit animation. Release
+            // that window before replacing the reference, including while hidden.
+            cancelLinearMenuFadeOut();
+            removeLinearMenuImmediately(previousMenuView);
         }
         menuView = null;
         modernMenuView = null;
@@ -1233,6 +1234,10 @@ final class DragShareController {
                     .setInterpolator(new DecelerateInterpolator(1.5f))
                     .start();
             updatePreviewPosition(lastX, lastY);
+            if (isPortalStyle() && glowView != null) {
+                glowView.setPullProgress(1f, glowPointerFraction(lastX, lastY));
+                glowView.expandMenu();
+            }
             log("linear menu restored pointerY=" + Math.round(lastY)
                     + " menuTop=" + menuTop);
             menuView.post(() -> updateSelectedTarget(lastX, lastY));

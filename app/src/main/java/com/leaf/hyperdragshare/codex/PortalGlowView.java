@@ -96,11 +96,12 @@ final class PortalGlowView extends View {
     }
 
     void expandMenu() {
-        if (expansionProgress >= 1f) {
-            return;
-        }
         if (expansionAnimator != null) {
             expansionAnimator.cancel();
+            expansionAnimator = null;
+        }
+        if (expansionProgress >= 1f) {
+            return;
         }
         expansionAnimator = ValueAnimator.ofFloat(expansionProgress, 1f);
         expansionAnimator.setDuration(380L);
@@ -113,11 +114,12 @@ final class PortalGlowView extends View {
     }
 
     void collapseMenu() {
-        if (expansionProgress <= 0f) {
-            return;
-        }
         if (expansionAnimator != null) {
             expansionAnimator.cancel();
+            expansionAnimator = null;
+        }
+        if (expansionProgress <= 0f) {
+            return;
         }
         expansionAnimator = ValueAnimator.ofFloat(expansionProgress, 0f);
         expansionAnimator.setDuration(240L);

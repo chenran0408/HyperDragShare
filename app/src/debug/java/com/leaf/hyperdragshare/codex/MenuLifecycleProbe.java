@@ -6,9 +6,12 @@ import android.content.Context;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.Display;
+import android.view.View;
 import android.view.WindowManager;
 
 import java.lang.reflect.Field;
@@ -17,7 +20,13 @@ import java.util.List;
 
 /** Generated payload and controller events only: no Root, input injection or page capture. */
 public final class MenuLifecycleProbe extends Instrumentation {
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); start(); }
+    private String mode;
+
+    @Override public void onCreate(Bundle arguments) {
+        super.onCreate(arguments);
+        mode = arguments == null ? null : arguments.getString("mode");
+        start();
+    }
 
     @Override public void onStart() {
         Bundle report = new Bundle();
@@ -26,6 +35,14 @@ public final class MenuLifecycleProbe extends Instrumentation {
                 .getSystemService(DisplayManager.class).getDisplay(Display.DEFAULT_DISPLAY)).createWindowContext(
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null);
         Rect bounds = context.getSystemService(WindowManager.class).getMaximumWindowMetrics().getBounds();
+        if ("linear_race".equals(mode)) {
+            boolean passed = checkLinearRace(context, bounds, DragShareSettings.STYLE_SIMPLE, report);
+            passed &= checkLinearRace(context, bounds, DragShareSettings.STYLE_PORTAL, report);
+            passed &= checkGlowReentry(context, bounds, report);
+            report.putBoolean("passed", passed);
+            finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, report);
+            return;
+        }
         DragShareController controller = new DragShareController(context, OverlayWindowPolicy.application());
         boolean passed = false;
         try {
@@ -72,6 +89,108 @@ public final class MenuLifecycleProbe extends Instrumentation {
         }
         report.putBoolean("passed", passed);
         finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, report);
+    }
+
+    private boolean checkLinearRace(Context context, Rect bounds, int style, Bundle report) {
+        String key = "style" + style;
+        DragShareController controller = new DragShareController(context, OverlayWindowPolicy.application());
+        List<View> observed = new ArrayList<>();
+        boolean passed = false;
+        try {
+            showGenerated(controller, context, bounds, style);
+            move(controller, bounds.width() - 2, bounds.height() / 2f);
+            View right = (View) readField(controller, "menuView");
+            require(right != null && right.isAttachedToWindow(), "Initial right menu was not attached");
+            observed.add(right);
+            runOnMainSync(() -> {
+                long time = SystemClock.uptimeMillis();
+                controller.acceptPointerEvent(MotionEvent.ACTION_MOVE, bounds.width() / 2f,
+                        bounds.height() / 2f, time, "probe");
+                controller.acceptPointerEvent(MotionEvent.ACTION_MOVE, bounds.width() / 2f,
+                        180, time + 1, "probe");
+                // acceptPointerEvent always posts, while cancel runs immediately on Main.
+                new Handler(Looper.getMainLooper()).post(controller::cancelActiveSession);
+            });
+            SystemClock.sleep(450);
+            waitForIdleSync();
+            boolean detached = !right.isAttachedToWindow();
+            report.putBoolean(key + "OldRightDetached", detached);
+            require(detached, "Leaving, changing edge and cancelling retained the old right menu");
+            passed = true;
+        } catch (ReflectiveOperationException | IllegalStateException error) {
+            report.putString(key + "Error", error.toString());
+        } finally {
+            cleanLinearWindows(controller, context, observed);
+        }
+        report.putBoolean(key + "Passed", passed);
+        return passed;
+    }
+
+    private boolean checkGlowReentry(Context context, Rect bounds, Bundle report) {
+        DragShareController controller = new DragShareController(context, OverlayWindowPolicy.application());
+        List<View> observed = new ArrayList<>();
+        boolean passed = false;
+        try {
+            showGenerated(controller, context, bounds, DragShareSettings.STYLE_PORTAL);
+            move(controller, bounds.width() - 2, bounds.height() / 2f);
+            View right = (View) readField(controller, "menuView");
+            require(right != null && right.isAttachedToWindow(), "Initial glow menu was not attached");
+            observed.add(right);
+            PortalGlowView glow = (PortalGlowView) readField(controller, "glowView");
+            require(glow != null, "Initial glow view was not created");
+            require((float) readField(glow, "expansionProgress") >= .95f, "Initial glow did not expand");
+            runOnMainSync(() -> {
+                long time = SystemClock.uptimeMillis();
+                controller.acceptPointerEvent(MotionEvent.ACTION_MOVE, bounds.width() / 2f,
+                        bounds.height() / 2f, time, "probe");
+                controller.acceptPointerEvent(MotionEvent.ACTION_MOVE, bounds.width() - 2,
+                        bounds.height() / 2f, time + 1, "probe");
+            });
+            SystemClock.sleep(450);
+            waitForIdleSync();
+            boolean shown = (boolean) readField(controller, "menuShown");
+            float progress = (float) readField(glow, "expansionProgress");
+            report.putBoolean("glowReentryMenuShown", shown);
+            report.putFloat("glowReentryExpansion", progress);
+            require(shown && right.isAttachedToWindow(), "Same-edge reentry did not restore the menu");
+            require(progress >= .95f, "The restored menu retained a collapsed glow");
+            passed = true;
+        } catch (ReflectiveOperationException | IllegalStateException error) {
+            report.putString("glowReentryError", error.toString());
+        } finally {
+            cleanLinearWindows(controller, context, observed);
+        }
+        report.putBoolean("glowReentryPassed", passed);
+        return passed;
+    }
+
+    private void showGenerated(DragShareController controller, Context context, Rect bounds, int style) {
+        Bundle settings = DragShareSettings.readLocal(context).toBundle();
+        settings.putInt("ui_style", style);
+        settings.putBoolean("block_background_scroll", false);
+        settings.putBoolean("close_menu_when_pointer_leaves", true);
+        runOnMainSync(() -> controller.show(
+                CapturedContent.text("MENU RACE 129", "generated", null, null, null),
+                bounds.width() / 2f, bounds.height() / 2f, DragShareSettings.fromBundle(settings)));
+    }
+
+    private void cleanLinearWindows(DragShareController controller, Context context, List<View> observed) {
+        runOnMainSync(() -> {
+            controller.destroy();
+            // The baseline can lose ownership of an old menu. Remove only our captured views.
+            for (View view : observed) {
+                if (view.isAttachedToWindow()) {
+                    view.animate().cancel();
+                    context.getSystemService(WindowManager.class).removeViewImmediate(view);
+                }
+            }
+        });
+    }
+
+    private static Object readField(Object owner, String name) throws ReflectiveOperationException {
+        Field field = owner.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(owner);
     }
 
     private void move(DragShareController controller, float x, float y) {

@@ -741,3 +741,14 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 侧窗只选生成文字组2项和生成图片1项，删除确认明确3项，hds129-delete-confirm.xml；确认后剩7条，hds129-cleaned.xml。停止模块保存hds129-after-stash.tar/snapshot，原id/正文/类型/时间/MIME指纹及4图SHA与before完全一致，未恢复旧库。图片组字段也均保留独立状态。旧123前schema1备份保持不动；此次无新schema迁移，但回退128等旧UI前需拆开文字/混合组。
 - 临时中转站磁贴全表、drag_share_settings、stash_window_position前后完全一致；无Root取词helper/远端probe，测试窗关闭、临时device XML已删。原Bili休息提醒仍在，没有关闭提醒或恢复播放。截图、DB备份不提交仓库。
 - 未验：新组跨UID实际接收、只抽出组内部分成员、横屏/深色/管理页宽布局、IO错误设备分支。真实拇指面积、Bili评论普通长按、四种四边完整矩阵、115旧ANR与复制编辑浮层共存仍未解决。本轮只读传送门审计不支持盲加放行Hook；Compose上游遗漏仍只是候选根因。
+
+## 2026-10-21：1.7.130 简洁/流光快速换边与重入
+
+- 先核对输入环境，当前唯一直接触屏为Xiaomi_Touch_Input_0/event7，143999×319999，真实触点数0。对系统设置标题做两次受控evdev坐标DOWN→右移→UP，仅用slot/tracking/X/Y/BTN_TOUCH/BTN_TOOL_FINGER/SYN，不写任何尺寸/压力轴，脚本EXIT释放。第二次明确确认传送门服务已存活。InputReader持有期间pointerCount=1、结束后0且实时Touching IDs为空，但两次均未产生startPick或菜单；不记为Root Controller、真实触发或面积通过，也不再调参数重试。hds130-input-before/after.txt、raw/live-raw-right.png/log；后者是局部logcat快照，不足以证明全部宿主拒绝原因。
+- input dump中的ANR时间仍为05:28:26旧快照；当前队列为空、通道响应正常，不能将“last ANR”误当本次新故障。没有用重启掩盖输入问题。原服务源码确有空闲60秒stopSelf/退出进程路径；是否影响已启用且校准的全局面积监听仍待核验，本轮不据未校准状态加保活Hook。
+- 从控制流定位简洁/流光窗口泄漏：菜单隐藏160ms退出期间menuShown已false，换边会覆盖menuView而未移除旧View；随后取消清掉旧退出回调，旧窗口失去所有权。修复为非现代换边始终取消旧退出并移除旧View，再覆盖引用。现代122的释放路径保留。
+- debug-only MenuLifecycleProbe新增mode=linear_race，生产代码未修的266/129实机复现style0OldRightDetached=false、style1OldRightDetached=false；独立流光重入menuShown=true但expansionProgress=0，三个case分别失败（hds130-before-menu-race.txt）。两个MOVE用不同eventTime并正确排队取消，避免探针被生产重复事件过滤或提前取消。finally显式清理其持有的旧自身View，没有遗留基线泄漏。
+- 流光attached恢复分支补回pull/expand；PortalGlowView先取消并清空旧动画，再判断是否已到目标端点，避免同帧反向仍留下旧动画。267/130同一设备同一探针三项全部通过，两个旧右菜单均detached，流光重入shown=true/expansion=1（hds130-after-menu-race.txt）。默认现代探针右→上→左→离开→底部重开→取消也通过，oldWindowDisposed=true（hds130-modern-menu.txt）。均为模块UID应用悬浮窗/生产Controller受控事件，不读取节点、不截图、不Root、不执行分享；不能替代Portal UID/真实手指四样式16组合验收。
+- 最终267 testDebugUnitTest/lintDebug/assembleDebug通过，197项单测0失败，Lint0 errors/139 warnings/2 hints。没有为低影响设置文案新增单测；“移开关闭”说明修正为四种样式均适用。原位安装154，包名和debug签名不变；outputs/HyperDragShare-1.7.130-debug.apk SHA256 6C186EBE7BCDEB5067F921ECCCAB45761A7F820EEF80C253B4ACD717A09301FB，与设备base.apk严格一致，hds130-installed-hash.txt。仅重载传送门，实际injected_version=154/portal_root_version=154/granted=true，hds130-activation.xml；未重启android/AICR/整机。
+- 设置前后XML一致；本轮未执行中转站存储/分组/删除，不改变schema2和129回退旧UI须先拆组的约束。未新增磁贴、外部APK或权限。受控脚本已结束且device临时脚本/XML删除，无取词helper/远端probe或测试菜单窗口；原Bili2183休息提醒置前，未关闭提醒或恢复播放。截图和输入日志仅留本机，不提交私人画面。
+- 未验：真实传送门四样式四边完整视觉/松手接收、快速重入深色/横屏、环形本轮回归、真实手指面积、Bili评论普通长按。不能将此窗口残留修复当作115侧条ANR或复制编辑浮层问题已解决。
