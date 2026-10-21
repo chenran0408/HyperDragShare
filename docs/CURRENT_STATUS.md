@@ -8,7 +8,7 @@
 
 修复按窗口令牌关联当前显示的visible handle矩形，保留实际遮挡裁剪与未知可见窗拒绝；针对同令牌异名的安全中心侧栏回归用例7项全通过。热重载不需要整机重启：移除旧版保留 Root lease 的行为，Portal退出后旧app_process会随lease释放，新Portal从当前APK启动Root读取helper。原生侧栏在容器已attach时直接完成扩展挂接，未attach才post，避免额外等一帧；增加一次性挂接耗时日志供设备确认。
 
-源码1.7.180/204，`testDebugUnitTest --tests PressWindowSnapshotTest`、`lintDebug`、R8 `assembleRelease`通过。输出包仅arm64-v8a，7,429,983 bytes；已用项目相同debug签名校验，SHA256 `B26345E18CCA3FA5CE3751D945A585E842ACFC5202905438E3352FDBBA70530E`，路径`outputs/HyperDragShare-1.7.180-arm64-v8a.apk`。本轮APK尚未安装，当前运行Hook仍为此前版本203；微信真实长按修复和侧栏首开速度改善均待新包安装后实测。正式Latest仍v1.7.179。
+源码/已安装APK为1.7.180/204；定向7项 `PressWindowSnapshotTest`、`lintDebug`、R8 `assembleRelease`通过。输出包仅arm64-v8a，7,429,983 bytes；项目同签名校验通过，SHA256 `B26345E18CCA3FA5CE3751D945A585E842ACFC5202905438E3352FDBBA70530E`，路径`outputs/HyperDragShare-1.7.180-arm64-v8a.apk`。设备覆盖安装成功；启动模块后新Root helper/PressReader日志显示ready，Root helper启动269ms、读取连接272ms。ADB模拟长按能触发原生选择菜单；日志出现Press时长确认及语义查询（47–61ms），但没有确认新版分词面板显示，故微信长按仍未通过实测。ADB模拟事件没有稳定对应真实evdev触摸链路。热重载 shell 对Provider/SystemUI操作被设备SELinux拒绝；`com.android.systemui`仍为PID14951，`com.miui.securitycenter:ui`仍为PID14913，因此侧栏挂接代码204未加载，首次展开性能未实测。正式Latest仍v1.7.179，未发布180。
 
 Flyme小窗对照的后续清单见子代理只读审计：优先实测同屏双小窗触摸目标与窗外操作，确保关闭/最小化后不会误作用于另一个窗口；底部拖条上滑mini由HyperOS原生处理，不另复制ColorOS Hook。侧栏首次展开应用列表的冷启动耗时也待设备验收。
 
