@@ -166,15 +166,15 @@ final class ModernOverlayWindow {
         if (blurListenerRegistered) {
             try {
                 windowManager.removeCrossWindowBlurEnabledListener(blurEnabledListener);
-            } catch (Throwable ignored) {
-                // The host window manager can already be shutting down.
+            } catch (RuntimeException error) {
+                DragShareLog.w("DragShare/ModernWindow", "Unable to remove background blur listener", error);
             }
             blurListenerRegistered = false;
         }
         try {
             dialog.dismiss();
-        } catch (Throwable ignored) {
-            // The dialog may never have reached WindowManager.addView().
+        } catch (RuntimeException error) {
+            DragShareLog.w("DragShare/ModernWindow", "Unable to dismiss modern overlay window", error);
         }
         overlayView.disposeOverlay();
     }
@@ -198,22 +198,14 @@ final class ModernOverlayWindow {
         if (blurRadiusPx <= 0) {
             return;
         }
-        try {
-            windowManager.addCrossWindowBlurEnabledListener(blurEnabledListener);
-            blurListenerRegistered = true;
-        } catch (Throwable ignored) {
-            updateCrossWindowBlurEnabled(false);
-        }
+        windowManager.addCrossWindowBlurEnabledListener(blurEnabledListener);
+        blurListenerRegistered = true;
     }
 
     private void refreshNativeBackdropBlurEnabled() {
         boolean enabled = false;
         if (blurRadiusPx > 0) {
-            try {
-                enabled = windowManager.isCrossWindowBlurEnabled();
-            } catch (Throwable ignored) {
-                // The transparent glass fallback below remains readable.
-            }
+            enabled = windowManager.isCrossWindowBlurEnabled();
         }
         updateCrossWindowBlurEnabled(enabled);
     }

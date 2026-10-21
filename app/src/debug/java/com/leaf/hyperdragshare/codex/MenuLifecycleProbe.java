@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.graphics.Rect;
@@ -13,10 +14,12 @@ import android.view.MotionEvent;
 import android.view.Display;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.TextView;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Generated payload and controller events only: no Root, input injection or page capture. */
 public final class MenuLifecycleProbe extends Instrumentation {
@@ -39,6 +42,12 @@ public final class MenuLifecycleProbe extends Instrumentation {
             boolean passed = checkLinearRace(context, bounds, DragShareSettings.STYLE_SIMPLE, report);
             passed &= checkLinearRace(context, bounds, DragShareSettings.STYLE_PORTAL, report);
             passed &= checkGlowReentry(context, bounds, report);
+            report.putBoolean("passed", passed);
+            finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, report);
+            return;
+        }
+        if ("window_failure".equals(mode)) {
+            boolean passed = checkWindowFailure(context, bounds, report);
             report.putBoolean("passed", passed);
             finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, report);
             return;
@@ -89,6 +98,68 @@ public final class MenuLifecycleProbe extends Instrumentation {
         }
         report.putBoolean("passed", passed);
         finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, report);
+    }
+
+    private boolean checkWindowFailure(Context context, Rect bounds, Bundle report) {
+        DragShareController controller = new DragShareController(context, OverlayWindowPolicy.application());
+        List<ModernOverlayWindow> observed = new ArrayList<>();
+        boolean passed = false;
+        try {
+            showGenerated(controller, context, bounds, DragShareSettings.STYLE_MODERN);
+            waitForIdleSync();
+            ModernOverlayWindow preview = (ModernOverlayWindow) readField(controller, "modernPreviewWindow");
+            ModernOverlayWindow menu = window(controller);
+            require(preview != null && preview.isShowing(), "Initial modern preview was not showing");
+            require(!menu.isShowing(), "The menu was already showing before the failure injection");
+            observed.add(preview);
+            observed.add(menu);
+            Dialog dialog = (Dialog) readField(menu, "dialog");
+            WindowManager.LayoutParams passiveParams = (WindowManager.LayoutParams) readField(controller, "menuParams");
+            runOnMainSync(() -> dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION));
+            report.putInt("rejectedNativeWindowType", dialog.getWindow().getAttributes().type);
+            report.putInt("passiveMenuWindowType", passiveParams.type);
+            require(passiveParams.type == WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    "The failure injection changed the passive menu parameters");
+            report.putString("failureInjection", "TYPE_APPLICATION mismatches the overlay WindowContext");
+            // A fresh controller initially owns a bottom menu. Moving right would replace it
+            // before showing and discard the deliberately invalid Window type.
+            move(controller, bounds.width() / 2f, bounds.height() - 180);
+            View remainingMenu = (View) readField(controller, "menuView");
+            boolean cancelled = !controller.isActive();
+            boolean noAttachedMenu = remainingMenu == null || !remainingMenu.isAttachedToWindow();
+            boolean previewDisposed = disposed(preview);
+            boolean nativeMenuDisposed = disposed(menu);
+            boolean nativeMenuRetained = readField(controller, "modernMenuWindow") != null;
+            report.putBoolean("failureCancelledSession", cancelled);
+            report.putBoolean("failureNoAttachedMenu", noAttachedMenu);
+            report.putBoolean("failurePreviewDisposed", previewDisposed);
+            report.putBoolean("failureNativeMenuDisposed", nativeMenuDisposed);
+            report.putBoolean("failureNativeMenuRetained", nativeMenuRetained);
+            TextView message = (TextView) readField(readField(controller, "dragShareToast"), "view");
+            boolean feedbackShown = message != null && message.isAttachedToWindow() && message.getText().length() > 0;
+            report.putBoolean("failureFeedbackShown", feedbackShown);
+            if (message != null) report.putString("failureFeedback", message.getText().toString());
+
+            // Never allow the baseline's surviving fallback to launch a share on this UP.
+            runOnMainSync(controller::cancelActiveSession);
+            AtomicInteger completions = new AtomicInteger();
+            controller.acceptPointerEvent(MotionEvent.ACTION_UP, bounds.width() / 2f,
+                    bounds.height() / 2f, SystemClock.uptimeMillis(), "root", completions::incrementAndGet);
+            waitForIdleSync();
+            boolean completionOnce = completions.get() == 1;
+            report.putInt("cancelledRootUpCompletionCount", completions.get());
+            report.putBoolean("cancelledRootUpCompletionOnce", completionOnce);
+            passed = cancelled && noAttachedMenu && previewDisposed && nativeMenuDisposed
+                    && !nativeMenuRetained && feedbackShown && completionOnce;
+        } catch (ReflectiveOperationException | IllegalStateException error) {
+            report.putString("windowFailureError", error.toString());
+        } finally {
+            runOnMainSync(() -> {
+                controller.destroy();
+                for (ModernOverlayWindow window : observed) window.dispose();
+            });
+        }
+        return passed;
     }
 
     private boolean checkLinearRace(Context context, Rect bounds, int style, Bundle report) {

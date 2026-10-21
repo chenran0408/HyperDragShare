@@ -8,7 +8,6 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import java.lang.reflect.Field;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = 35)
@@ -25,7 +24,7 @@ public final class DragMenuDirectionTest {
             settings.set(controller, DragShareSettings.fromBundle(values));
             for (int edge = 0; edge < 4; edge++) {
                 direction.setInt(controller, edge);
-                assertTrue((Boolean) refresh.invoke(controller));
+                refresh.invoke(controller);
                 assertEquals("style=" + style + ", edge=" + edge,
                         edge, direction.getInt(controller));
             }

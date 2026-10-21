@@ -752,3 +752,12 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 最终267 testDebugUnitTest/lintDebug/assembleDebug通过，197项单测0失败，Lint0 errors/139 warnings/2 hints。没有为低影响设置文案新增单测；“移开关闭”说明修正为四种样式均适用。原位安装154，包名和debug签名不变；outputs/HyperDragShare-1.7.130-debug.apk SHA256 6C186EBE7BCDEB5067F921ECCCAB45761A7F820EEF80C253B4ACD717A09301FB，与设备base.apk严格一致，hds130-installed-hash.txt。仅重载传送门，实际injected_version=154/portal_root_version=154/granted=true，hds130-activation.xml；未重启android/AICR/整机。
 - 设置前后XML一致；本轮未执行中转站存储/分组/删除，不改变schema2和129回退旧UI须先拆组的约束。未新增磁贴、外部APK或权限。受控脚本已结束且device临时脚本/XML删除，无取词helper/远端probe或测试菜单窗口；原Bili2183休息提醒置前，未关闭提醒或恢复播放。截图和输入日志仅留本机，不提交私人画面。
 - 未验：真实传送门四样式四边完整视觉/松手接收、快速重入深色/横屏、环形本轮回归、真实手指面积、Bili评论普通长按。不能将此窗口残留修复当作115侧条ANR或复制编辑浮层问题已解决。
+
+## 2026-10-21：1.7.131 窗口拒绝与取消收尾
+
+- 基线268生产代码仍130，debug-only MenuLifecycleProbe mode=window_failure把自身现代菜单Dialog改为TYPE_APPLICATION=2，保留WindowContext/被动参数2038，触发真实WindowManagerImpl.assertWindowContextTypeMatches的IllegalArgumentException。hds131-before-window-failure.txt/log确认旧版取消false、残留菜单、无错误提示、取消后Root UP回调0；不是预想的BadToken，不改系统权限或组件。
+- 移除现代构造/显示失败换窗、updateViewLayout吞错及查询空列表；创建、指针和环形定时UI入口在实际RuntimeException边界取消并记录原因。无活动会话的真实UP仍执行宿主完成回调；UP自身失败也finally执行。失败/CANCEL不提前回放宿主取消，保留既有真实抬手约束。
+- 修复后270在同机同探针通过：cancelled=true、preview/menu disposed=true、noAttachedMenu=true、nativeMenuRetained=false，实际附着TextView显示“分享菜单显示失败，已取消本次拖拽；详情见诊断日志”，取消后回调1。hds131-after-window-failure.txt/log。正常默认现代探针右→上→左→离开→底部重开→取消也通过，hds131-modern-menu.txt。全部为模块UID生产Controller、生成文字和受控事件，不Root/读树/截屏/实际分享；不替代Portal UID、真实权限撤销、原生延迟取消队列或手指全矩阵。
+- 269唯一失败是既有方向测试将已改为void的refreshDisplayGeometry反射返回值强转Boolean；修正测试调用，方向断言不变。270全部通过；删除本批产生的未用错误文案后最终271 testDebugUnitTest/lintDebug/assembleDebug通过，197项0失败，Lint0 errors/139 warnings/2 hints。没有重复执行资源删除不影响的设备探针。
+- 最终155原位安装，包名com.leaf.hyperdragshare.codex和debug证书不变。outputs/HyperDragShare-1.7.131-debug.apk与设备base.apk SHA256严格一致：274976183D2635312774BE8A497DF4DB56352DCAF9823C051C6584361BC3163A。hds131-installed-hash.txt。首次快速启动服务返回app is in background，不能记为重载成功；最终等待BlacklistSettingActivity启动完再启动服务，实际握手155/Root155/granted=true，hds131-activation.xml。仅重载Portal，不重启android/AICR/整机。
+- 设置前后XML一致，本轮不写中转站，schema2和旧UI先拆文字/混合组约束保留。无Root取词helper、远端probe或测试菜单残留；原Bili2183休息提醒置前，不关闭提醒/不播放。授权持续有效，无需再询问。真实拇指面积、Bili评论普通长按、四样式四边真实分享、115旧ANR及复制浮层共存仍未解决。
