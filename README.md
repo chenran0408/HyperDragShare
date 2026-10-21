@@ -42,6 +42,10 @@
 
 输出：`app/build/outputs/apk/debug/app-debug.apk`。本地签名与SDK路径放在Git忽略的 `signing/` 和 `local.properties`，不要提交密钥或口令。
 
+推送开发分支、提交PR或手动运行时，[Android checks](https://github.com/chenran0408/HyperDragShare/actions/workflows/android.yml)会执行单测、Lint和调试构建。成功运行的Artifacts中可下载APK与检查报告，保留14天；实际结果以对应运行记录为准。
+
+CI使用临时调试签名，不能直接覆盖本地同签名开发版。已安装用户优先从Releases获取验收包；自动构建不上传本地密钥，也不自动发布稳定版。
+
 ## 实现与许可
 
 - [实现说明](docs/IMPLEMENTATION.md)、[按压机制与历史调查](docs/CONTACT_AREA_TRIGGER.md)、[图片识字](docs/IMAGE_OCR.md)、[中转站](docs/STASH.md)。

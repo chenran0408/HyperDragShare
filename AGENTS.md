@@ -132,7 +132,7 @@
 
 ## 公开仓库
 
-本fork已公开：https://github.com/chenran0408/HyperDragShare ，默认分支hyperos4-adaptation。origin为本账号仓库，upstream为Leaf-lsgtky/HyperDragShare；不要向upstream推送本fork提交。v1.7.147-dev为开发预览，APK本地/服务器SHA256已核对。OAuth当前无workflow权限，本分支不含自动工作流；不自行扩大账号权限，也不把本地构建称为云端通过。签名、local.properties、原始APK/视频、私人截图与任务备份继续留在Git之外。后续代码批次公开前检查变更和真实验收范围，不重复建仓库。
+本fork已公开：https://github.com/chenran0408/HyperDragShare ，默认分支hyperos4-adaptation。origin为本账号仓库，upstream为Leaf-lsgtky/HyperDragShare；不要向upstream推送本fork提交。v1.7.147-dev为开发预览，APK本地/服务器SHA256已核对。用户已授权workflow权限，API已核对生效；android.yml执行JDK21/SDK37的单测、Lint及Debug构建，上传APK和报告14天。云端结果按具体运行核对，不把本地通过等同云端通过；临时CI签名不可冒充设备同签名更新包。不上传本地签名密钥，不自动发稳定版。签名、local.properties、原始APK/视频、私人截图与任务备份继续留在Git之外。后续代码批次公开前检查变更和真实验收范围，不重复建仓库。
 
 ## 修改流程
 
@@ -161,8 +161,8 @@ signingInfoFile=signing/qianming.txt
 签名信息文件按 `ALIAS`、`KEY_PASSWORD`、`KEYSTORE_PASSWORD` 的字段名与值交替保存。
 不要把 keystore、签名信息、口令或绝对本机路径提交到仓库。配置存在时，`assembleRelease` 会构建
 经 R8 压缩且已签名的 APK，输出为 `app\build\outputs\apk\release\app-release.apk`。
-云端 Release 使用 `SIGNING_KEYSTORE_PATH`、`SIGNING_KEYSTORE_PASSWORD`、`SIGNING_KEY_ALIAS` 和
-`SIGNING_KEY_PASSWORD` 环境变量配置同一 signingConfig；工作流只发布非 `-unsigned` 的 APK。
+源码也支持 `SIGNING_KEYSTORE_PATH`、`SIGNING_KEYSTORE_PASSWORD`、`SIGNING_KEY_ALIAS` 和
+`SIGNING_KEY_PASSWORD` 环境变量配置同一 signingConfig；当前云端工作流只做Debug构建，未接入发布密钥或自动Release。
 
 实机排查优先看以下日志：
 
