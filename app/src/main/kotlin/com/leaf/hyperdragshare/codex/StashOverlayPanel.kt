@@ -14,6 +14,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.WindowInsets
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -120,7 +121,8 @@ object StashOverlayPanel {
         private var dragStartLeft = 0
         private var dragStartCenterY = 0f
         private var moving = false
-        private val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+        private val displayManager = app.getSystemService(DisplayManager::class.java)
+        private val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
         private val context = app.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -141,9 +143,17 @@ object StashOverlayPanel {
                 overlay.dismiss()
             }
         }
+        private val displayListener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) = Unit
+            override fun onDisplayRemoved(displayId: Int) = Unit
+            override fun onDisplayChanged(displayId: Int) {
+                if (displayId == Display.DEFAULT_DISPLAY && active === this@Shelf) resize()
+            }
+        }
         val overlay: InteractiveOverlayWindow = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
             onDismissed = {
                 app.unregisterReceiver(screenOffReceiver)
+                displayManager.unregisterDisplayListener(displayListener)
                 scope.cancel()
                 if (active === this) active = null
             },
@@ -153,6 +163,7 @@ object StashOverlayPanel {
         init {
             app.registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF),
                 Context.RECEIVER_NOT_EXPORTED)
+            displayManager.registerDisplayListener(displayListener, main)
         }
 
         fun expand() {
@@ -169,7 +180,10 @@ object StashOverlayPanel {
         }
 
         private fun resize() {
-            val metrics = context.getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
+            val windowMetrics = context.getSystemService(WindowManager::class.java).maximumWindowMetrics
+            val metrics = windowMetrics.bounds
+            val insets = windowMetrics.windowInsets.getInsetsIgnoringVisibility(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
             val density = context.resources.displayMetrics.density
             overlay.window.attributes = overlay.window.attributes.apply {
                 // Both dimensions are at most 40% of the display: area <= 16%, below 1/6.
@@ -178,10 +192,11 @@ object StashOverlayPanel {
                 height = if (expanded) minOf((320 * density).toInt(), (metrics.height() * .4f).toInt())
                     else (96 * density).toInt()
                 gravity = Gravity.LEFT or Gravity.TOP
-                x = (dragLeft?.toInt() ?: if (onLeft) 0 else metrics.width() - width)
-                    .coerceIn(0, (metrics.width() - width).coerceAtLeast(0))
+                val rightEdge = (metrics.width() - insets.right - width).coerceAtLeast(insets.left)
+                x = (dragLeft?.toInt() ?: if (onLeft) insets.left else rightEdge)
+                    .coerceIn(insets.left, rightEdge)
                 y = (centerY * metrics.height() - height / 2f).toInt()
-                    .coerceIn(0, (metrics.height() - height).coerceAtLeast(0))
+                    .coerceIn(insets.top, (metrics.height() - insets.bottom - height).coerceAtLeast(insets.top))
                 flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     if (expanded) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             }

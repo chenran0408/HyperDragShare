@@ -2,6 +2,12 @@
 
 本文件记录本 fork 的实验和行为参考；不包含参考 APK 的反编译代码。目标设备为小米 15 Pro / HyperOS 4.0.0.17 / Android 17。
 
+## 1.7.141 传送门退出路径补充
+
+5.1.5的BlacklistSettingActivity.onStop还会通过App持有的StopSelfHandler发送what=1、延迟60000ms消息；其handleMessage在当前顶部不是Portal时直接killProcess。它独立于服务scheduleStopSelfJob，因此140只取消服务任务不完整。141只Hook该精确类的handleMessage：what=1且按压Source存在时跳过，其他情况保持原行为；安装失败记录具体原因并提示，不Hook通用Handler/killProcess，也不定时复活进程。
+
+DEX已核对发送端、60000ms、消息值和接收分支；旧进程SIGKILL记录及约60秒间隔只说明现象，不能单独证明某次退出确由此路径产生。141已安装但Portal仍为164，尚无新Hook实际消息证据。
+
 ## 1.7.140 按压流程重写（真机手感未验收）
 
 用户要求以参考行为整体重写，已删除校准Activity、校准计算与旧180ms检测器、两套独立面积CaptureSource。现在PressTriggerDetector负责220ms大接触、700ms普通按住、120ms预分类和安全无文字300ms分支；PressCaptureSource统一传送门/无障碍的输入、一次读取、缓存、确认、接管及原页窗口。开关保留原保存键，不使用旧校准阈值，也不要求再次采样。

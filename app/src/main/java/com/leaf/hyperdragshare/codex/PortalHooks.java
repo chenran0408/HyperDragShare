@@ -45,6 +45,7 @@ final class PortalHooks {
     private static volatile PressCaptureSource thumbCaptureSource;
     @SuppressLint("StaticFieldLeak")
     private static android.app.Service portalService;
+    private static String appIdleHookError;
     private static volatile boolean rootAuthorityLogged;
     private static volatile boolean hostCancelIgnoredLogged;
     private static volatile boolean controlIgnoredLogged;
@@ -63,12 +64,33 @@ final class PortalHooks {
             Class<?> serviceClass = XposedHelpers.findClass(SERVICE_CLASS, classLoader);
             suppressOriginalFloatWindows(classLoader);
             hookServiceLifecycle(serviceClass, classLoader);
+            hookAppIdleExit(classLoader);
             hookShareStart(serviceClass);
             hookKnownCallbackClass(classLoader);
             hookClipboardCard(serviceClass, classLoader);
             log("portal hooks installed");
         } catch (Throwable error) {
             log("unable to install Taplus hooks", error);
+        }
+    }
+
+    private static void hookAppIdleExit(ClassLoader classLoader) {
+        String handlerClass = "com.miui.contentextension.setting.whitelist.utils.StopSelfHandler";
+        try {
+            XposedHelpers.findAndHookMethod(handlerClass, classLoader, "handleMessage", android.os.Message.class,
+                    new XC_MethodHook() {
+                        @Override protected void beforeHookedMethod(MethodHookParam param) {
+                            android.os.Message message = (android.os.Message) param.args[0];
+                            if (message.what == 1 && thumbCaptureSource != null) {
+                                log("press input active; skipping settings idle exit");
+                                param.setResult(null);
+                            }
+                        }
+                    });
+            log("settings idle exit hook installed");
+        } catch (RuntimeException | LinkageError | XposedHelpers.ClassNotFoundError error) {
+            appIdleHookError = "传送门空闲退出Hook不可用，按压监听可能随进程退出";
+            log("cannot hook settings idle exit; keeping host behavior", error);
         }
     }
 
@@ -521,6 +543,10 @@ final class PortalHooks {
                 thumbCaptureSource = new PressCaptureSource(
                         context, rootTouchSource, controller, settings, settings::isPortalCaptureMode);
                 log("reference press trigger enabled; no calibration required");
+                if (appIdleHookError != null) {
+                    new Handler(Looper.getMainLooper()).post(() -> android.widget.Toast.makeText(context,
+                            appIdleHookError, android.widget.Toast.LENGTH_LONG).show());
+                }
             }
             updateHostIdleTimer(thumb.enabled);
         } catch (SecurityException | IllegalStateException error) {

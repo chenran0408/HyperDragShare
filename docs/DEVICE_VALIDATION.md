@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.140 / versionCode 164。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 164。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.141 / versionCode 165。沿用本 fork 包名和 debug 签名，原位升级成功；Portal进程仍为164，141新Hook尚未重载。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装 1.7.140 / 164；196 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
+- 当前已安装 1.7.141 / 165；196 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -875,3 +875,14 @@ PressCaptureSource共用一次Root读取、缓存、确认、接管和原页文�
 1.7.140/164合并139托盘改动覆盖安装成功，同一debug签名；已安装base.apk与交付包SHA256均 `CEF70F709397B819D10B73D980A1221DA496CDF7D1DFB3C956DBE6148EABB5AC`。只重载Portal作用域，注入与Root握手均164/true，日志确认reference press trigger enabled与press reader ready，原thumb开关仍true。没有重启android/AICR/整机，也没有改无障碍/系统后台权限。部署借用原生设置Activity启动服务后，通过Root setFocusedTask恢复原前台任务，前后task一致；未向原搜索Activity发送新Intent或输入内容。
 
 按用户“少验证”要求未做点击、截图、ADB手势或真实长按验收。启动握手不等于新按压功能或托盘新拖动通过。没有写剪贴板/中转站、没有播放Bili或恢复已消失提醒；最终手机仍由用户使用。部署临时dex与本批设备测试截图/层次文件清理，不提交私人内容。下一步以真实反馈定位触发问题，不再安排反复无数据校准。
+
+
+## 2026-10-21：1.7.141 托盘边界与专用退出消息
+
+托盘使用系统栏/刘海安全区域限制位置，显示改变时重新定位。背敲Hook在锁屏时先保留系统原动作，不提前消费去重。Portal新增专用StopSelfHandler.handleMessage Hook，what=1且按压Source存在才跳过；其余消息、用户关闭与系统销毁保持原行为。依据用户提供5.1.5 APK的DEX核对，不复制反编译代码。
+
+原生BlacklistSettingActivity.onStop发送延迟60000ms的App消息1，接收端可直接killProcess；140服务的scheduleStopSelfJob Hook覆盖不到它。旧进程exit-info只有SIGKILL/status9，没有ANR或明确原因，不把时间相近直接写成某次退出的唯一根因。141失败只记录并提示，不增加通用killProcess/stopSelf拦截、周期复活或SystemUI作用域。
+
+最终288构建成功：196项单测0失败/0错误，Lint 0 errors/140 warnings/2 hints，assembleDebug成功；无新UI镜像测试。APK为1.7.141/165，SHA256 `015BE09F9027CA5113A92F75824685AA5590DC9FDCC49DFAA0F98559FBF76FDD`，签名与原包一致。apksigner首次因当前shell未设置JAVA_HOME未执行，设置JDK21后验证成功。
+
+已单次adb install -r成功，PackageManager读回165/1.7.141；Portal PID及原前台任务均未改变，注入/Root持久记录仍164/true。安装不是新Hook已加载：本轮不切换用户正在使用的页面、不强停Portal、不重启android，Portal消息Hook及框架锁屏修正待下一次对应进程重载。未做点击、截图、旋转、拖动或长按验收，未写中转站/剪贴板。当前新交互与60秒存活仍未实测。

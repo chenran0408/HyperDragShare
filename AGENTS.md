@@ -85,9 +85,9 @@
 - `PortalGlowView.java`：流光样式的全屏不可触摸光效、下拉进度和托盘展开绘制。
 - `CircleMenuOverlayView.java`、`CircleMenuGeometry.java`：四边环形菜单，240dp 面板跨度、56dp 条目；预览需避让四边面板。
 - `LinearMenuGeometry.java`：简洁、流光、现代共用紧凑边界，64×68dp 单元、最多 5 项可见；设置方向必须对四种样式都生效。
-- `StashStore.java`、`StashClient.java`、`StashImageProvider.java`、`StashActivity.kt`：私有持久中转站、受限存入 RPC、按次授权读图和 Miuix 管理列表，进度见 `docs/STASH.md`。
+- `StashStore.java`、`StashClient.java`、`StashImageProvider.java`、`StashActivity.kt`：私有暂存、受限存入 RPC、按次授权读图和透明分享接收桥，进度见 `docs/STASH.md`。
   1.7.123起数据库为schema2，带同次图片导入批次；降到schema1旧APK须配套升级前数据备份，不能仅降APK或清数据。任务内备份位置和实际核验见STASH/DEVICE_VALIDATION，不提交用户内容。
-- `StashBatchCard.kt`、`StashSearchInput.kt`：共享组内顺序/组卡及窄窗搜索；系统小窗搜索和多选操作位于固定标题区，避免焦点滚动或条目锚点把控件移到标题背后。
+- `StashOverlayPanel.kt`、`StashBatchCard.kt`、`StashImage.kt`：Miuix临时浮动托盘、分组和图片；标题/灰条拖动并自动贴边，展开面积≤16%。不再有系统小窗、搜索、复制或手动换边入口。
 - `ModernOverlayViews.kt`、`ModernOverlayWindow.java`、`ModernPreviewSizer.java`：现代 Compose 内容、View outline、公开 Window 局部背景模糊和自适应正方形预览。
 - `DragShareSettings.java`：设置默认值、范围校验、本地持久化和 Provider 配置 RPC。
 - `BackgroundTouchBlocker.java`、`FrameworkBinderTransactionResolver.java`：可选地通过系统手势监视器取消原前台窗口的触摸流；直接 API 被拒绝或被隐藏 API 策略屏蔽时，从当前 ROM 的 framework DEX 动态解析输入 Binder 事务号并以 root 回退，失败时旁路观察。

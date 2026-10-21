@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.Context;
+import android.app.KeyguardManager;
 import android.content.Intent;
 import android.os.SystemClock;
 import android.provider.Settings;
@@ -107,6 +108,13 @@ final class BackTapFrameworkHooks {
             return false;
         }
 
+        Context context = systemContext();
+        if (context == null) {
+            log("system context unavailable; allowing the ROM shortcut");
+            return false;
+        }
+        if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()) return false;
+
         long now = SystemClock.uptimeMillis();
         if (lastHandledAt > 0L
                 && lastHandledWasDoubleTap == doubleTap
@@ -114,11 +122,6 @@ final class BackTapFrameworkHooks {
             return true;
         }
 
-        Context context = systemContext();
-        if (context == null) {
-            log("system context unavailable; allowing the ROM shortcut");
-            return false;
-        }
         try {
             Intent intent = new Intent()
                     .setClassName(MODULE_PACKAGE, SCREEN_OCR_ACTIVITY)

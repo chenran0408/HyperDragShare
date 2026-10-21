@@ -2,7 +2,11 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装 1.7.140（versionCode 164）；传送门注入与Root握手均164，设置首页已显示当前版本激活。Root语义取词可独立读到bilipai评论，但长按后会命中原生菜单；按压路径已整体重写，默认220ms面积/700ms普通/300ms安全无文字；校准页及旧180ms方案已删除。原始面积数据与完整真实触发仍未通过，不将普通路径称为面积恢复；用户原按压开关保持开启。搜索、OCR、分词和设置页使用 Miuix 主题；拖拽菜单仍由自绘 View/Compose 绘制，但使用 Miuix 色板。文本面板已有选词、拆分、合并、编辑与单次撤销；图片识别进入模块独立悬浮窗口已真机确认，原前台仍为桌面，没有打开模块首页。外部文字分享/选词处理通过透明接收桥打开独立分词窗；屏幕OCR选区和结果已由ScreenOcrSession独立窗口承载，内部追加不启动Activity。真机取消恢复7/16、AICR区域确认追加7/25保留旧选词通过；两引擎整屏返回与单行点选分词通过，ML Kit样本仍有漏字/错字。中转站侧窗新增直接按住内容拖出，文字/图片及混合六项由另一UID成功接收；新内容自动置顶已验。灰条注入手势左右拖动通过，但收尾出现一次输入ANR，打开设置后原通道恢复，根因未明；116设置往返、拖出后往返和安全页隐藏恢复均通过，但不据此宣称旧ANR修复，仍是开发节点。原生系统小窗已复用直接按住内容拖出，单条文字/PNG跨UID通过。真实手指与系统侧边栏共存待验。范围和证据见 [STASH.md](STASH.md)、[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，搜索、图片 OCR 说明见 [SEARCH_OVERLAY.md](SEARCH_OVERLAY.md) 与 [IMAGE_OCR.md](IMAGE_OCR.md)，移植状态见 [MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)。下文旧版本及 1220×2656 参数属于历史记录，不代表当前小米 15 Pro。
+当前设备为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17；已安装1.7.141（165），Portal仍运行164，未为本轮重载打断用户页面。140已删除强制校准与旧180ms检测器，以统一PressCaptureSource实现220ms面积、700ms普通按住及安全无文字300ms流程；有效物理面积和真实新触发尚未通过，不能将零尺寸普通路径称为面积恢复。
+
+除设置外，文字、图片OCR、屏幕OCR、搜索与中转站以原页独立浮窗工作；外部分享使用透明接收桥，不打开设置首页。中转站仅保留临时拖放托盘和灰条，标题或灰条拖动、松手就近贴边、展开面积≤16%；系统小窗、搜索、复制和手动左右切换已删除，保留原有数据。141补系统栏避让与显示变化后的重新定位，未实测新拖动。
+
+141新增精确StopSelfHandler消息1 Hook，补服务计时器以外的传送门退出路径；只在按压Source存在时抑制该消息。锁屏背敲保留系统动作的修正尚未重载到android。当前差距以[MIBIGBANG_MIGRATION_PLAN.md](MIBIGBANG_MIGRATION_PLAN.md)顶部表为准，设备证据见[DEVICE_VALIDATION.md](DEVICE_VALIDATION.md)，按压机制见[CONTACT_AREA_TRIGGER.md](CONTACT_AREA_TRIGGER.md)，中转站见[STASH.md](STASH.md)。下文旧版本的系统小窗、校准和1220×2656参数均是历史记录，不代表当前入口。
 
 ## 1. 运行边界
 
