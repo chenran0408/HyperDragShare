@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.122 / versionCode 146。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 146。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.123 / versionCode 147。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 147。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.122 / 146；186 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
+- 当前源码与设备均为 1.7.123 / 147；187 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -660,3 +660,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 设置XML前后按键值比较完全一致；未增加中转站条目或磁贴。受控探针不截屏，最初Via现状截图仅留本机、不提交。独立探针finally销毁包含缺陷旧对象在内的全部窗口，dumpsys未见DragShare菜单残留；无Root取词helper/UiAutomation。原bilipai任务2183恢复置前，没有播放操作。
 - 一组Via本地页面打开/节点dump/截图命令被自动审批拒绝，未执行，不计为证据；未重试同一路径。临时本机HTTP进程已通过其活跃句柄停止，adb reverse已移除。后续改用不读取页面的受控诊断，安装/运行成功。
 - 仍缺：传送门真实手指四样式四方向、松手分享/滚动、面积数据、bilipai评论入口、115旧侧条ANR。当前修复不证明这些已完成。
+
+## 2026-10-21：1.7.123 同次图片分组
+
+- StashStore schema1→2增加batch_id/batch_order；单项为独立组，多图事务共享批次并保留输入顺序。升级旧记录逐条映射自身id，不按时间猜测合组。侧窗显示一张组卡，点开逐张操作，长按整组拖出；组内删除至空后返回全部列表。侧窗图片改Fit，避免裁掉文字边缘，窗口尺寸未变。完整管理页/系统小窗仍逐条显示，不声称所有界面均分组。
+- 升级前模块停止，保存work/hds123-before-stash.tar（schema1、7条/4张图）及只含id/哈希的snapshot.json。备份含用户内容，仅留本机，不进Git。新版本真实迁移到schema2，旧条目各自独立；hds123-migrated.db核验9条中仅2条新生成记录属于同一批次，batch_order=0/1。
+- testDebugUnitTest/lintDebug/assembleDebug最终构建240通过，187项单测0失败；Lint0 errors/139 warnings/2 hints。新增真实旧库升级测试，扩展多图重开/顺序/独立导入测试，原失败事务回滚继续通过。独立诊断工程构建通过，但设备安装器返回INSTALL_FAILED_USER_RESTRICTED/Install canceled by user，未安装，未改系统安装设置或权限，也未改用特权安装绕过拒绝。
+- 改用debug-only OverlayInteractionProbe stash_batch，通过生产Store生成640×240 A、320×180 B两张PNG并打开侧窗；不读原页面、不使用Root。hds123-create-batch.txt记录saved=2/accepted=true。真实侧窗显示2张图片组，点击展开按A/B排列；hds123-group.png/xml、hds123-expanded.png/xml。未用外部分享授权路径，所以不算相册多图入口验收。
+- 返回后长按组卡，07:57:13 WindowManager记录GLOBAL/URI_READ flags0x101、ClipData含2项并广播DRAG_STARTED；07:57:14 DRAG_ENDED并释放通道，侧窗收灰条。hds123-group-drag.log、hds123-after-group-drag.png。没有接收应用读取结果，**不能计为跨UID拖出成功**；115旧多项证据也不能替代此新入口。
+- 最终240安装后重开StashWindowActivity，原批次仍显示，Fit缩略图完整显示A；hds123-persisted-final.png/xml。进入组内多选两张，确认页明确“删除已选2项”，仅删除本批后标题恢复7项且不再显示空组；hds123-select-final.xml、hds123-delete-confirm.xml、hds123-cleaned-final.xml。
+- 清理后停止模块取只读快照，hds123-after-stash.tar/snapshot.json与升级前比较：原7条id、正文/类型/时间/MIME整体哈希一致，4张图片字节哈希一致；所有旧条目batch_id=id/order0。未恢复旧库掩盖升级结果，设备当前确为schema2。debug缓存生成文件已删，诊断应用未安装，无Root helper/UiAutomation/活跃Instrumentation残留，设备临时XML已删除；原bilipai2183置前，未关闭提醒或播放。
+- 最终147原位安装，Portal注入147/Root147/granted=true，仅重载传送门。APK与设备base.apk SHA256一致9F59946AD7F9ED88AABF53D736F7D7D2EAFAA4F159DBDD79E2FA761BE33991E7，debug签名不变。交付outputs/HyperDragShare-1.7.123-debug.apk。
+- 待验：新增组的独立接收UID读取与图片顺序、相册ACTION_SEND_MULTIPLE实机授权、深色/横屏、组级选择及单成员删除退化。文字/混合手动分组、文件与跨设备未实现。面积/评论/115旧ANR仍未解决。回退schema1旧APK必须配套升级前中转站备份，详见STASH.md，不可仅降APK。

@@ -21,6 +21,12 @@ public final class OverlayInteractionProbe extends Instrumentation {
     }
 
     @Override public void onStart() {
+        if (arguments != null && "stash_batch".equals(arguments.getString("mode"))) {
+            Bundle report = new Bundle();
+            boolean accepted = createStashBatch(report);
+            finishAfterInspection(accepted, report);
+            return;
+        }
         if (arguments != null && "root_image".equals(arguments.getString("mode"))) {
             Bundle report = new Bundle();
             boolean accepted = captureRootImage(report);
@@ -41,6 +47,44 @@ public final class OverlayInteractionProbe extends Instrumentation {
         report.putBoolean("longText", longText);
         report.putInt("syntheticLength", sample.length());
         finishAfterInspection(accepted, report);
+    }
+
+    private boolean createStashBatch(Bundle report) {
+        java.util.List<java.io.File> files = new java.util.ArrayList<>();
+        try {
+            java.util.List<Uri> uris = new java.util.ArrayList<>();
+            for (int index = 0; index < 2; index++) {
+                java.io.File file = new java.io.File(getTargetContext().getCacheDir(), "batch123-" + index + ".png");
+                files.add(file);
+                android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
+                        index == 0 ? 640 : 320, index == 0 ? 240 : 180, android.graphics.Bitmap.Config.ARGB_8888);
+                android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+                canvas.drawColor(android.graphics.Color.WHITE);
+                android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                paint.setColor(android.graphics.Color.BLACK);
+                paint.setTextSize(36);
+                canvas.drawText("BATCH 123 " + (index == 0 ? "A" : "B"), 18, 100, paint);
+                try (java.io.FileOutputStream output = new java.io.FileOutputStream(file)) {
+                    if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)) {
+                        throw new IOException("Generated PNG encode failed");
+                    }
+                } finally { bitmap.recycle(); }
+                uris.add(Uri.fromFile(file));
+            }
+            try (StashStore store = new StashStore(getTargetContext())) {
+                report.putInt("saved", store.addImages(getTargetContext().getContentResolver(), uris));
+                report.putString("batchId", store.listEntries().get(0).batchId);
+            }
+            StashOverlayPanel.show(getTargetContext());
+            return true;
+        } catch (IOException | SecurityException error) {
+            report.putString("error", error.toString());
+            return false;
+        } finally {
+            for (java.io.File file : files) {
+                if (file.exists() && !file.delete()) android.util.Log.w("DragShare/OverlayProbe", "Generated sample cleanup failed");
+            }
+        }
     }
 
     private boolean captureRootImage(Bundle report) {

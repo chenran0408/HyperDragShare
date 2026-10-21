@@ -5,7 +5,6 @@ import android.content.ContentResolver;
 import android.net.Uri;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteException;
@@ -28,7 +27,7 @@ public final class StashStore implements AutoCloseable {
     public static final String KIND_IMAGE = "image";
 
     private static final String DATABASE_NAME = "stash.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
     private static final String TABLE = "stash_entries";
     private static final long MAX_IMAGE_BYTES = 32L * 1024L * 1024L;
     private static final Pattern UUID_PATTERN = Pattern.compile(
@@ -54,15 +53,23 @@ public final class StashStore implements AutoCloseable {
         values.putNull("image_file_name");
         values.putNull("mime");
         values.put("created_at", createdAt);
+        values.put("batch_id", id);
+        values.put("batch_order", 0);
         insert(values);
-        return new Entry(id, KIND_TEXT, text, null, null, createdAt);
+        return new Entry(id, KIND_TEXT, text, null, null, createdAt, id, 0);
     }
 
     /** Copies the image bytes without closing the caller-owned input stream. */
     public Entry addImage(InputStream source, String mime) throws IOException {
+        return addImage(source, mime, null, 0, System.currentTimeMillis());
+    }
+
+    private Entry addImage(InputStream source, String mime, String batchId, int batchOrder,
+                           long createdAt) throws IOException {
         Objects.requireNonNull(source, "source");
         String storedMime = normalizeImageMime(mime);
         String id = UUID.randomUUID().toString();
+        String storedBatchId = batchId == null ? id : batchId;
         File imageFile = imageFile(id);
         ensureStashDirectory();
 
@@ -83,7 +90,6 @@ public final class StashStore implements AutoCloseable {
             throw error;
         }
 
-        long createdAt = System.currentTimeMillis();
         ContentValues values = new ContentValues();
         values.put("id", id);
         values.put("kind", KIND_IMAGE);
@@ -91,13 +97,15 @@ public final class StashStore implements AutoCloseable {
         values.put("image_file_name", id);
         values.put("mime", storedMime);
         values.put("created_at", createdAt);
+        values.put("batch_id", storedBatchId);
+        values.put("batch_order", batchOrder);
         try {
             insert(values);
         } catch (IOException error) {
             removeGeneratedFile(imageFile, error);
             throw error;
         }
-        return new Entry(id, KIND_IMAGE, null, id, storedMime, createdAt);
+        return new Entry(id, KIND_IMAGE, null, id, storedMime, createdAt, storedBatchId, batchOrder);
     }
 
     public List<Entry> listEntries() throws IOException {
@@ -123,6 +131,8 @@ public final class StashStore implements AutoCloseable {
     public int addImages(ContentResolver resolver, List<Uri> uris) throws IOException {
         if (uris.isEmpty()) throw new IOException("分享内容没有图片文件");
         List<Entry> added = new ArrayList<>();
+        String batchId = UUID.randomUUID().toString();
+        long createdAt = System.currentTimeMillis();
         try {
             SQLiteDatabase db = database.getWritableDatabase();
             db.beginTransaction();
@@ -134,7 +144,7 @@ public final class StashStore implements AutoCloseable {
                     }
                     try (InputStream source = resolver.openInputStream(uri)) {
                         if (source == null) throw new IOException("无法读取分享的图片");
-                        added.add(addImage(source, mime));
+                        added.add(addImage(source, mime, batchId, added.size(), createdAt));
                     }
                 }
                 db.setTransactionSuccessful();
@@ -291,11 +301,11 @@ public final class StashStore implements AutoCloseable {
                 cursor.isNull(2) ? null : cursor.getString(2),
                 cursor.isNull(3) ? null : cursor.getString(3),
                 cursor.isNull(4) ? null : cursor.getString(4),
-                cursor.getLong(5));
+                cursor.getLong(5), cursor.getString(6), cursor.getInt(7));
     }
 
     private static final String[] COLUMNS = {
-            "id", "kind", "text", "image_file_name", "mime", "created_at"
+            "id", "kind", "text", "image_file_name", "mime", "created_at", "batch_id", "batch_order"
     };
 
     public static final class Entry {
@@ -305,6 +315,8 @@ public final class StashStore implements AutoCloseable {
         public final String imageFileName;
         public final String mime;
         public final long createdAt;
+        public final String batchId;
+        public final int batchOrder;
 
         private Entry(
                 String id,
@@ -312,13 +324,15 @@ public final class StashStore implements AutoCloseable {
                 String text,
                 String imageFileName,
                 String mime,
-                long createdAt) {
+                long createdAt, String batchId, int batchOrder) {
             this.id = id;
             this.kind = kind;
             this.text = text;
             this.imageFileName = imageFileName;
             this.mime = mime;
             this.createdAt = createdAt;
+            this.batchId = batchId;
+            this.batchOrder = batchOrder;
         }
     }
 
@@ -335,13 +349,16 @@ public final class StashStore implements AutoCloseable {
                     + "text TEXT, "
                     + "image_file_name TEXT, "
                     + "mime TEXT, "
-                    + "created_at INTEGER NOT NULL)");
+                    + "created_at INTEGER NOT NULL, "
+                    + "batch_id TEXT NOT NULL, "
+                    + "batch_order INTEGER NOT NULL DEFAULT 0)");
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-            throw new SQLException("Unsupported stash database upgrade: "
-                    + oldVersion + " to " + newVersion);
+            db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN batch_id TEXT");
+            db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN batch_order INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("UPDATE " + TABLE + " SET batch_id = id");
         }
     }
 }

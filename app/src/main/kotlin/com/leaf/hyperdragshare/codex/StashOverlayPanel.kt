@@ -142,6 +142,7 @@ object StashOverlayPanel {
         private var deleting by mutableStateOf(false)
         private var copying by mutableStateOf(false)
         private var preview by mutableStateOf<StashStore.Entry?>(null)
+        private var openedBatchId by mutableStateOf<String?>(null)
         private val screenOffReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 overlay.dismiss()
@@ -307,10 +308,12 @@ object StashOverlayPanel {
                     val updated = withContext(Dispatchers.IO) { StashStore(app).use { it.listEntries() } }
                     val newestChanged = updated.firstOrNull()?.id != entries.firstOrNull()?.id
                     entries = updated
+                    if (openedBatchId != null && entries.none { it.batchId == openedBatchId }) openedBatchId = null
                     if (newestChanged) {
                         searching = false
                         query = ""
                         preview = null
+                        openedBatchId = null
                         confirmDelete = false
                         cancelSelection()
                         // Apply with the new item provider, rather than keeping the old first key.
@@ -356,6 +359,7 @@ object StashOverlayPanel {
                         selectedIds = selectedIds - entry.id
                     }
                     cancelSelection()
+                    if (openedBatchId != null && entries.none { it.batchId == openedBatchId }) openedBatchId = null
                 } catch (error: IOException) {
                     report("删除未完成，剩余内容已保留", error)
                 } catch (error: SecurityException) {
@@ -396,7 +400,7 @@ object StashOverlayPanel {
                             enabled = !deleting, draggable = !selectionMode,
                             onStarted = ::collapse, onClick = open) {
                             if (entry.kind == StashStore.KIND_IMAGE) {
-                                StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp))
+                                StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp), ContentScale.Fit)
                             } else {
                                 Text(entry.text.orEmpty(), fontSize = 13.sp, maxLines = 3,
                                     overflow = TextOverflow.Ellipsis,
@@ -419,6 +423,35 @@ object StashOverlayPanel {
             }
         }
 
+        @Composable private fun ShelfBatch(batch: List<StashStore.Entry>) {
+            if (batch.size == 1) {
+                ShelfItem(batch.first())
+                return
+            }
+            val ids = batch.map { it.id }.toSet()
+            val selectedCount = ids.count { it in selectedIds }
+            Card(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                StashDraggableContent(batch, Modifier.fillMaxWidth().padding(6.dp),
+                    enabled = !deleting, draggable = !selectionMode, onStarted = ::collapse,
+                    onClick = {
+                        if (selectionMode) {
+                            selectedIds = if (selectedCount == batch.size) selectedIds - ids else selectedIds + ids
+                        } else {
+                            openedBatchId = batch.first().batchId
+                            listState.requestScrollToItem(0)
+                        }
+                    }) {
+                    Column {
+                        StashImage(batch.first(), 480, Modifier.fillMaxWidth().height(56.dp), ContentScale.Fit)
+                        Text(if (selectionMode) "已选 $selectedCount/${batch.size} 张"
+                            else "${batch.size} 张图片 · 点按展开",
+                            fontSize = 12.sp, maxLines = 1, color = if (selectedCount > 0)
+                                MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    }
+                }
+            }
+        }
+
         @Composable private fun Content() {
             val dark = DragShareSettings.readLocal(app).isDarkThemeInComposition()
             val focusManager = LocalFocusManager.current
@@ -432,9 +465,12 @@ object StashOverlayPanel {
                 cancelSelection()
             }
             val visibleEntries = entries.filter {
-                query.isBlank() || (it.kind == StashStore.KIND_TEXT &&
-                    it.text.orEmpty().contains(query, ignoreCase = true))
-            }
+                (openedBatchId == null || it.batchId == openedBatchId) &&
+                    (query.isBlank() || (it.kind == StashStore.KIND_TEXT &&
+                        it.text.orEmpty().contains(query, ignoreCase = true)))
+            }.let { if (openedBatchId != null) it.sortedBy { entry -> entry.batchOrder } else it }
+            val visibleBatches = if (openedBatchId != null) visibleEntries.map { listOf(it) }
+                else visibleEntries.groupBy { it.batchId }.values.map { it.sortedBy { entry -> entry.batchOrder } }
             LaunchedEffect(expanded) {
                 if (!expanded) {
                     focusManager.clearFocus()
@@ -450,6 +486,7 @@ object StashOverlayPanel {
                         preview != null -> preview = null
                         selectionMode -> cancelSelection()
                         searching -> closeSearch()
+                        openedBatchId != null -> { openedBatchId = null; listState.requestScrollToItem(0) }
                         else -> collapse()
                     }
                 }
@@ -507,6 +544,19 @@ object StashOverlayPanel {
                                         onClick = ::collapse, contentDescription = "收起中转站")
                                 }
                             }
+                            if (openedBatchId != null && preview == null && !confirmDelete) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    OverlayIconAction(Icons.Outlined.ArrowBack,
+                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        onClick = {
+                                            openedBatchId = null
+                                            cancelSelection()
+                                            listState.requestScrollToItem(0)
+                                        }, contentDescription = "返回全部内容")
+                                    Text("图片组 · ${visibleEntries.size} 张", fontSize = 12.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                }
+                            }
                             message?.let {
                                 Text(it, Modifier.padding(horizontal = 6.dp), fontSize = 11.sp,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -548,7 +598,9 @@ object StashOverlayPanel {
                                 }
                                 else -> LazyColumn(Modifier.weight(1f), state = listState,
                                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    items(visibleEntries, key = { it.id }) { ShelfItem(it) }
+                                    items(visibleBatches, key = {
+                                        if (openedBatchId == null) it.first().batchId else it.first().id
+                                    }) { ShelfBatch(it) }
                                 }
                             }
                             if (deleting) {
@@ -583,7 +635,10 @@ object StashOverlayPanel {
                                     enabled = !deleting,
                                     onClick = {
                                         preview = null
-                                        if (searching) closeSearch() else searching = true
+                                        if (searching) closeSearch() else {
+                                            openedBatchId = null
+                                            searching = true
+                                        }
                                     },
                                     contentDescription = if (searching) "退出搜索" else "搜索已存文字")
                                 OverlayIconAction(Icons.Outlined.Close,

@@ -30,6 +30,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.ArrayList;
 
 /** Independent UID, generated samples only; no network or screen capture. */
 public final class MainActivity extends Activity {
@@ -60,6 +61,7 @@ public final class MainActivity extends Activity {
         addButton(root, "分词复制样本", this::shareSegmentationSample);
         addButton(root, "存入复制测试119", () -> shareText("COPY-119-STASH"));
         addButton(root, "存入复制图片120", this::shareCopyImage);
+        addButton(root, "存入图片组123", this::shareImageBatch);
         addButton(root, "屏幕识字样本", this::showScreenSample);
         addButton(root, "核对测试复制", this::verifyTestCopy);
         TextView drop = new TextView(this);
@@ -248,6 +250,39 @@ public final class MainActivity extends Activity {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("sample", IMAGE));
         startActivity(intent);
+    }
+
+    private void shareImageBatch() {
+        try {
+            writeBatchImage("batch-a.png", 640, 240, "BATCH 123 A");
+            writeBatchImage("batch-b.png", 320, 180, "BATCH 123 B");
+        } catch (IOException error) {
+            result.setText("生成图片组失败：" + error.getMessage());
+            return;
+        }
+        Uri first = Uri.parse("content://com.leaf.dragdrop.probe.image/batch-a");
+        Uri second = Uri.parse("content://com.leaf.dragdrop.probe.image/batch-b");
+        Intent intent = new Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/png")
+                .setClassName("com.leaf.hyperdragshare.codex", "com.leaf.hyperdragshare.codex.StashActivity")
+                .putParcelableArrayListExtra(Intent.EXTRA_STREAM, new ArrayList<>(Arrays.asList(first, second)))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        ClipData clip = ClipData.newRawUri("generated batch", first);
+        clip.addItem(new ClipData.Item(second));
+        intent.setClipData(clip);
+        startActivity(intent);
+    }
+
+    private void writeBatchImage(String file, int width, int height, String label) throws IOException {
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.WHITE);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.BLACK);
+        paint.setTextSize(36);
+        canvas.drawText(label, 18, 100, paint);
+        try (FileOutputStream output = new FileOutputStream(new File(getFilesDir(), file))) {
+            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) throw new IOException("PNG encode failed");
+        } finally { bitmap.recycle(); }
     }
 
     private boolean receive(DragEvent event) {

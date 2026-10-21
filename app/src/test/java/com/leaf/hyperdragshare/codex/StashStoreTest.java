@@ -250,22 +250,86 @@ public final class StashStoreTest {
     }
 
     @Test
-    public void imageBatchPersistsBothFiles() throws IOException {
+    public void imageBatchSurvivesReopenWithItsOriginalOrderAndIndependentImports() throws IOException {
         File first = new File(context.getCacheDir(), "batch-first.png");
         File second = new File(context.getCacheDir(), "batch-second.png");
         java.nio.file.Files.write(first.toPath(), new byte[]{1, 2});
         java.nio.file.Files.write(second.toPath(), new byte[]{3, 4});
-        try (StashStore store = new StashStore(context)) {
+        try {
             assertEquals(2, store.addImages(context.getContentResolver(), java.util.Arrays.asList(
                     android.net.Uri.fromFile(first), android.net.Uri.fromFile(second))));
-            assertEquals(2, store.listEntries().size());
-            for (StashStore.Entry entry : store.listEntries()) {
-                assertEquals(2, store.openImage(entry.id).length());
-            }
+            String batchId = store.listEntries().get(0).batchId;
+            StashStore.Entry separateImage = store.addImage(
+                    new ByteArrayInputStream(new byte[]{5, 6}), "image/png");
+            StashStore.Entry separateText = store.addText("independent text");
+            assertEquals(1, store.addImages(context.getContentResolver(),
+                    List.of(android.net.Uri.fromFile(first))));
+            String secondImportBatch = store.listEntries().get(0).batchId;
+
+            store.close();
+            store = new StashStore(context);
+
+            List<StashStore.Entry> batch = store.listEntries().stream()
+                    .filter(entry -> batchId.equals(entry.batchId))
+                    .sorted(java.util.Comparator.comparingInt(entry -> entry.batchOrder))
+                    .toList();
+            assertEquals(5, store.listEntries().size());
+            assertEquals(2, batch.size());
+            assertEquals(0, batch.get(0).batchOrder);
+            assertEquals(1, batch.get(1).batchOrder);
+            assertArrayEquals(new byte[]{1, 2}, readFile(store.openImage(batch.get(0).id)));
+            assertArrayEquals(new byte[]{3, 4}, readFile(store.openImage(batch.get(1).id)));
+            assertFalse(batchId.equals(secondImportBatch));
+            assertEquals(separateImage.id, store.getEntry(separateImage.id).batchId);
+            assertEquals(separateText.id, store.getEntry(separateText.id).batchId);
+            assertEquals(0, store.getEntry(separateImage.id).batchOrder);
+            assertEquals(0, store.getEntry(separateText.id).batchOrder);
         } finally {
             java.nio.file.Files.deleteIfExists(first.toPath());
             java.nio.file.Files.deleteIfExists(second.toPath());
         }
+    }
+
+    @Test
+    public void versionOneUpgradePreservesOldEntriesAsIndependentBatches() throws IOException {
+        store.close();
+        String textId = "11111111-1111-4111-8111-111111111111";
+        String imageId = "22222222-2222-4222-8222-222222222222";
+        byte[] imageBytes = {9, 8, 7, 6};
+        File directory = new File(context.getFilesDir(), "stash");
+        assertTrue(directory.mkdirs());
+        java.nio.file.Files.write(new File(directory, imageId).toPath(), imageBytes);
+        SQLiteDatabase oldDatabase = context.openOrCreateDatabase(DATABASE_NAME, Context.MODE_PRIVATE, null);
+        try {
+            oldDatabase.execSQL("CREATE TABLE stash_entries (id TEXT PRIMARY KEY NOT NULL, "
+                    + "kind TEXT NOT NULL CHECK(kind IN ('text', 'image')), text TEXT, "
+                    + "image_file_name TEXT, mime TEXT, created_at INTEGER NOT NULL)");
+            oldDatabase.execSQL("INSERT INTO stash_entries VALUES (?, 'text', ?, NULL, NULL, ?)",
+                    new Object[]{textId, "existing saved text", 100L});
+            oldDatabase.execSQL("INSERT INTO stash_entries VALUES (?, 'image', NULL, ?, 'image/png', ?)",
+                    new Object[]{imageId, imageId, 200L});
+            oldDatabase.setVersion(1);
+        } finally {
+            oldDatabase.close();
+        }
+        store = new StashStore(context);
+
+        assertEquals(2, store.listEntries().size());
+        StashStore.Entry text = store.getEntry(textId);
+        StashStore.Entry image = store.getEntry(imageId);
+        assertEquals("existing saved text", text.text);
+        assertEquals(textId, text.batchId);
+        assertEquals(imageId, image.batchId);
+        assertEquals(0, text.batchOrder);
+        assertEquals(0, image.batchOrder);
+        assertEquals(100L, text.createdAt);
+        assertEquals(200L, image.createdAt);
+        assertEquals("image/png", image.mime);
+        assertArrayEquals(imageBytes, readFile(store.openImage(imageId)));
+        store.close();
+        store = new StashStore(context);
+        assertEquals(textId, store.getEntry(textId).batchId);
+        assertArrayEquals(imageBytes, readFile(store.openImage(imageId)));
     }
 
     @Test

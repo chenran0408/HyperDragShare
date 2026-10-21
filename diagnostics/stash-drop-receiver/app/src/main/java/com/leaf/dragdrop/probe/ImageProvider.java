@@ -12,8 +12,15 @@ public final class ImageProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
     @Override public String getType(Uri uri) { return "image/png"; }
     @Override public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-        if (!"/sample".equals(uri.getPath()) || !"r".equals(mode)) throw new FileNotFoundException("sample is read-only");
-        return ParcelFileDescriptor.open(new File(getContext().getFilesDir(), "sample.png"), ParcelFileDescriptor.MODE_READ_ONLY);
+        String file;
+        switch (uri.getPath()) {
+            case "/sample": file = "sample.png"; break;
+            case "/batch-a": file = "batch-a.png"; break;
+            case "/batch-b": file = "batch-b.png"; break;
+            default: throw new FileNotFoundException("Unknown generated sample");
+        }
+        if (!"r".equals(mode)) throw new FileNotFoundException("sample is read-only");
+        return ParcelFileDescriptor.open(new File(getContext().getFilesDir(), file), ParcelFileDescriptor.MODE_READ_ONLY);
     }
     @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) { return null; }
     @Override public Uri insert(Uri uri, ContentValues values) { throw new UnsupportedOperationException(); }
