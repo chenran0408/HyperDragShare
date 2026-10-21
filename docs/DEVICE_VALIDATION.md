@@ -1282,3 +1282,5 @@ build359图标导入缺失失败，补齐后360全套通过；361显示修复检
 首次Miuix指南本机升级首次展示，点确认后读回first_run_guide.confirmed=true；没有清数据或改原设置。关于页复看为构建证据。真实Android运行当前PressWindowSnapshot源码clinit成功，修复ICU对未转义闭花括号的错误；临时dex删除，未把这个检查当成微信物理按压通过。
 
 最终21:16安全服务:ui559 Hook199，Portal645输入220ms、reader334ms ready。SystemUI保持198相同代码，框架/桌面/AICR本批未重载。截图/参考分析仅本机work/sidebar175。未更改私人内容。正式R8发布另记结果。
+
+175发布确认：正式tag v1.7.175 指向代码ff66401；GitHub Release非草稿/非预发布，APK与校验文件均上传成功，服务端APK digest与本地0B8DDF479D2DBBA77FADC5DE2C9EFAE853CAF5E93F97368785A9724F6CE8BFA5一致。Actions39606816340登记时仍运行，未借本地结果写云端通过。下载：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.175 。
