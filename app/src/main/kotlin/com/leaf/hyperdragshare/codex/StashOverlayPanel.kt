@@ -1,6 +1,8 @@
 package com.leaf.hyperdragshare.codex
 
 import android.app.KeyguardManager
+import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.Context
@@ -79,6 +81,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import java.io.IOException
@@ -453,6 +456,34 @@ object StashOverlayPanel {
             selectionMode = false
         }
 
+        private fun shareImagesToWechat(images: List<StashStore.Entry>) {
+            if (images.isEmpty() || images.any { it.kind != StashStore.KIND_IMAGE }) return
+            val uris = ArrayList(images.map { StashImageProvider.uriForEntry(it.id) })
+            val mime = images.map { it.mime }.distinct().singleOrNull() ?: "image/*"
+            val clip = ClipData.newUri(app.contentResolver, "中转站图片", uris.first())
+            uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+            val intent = Intent(if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
+                component = ComponentName("com.tencent.mm", "com.tencent.mm.ui.tools.ShareImgUI")
+                type = mime
+                if (uris.size == 1) {
+                    setDataAndType(uris.first(), mime)
+                    putExtra(Intent.EXTRA_STREAM, uris.first())
+                } else putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                clipData = clip
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try {
+                app.startActivity(intent)
+                // Opening the receiver is not proof that WeChat read or sent the images.
+                DragShareLog.i("DragShare/Stash", "WeChat image share opened count=" + images.size)
+                collapse()
+            } catch (error: ActivityNotFoundException) {
+                report("无法打开微信图片分享，请确认微信已安装", error)
+            } catch (error: SecurityException) {
+                report("系统拒绝将图片交给微信，原图已保留", error)
+            }
+        }
+
         private fun selectedEntries() = stashBatches(entries).flatten().filter { it.id in selectedIds }
 
         private fun openText(entry: StashStore.Entry) {
@@ -586,6 +617,11 @@ object StashOverlayPanel {
                                         StashImage(image, 1200, Modifier.fillMaxSize(), ContentScale.Fit)
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                        OverlayIconAction(MiuixIcons.Share,
+                                            MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                            enabled = !updating,
+                                            onClick = { shareImagesToWechat(listOf(image)) },
+                                            contentDescription = "交给微信发送")
                                         OverlayIconAction(MiuixIcons.Scan,
                                             MiuixTheme.colorScheme.onSurfaceVariantActions,
                                             onClick = {
@@ -643,6 +679,13 @@ object StashOverlayPanel {
                                             selectedIds = if (allSelected) selectedIds - visibleIds
                                                 else selectedIds + visibleIds
                                         }, contentDescription = if (allSelected) "取消当前列表全选" else "全选当前列表")
+                                    if (selected.isNotEmpty() && selected.all { it.kind == StashStore.KIND_IMAGE }) {
+                                        OverlayIconAction(MiuixIcons.Share,
+                                            MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                            enabled = !updating,
+                                            onClick = { shareImagesToWechat(selected) },
+                                            contentDescription = "将所选图片交给微信发送")
+                                    }
                                     OverlayIconAction(MiuixIcons.Delete,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         enabled = !updating && selectedIds.isNotEmpty(),

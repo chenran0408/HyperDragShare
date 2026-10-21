@@ -183,3 +183,9 @@ StashActivity删除原全屏/系统小窗页面，只保留透明分享接收、
 157同签名安装后Portal 30012/181输入与reader ready，但新操作没有因此自动验收。四次文字Root lease在约20ms结束并返回“拖入位置被系统窗口遮挡”，不是传输超时。生成PNG拖入微信自有文件传输助手时系统报告accepted=true，微信未显示图片/预览，本次副本映射不存在且无本次URI grant。accepted仅代表系统拖放事件被接受，不代表微信读取URI或完成接收。WMS能列出focused微信应用窗口，但A11y仅列状态栏与模块托盘，Active/TopFocused=-1，收起托盘后也仍缺微信；未确定原因。检测到该微信scope还有FreeMoe 5.1.3 beta，只作只读识别。
 
 清理边界：156生成批次ID `ac2cbb17` 与图片条目ID不同，图片实际ID `ade43994...`；已按精确ID删除该生成图片及两条对应文字，回到原4条/3图。157故障复现新增的`HDS157_TEXT_DROP_TEST`文字和`HDS157 DRAG IMAGE TEST` PNG（6084 bytes）在本记录时仍待主代理按确切ID清理。用户后续另行存入的新内容不按历史条目数推定，不做批量清除。
+
+## 165 微信图片的明确分享入口
+
+目标设备只读PackageManager查询确认微信ShareImgUI同时接收ACTION_SEND image/png与ACTION_SEND_MULTIPLE image/*。现有图片预览增加Miuix分享图标，纯图片多选时在已有操作行提供同一入口；分别携单图EXTRA_STREAM、多图URI列表及ClipData/临时读取权限，直接打开微信接收页面，由用户选联系人并确认发送。不增加本模块Activity、不自动发消息、不删除原图，取消后重开托盘仍保留预览/选区。
+
+这条路径与原生拖放分别记账：原生drop accepted但微信不读取Provider的问题没有因此修复，也不能称当前聊天直接拖图可用。分享日志只记录入口启动和图片数量，不写URI/内容；启动成功不当作图片读取或发送成功。系统拒绝/微信入口缺失时显示明确错误并保留托盘。构建/实机证据见DEVICE_VALIDATION最新条。
