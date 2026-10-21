@@ -78,6 +78,8 @@ import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.SelectAll
+import top.yukonga.miuix.kmp.icon.extended.Merge
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 internal enum class BigBangMoreAction {
@@ -333,9 +335,10 @@ internal fun BigBangOverlayContent(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            BigBangToolAction(if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
-                                modifier = Modifier.width(80.dp).semantics { selected = allTextSelected },
-                                primary = allTextSelected)
+                            BigBangIconAction(MiuixIcons.SelectAll,
+                                if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
+                                primary = allTextSelected,
+                                modifier = Modifier.semantics { selected = allTextSelected })
                             BigBangToolAction("拆词", { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
                             BigBangIconAction(MiuixIcons.Copy, if (copying) "正在复制" else "复制", onCopy,
                                 ready && !copying, primary = true)
@@ -350,7 +353,8 @@ internal fun BigBangOverlayContent(
                                 editorText = originalText()
                                 showEditor = true
                             }, ready)
-                            BigBangToolAction("合并", { onMoreAction(BigBangMoreAction.Merge) }, ready && canMerge)
+                            BigBangIconAction(MiuixIcons.Merge, "合并选词",
+                                { onMoreAction(BigBangMoreAction.Merge) }, ready && canMerge)
                             BigBangIconAction(MiuixIcons.Undo, "撤销", { onMoreAction(BigBangMoreAction.UndoEdit) }, ready && canUndoEdit)
                             BigBangIconAction(MiuixIcons.Translate, "翻译", { onMoreAction(BigBangMoreAction.Translate) }, ready)
                             BigBangIconAction(DictionaryIcon, "词典查词", { onMoreAction(BigBangMoreAction.Dictionary) }, ready)
@@ -504,12 +508,13 @@ private fun BigBangIconAction(
     onClick: () -> Unit,
     enabled: Boolean,
     primary: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     TooltipBox(text = label, enabled = enabled) {
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(44.dp),
+            modifier = modifier.size(44.dp),
             minWidth = 44.dp,
             minHeight = 44.dp,
             cornerRadius = 12.dp,

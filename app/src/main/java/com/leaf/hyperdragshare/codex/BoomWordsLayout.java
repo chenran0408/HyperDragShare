@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.Context;
+import android.icu.text.BreakIterator;
 import android.content.res.Resources;
 import android.text.TextPaint;
 import android.text.TextUtils;
@@ -10,6 +11,7 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.TreeSet;
+import java.util.Locale;
 
 public class BoomWordsLayout {
 
@@ -403,9 +405,16 @@ public class BoomWordsLayout {
     public boolean canSplitSelectedWords(TreeSet<Integer> selectedIds) {
         for (int index : selectedIds) {
             Word word = mWords.get(index);
-            if (!word.punc && word.word.codePointCount(0, word.word.length()) > 1) return true;
+            if (!word.punc && hasMultipleCharacters(word.word)) return true;
         }
         return false;
+    }
+
+    private static boolean hasMultipleCharacters(String text) {
+        BreakIterator characters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        characters.setText(text);
+        characters.first();
+        return characters.next() != BreakIterator.DONE && characters.next() != BreakIterator.DONE;
     }
 
     public TreeSet<Integer> mergeSelectedWords(TreeSet<Integer> selectedIds) {
@@ -460,7 +469,7 @@ public class BoomWordsLayout {
             }
             final Word word = mWords.get(i);
             final boolean selected = selectedIds.contains(i);
-            if (!selected || word.punc || word.word.codePointCount(0, word.word.length()) <= 1) {
+            if (!selected || word.punc || !hasMultipleCharacters(word.word)) {
                 newWords.add(word);
                 if (selected) {
                     newSelected.add(newWords.size() - 1);
@@ -468,14 +477,15 @@ public class BoomWordsLayout {
                 continue;
             }
             changed = true;
-            for (int offset = 0; offset < word.word.length();) {
+            BreakIterator characters = BreakIterator.getCharacterInstance(Locale.ROOT);
+            characters.setText(word.word);
+            for (int offset = characters.first(), next = characters.next();
+                    next != BreakIterator.DONE; offset = next, next = characters.next()) {
                 final int codePoint = word.word.codePointAt(offset);
-                final int next = offset + Character.charCount(codePoint);
                 if (!Character.isWhitespace(codePoint) && !Character.isSpaceChar(codePoint)) {
                     newWords.add(new Word(word.word.substring(offset, next), word.start + offset, false));
                     newSelected.add(newWords.size() - 1);
                 }
-                offset = next;
             }
         }
         if (!changed) {

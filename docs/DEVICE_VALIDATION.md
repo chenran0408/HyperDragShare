@@ -1088,3 +1088,37 @@ build319完整testDebugUnitTest/lintDebug/assembleDebug成功44s：217tests/0fai
 微信只读窄审计：当前8.0.79/3182/targetSdk35，APK静态有聊天View.OnDragListener/onDrag(DragEvent)；证明存在Android接收器，不证明会接受本源文字/图片或URI。旧UID10228独立接收器的成功不是微信证据。本轮不发送私人测试消息。
 
 154云端39559847714/head13aa390已success且两个Artifact上传成功；155按本次push的新run核验。
+
+## 155 软重启实测准备与新故障
+
+用户明确准备重启实测。先保存本机reboot155/before.json元数据，再执行项目现有软重启命令setprop ctl.restart zygote一次，未执行整机重启/清数据/授权修改。系统恢复到桌面，无需输入锁屏凭据；旧微信任务未被脚本重新打开。
+
+确切运行证据：15:29:23.474 system_server18477、15:29:38.935 SystemUI20665、15:29:53.753 AICR cognitionService24531、15:29:57.784 AICR主27489、15:29:58.810 actionprovider28325，Hook安装日志均自报build=1.7.155/179。原生179尚无真实尺寸采样；旧178到重启前累计10手势三个尺寸均0，不把它写为新toolMajor的结果。框架已加载不等于命中过数量保护分支。
+
+15:30:13 Portal32700 Root输入和reader就绪；15:30:22.143/144 LMK以adj905终止模块25171和Portal32700，AMS同时记录Portal依赖死亡ShareImageProvider。此为LMK/宿主死亡，不是Root phantom数量裁剪；既有窄Hook不应扩大为阻止所有系统回收。pidof已空，但module_activation保留179ready。15:32打开自身MainActivity，实际显示“已激活/传送门已加载当前模块”；截图本机reboot155/module-status.png，不提交图片，未触碰私人页面。由此确认首页将历史握手误当当前存活的根因。
+
+为固定155人工验收，未再安装更新；明确一次provider后台唤醒Portal14292，前台仍自身设置。此操作只恢复测试入口，不是自动重试/保活修复，不能据此称LMK稳定性通过。after.json保存本机版本与加载元数据。下一批用受限RPC的Binder存活token校正状态，module重启不信旧偏好；另准备字符字形完整性修复，均未安装。
+
+155云端运行39562051648/headadd8c335c43affbd538f50fbf5b69a9bd1596d6d已completed/success。末次pidofPortal14292仍在，自身MainActivity/task2439前台；未再安装或进行拖放、OCR、私聊输入。
+
+## 179原生面积实际核验：当前四轴全零
+
+SystemUI20665明确加载1.7.155/179后，15:36:15至15:37:32记录7个真实触屏手势（含UP与CANCEL），持续256至1382ms；size、touchMajor、touchMinor、toolMajor峰值均0。采样位于WM Shell EventReceiver.onInputEvent before，先于小窗/边缘handlers，不抢触摸，不混用Root结束事件。真实指尖/拇指身份没有标注，不把它写成完成区分手指对照，但已经证明该入口目前未得到可用面积值。
+
+只读getevent -lp确认Xiaomi_Touch_Input_0/event7声明ABS_MT_TOUCH_MAJOR、ABS_MT_TOUCH_MINOR，范围0..255；没有声明工具宽度轴。能力声明不等于实际数值。15:38:13至15:38:33有限20秒旁路观察无任何SYN_REPORT/接触起点，故不能据此判断驱动不发尺寸；没有坐标/原始触点ID持久化，无注入、校准、抓取页面、权限或设置修改。当前结论：SystemUI现有通道没有可用面积输入，不能启用或声称物理拇指面积触发完成。系统样本与内核观察摘要仅本机reboot155。
+
+后续同一179进程只读复核累计23组真实手势，时长225至1382ms，四项尺寸峰值仍全部0；这是对最初7组结果的补充，不改变当前通道无有效面积的结论。
+
+## 2026-10-21 1.7.156：图标、真实存活状态和字符完整性
+
+按最新指令暂停面积研究，继续Root evdev时长/位移。全选/取消全选共用Miuix SelectAll，selected语义/主题色与动态Tooltip、无障碍描述区分；合并用Miuix Merge。共用44dp触区/22dp图形，仍与拆词相邻，不新增页面或工具栏，无效时禁用。
+
+ModuleActivation所有Portal报告携同一进程Binder token。模块端仅订阅当前token/pid；进程退出清专用运行状态、旧死亡不清新报告；getter要求当前活token，模块重新创建不能信历史pref。Settings状态回调只更新卡片，不重新Root探测或拉起宿主，Portal pending旧轮询已移除。仅进入设置沿既有单次握手；no-op查询不保证活宿主重报丢失token，未连接时提示显式重载。未提高OOM、全局关闭phantom或加保活重试。
+
+审查已准备源码发现codePoint仍会拆开组合字形，故同批修TextSegmenter与BoomWordsLayout：ICU字符边界保护重音、肤色、旗帜、VS16和ZWJ，初次native token与手动拆词都不产生字形残片；保持原文、UTF16范围、中文词语粒度、选区/合并快照。既存碎片快照不自动重分词，避免改变已存用户语义。
+
+build320完整testDebugUnitTest/lintDebug/assembleDebug成功：226tests/0failures/0errors/0skips，Lint0errors/159warnings/2hints。未失败后通过增加回退掩盖。包名com.leaf.hyperdragshare.codex，180/1.7.156，证书SHA256仍b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0；APK SHA256 08B15831ABB8A669CA3218EE7A2339B0C758C72F7E7CA547F7D41C8783431448，任务outputs/HyperDragShare-1.7.156-debug.apk。同签名覆盖安装一次，PM读回180。
+
+真机针对原故障：初次Portal18074/180 input、reader ready，首页已激活；15:43:25执行一次针对性宿主停止，模块18622实际记录Portal process ended; cleared its runtime readiness pid=18074，偏好<map/>，同一首页立即显示未连接传送门。下一次明确恢复前pidof仍为空，没有死亡通知自动重拉。单次后台唤醒后22290/180输入/reader再次ready、错误空。系统/AICR/SystemUI仍179，未再软重启。此结果证明死亡后的状态修复，不证明宿主避免LMK。
+
+图标针对性操作使用现有SEND桥带生成文字alpha beta gamma（16字符），不新增Probe。原页浮窗先全选16/16、图标主题色，按同图标取消回无选区/合并禁用，再全选与合并图标将3块变1块，原文字/空格与选区16/16保留、合并重新禁用。明确点击该浮窗关闭图标，未盲发Back。没有复制/分享、写中转站、私聊草稿、私人内容或权限修改。截图仅本机validation156，不做新截图矩阵。字符组合/撤销与连续选词本轮主要为自动回归，未写成完整真机手感通过。

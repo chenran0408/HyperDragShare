@@ -1162,3 +1162,13 @@ SwipeSelectView/CustomScrollView：横向意图锁选词，纵向留给滚动；
 UI复用现有组件：去掉状态卡硬编码红绿与170dp图形；图片/二维码、点取、屏幕OCR统一18sp标题和单一关闭；搜索及共用操作44dp触区、22dp图形、Miuix图标/Tooltip/禁用态。未新增页面，不恢复分词中转站按钮或再次OCR，不改OCR引擎。中转站窗口面积仍≤16%。
 
 完整构建/安装/未实测范围见 DEVICE_VALIDATION 最新155记录和 CURRENT_STATUS。
+
+## 2026-10-21 1.7.156：图标、真实存活状态和字符完整性
+
+按最新指令暂停面积研究，继续Root evdev时长/位移。全选/取消全选共用Miuix SelectAll，selected语义/主题色与动态Tooltip、无障碍描述区分；合并用Miuix Merge。共用44dp触区/22dp图形，仍与拆词相邻，不新增页面或工具栏，无效时禁用。
+
+ModuleActivation所有Portal报告携同一进程Binder token。模块端仅订阅当前token/pid；进程退出清专用运行状态、旧死亡不清新报告；getter要求当前活token，模块重新创建不能信历史pref。Settings状态回调只更新卡片，不重新Root探测或拉起宿主，Portal pending旧轮询已移除。仅进入设置沿既有单次握手；no-op查询不保证活宿主重报丢失token，未连接时提示显式重载。未提高OOM、全局关闭phantom或加保活重试。
+
+审查已准备源码发现codePoint仍会拆开组合字形，故同批修TextSegmenter与BoomWordsLayout：ICU字符边界保护重音、肤色、旗帜、VS16和ZWJ，初次native token与手动拆词都不产生字形残片；保持原文、UTF16范围、中文词语粒度、选区/合并快照。既存碎片快照不自动重分词，避免改变已存用户语义。
+
+构建、安装与真实验收见DEVICE_VALIDATION最新156记录；CURRENT_STATUS为当前账本。

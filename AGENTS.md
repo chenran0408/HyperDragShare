@@ -1,5 +1,7 @@
 # HyperDragShare Agent Guide
 
+最新版本、功能差距和验证层级先读 `docs/CURRENT_STATUS.md`，再读各文档末条。用户已明确暂缓面积研究，沿用Root evdev时长/位移；不要根据旧计划继续安排尺寸实验或校准。
+
 本文是后续自动化代理在本工程内工作的约束。当前源码和
 `docs/IMPLEMENTATION.md` 是实现事实来源；`E:\workspace\TaplusContentPreview`
 只可作为早期传送门内容抓取思路的参考，不代表可运行基线。

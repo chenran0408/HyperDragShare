@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.Context;
+import android.icu.text.BreakIterator;
 import android.content.res.AssetManager;
 
 import java.io.File;
@@ -8,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Locale;
 
 /** Lazy, process-local wrapper around cppjieba for the text-segmentation screen. */
 final class TextSegmenter {
@@ -105,24 +107,34 @@ final class TextSegmenter {
         }
         ArrayList<Integer> words = new ArrayList<>();
         ArrayList<Integer> punctuations = new ArrayList<>();
+        BreakIterator characters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        characters.setText(text);
         int cursor = 0;
+        int previousTokenEnd = 0;
         for (int index = 0; index + 1 < tokenSpans.length; index += 2) {
             int start = tokenSpans[index];
             int endExclusive = tokenSpans[index + 1];
-            if (start < cursor || start < 0 || endExclusive <= start
+            if (start < previousTokenEnd || start < 0 || endExclusive <= start
                     || endExclusive > text.length()) {
                 continue;
             }
-            appendPunctuation(text, cursor, start, punctuations);
+            previousTokenEnd = endExclusive;
+            // Native tokens can end inside one displayed character. Keep that character whole,
+            // and let the next token start after the part already included in this token.
+            if (!characters.isBoundary(start)) start = characters.preceding(start);
+            if (!characters.isBoundary(endExclusive)) endExclusive = characters.following(endExclusive);
+            start = Math.max(start, cursor);
+            if (endExclusive <= start) continue;
+            appendPunctuation(text, cursor, start, punctuations, characters);
             if (hasWordCodePoint(text, start, endExclusive)) {
                 words.add(start);
                 words.add(endExclusive - 1);
             } else {
-                appendPunctuation(text, start, endExclusive, punctuations);
+                appendPunctuation(text, start, endExclusive, punctuations, characters);
             }
             cursor = endExclusive;
         }
-        appendPunctuation(text, cursor, text.length(), punctuations);
+        appendPunctuation(text, cursor, text.length(), punctuations, characters);
         if (words.isEmpty() && punctuations.isEmpty()) {
             return null;
         }
@@ -211,10 +223,10 @@ final class TextSegmenter {
     }
 
     private static void appendPunctuation(
-            String text, int start, int endExclusive, ArrayList<Integer> out) {
+            String text, int start, int endExclusive, ArrayList<Integer> out, BreakIterator characters) {
         for (int index = start; index < endExclusive;) {
             int codePoint = text.codePointAt(index);
-            int next = index + Character.charCount(codePoint);
+            int next = characters.following(index);
             if (!Character.isWhitespace(codePoint) && !Character.isSpaceChar(codePoint)) {
                 out.add(index);
                 out.add(next - 1);

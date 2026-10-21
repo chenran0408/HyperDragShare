@@ -21,3 +21,11 @@ trim在持有AMS.mProcLock与phantom.mLock时调用killLocked，已有归属映�
 ## 独立的生命周期欠项
 
 RootTouchSource仍需修正停止时关闭阻塞读流、旧线程finally清理新会话以及su子进程退出归属。旧reader5237曾确认属于Portal4541、后来自行消失；未执行按进程名或event节点批量清理。不能仅以phantom故障解释全部reader生命周期问题。
+
+## 155软重启后证据
+
+179框架Hook已于15:29:23随system_server18477加载。15:30:22的新故障是LMK杀cached模块和Portal宿主（adj905），不是phantom子进程数量裁剪；不扩大Hook阻止LMK。历史握手/ready偏好在进程消失后仍使设置实际误报激活，下一批修Binder存活状态。前述153已修输入Run归属及EOF清理，旧“仍需修”是历史记录；仍未证明框架保护自然命中。
+
+## 156状态存活修复
+
+ModuleActivation以受限ProviderRPC的进程Binder token判当前连接，死亡清运行状态，旧death按token/pid隔离。模块重建丢token时旧pref不能冒称当前激活，显式重载恢复。Settings死亡通知不触发自动握手。真机停止18074后立即撤下已激活并清pref、恢复22290/180输入/reader就绪。此修复不阻止LMK，也不扩大phantom保护范围。

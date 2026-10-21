@@ -1040,6 +1040,12 @@ private fun runtimeActivation(context: Context, accessibility: Boolean): Activat
     }
 }
 
+private fun portalActivation(context: Context): ActivationUiState = when {
+    !ModuleActivation.isCurrentBuildInjected(context) -> ActivationUiState.NotInjected
+    !ModuleActivation.isCurrentBuildPortalRootGranted(context) -> ActivationUiState.PortalRootUnavailable
+    else -> runtimeActivation(context, false)
+}
+
 private fun openAccessibilitySettings(context: Context) {
     context.startActivity(
         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
@@ -1057,12 +1063,13 @@ private fun ActivationStatusCard(
     var state by remember { mutableStateOf(ActivationUiState.Checking) }
     val lifecycleOwner = LocalView.current.context as? LifecycleOwner
 
-    DisposableEffect(context) {
+    DisposableEffect(context, contentCaptureMode) {
         val preferences = context.getSharedPreferences(ModuleActivation.PREFS_NAME, Context.MODE_PRIVATE)
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == ModuleActivation.EXTRA_ROOT_INPUT_READY || key == ModuleActivation.EXTRA_ROOT_INPUT_ERROR
-                || key == ModuleActivation.EXTRA_PRESS_READER_READY || key == ModuleActivation.EXTRA_PRESS_READER_ERROR) {
-                refreshGeneration++
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            // Death/status reports update the card. Only entering settings requests a handshake.
+            if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_PORTAL
+                && state != ActivationUiState.Checking && state != ActivationUiState.NoRoot) {
+                state = portalActivation(context)
             }
         }
         preferences.registerOnSharedPreferenceChangeListener(listener)
@@ -1114,21 +1121,18 @@ private fun ActivationStatusCard(
                 injected = ModuleActivation.isCurrentBuildInjected(context)
                 portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
                 if (injected && portalRootGranted) {
-                    state = runtimeActivation(context, false)
+                    state = portalActivation(context)
                     return@LaunchedEffect
                 }
                 delay(PORTAL_ACTIVATION_CHECK_INTERVAL_MS)
             }
         }
-        state = when {
-            !injected -> ActivationUiState.NotInjected
-            !portalRootGranted -> ActivationUiState.PortalRootUnavailable
-            else -> runtimeActivation(context, false)
-        }
+        state = portalActivation(context)
     }
 
     LaunchedEffect(state, contentCaptureMode) {
-        if (state == ActivationUiState.PressReaderConnecting || state == ActivationUiState.RootInputConnecting) {
+        if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY
+            && (state == ActivationUiState.PressReaderConnecting || state == ActivationUiState.RootInputConnecting)) {
             while (state == ActivationUiState.PressReaderConnecting || state == ActivationUiState.RootInputConnecting) {
                 delay(300L)
                 state = runtimeActivation(context,
@@ -1141,7 +1145,7 @@ private fun ActivationStatusCard(
     val title = when (state) {
         ActivationUiState.Checking -> "正在检测"
         ActivationUiState.NoRoot -> "未获取 Root 权限"
-        ActivationUiState.NotInjected -> "未注入到传送门"
+        ActivationUiState.NotInjected -> "未连接传送门"
         ActivationUiState.PortalRootUnavailable -> "传送门 Root 通道不可用"
         ActivationUiState.AccessibilityDisabled -> "无障碍服务未启用"
         ActivationUiState.AccessibilityConnecting -> "无障碍服务正在连接"
@@ -1154,7 +1158,7 @@ private fun ActivationStatusCard(
     val summary = when (state) {
         ActivationUiState.Checking -> "正在检查运行环境"
         ActivationUiState.NoRoot -> "Root 输入通道当前不可用"
-        ActivationUiState.NotInjected -> "当前版本尚未在传送门进程中加载\n如果传送门未启动，该提示为正常现象"
+        ActivationUiState.NotInjected -> "尚未收到当前传送门进程的存活确认。已启用作用域时，可通过下方“重载模块”重新连接。"
         ActivationUiState.PortalRootUnavailable -> "传送门的 Root 检测未完成或未成功，请检查作用域运行状态"
         ActivationUiState.AccessibilityDisabled -> "请在系统设置中手动开启“HyperDragShare”服务"
         ActivationUiState.AccessibilityConnecting -> "正在等待无障碍服务和 Root 输入就绪"

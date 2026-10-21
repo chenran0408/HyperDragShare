@@ -2,7 +2,10 @@ package com.leaf.hyperdragshare.codex;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Binder;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.RemoteException;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +20,7 @@ final class ModuleActivation {
     static final String EXTRA_PRESS_READER_ERROR = "press_reader_error";
     static final String EXTRA_ROOT_INPUT_READY = "root_input_ready";
     static final String EXTRA_ROOT_INPUT_ERROR = "root_input_error";
+    static final String EXTRA_LIFETIME_TOKEN = "portal_lifetime_token";
 
     static final String PREFS_NAME = "module_activation";
     private static final String KEY_INJECTED_VERSION = "injected_version";
@@ -32,6 +36,11 @@ final class ModuleActivation {
             "am start --user current -n com.miui.contentextension/"
                     + "com.miui.contentextension.setting.whitelist.BlacklistSettingActivity";
     private static boolean portalRootProbeInFlight;
+    // Each injected Portal process owns its token; the module never persists this capability.
+    private static final Binder LIFETIME_TOKEN = new Binder();
+    private static IBinder livePortal;
+    private static int livePortalPid;
+    private static IBinder.DeathRecipient portalDeath;
 
     private ModuleActivation() {}
 
@@ -101,6 +110,7 @@ final class ModuleActivation {
         if (portalContext == null) {
             return false;
         }
+        extras.putBinder(EXTRA_LIFETIME_TOKEN, LIFETIME_TOKEN);
         try {
             portalContext.getContentResolver().call(
                     ImageStagingClient.BASE_URI,
@@ -114,24 +124,40 @@ final class ModuleActivation {
         }
     }
 
-    static void recordInjected(Context moduleContext, Bundle extras) {
+    static synchronized void recordInjected(Context moduleContext, Bundle extras) {
         long reportedVersion = extras == null
                 ? -1L
                 : extras.getLong(EXTRA_VERSION_CODE, -1L);
         if (!matchesCurrentBuild(reportedVersion)) {
             return;
         }
+        IBinder token = extras.getBinder(EXTRA_LIFETIME_TOKEN);
+        int pid = extras.getInt(EXTRA_PROCESS_ID, 0);
+        if (token == null || pid <= 0) {
+            DragShareLog.w("DragShare/Activation", "Portal report has no valid lifetime token/PID");
+            clearPortalReport(moduleContext);
+            return;
+        }
+        if (livePortal != token || livePortalPid != pid) {
+            clearPortalReport(moduleContext);
+            Context app = moduleContext.getApplicationContext();
+            IBinder.DeathRecipient death = () -> portalDied(app, token, pid);
+            try {
+                token.linkToDeath(death, 0);
+            } catch (RemoteException error) {
+                DragShareLog.w("DragShare/Activation", "Portal ended before its lifetime could be linked", error);
+                return;
+            }
+            livePortal = token;
+            livePortalPid = pid;
+            portalDeath = death;
+        }
         SharedPreferences preferences = moduleContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = preferences.edit();
-        if (extras.getInt(EXTRA_PROCESS_ID, 0) != preferences.getInt(KEY_PROCESS_ID, 0)) {
-            editor.remove(KEY_PORTAL_ROOT_VERSION).remove(KEY_PORTAL_ROOT_GRANTED)
-                    .remove(KEY_ROOT_INPUT_VERSION).remove(EXTRA_ROOT_INPUT_READY).remove(EXTRA_ROOT_INPUT_ERROR)
-                    .remove(KEY_PRESS_READER_VERSION).remove(EXTRA_PRESS_READER_READY).remove(EXTRA_PRESS_READER_ERROR);
-        }
         editor
                 .putLong(KEY_INJECTED_VERSION, reportedVersion)
-                .putInt(KEY_PROCESS_ID, extras.getInt(EXTRA_PROCESS_ID, 0));
-        if (extras != null && extras.containsKey(EXTRA_PORTAL_ROOT_GRANTED)) {
+                .putInt(KEY_PROCESS_ID, pid);
+        if (extras.containsKey(EXTRA_PORTAL_ROOT_GRANTED)) {
             editor.putLong(KEY_PORTAL_ROOT_VERSION, reportedVersion)
                     .putBoolean(
                             KEY_PORTAL_ROOT_GRANTED,
@@ -150,18 +176,19 @@ final class ModuleActivation {
         editor.apply();
     }
 
-    static boolean isCurrentBuildInjected(Context context) {
-        if (context == null) {
+    static synchronized boolean isCurrentBuildInjected(Context context) {
+        if (context == null || livePortal == null || !livePortal.isBinderAlive()) {
             return false;
         }
         SharedPreferences preferences = context.getSharedPreferences(
                 PREFS_NAME,
                 Context.MODE_PRIVATE);
-        return matchesCurrentBuild(preferences.getLong(KEY_INJECTED_VERSION, -1L));
+        return matchesCurrentBuild(preferences.getLong(KEY_INJECTED_VERSION, -1L))
+                && livePortalPid == preferences.getInt(KEY_PROCESS_ID, 0);
     }
 
-    static boolean isCurrentBuildPortalRootGranted(Context context) {
-        if (context == null) {
+    static synchronized boolean isCurrentBuildPortalRootGranted(Context context) {
+        if (!isCurrentBuildInjected(context)) {
             return false;
         }
         SharedPreferences preferences = context.getSharedPreferences(
@@ -175,25 +202,29 @@ final class ModuleActivation {
         return runRootCommand("id -u");
     }
 
-    static boolean isPressReaderReady(Context context) {
+    static synchronized boolean isPressReaderReady(Context context) {
+        if (!isCurrentBuildInjected(context)) return false;
         SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         return matchesCurrentBuild(preferences.getLong(KEY_PRESS_READER_VERSION, -1L))
                 && preferences.getBoolean(EXTRA_PRESS_READER_READY, false);
     }
 
-    static String pressReaderError(Context context) {
+    static synchronized String pressReaderError(Context context) {
+        if (!isCurrentBuildInjected(context)) return "";
         SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         return matchesCurrentBuild(preferences.getLong(KEY_PRESS_READER_VERSION, -1L))
                 ? preferences.getString(EXTRA_PRESS_READER_ERROR, "") : "";
     }
 
-    static boolean isRootInputReady(Context context) {
+    static synchronized boolean isRootInputReady(Context context) {
+        if (!isCurrentBuildInjected(context)) return false;
         SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         return matchesCurrentBuild(preferences.getLong(KEY_ROOT_INPUT_VERSION, -1L))
                 && preferences.getBoolean(EXTRA_ROOT_INPUT_READY, false);
     }
 
-    static String rootInputError(Context context) {
+    static synchronized String rootInputError(Context context) {
+        if (!isCurrentBuildInjected(context)) return "";
         SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         return matchesCurrentBuild(preferences.getLong(KEY_ROOT_INPUT_VERSION, -1L))
                 ? preferences.getString(EXTRA_ROOT_INPUT_ERROR, "") : "";
@@ -208,11 +239,30 @@ final class ModuleActivation {
         return "content query --user $(am get-current-user) --uri " + PORTAL_PROVIDER_URI;
     }
 
-    static int injectedProcessId(Context context) {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_PROCESS_ID, 0);
+    static synchronized int injectedProcessId(Context context) {
+        return isCurrentBuildInjected(context) ? livePortalPid : 0;
     }
 
-    static void clearPortalReport(Context context) {
+    static synchronized void clearPortalReport(Context context) {
+        IBinder previous = livePortal;
+        IBinder.DeathRecipient death = portalDeath;
+        livePortal = null;
+        livePortalPid = 0;
+        portalDeath = null;
+        if (previous != null) previous.unlinkToDeath(death, 0);
+        clearStoredPortalReport(context);
+    }
+
+    private static synchronized void portalDied(Context context, IBinder token, int pid) {
+        if (livePortal != token || livePortalPid != pid) return;
+        livePortal = null;
+        livePortalPid = 0;
+        portalDeath = null;
+        clearStoredPortalReport(context);
+        DragShareLog.w("DragShare/Activation", "Portal process ended; cleared its runtime readiness pid=" + pid);
+    }
+
+    private static void clearStoredPortalReport(Context context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
                 .remove(KEY_INJECTED_VERSION).remove(KEY_PORTAL_ROOT_VERSION)
                 .remove(KEY_ROOT_INPUT_VERSION).remove(EXTRA_ROOT_INPUT_READY).remove(EXTRA_ROOT_INPUT_ERROR)

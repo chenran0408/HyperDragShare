@@ -28,6 +28,38 @@ public class BoomWordsLayoutTest {
     }
 
     @Test
+    public void displayedCharactersCannotBeSplitIntoCombiningOrEmojiFragments() {
+        for (String glyph : new String[]{"e\u0301", "\uD83D\uDC4D\uD83C\uDFFD",
+                "\uD83C\uDDE8\uD83C\uDDF3", "\u2764\uFE0F",
+                "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66"}) {
+            BoomWordsLayout layout = layout(glyph, 0, glyph.length() - 1, -1);
+            assertFalse(glyph, layout.canSplitSelectedWords(selected(0)));
+            assertNull(layout.splitSelectedWordsToChars(selected(0)));
+            assertEquals(glyph, layout.getWord(0));
+        }
+    }
+
+    @Test
+    public void splitPreservesGraphemeOffsetsSelectionAndUndoSnapshot() {
+        String family = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66";
+        String text = "A" + family + "e\u0301Z";
+        BoomWordsLayout layout = layout(text, 0, text.length() - 1, -1);
+        int[] before = layout.getSegments();
+        assertTrue(layout.canSplitSelectedWords(selected(0)));
+        assertEquals(selected(0, 1, 2, 3), layout.splitSelectedWordsToChars(selected(0)));
+        assertEquals("A", layout.getWord(0));
+        assertEquals(family, layout.getWord(1));
+        assertEquals("e\u0301", layout.getWord(2));
+        assertEquals("Z", layout.getWord(3));
+        assertEquals(1 + family.length(), layout.getWordStart(2));
+        assertFalse(layout.canSplitSelectedWords(selected(0, 1, 2, 3)));
+        assertEquals(text, layout.getOriText());
+        assertEquals(text, layout(text, before).getWord(0));
+        assertEquals(selected(0), layout.mergeSelectedWords(selected(0, 1, 2, 3)));
+        assertEquals(text, layout.getWord(0));
+    }
+
+    @Test
     public void editAvailabilityTracksSelectionAndParagraphBoundaries() {
         BoomWordsLayout layout = layout("甲乙\n丙丁", 0, 0, 1, 1, 3, 3, 4, 4, -1);
         assertFalse(layout.canMergeSelectedWords(selected(0)));
