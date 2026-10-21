@@ -740,7 +740,6 @@ public class BoomChipPage {
         }
 
         public void setSelected(boolean selected) {
-            word.setShadowLayer(selected ? 1.0f : 0, 0, -3.0f, 0x1f000000);
             word.setSelected(selected);
         }
     }

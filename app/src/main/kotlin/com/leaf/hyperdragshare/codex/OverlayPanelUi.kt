@@ -337,11 +337,12 @@ internal fun OverlayIconAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
     contentDescription: String,
+    touchSize: Dp = 36.dp,
 ) {
     Box(
         modifier = Modifier
-            .requiredWidth(36.dp)
-            .requiredHeight(36.dp)
+            .requiredWidth(touchSize)
+            .requiredHeight(touchSize)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

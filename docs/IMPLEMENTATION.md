@@ -1113,3 +1113,9 @@ RootNodeCaptureMain在按压点遍历后、文字与图片选择前排除明确�
 ## 1.7.149：暂未就绪窗口属于单次请求结果
 
 真实Root helper因awaitRoot的1200ms节点就绪等待抛出IOException退出，导致共享租约失效和后续取词持续失败。当前只将这个明确的无窗口结果改为found=false/window_not_ready；保留服务供下一次用户手势，不增加自动重连或本次请求回退。captureRequest单测覆盖同一服务对象的缺窗后成功请求，212项检查及构建通过，173安装并后台加载。真机空缺后恢复与完整手势仍待验。
+
+## 1.7.151：一级操作与图标
+
+BigBangOverlayContent使用两行主操作；Miuix IconButton/TooltipBox承载常见图标，少量不易解释的动作保留短标签。CaptureMore入口明确为二次爆炸并沿用ScreenOcrOverlay追加快照流程，编辑/翻译/合并/拆分等不再藏在更多。更多只保留外观，Back与点外部继续按子层→收起处理，不增收起按钮。工具条和反馈高度计入短内容自然高度；词块仍由原生View负责拖放/划选，但颜色、sp字体与选中表现使用Miuix主题。212项本地检查及build311通过，175单次安装；未实测新界面，不把编译等同交互通过。
+
+系统phantom数量裁剪已由真实日志确认会杀两宿主su。精确Hook与锁信息已定位，尚未实现，见ROOT_PROCESS_LIFECYCLE.md；最新输入ready不代表取词连接ready。

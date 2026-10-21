@@ -16,7 +16,7 @@
         android:maxWidth="260dp"
         android:background="@drawable/boom_chip_surface"
         android:minWidth="@dimen/punc_min_width"
-        android:minHeight="32dp"
+        android:minHeight="36dp"
         android:paddingHorizontal="4dp"
         android:paddingVertical="4dp"
         android:includeFontPadding="false"

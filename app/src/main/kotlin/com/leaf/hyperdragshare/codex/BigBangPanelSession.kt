@@ -159,6 +159,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     totalCharacterCount = totalCharacterCount,
                     selectedCharacterCount = selectedCharacterCount,
                     hasTextSelection = hasTextSelection,
+                    allTextSelected = boomChipPage?.mBoomActionHandler?.isAllSelected() == true,
                     isSegmenting = isSegmenting,
                     copyFeedback = copyFeedback,
                     onClearSelection = { boomChipPage?.handleClick() },

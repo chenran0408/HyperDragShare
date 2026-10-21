@@ -1019,3 +1019,19 @@ build307完整testDebugUnitTest/lintDebug/assembleDebug通过，212项0失败/0�
 没有新设备页面、截图矩阵、校准、拖拽样本或暂存/剪贴板修改。用户一直在操作，只做安装和后台连接核验。当前APK仍为开发预览，实际录音共存、完整按住取词、混合/图片中转站取用仍未完成。
 
 149云端运行 https://github.com/chenran0408/HyperDragShare/actions/runs/39553180987 已终态success，所有检查与两个Artifact上传成功。150需核对后续运行。
+
+## 2026-10-21：1.7.151 分词一级操作与图标整理
+
+按用户本轮连续指令合并为一个151批次，未把每次布局调整分别安装增版。常用复制/搜索/分享/编辑/全选改为Miuix图标与IconButton，44dp点击区、22dp图形，Miuix TooltipBox长按提示与contentDescription；复制及已全选状态以主题色标识。全选再次点击即取消全选，只有部分选中才有独立清选，避免同状态重复。中转站保留短标签，防止用普通文件夹冒充其含义。
+
+二次爆炸链路未删除：BigBangOverlayLauncher.captureMoreText仍移除自身窗口后做原页ScreenOcrOverlay区域识屏，结果经insertIntoSavedState前插/后插到旧文本，保留原分词和选区；取消回旧快照，source_area用于连续扩展。151将原“追加屏幕文字”明确改名“二次爆炸”，放第二操作行首位。它与拆分选词分别接原有操作，未把单字拆分算二次爆炸。137的两轮实际扩展证据仍有效，但151新入口尚未点击实测。
+
+两行操作固定在正文之外，第二行横向滑动直接访问有效合并/拆分、撤销、翻译、查词及有图时识字/二维码，无新管理页或功能弹出菜单。原更多仅保留外观调整。删除新增收起按钮，保留返回/点外部先退子层再收起，以及单独明确关闭；正文仍直接长按拖出、滑动选词。未承诺不存在的空白清选手势，因此部分选中的单个清选标签仍保留。词块/标点高度32→36dp、最小词宽36dp、10dp圆角、文字单位sp，移除选中文字旧投影；颜色继续取当前Miuix深浅主题。自然窗口高度计入两行工具栏和反馈文字，避免短内容把工具栏挤掉。
+
+build309/310后用户继续要求二次爆炸和图标，同一151未安装，最终build311完整testDebugUnitTest/lintDebug/assembleDebug通过：212项0失败/0错误，Lint0错误/153警告/2提示（包含旧标签资源未使用）。未写UI镜像测试或重复跑样本矩阵。
+
+最终151/175 APK SHA256 1CBB4E21A22D6712454D773C65E49F01BCEA818E3899D4C5E8E80ADA1016A038，与旧开发证书一致，单次覆盖安装成功、PM读回175/1.7.151。只后台重载Portal，新PID15214、注入175/Root175true，前台微信LauncherUI/2387保持不变；没有打开或点击分词测试窗，也没有截图、写剪贴板或暂存。新布局手感、Tooltip层级、大字/横屏和新版二次爆炸仍未实测。
+
+当前输入reader15961存在，但取词准备在ready前退出，不能据Root授权true宣称入口已可用。ActivityManager14:26:01.229又记录对归属模块进程15721的su15936执行Trimming phantom processes，与之前Portal su被裁剪一起证实影响两个宿主。目标ROM窄Hook与锁核对记录在ROOT_PROCESS_LIFECYCLE.md；本批未加入该Hook、不软重启用户正在使用的手机。
+
+150云端 https://github.com/chenran0408/HyperDragShare/actions/runs/39554086189 终态success，Debug APK和报告Artifact确实存在。151按其新运行核对，不能复用150通过状态。
