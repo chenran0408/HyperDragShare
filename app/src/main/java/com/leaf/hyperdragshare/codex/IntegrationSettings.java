@@ -22,7 +22,7 @@ public final class IntegrationSettings {
     private IntegrationSettings() {}
 
     public static boolean isAicrOcrEnabled(Context context) {
-        return preferences(context).getBoolean("aicr_ocr_enabled", false);
+        return preferences(context).getBoolean("aicr_ocr_enabled", true);
     }
 
     public static void setAicrOcrEnabled(Context context, boolean enabled) {

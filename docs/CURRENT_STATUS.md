@@ -2,6 +2,12 @@
 
 事实来源为当前源码、具体构建报告、安装元数据与对应运行日志；构建通过、已安装、Hook加载和实际操作分别记账。旧逐版记录的“当前”仅代表当时。
 
+## 下一批已改：默认系统AICR V2（未打包）
+
+IntegrationSettings在aicr_ocr_enabled键不存在时默认true；已有显式true/false不覆盖，ML Kit仍可手选。设置选项改为“ML Kit／系统 AICR V2（默认）”，不改识别客户端或错误处理。build370 compileDebugKotlin/compileDebugJavaWithJavac/lintDebug成功；未新增镜像默认值的测试，未执行OCR样本。
+
+按完整批次发布的要求，本项不独立增版、安装或发布；随下一批APK生效。当前已发布/已安装仍为176/200，其新装默认仍是ML Kit；本机此前保存AICR=true，不受影响。README继续描述当前发布版本的双引擎选择，下一批发布时同步默认说明。
+
 ## 176 仅arm64-v8a打包（2026-10-21）
 
 按用户要求，defaultConfig.ndk.abiFilters仅arm64-v8a，源码/最终安装1.7.176/200；未修改功能或移除ML Kit。R8/资源压缩继续启用。build369 lintDebug/assembleRelease成功，Lint0错误183警告3提示；本次仅打包配置变化，未重复393项既有单测或页面矩阵。

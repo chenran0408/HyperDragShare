@@ -305,7 +305,7 @@ private fun MainPage(
     var aicrOcrEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isAicrOcrEnabled(context))
     }
-    val ocrEngineNames = listOf("ML Kit（默认）", "系统 AICR V2（实验）")
+    val ocrEngineNames = listOf("ML Kit", "系统 AICR V2（默认）")
     var copyDirectEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
     }
