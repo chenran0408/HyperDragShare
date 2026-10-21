@@ -1245,3 +1245,10 @@ build346：383测试通过，0失败/错误/跳过；Lint0错误179警告3提示
 ## 2026-10-21 171/195 首页布局
 
 build351/352 Lint/Release成功，无单元重跑；候选实机发现TopAppBar省略largeTitle仍默认展开，最终使用SmallTopAppBar。19:15最终APK覆盖安装，首页紧凑标题、短激活卡、中转站前移及按压控件可见，更多页权限/重载/OCR入口保留。Portal24241/195与Root输入/reader ready；SystemUI沿用194，不称195。私有截图work/home171，未提交。此轮未修改名单和其他用户配置；未验暗色、横屏或重复功能矩阵。
+
+
+## 172 / 2026-10-21 19:28
+
+候选1.7.172/196同签名安装成功；Portal与SystemUI重载，Portal Root输入/reader ready且错误空；SystemUI诊断明确version=196。已打开中转站确认Miuix卡片/拖柄/预览缩略项显示。发现透明底板与背景混杂后同批加圆角底板，用户随后追加1dp描边。没有发送内容、移动已有中转站位置或更改用户数据；位置仍为right/center_y=.44625。私有截图和运行摘要在work/overlay172，未进Git。
+
+依用户“少检查，多推进”，不重复截图矩阵/微信拖放验收，IME避让和DOWN仲裁当前是源码/自动测试层证据，不称实机通过。最终APK另见CURRENT_STATUS。

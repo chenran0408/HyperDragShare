@@ -12,6 +12,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -373,7 +374,14 @@ final class FanTriggerCapture {
                 screenEvent.offsetLocation(event.getRawX() - event.getX(),
                         event.getRawY() - event.getY());
                 recordCapturedEvent(screenEvent);
-                if (gestureHandoffInProgress) {
+                if (!gestureHandoffInProgress
+                        && screenEvent.getActionMasked() == MotionEvent.ACTION_DOWN
+                        && OverlayTouchRegions.contains(screenEvent.getX(), screenEvent.getY())) {
+                    // The fallback window can sit above an app overlay. Replay its DOWN
+                    // after removing the capture layer, then keep forwarding this stream.
+                    passthroughCapturedGesture(context.getDisplay() == null ? 0
+                            : context.getDisplay().getDisplayId());
+                } else if (gestureHandoffInProgress) {
                     enqueueGestureEvent(MotionEvent.obtain(screenEvent),
                             context.getDisplay() == null ? 0 : context.getDisplay().getDisplayId());
                 } else {

@@ -213,3 +213,13 @@ Portal32078明确注入191，Root输入ready；reader上报Root node process exi
 build345：381测试全部通过，Lint0错误179警告3提示，Debug/Release成功。已安装1.7.168/192，同签名APK SHA256 0C8DB562FE9136AEED6DB91066F75C3F3B797AC203BAF771D3B1E38FE5D9405A。Portal15479自报192，Root输入/reader ready且错误空；167曾退出的原因未修复，不将本次就绪当成稳定性解决。
 
 18:44实测仅把既有生成测试文字HDS157_TEXT_DROP_TEST拖向文件传输助手输入栏，微信当前聊天出现对应消息，没有联系人选择器、没有填框报错。私有截图/log在work/wechat168。多选合并文字、其他应用和混合内容未实测；图片在本轮167键盘打开状态已确认接收。保留原内容、侧条收起。
+
+
+## 172避让与Miuix整理
+
+中转站保持原生text/plain与系统MediaStore图片拖放、NOT_FOCUSABLE、灰侧条及展开面积上限。位置调整使用显示屏WindowMetrics的IME边界，而非小窗口decor的局部inset；decor仅通知重新取值，避免上移后局部inset归零造成反复跳动。底部同时避开mandatorySystemGestures；键盘引起的临时位移不保存到center_y，关闭后回到原位置。目标ROM实际结果见本批DEVICE_VALIDATION记录，构建与安装前不称已验。
+
+
+本批按用户追加要求用Miuix重新整理托盘：移除方形Scaffold底板，短标题拖柄、内容、图片预览、错误/空态使用圆角卡片；条目与分组提供主题选中底色，Miuix Checkbox配44dp点击区；保留内容直接拖放、原有选择/分组/删除/收起/OCR交互，不新增操作页面。独立浮窗可触摸区域供SystemUI在DOWN让位，拖出时撤销，关闭或模块进程退出后不留区域。
+
+最终附1dp圆角描边，按Miuix深浅主题调对比度；build356成功并覆盖安装。真实新IME与手势仲裁待集中验收，不重复旧微信发送测试。

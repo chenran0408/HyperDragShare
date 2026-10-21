@@ -19,6 +19,7 @@ import android.view.WindowManager
 import android.view.WindowInsets
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
@@ -28,21 +29,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckBox
-import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Color
@@ -68,7 +69,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Checkbox
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
@@ -144,6 +147,7 @@ object StashOverlayPanel {
         private var dragStartCenterY = 0f
         private var dragStartAnchorY = 0f
         private var moving = false
+        private var imeBottomInset = 0
         private val displayManager = app.getSystemService(DisplayManager::class.java)
         private val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
         private val context = app.createDisplayContext(display)
@@ -188,6 +192,22 @@ object StashOverlayPanel {
         ) { Content() }
 
         init {
+            overlay.window.decorView.setOnApplyWindowInsetsListener { _, insets ->
+                // Decor insets are relative to this small window. Placement uses display coordinates.
+                val displayInsets = context.getSystemService(WindowManager::class.java)
+                    .maximumWindowMetrics.windowInsets
+                val imeType = WindowInsets.Type.ime()
+                val nextImeBottom = if (displayInsets.isVisible(imeType)) {
+                    displayInsets.getInsets(imeType).bottom
+                } else {
+                    0
+                }
+                if (imeBottomInset != nextImeBottom) {
+                    imeBottomInset = nextImeBottom
+                    resize()
+                }
+                insets
+            }
             app.registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF),
                 Context.RECEIVER_NOT_EXPORTED)
             displayManager.registerDisplayListener(displayListener, main)
@@ -248,6 +268,9 @@ object StashOverlayPanel {
             val metrics = windowMetrics.bounds
             val insets = windowMetrics.windowInsets.getInsetsIgnoringVisibility(
                 WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            val navigationGestures = windowMetrics.windowInsets.getInsetsIgnoringVisibility(
+                WindowInsets.Type.mandatorySystemGestures())
+            val bottomInset = maxOf(insets.bottom, navigationGestures.bottom, imeBottomInset)
             val density = context.resources.displayMetrics.density
             val showPanel = expanded && !draggingContent
             overlay.window.attributes = overlay.window.attributes.apply {
@@ -261,7 +284,7 @@ object StashOverlayPanel {
                 x = (dragLeft?.toInt() ?: if (onLeft) insets.left else rightEdge)
                     .coerceIn(insets.left, rightEdge)
                 y = (centerY * metrics.height() - height / 2f).toInt()
-                    .coerceIn(insets.top, (metrics.height() - insets.bottom - height).coerceAtLeast(insets.top))
+                    .coerceIn(insets.top, (metrics.height() - bottomInset - height).coerceAtLeast(insets.top))
                 flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     if (draggingContent) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0
@@ -314,22 +337,22 @@ object StashOverlayPanel {
         @OptIn(ExperimentalComposeUiApi::class)
         @Composable private fun MoveHandle() {
             Column(
-                Modifier.fillMaxWidth().height(44.dp).systemGestureExclusion()
+                Modifier.fillMaxWidth().height(48.dp).systemGestureExclusion()
                     .semantics { contentDescription = "拖动中转站，松手自动贴边" }
                     .pointerInteropFilter { handleMove(it, false) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Box(Modifier.width(28.dp).height(4.dp).background(
-                    MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .45f), RoundedCornerShape(2.dp)))
+                Box(Modifier.width(34.dp).height(4.dp).background(
+                    MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .55f), RoundedCornerShape(2.dp)))
                 Text(when {
-                    confirmDelete -> "删除所选"
+                    confirmDelete -> "确认删除"
                     preview != null -> "图片预览"
-                    selectionMode -> "已选 ${selectedIds.size}"
+                    selectionMode -> "已选 ${selectedIds.size} 项"
                     openedBatchId != null -> "分组"
                     else -> "中转站"
                 },
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurface, fontSize = 11.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -463,8 +486,13 @@ object StashOverlayPanel {
                 } else if (entry.kind == StashStore.KIND_TEXT) openText(entry)
                 else preview = entry
             }
-            Card(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                Column(Modifier.padding(6.dp)) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 3.dp),
+                colors = CardDefaults.defaultColors(color = if (selected)
+                    MiuixTheme.colorScheme.primary.copy(alpha = .12f)
+                    else MiuixTheme.colorScheme.surfaceContainer),
+            ) {
+                Column(Modifier.padding(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StashDraggableContent(if (selectionMode) dragSelection else listOf(entry), Modifier.weight(1f),
                             enabled = !updating, draggable = !selectionMode || selected,
@@ -477,13 +505,16 @@ object StashOverlayPanel {
                                     color = MiuixTheme.colorScheme.onSurface)
                             }
                         }
-                        if (selectionMode) OverlayIconAction(
-                            imageVector = if (selected) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
-                            tint = MiuixTheme.colorScheme.primary,
-                            enabled = !updating,
-                            onClick = open,
-                            contentDescription = if (selected) "取消选择这条内容" else "选择这条内容",
-                        )
+                        if (selectionMode) {
+                            Checkbox(
+                                state = if (selected) ToggleableState.On else ToggleableState.Off,
+                                modifier = Modifier.size(44.dp).semantics {
+                                    contentDescription = if (selected) "取消选择这条内容" else "选择这条内容"
+                                },
+                                enabled = !updating,
+                                onClick = open,
+                            )
+                        }
                     }
                 }
             }
@@ -522,61 +553,83 @@ object StashOverlayPanel {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
                 Box(Modifier.fillMaxSize()) {
-                    if (expanded) Scaffold(
-                        // Resizing the window must not detach or remeasure the active drag source.
+                    if (expanded) Column(
+                        // Keep the drag source composed at its original size while the window collapses.
                         modifier = (if (draggingContent)
                             Modifier.requiredSize(dragContentWidthDp.dp, dragContentHeightDp.dp)
                             else Modifier.fillMaxSize())
-                            .graphicsLayer { alpha = if (draggingContent) 0f else 1f },
+                            .graphicsLayer { alpha = if (draggingContent) 0f else 1f }
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MiuixTheme.colorScheme.surface)
+                            .border(1.dp, MiuixTheme.colorScheme.onSurface.copy(
+                                alpha = if (dark) .28f else .16f), RoundedCornerShape(24.dp))
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Column(Modifier.fillMaxSize()) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                            colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+                        ) {
+                            Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (preview != null || openedBatchId != null || confirmDelete) {
-                                    OverlayIconAction(MiuixIcons.Back,
-                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    OverlayIconAction(MiuixIcons.Back, MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         onClick = ::back, contentDescription = "返回内容列表")
                                 } else {
                                     OverlayIconAction(if (selectionMode) MiuixIcons.Close else MiuixIcons.SelectAll,
                                         if (selectionMode) MiuixTheme.colorScheme.primary
-                                            else MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        else MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         enabled = !updating && (selectionMode || visibleEntries.isNotEmpty()),
-                                        onClick = {
-                                            if (selectionMode) cancelSelection() else selectionMode = true
-                                        }, contentDescription = if (selectionMode) "退出多选" else "多选拖出")
+                                        onClick = { if (selectionMode) cancelSelection() else selectionMode = true },
+                                        contentDescription = if (selectionMode) "退出多选" else "多选拖出")
                                 }
                                 Box(Modifier.weight(1f)) { MoveHandle() }
-                                OverlayIconAction(StashCollapseIcon,
-                                    MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                OverlayIconAction(StashCollapseIcon, MiuixTheme.colorScheme.onSurfaceVariantActions,
                                     onClick = ::collapse, contentDescription = "收起中转站")
                             }
-                            message?.let {
-                                Text(it, Modifier.padding(horizontal = 6.dp), fontSize = 11.sp,
+                        }
+                        message?.let { error ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+                            ) {
+                                Text(error, Modifier.padding(horizontal = 8.dp, vertical = 5.dp), fontSize = 11.sp,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             }
-                            val image = preview
-                            when {
-                                confirmDelete -> Column(Modifier.weight(1f).padding(8.dp),
-                                    verticalArrangement = Arrangement.Center) {
+                        }
+                        val image = preview
+                        when {
+                            confirmDelete -> Card(
+                                Modifier.weight(1f).fillMaxWidth(),
+                                insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+                            ) {
+                                Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.Center) {
                                     Text("删除已选 ${selectedIds.size} 项？", fontSize = 14.sp,
                                         color = MiuixTheme.colorScheme.onSurface)
                                     Text("删除后无法恢复", fontSize = 12.sp,
                                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                                    Row {
-                                        TextButton("取消", { confirmDelete = false }, modifier = Modifier.weight(1f))
-                                        TextButton("删除", ::deleteSelected, modifier = Modifier.weight(1f))
+                                    Row(Modifier.fillMaxWidth()) {
+                                        TextButton("取消", { confirmDelete = false }, modifier = Modifier.weight(1f).height(44.dp))
+                                        TextButton("删除", ::deleteSelected, modifier = Modifier.weight(1f).height(44.dp))
                                     }
                                 }
-                                image != null -> Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+                            }
+                            image != null -> Card(
+                                Modifier.weight(1f).fillMaxWidth(),
+                                insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+                            ) {
+                                Column(Modifier.fillMaxSize().padding(4.dp)) {
                                     StashDraggableContent(if (selectionMode && image.id in selectedIds) selected else listOf(image),
-                                        Modifier.fillMaxWidth().weight(1f),
-                                        enabled = !updating, startDrag = ::startContentDrag, onClick = {}) {
+                                        Modifier.fillMaxWidth().weight(1f), enabled = !updating,
+                                        startDrag = ::startContentDrag, onClick = {}) {
                                         StashImage(image, 1200, Modifier.fillMaxSize(), ContentScale.Fit)
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                        OverlayIconAction(MiuixIcons.Scan,
-                                            MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                        OverlayIconAction(MiuixIcons.Scan, MiuixTheme.colorScheme.onSurfaceVariantActions,
                                             onClick = {
                                                 val uri = StashImageProvider.uriForEntry(image.id)
                                                 if (ImageOcrOverlay.startWithResult(app, uri) { text ->
@@ -592,51 +645,57 @@ object StashOverlayPanel {
                                                             collapse()
                                                         }
                                                     }
-                                                }) {
-                                                    collapse()
-                                                }
+                                                }) { collapse() }
                                             }, contentDescription = "识别图片文字")
                                     }
                                 }
-                                visibleEntries.isEmpty() -> Box(Modifier.weight(1f).padding(8.dp),
-                                    contentAlignment = Alignment.Center) {
-                                    Text(if (loading) "正在读取…" else "拖拽或分享内容存入这里",
-                                        fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                                }
-                                else -> LazyColumn(Modifier.weight(1f), state = listState,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    items(visibleBatches, key = {
-                                        if (openedBatchId == null) it.first().batchId else it.first().id
-                                    }) { ShelfBatch(it, selected) }
+                            }
+                            visibleEntries.isEmpty() -> Card(
+                                Modifier.weight(1f).fillMaxWidth(),
+                                insideMargin = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surfaceContainer),
+                            ) {
+                                Column(Modifier.fillMaxSize().padding(12.dp),
+                                    verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                                    if (loading) CircularProgressIndicator()
+                                    Text(if (loading) "正在读取中转站" else "中转站还是空的",
+                                        fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface)
+                                    if (!loading) Text("拖拽或分享内容存入这里", fontSize = 11.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
                             }
-                            if (updating) {
-                                Text("正在处理…", Modifier.padding(6.dp), fontSize = 12.sp,
+                            else -> LazyColumn(Modifier.weight(1f), state = listState,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                items(visibleBatches, key = {
+                                    if (openedBatchId == null) it.first().batchId else it.first().id
+                                }) { ShelfBatch(it, selected) }
+                            }
+                        }
+                        if (updating) {
+                            Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center) {
+                                CircularProgressIndicator()
+                                Text("正在处理", Modifier.padding(start = 8.dp), fontSize = 11.sp,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                            } else if (selectionMode && !confirmDelete && preview == null) {
-                                StashGroupingActions(selected, true,
-                                    canUngroup = selected.any { it.id in stashGroupedEntryIds(entries) },
-                                    onGroup = { regroup(selected, false) },
-                                    onUngroup = { regroup(selected, true) })
                             }
-                            if (selectionMode && !confirmDelete && preview == null) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                    val allSelected = visibleEntries.isNotEmpty() &&
-                                        visibleEntries.all { it.id in selectedIds }
-                                    OverlayIconAction(MiuixIcons.SelectAll,
-                                        if (allSelected) MiuixTheme.colorScheme.primary
-                                            else MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        enabled = !updating && visibleEntries.isNotEmpty(),
-                                        onClick = {
-                                            val visibleIds = visibleEntries.map { it.id }.toSet()
-                                            selectedIds = if (allSelected) selectedIds - visibleIds
-                                                else selectedIds + visibleIds
-                                        }, contentDescription = if (allSelected) "取消当前列表全选" else "全选当前列表")
-                                    OverlayIconAction(MiuixIcons.Delete,
-                                        MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        enabled = !updating && selectedIds.isNotEmpty(),
-                                        onClick = { confirmDelete = true }, contentDescription = "移除所选内容")
-                                }
+                        } else if (selectionMode && !confirmDelete && preview == null) {
+                            StashGroupingActions(selected, true,
+                                canUngroup = selected.any { it.id in stashGroupedEntryIds(entries) },
+                                onGroup = { regroup(selected, false) }, onUngroup = { regroup(selected, true) })
+                        }
+                        if (selectionMode && !confirmDelete && preview == null) {
+                            Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                val allSelected = visibleEntries.isNotEmpty() && visibleEntries.all { it.id in selectedIds }
+                                OverlayIconAction(MiuixIcons.SelectAll,
+                                    if (allSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    enabled = !updating && visibleEntries.isNotEmpty(),
+                                    onClick = {
+                                        val visibleIds = visibleEntries.map { it.id }.toSet()
+                                        selectedIds = if (allSelected) selectedIds - visibleIds else selectedIds + visibleIds
+                                    }, contentDescription = if (allSelected) "取消当前列表全选" else "全选当前列表")
+                                OverlayIconAction(MiuixIcons.Delete, MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    enabled = !updating && selectedIds.isNotEmpty(),
+                                    onClick = { confirmDelete = true }, contentDescription = "移除所选内容")
                             }
                         }
                     }

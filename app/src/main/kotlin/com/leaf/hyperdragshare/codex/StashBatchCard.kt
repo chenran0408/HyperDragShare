@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -45,8 +46,10 @@ internal fun StashGroupingActions(
     val canGroup = entries.size > 1 && entries.any { it.batchId != entries.first().batchId }
     if (!canGroup && !canUngroup) return
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (canGroup) TextButton("分组", onGroup, enabled = enabled, modifier = Modifier.weight(1f))
-        if (canUngroup) TextButton("拆开", onUngroup, enabled = enabled, modifier = Modifier.weight(1f))
+        if (canGroup) TextButton("分组", onGroup, enabled = enabled,
+            modifier = Modifier.weight(1f).height(44.dp))
+        if (canUngroup) TextButton("拆开", onUngroup, enabled = enabled,
+            modifier = Modifier.weight(1f).height(44.dp))
     }
 }
 
@@ -63,7 +66,13 @@ internal fun StashBatchCard(
     startDrag: (View, ClipData, View.DragShadowBuilder, Int) -> Boolean,
     onClick: () -> Unit,
 ) {
-    Card(modifier.fillMaxWidth()) {
+    Card(
+        modifier.fillMaxWidth(),
+        colors = CardDefaults.defaultColors(
+            color = if (selectedCount > 0) MiuixTheme.colorScheme.primary.copy(alpha = .12f)
+                else MiuixTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
         StashDraggableContent(dragEntries, Modifier.fillMaxWidth().padding(6.dp), enabled = enabled,
             draggable = !selectionMode || selectedCount > 0, startDrag = startDrag, onClick = onClick) {
             Column {

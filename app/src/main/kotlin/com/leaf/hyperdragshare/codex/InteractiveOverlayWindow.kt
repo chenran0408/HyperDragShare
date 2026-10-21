@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex
 
 import android.content.Context
+import android.graphics.Rect
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.view.DragEvent
@@ -15,6 +16,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions
 
 /**
  * One-shot interactive window for a host that already has [policy]'s window capability.
@@ -35,6 +37,11 @@ internal class InteractiveOverlayWindow(
     private var disposed = false
     private var dragWindowAttributes: WindowManager.LayoutParams? = null
     private var onDragFinished: ((Boolean) -> Unit)? = null
+    private val touchRegionId = OverlayTouchRegions.newWindowId()
+    private var observedTree: android.view.ViewTreeObserver? = null
+    private val touchRegionListener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+        publishTouchRegion()
+    }
 
     init {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -60,6 +67,13 @@ internal class InteractiveOverlayWindow(
         check(!disposed) { "Create a new interactive window after dismissal" }
         return try {
             dialog.show()
+            val decor = window.decorView
+            val nextTree = decor.viewTreeObserver
+            if (observedTree !== nextTree) {
+                observedTree?.let { if (it.isAlive) it.removeOnGlobalLayoutListener(touchRegionListener) }
+                observedTree = nextTree.also { it.addOnGlobalLayoutListener(touchRegionListener) }
+            }
+            decor.post(::publishTouchRegion)
             if (pressConfirmedAt > 0L) {
                 val view = window.decorView
                 val observer = view.viewTreeObserver
@@ -118,6 +132,7 @@ internal class InteractiveOverlayWindow(
                         it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     }
+                    publishTouchRegion()
                     onStarted?.invoke()
                     true
                 }
@@ -130,6 +145,7 @@ internal class InteractiveOverlayWindow(
                     if (!disposed) {
                         // A successful drop hands focus to the target; restoring the source first closes its editor.
                         if (!event.result) window.attributes = original
+                        publishTouchRegion()
                         finished?.invoke(event.result)
                         if (!isCurrent()) dismiss()
                         else if (event.result) onDropped()
@@ -151,6 +167,7 @@ internal class InteractiveOverlayWindow(
         onDragFinished = null
         if (!disposed) {
             window.attributes = original
+            publishTouchRegion()
             finished?.invoke(false)
         }
     }
@@ -165,11 +182,41 @@ internal class InteractiveOverlayWindow(
     private fun dispose() {
         if (disposed) return
         disposed = true
+        observedTree?.let { if (it.isAlive) it.removeOnGlobalLayoutListener(touchRegionListener) }
+        observedTree = null
+        OverlayTouchRegions.update(dialog.context, touchRegionId, null)
         window.decorView.setOnDragListener(null)
         dragWindowAttributes = null
         onDragFinished = null
         composeView.disposeComposition()
         viewModelStore.clear()
         onDismissed()
+    }
+
+    private fun publishTouchRegion() {
+        if (disposed) return
+        val decor = window.decorView
+        val flags = window.attributes.flags
+        if (!dialog.isShowing || !decor.isShown
+            || flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0) {
+            OverlayTouchRegions.update(dialog.context, touchRegionId, null)
+            return
+        }
+        val bounds = Rect()
+        val location = IntArray(2)
+        decor.getLocationOnScreen(location)
+        bounds.set(location[0], location[1], location[0] + decor.width, location[1] + decor.height)
+        val visible = Rect()
+        if (decor.getLocalVisibleRect(visible)) {
+            visible.offset(location[0], location[1])
+            if (!bounds.intersect(visible)) bounds.setEmpty()
+        } else {
+            bounds.setEmpty()
+        }
+        if (!bounds.isEmpty) {
+            OverlayTouchRegions.update(dialog.context, touchRegionId, bounds)
+        } else {
+            OverlayTouchRegions.update(dialog.context, touchRegionId, null)
+        }
     }
 }

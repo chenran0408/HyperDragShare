@@ -45,6 +45,18 @@ public final class ConfigProvider extends ContentProvider {
     public Bundle call(String method, String arg, Bundle extras) {
         enforceCaller();
         Context context = requireProviderContext();
+        if (ConfigContract.METHOD_GET_OVERLAY_TOUCH.equals(method)) {
+            try {
+                int systemUiUid = context.getPackageManager()
+                        .getApplicationInfo("com.android.systemui", 0).uid;
+                if (Binder.getCallingUid() != systemUiUid) {
+                    throw new SecurityException("Only SystemUI can read overlay touch bounds");
+                }
+            } catch (PackageManager.NameNotFoundException error) {
+                throw new SecurityException("SystemUI is unavailable", error);
+            }
+            return OverlayTouchRegions.read();
+        }
         SharedPreferences prefs = context.getSharedPreferences(ConfigContract.PREFS, Context.MODE_PRIVATE);
         if ("get_catalog".equals(method)) {
             Bundle out = new Bundle();

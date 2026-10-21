@@ -13,6 +13,11 @@ public final class ConfigContract {
     public static final Uri CATALOG_URI = Uri.parse("content://" + AUTHORITY + "/catalog");
     /** Interface status/heartbeat changes; observed by the dashboard. */
     public static final Uri STATUS_URI = Uri.parse("content://" + AUTHORITY + "/status");
+    /** Ephemeral touch bounds for live module-owned floating windows. */
+    public static final Uri OVERLAY_TOUCH_URI = Uri.parse("content://" + AUTHORITY + "/overlay-touch");
+    public static final String METHOD_GET_OVERLAY_TOUCH = "get_overlay_touch_regions";
+    public static final String KEY_OVERLAY_TOUCH_OWNER = "overlay_touch_owner";
+    public static final String KEY_OVERLAY_TOUCH_RECTS = "overlay_touch_rects";
     public static final String PREFS = "fan_config";
     public static final String KEY_ENABLED = "enabled";
     public static final String KEY_HAPTIC = "haptic";

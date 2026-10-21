@@ -29,6 +29,7 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowMetrics;
 import com.leaf.hyperdragshare.gestures.config.ConfigContract;
+import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
 import com.leaf.hyperdragshare.gestures.config.AppTarget;
 import com.leaf.hyperdragshare.gestures.config.ShortcutIconLoader;
 import java.util.ArrayList;
@@ -191,6 +192,9 @@ final class FanRuntime {
 
     private long systemPanelInputDownTime = -1L;
     private long gestureExcludedDownTime = -1L;
+
+    private final OverlayTouchRegions.DownGate overlayTouchDownGate =
+            new OverlayTouchRegions.DownGate();
     private volatile boolean foregroundGestureExcluded;
     private volatile String foregroundPackageForGesture;
 
@@ -339,6 +343,8 @@ final class FanRuntime {
             }
         });
         outsideCapture = new OutsideTouchCapture(context, mainHandler, this::onCapturedOutsideTouch);
+        OverlayTouchRegions.observe(context, configHandler,
+                () -> mainHandler.post(this::refreshOutsideCapture));
         freeform = new HyperOsFreeformBridge(context, classLoader, mainHandler);
         outsideGestures = new OutsideGestureRecognizer(mainHandler, viewConfiguration, density, this::performOutsideAction);
         requestConfigReload();
@@ -886,6 +892,16 @@ final class FanRuntime {
             outsideCapture.remove();
             outsideGestures.clearAll();
             if (state != State.IDLE) resetFan();
+            return;
+        }
+        boolean overlayDown = action == MotionEvent.ACTION_DOWN
+                && OverlayTouchRegions.contains(x, y);
+        if (overlayTouchDownGate.shouldYield(action, event.getDownTime(), overlayDown)) {
+            if (action == MotionEvent.ACTION_DOWN) {
+                if (state != State.IDLE) resetFan();
+                outsideGestures.clearAll();
+                Log.i("Module floating window owns touch stream from DOWN");
+            }
             return;
         }
         boolean nativeSideEdge = action == MotionEvent.ACTION_DOWN && GestureGeometry.sideAt(x, width, systemSideGestureInsets().left, systemSideGestureInsets().right) != null;
@@ -1941,6 +1957,10 @@ final class FanRuntime {
         boolean hasInteractiveWindow = freeform.hasInteractiveFreeform();
         if (pending == null && !hasInteractiveWindow)
             visibleWindows.clear();
+        if (visibleWindows.isEmpty()) {
+            outsideCapture.remove();
+            return;
+        }
         boolean inputMethodActive = hasInteractiveWindow && inputMethodActive();
         Rect ime = hasInteractiveWindow ? visibleImeBounds() : null;
         if (inputMethodActive && ime == null) {
@@ -1955,6 +1975,7 @@ final class FanRuntime {
             int statusBarHeight = statusBarGestureHeight();
             visibleWindows.add(new Rect(display.left, display.top, display.right, Math.min(display.bottom, display.top + statusBarHeight)));
         }
+        visibleWindows.addAll(OverlayTouchRegions.snapshot());
         if (ime == null && !visibleWindows.isEmpty() && (triggerCapture.isCapturing() || inputSources.usesNativeInput())) {
             Rect display = displayBounds();
             int hotWidth = Math.round(display.width() * config.hotWidthPercent / 100f);
