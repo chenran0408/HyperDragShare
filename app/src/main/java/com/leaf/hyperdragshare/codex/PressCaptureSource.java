@@ -56,6 +56,7 @@ final class PressCaptureSource {
         this.settings = settings;
         this.hostAllowed = hostAllowed;
         blocker = new BackgroundTouchBlocker(context);
+        ModuleActivation.reportPressReader(context, false, "");
         worker.execute(() -> {
             try {
                 SharedRootNodeCapture.Connection ready = SharedRootNodeCapture.open(context, false);
@@ -63,12 +64,13 @@ final class PressCaptureSource {
                     if (stopped) ready.close();
                     else {
                         nodeSession = ready;
+                        ModuleActivation.reportPressReader(context, true, "");
                         DragShareLog.i(TAG, "press reader ready; idle without reading nodes");
                     }
                 });
             } catch (IOException | SecurityException error) {
                 DragShareLog.w(TAG, "cannot prepare press reader", error);
-                main.post(() -> { if (!stopped) showFailure("按压取词连接失败：" + error.getMessage()); });
+                main.post(() -> { if (!stopped) readerFailed(null, "取词连接未建立，请重载作用域。" + error.getMessage()); });
             }
         });
     }
@@ -114,7 +116,7 @@ final class PressCaptureSource {
     }
 
     private boolean allowed() {
-        return !stopped && input.isReady() && hostAllowed.getAsBoolean()
+        return !stopped && nodeSession != null && input.isReady() && hostAllowed.getAsBoolean()
                 && (settings.isSharingEnabled(false) || settings.isSharingEnabled(true))
                 && controller.canContinuePress(downTime)
                 && settings.isAccessibilityRecognitionEnabledForOrientation(
@@ -149,7 +151,6 @@ final class PressCaptureSource {
     private void lookup() {
         SharedRootNodeCapture.Connection session = nodeSession;
         if (session == null) {
-            if (detector.isFired()) showFailure("按压取词尚未连接，请稍后重试");
             cancelGesture();
             return;
         }
@@ -185,8 +186,11 @@ final class PressCaptureSource {
             } catch (IOException | SecurityException error) {
                 DragShareLog.w(TAG, "press lookup failed", error);
                 main.post(() -> {
-                    if (request == generation && !stopped) {
-                        showFailure("按压识别失败：" + error.getMessage());
+                    if (stopped) return;
+                    if (error instanceof SharedRootNodeCapture.ConnectionFailedException || error instanceof SecurityException) {
+                        readerFailed(session, "取词连接已中断，请重载作用域。" + error.getMessage());
+                    } else if (request == generation) {
+                        if (detector.isFired()) showFailure("本次按压未完成：" + error.getMessage());
                         cancelGesture();
                     }
                 });
@@ -203,9 +207,9 @@ final class PressCaptureSource {
         CapturedContent content = cached;
         cached = null;
         long request = generation;
+        SharedRootNodeCapture.Connection session = nodeSession;
         worker.execute(() -> {
             try {
-                SharedRootNodeCapture.Connection session = nodeSession;
                 if (request != generation || !allowed() || session == null
                         || !session.isCurrentSource(content.sourcePackage)) {
                     recycle(content);
@@ -241,7 +245,13 @@ final class PressCaptureSource {
                 recycle(content);
                 DragShareLog.w(TAG, "cannot confirm press source", error);
                 main.post(() -> {
-                    if (request == generation && !stopped) showFailure("按压来源核验失败：" + error.getMessage());
+                    if (stopped) return;
+                    if (error instanceof SharedRootNodeCapture.ConnectionFailedException || error instanceof SecurityException) {
+                        readerFailed(session, "取词连接已中断，请重载作用域。" + error.getMessage());
+                    } else if (request == generation) {
+                        showFailure("按压来源核验失败：" + error.getMessage());
+                        cancelGesture();
+                    }
                 });
             } catch (InterruptedException error) {
                 recycle(content);
@@ -337,12 +347,22 @@ final class PressCaptureSource {
         Toast.makeText(context, reason, Toast.LENGTH_LONG).show();
     }
 
+    private void readerFailed(SharedRootNodeCapture.Connection failed, String reason) {
+        if (nodeSession != failed) return;
+        nodeSession = null;
+        cancelGesture();
+        if (failed != null) failed.close();
+        ModuleActivation.reportPressReader(context, false, reason);
+        showFailure(reason);
+    }
+
     void stop() {
         Runnable stop = () -> {
             stopped = true;
             cancelGesture();
             SharedRootNodeCapture.Connection session = nodeSession;
             nodeSession = null;
+            ModuleActivation.reportPressReader(context, false, "");
             if (session != null) session.close();
             worker.shutdownNow();
         };

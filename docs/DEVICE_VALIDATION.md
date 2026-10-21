@@ -1035,3 +1035,13 @@ build309/310后用户继续要求二次爆炸和图标，同一151未安装，�
 当前输入reader15961存在，但取词准备在ready前退出，不能据Root授权true宣称入口已可用。ActivityManager14:26:01.229又记录对归属模块进程15721的su15936执行Trimming phantom processes，与之前Portal su被裁剪一起证实影响两个宿主。目标ROM窄Hook与锁核对记录在ROOT_PROCESS_LIFECYCLE.md；本批未加入该Hook、不软重启用户正在使用的手机。
 
 150云端 https://github.com/chenran0408/HyperDragShare/actions/runs/39554086189 终态success，Debug APK和报告Artifact确实存在。151按其新运行核对，不能复用150通过状态。
+
+
+## 2026-10-21 1.7.152：Root失败链与实际部署
+
+- build314：215 tests/0 failures/0 errors，testDebugUnitTest、lintDebug、assembleDebug通过，Lint157 warnings/2 hints/0 errors（新增4项为系统Hook反射PrivateApi提示）。
+- 包名com.leaf.hyperdragshare.codex，176/1.7.152，证书SHA256仍b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0；APK SHA256 1C23AC2EB807DBBD63C243274EEE616E8B90520CDA7657E50A2327E6BCB37E90。任务outputs/HyperDragShare-1.7.152-debug.apk；覆盖安装一次成功。
+- 保持桌面Launcher t2，后台仅重载Portal为13588；Provider无副作用query唤醒，176注入/Root检测确认，reader version176/ready=true。未打开模块Activity、截图、点取私人内容、修改剪贴板/中转站/权限或启动参考APK。
+- 14:40:00.747 system_server仍以Trimming phantom processes杀Portal所属su13888；Root输入发现命令同期退出137。新android Hook未加载；reader随后ready不能代表输入就绪或完整按压成功。手机亮屏且最近用户输入，未软重启。
+- 自动按压失效后的停止复用/忙状态分类由源码与新回归验证；未人为杀手机helper制造故障，真实恢复及Hook自然裁剪命中待系统作用域重载。
+- 云端151 run39555560460已读回completed/success，head8f013d0。152需按新推送run重新核对，不能沿用151结果。

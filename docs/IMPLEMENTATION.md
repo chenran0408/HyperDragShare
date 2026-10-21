@@ -1119,3 +1119,12 @@ RootNodeCaptureMain在按压点遍历后、文字与图片选择前排除明确�
 BigBangOverlayContent使用两行主操作；Miuix IconButton/TooltipBox承载常见图标，少量不易解释的动作保留短标签。CaptureMore入口明确为二次爆炸并沿用ScreenOcrOverlay追加快照流程，编辑/翻译/合并/拆分等不再藏在更多。更多只保留外观，Back与点外部继续按子层→收起处理，不增收起按钮。工具条和反馈高度计入短内容自然高度；词块仍由原生View负责拖放/划选，但颜色、sp字体与选中表现使用Miuix主题。212项本地检查及build311通过，175单次安装；未实测新界面，不把编译等同交互通过。
 
 系统phantom数量裁剪已由真实日志确认会杀两宿主su。精确Hook与锁信息已定位，尚未实现，见ROOT_PROCESS_LIFECYCLE.md；最新输入ready不代表取词连接ready。
+
+
+## 1.7.152：停止复用失效取词连接，限定框架裁剪 Hook
+
+PressCaptureSource只在reader建立后接受自动按压；Binder断开或共享lease失效后清空并关闭连接、取消当前手势、一次提示及在已有状态卡保存原因，不在后续每次按住时重新请求。请求忙/单次截图失败与失效lease分开处理；通过受UID限制的isOpen仅在请求失败时核对租约状态，不做自动重连或静默引擎切换。准备、失败、停止都上报；新Portal PID清除上一个宿主的Root与reader状态。
+
+新增RootProcessFrameworkHooks，android/system_server精确Hook PhantomProcessRecord.killLocked(String,boolean)。仅Root UID、本模块或Portal活宿主、真实映射与父PID一致、原因完全等于Trimming phantom processes才跳过数量裁剪。isKilled/isKilledByAm为目标ROM继承的公开方法，安装时解析。未改系统全局phantom配置。字段/反射失败保留原系统裁剪并记录。
+
+215项本地检查及build314完整构建通过，Lint0 errors/157 warnings/2 hints；312和313分别因错误设置字段引用、隐藏ServiceSpecificException无法编译而停止，均未安装，后者已删除并使用自有AIDL租约状态。152只安装一次。框架Hook尚未重载；14:40 Portal13588的su再次被旧框架数量裁剪，Root输入失败137，而取词reader ready，不能称整个入口可用。待手机空闲再重载系统作用域。

@@ -84,4 +84,41 @@ public final class ModuleActivationTest {
                         + "com.miui.contentextension.setting.whitelist.BlacklistSettingActivity",
                 ModuleActivation.portalBlacklistCommand());
     }
+
+    @Test
+    public void newHostCannotInheritOldRootOrReaderReadiness() {
+        Context context = RuntimeEnvironment.getApplication();
+        Bundle report = new Bundle();
+        report.putLong(ModuleActivation.EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+        report.putInt(ModuleActivation.EXTRA_PROCESS_ID, 42);
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_ROOT_GRANTED, true);
+        report.putBoolean(ModuleActivation.EXTRA_PRESS_READER_READY, true);
+        ModuleActivation.recordInjected(context, report);
+        assertTrue(ModuleActivation.isPressReaderReady(context));
+
+        Bundle restarted = new Bundle();
+        restarted.putLong(ModuleActivation.EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+        restarted.putInt(ModuleActivation.EXTRA_PROCESS_ID, 43);
+        ModuleActivation.recordInjected(context, restarted);
+        assertTrue(ModuleActivation.isCurrentBuildInjected(context));
+        assertFalse(ModuleActivation.isCurrentBuildPortalRootGranted(context));
+        assertFalse(ModuleActivation.isPressReaderReady(context));
+        assertEquals("", ModuleActivation.pressReaderError(context));
+    }
+
+    @Test
+    public void readerFailurePersistsWithoutClaimingRootWasDenied() {
+        Context context = RuntimeEnvironment.getApplication();
+        Bundle report = new Bundle();
+        report.putLong(ModuleActivation.EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_ROOT_GRANTED, true);
+        report.putBoolean(ModuleActivation.EXTRA_PRESS_READER_READY, false);
+        report.putString(ModuleActivation.EXTRA_PRESS_READER_ERROR, "Root 子进程已退出");
+        ModuleActivation.recordInjected(context, report);
+        assertTrue(ModuleActivation.isCurrentBuildPortalRootGranted(context));
+        assertFalse(ModuleActivation.isPressReaderReady(context));
+        assertEquals("Root 子进程已退出", ModuleActivation.pressReaderError(context));
+        ModuleActivation.clearPortalReport(context);
+        assertEquals("", ModuleActivation.pressReaderError(context));
+    }
 }

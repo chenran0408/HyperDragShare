@@ -20,7 +20,7 @@
 ## 不可破坏的约束
 
 1. LSPosed 作用域只包含 `com.miui.contentextension`、`com.xiaomi.aicr` 和 `android`，
-   分别用于传送门拖拽、AICR 文本直取和可选背部轻敲 Hook。不要加入
+   分别用于传送门拖拽、AICR 文本直取、可选背部轻敲和自有 Root 子进程数量裁剪 Hook。不要加入
    `com.miui.contentcatcher`（Application Extension Service），也不要在部署脚本中强停它；
    已知部分系统上强停它会连带结束其他应用。
 2. root 输入源一旦 `isReady()`，它就是一次拖拽的唯一权威输入源。不得把 MIUI
@@ -51,14 +51,14 @@
 11. “手指移开时关闭分享菜单”是四种拖拽样式的公共行为。简洁/现代/流光离开菜单与触发带时移除
     线性菜单，环形离开展开面板区域时折叠；同一手势重新进入触发区后都应允许再次展开。
 12. 首页激活状态必须按当前来源解释：传送门模式按“无 Root → 当前版本未注入传送门 →
-   传送门 Root 权限不可用 → 已激活”，
-    无障碍模式按“无 Root → 服务未启用 → 服务/Root 输入连接中 → 已激活”。传送门 Hook 必须通过
+   传送门 Root 通道不可用 → 已启用按压但取词未就绪/失败 → 已激活”，
+    无障碍模式按“无 Root → 服务未启用 → 服务/Root 输入连接中 → 已启用按压但取词未就绪/失败 → 已激活”。传送门 Hook 必须通过
     `ModuleActivation.reportInjected()` 上报其编译时 `BuildConfig.VERSION_CODE`；不要把普通的
     `get_settings` 调用当作注入证明，否则 APK 更新后仍运行旧代码的传送门进程会被误报为已激活。
 13. 内容获取方式默认是传送门。无障碍模式只由 `DragShareAccessibilityService` 在模块进程中
     工作，仍依赖 Root evdev，不得因此新增 LSPosed 作用域或静默启用无障碍服务。Xposed API
     仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
-    `AicrCopyHooks` 和 `BackTapFrameworkHooks`；AICR 与框架 Hook 必须保持包名、目标类和方法
+    `AicrCopyHooks`、`BackTapFrameworkHooks` 和 `RootProcessFrameworkHooks`；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
 14. 节点树只在一次明确请求后读取：无障碍长按超时、用户已启用按压入口且单指静止按住120ms后的分类、按住时长确认或用户主动点取。
     按压分类按MI行为仅缓存本次内容，到确认时才接管并打开窗口；松手、移位或多指取消，不在空闲时读取。

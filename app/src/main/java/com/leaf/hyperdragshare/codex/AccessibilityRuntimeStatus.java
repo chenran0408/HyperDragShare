@@ -10,6 +10,8 @@ import java.util.List;
 final class AccessibilityRuntimeStatus {
     private static volatile boolean connected;
     private static volatile boolean rootInputReady;
+    private static volatile boolean pressReaderReady;
+    private static volatile String pressReaderError = "";
 
     private AccessibilityRuntimeStatus() {}
 
@@ -17,6 +19,7 @@ final class AccessibilityRuntimeStatus {
         connected = value;
         if (!value) {
             rootInputReady = false;
+            setPressReader(false, "");
         }
     }
 
@@ -31,6 +34,15 @@ final class AccessibilityRuntimeStatus {
     static boolean isRootInputReady() {
         return rootInputReady;
     }
+
+    static void setPressReader(boolean ready, String error) {
+        pressReaderError = error;
+        pressReaderReady = ready;
+    }
+
+    static boolean isPressReaderReady() { return pressReaderReady; }
+
+    static String pressReaderError() { return pressReaderError; }
 
     static boolean isServiceEnabled(Context context) {
         if (context == null) {

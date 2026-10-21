@@ -39,3 +39,6 @@
 
 
 147已完成公开源码和开发APK：chenran0408/HyperDragShare，默认hyperos4-adaptation，v1.7.147-dev的APK服务器SHA256与本地一致。当前分支无自动工作流（OAuth无workflow权限），不要把云端检查写成通过。下一步仍是Root evdev时长/位移真实触发与复杂中转站取用，不重复建仓库/发布同一APK；新功能检查后沿现有origin正常推送，保留upstream。
+
+
+152当前：新增精确phantom裁剪Hook已构建安装但android尚未重载。Portal13588/176、Root grant和reader ready；输入发现又137并有同刻phantom裁剪证据，不能称已完全激活。用户持续使用手机，不软重启；无需重新申请授权。优先修RootTouchSource生命周期并让激活状态区分实际输入就绪，随后空闲时一次重载系统作用域并看真实日志。不要重跑无数据校准、UI矩阵或生成重复样本。ColorOS BigBang1.0.4静态分析在进行，Oplus私有raw observer＋MotionEvent.size，与MI BigBang已确认的evdev时长方案不同；不得照搬Oplus接口或把参考APK打到手机上。

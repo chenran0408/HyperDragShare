@@ -99,7 +99,7 @@ final class SharedRootNodeCapture {
 
         private void enforceOwner() {
             if (Binder.getCallingUid() != uid) throw new SecurityException("Capture lease belongs to another UID");
-            if (closed) throw new IllegalStateException("取词连接已关闭，请重新点取或重载作用域");
+            if (closed) throw new IllegalStateException("取词连接已关闭，请重载作用域");
         }
 
         @Override public Bundle capture(float x, float y, String[] blocked, boolean text, boolean images, boolean pressLookup,
@@ -154,6 +154,11 @@ final class SharedRootNodeCapture {
             } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
         }
 
+        @Override public boolean isOpen() {
+            if (Binder.getCallingUid() != uid) throw new SecurityException("Capture lease belongs to another UID");
+            return !closed;
+        }
+
         @Override public void close() {
             if (Binder.getCallingUid() != uid) throw new SecurityException("Capture lease belongs to another UID");
             release();
@@ -202,7 +207,7 @@ final class SharedRootNodeCapture {
         private CapturedContent capture(float x, float y, Set<String> blocked, boolean text, boolean images,
                                         boolean pressLookup, boolean earlyCapture, RootNodeCaptureClient.CandidateHandler handler)
                 throws IOException, InterruptedException {
-            if (closed) throw new IOException("取词连接已关闭");
+            if (closed) throw new ConnectionFailedException("取词连接已关闭", null);
             try {
                 Bundle node = lease.capture(x, y, blocked.toArray(new String[0]), text, images, pressLookup, earlyCapture,
                         new IRootNodeCandidate.Stub() {
@@ -219,11 +224,11 @@ final class SharedRootNodeCapture {
                 return RootNodeCaptureClient.contentFromNode(context, node, (source, windowId) -> {
                     try { return !closed && lease.verifyWindow(source, windowId); }
                     catch (RemoteException | IllegalStateException error) {
-                        throw new IOException("核验来源窗口失败：" + error.getMessage(), error);
+                        throw requestFailure("核验来源窗口失败", error);
                     }
                 });
             } catch (RemoteException | IllegalStateException error) {
-                throw new IOException("读取当前页面失败：" + error.getMessage(), error);
+                throw requestFailure("读取当前页面失败", error);
             }
         }
 
@@ -233,7 +238,17 @@ final class SharedRootNodeCapture {
             try {
                 return lease.verifySource(source) && !closed && !keyguard.isKeyguardLocked();
             } catch (RemoteException | IllegalStateException error) {
-                throw new IOException("核验按压来源失败：" + error.getMessage(), error);
+                throw requestFailure("核验按压来源失败", error);
+            }
+        }
+
+        private IOException requestFailure(String operation, Exception error) {
+            String reason = operation + "：" + error.getMessage();
+            if (error instanceof RemoteException) return new ConnectionFailedException(reason, error);
+            try {
+                return lease.isOpen() ? new IOException(reason, error) : new ConnectionFailedException(reason, error);
+            } catch (RemoteException disconnected) {
+                return new ConnectionFailedException(reason, disconnected);
             }
         }
 
@@ -244,5 +259,9 @@ final class SharedRootNodeCapture {
             catch (RemoteException error) { DragShareLog.w("DragShare/SharedNodes", "Capture service disconnected during close", error); }
             finally { provider.close(); }
         }
+    }
+
+    static final class ConnectionFailedException extends IOException {
+        ConnectionFailedException(String message, Exception cause) { super(message, cause); }
     }
 }

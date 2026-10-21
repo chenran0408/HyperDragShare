@@ -9,5 +9,6 @@ interface IRootNodeLease {
                    IRootNodeCandidate callback);
     boolean verifyWindow(String sourcePackage, int windowId);
     boolean verifySource(String sourcePackage);
+    boolean isOpen();
     void close();
 }

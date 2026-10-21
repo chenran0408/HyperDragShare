@@ -15,6 +15,7 @@ public final class MainHook implements IXposedHookLoadPackage {
         } else if (AICR_PACKAGE.equals(lpparam.packageName)) {
             AicrCopyHooks.install(lpparam.classLoader);
         } else if (ANDROID_PACKAGE.equals(lpparam.packageName)) {
+            RootProcessFrameworkHooks.install(lpparam.classLoader);
             BackTapFrameworkHooks.install(lpparam);
         }
     }

@@ -6,7 +6,7 @@
 
 目标ROM只读services.jar SHA256：`E67000C7F004E5590BA923511473CE1812F0470294C573C9C3EB2DF7490C9015`。对以下入口和锁的判断同时核对了DEX指令；反编译Java仅用于定位，没有复制到产品。
 
-## 待实现的窄Hook
+## 152已实现的窄Hook
 
 沿用android/system_server作用域，精确入口`com.android.server.am.PhantomProcessRecord.killLocked(String, boolean)`。只考虑原因完全等于上述数量裁剪、record.mUid为0的条目。
 
@@ -16,7 +16,7 @@ trim在持有AMS.mProcLock与phantom.mLock时调用killLocked，已有归属映�
 
 其余Process error、Stale process、CPU/进程组处置及普通停止均保持原实现。不得Hook通用killProcessGroup、保护其他应用Root进程或全局关闭phantom限制。条目仍计入总数，可能再次被尝试裁剪，不伪造计数。此Hook不能解决LMKD、主动停止、崩溃或Root管理器终止。
 
-**当前仅完成目标ROM分析，Hook未加入151。** 新框架Hook需要对应系统进程重载；用户正在使用手机，不能以应用热重载冒充已加载系统Hook。后续验收等待一次自然裁剪命中并核对自有输入/取词链持续工作，不造进程洪峰或改全局阈值。
+**152已加入RootProcessFrameworkHooks并通过构建，android作用域尚未重载，未证明真机裁剪跳过。** 新框架Hook需要对应系统进程重载；用户正在使用手机，不能以应用热重载冒充已加载系统Hook。后续验收等待一次自然裁剪命中并核对自有输入/取词链持续工作，不造进程洪峰或改全局阈值。
 
 ## 独立的生命周期欠项
 

@@ -1016,7 +1016,22 @@ private enum class ActivationUiState {
     PortalRootUnavailable,
     AccessibilityDisabled,
     AccessibilityConnecting,
+    PressReaderConnecting,
+    PressReaderUnavailable,
     Active,
+}
+
+private fun pressReaderActivation(context: Context, accessibility: Boolean): ActivationUiState {
+    if (!ThumbTriggerSettings.read(context).enabled) return ActivationUiState.Active
+    val ready = if (accessibility) AccessibilityRuntimeStatus.isPressReaderReady()
+        else ModuleActivation.isPressReaderReady(context)
+    val error = if (accessibility) AccessibilityRuntimeStatus.pressReaderError()
+        else ModuleActivation.pressReaderError(context)
+    return when {
+        ready -> ActivationUiState.Active
+        error.isNotEmpty() -> ActivationUiState.PressReaderUnavailable
+        else -> ActivationUiState.PressReaderConnecting
+    }
 }
 
 private fun openAccessibilitySettings(context: Context) {
@@ -1069,7 +1084,7 @@ private fun ActivationStatusCard(
                         || !AccessibilityRuntimeStatus.isRootInputReady() -> {
                     ActivationUiState.AccessibilityConnecting
                 }
-                else -> ActivationUiState.Active
+                else -> pressReaderActivation(context, true)
             }
             return@LaunchedEffect
         }
@@ -1083,7 +1098,7 @@ private fun ActivationStatusCard(
                 injected = ModuleActivation.isCurrentBuildInjected(context)
                 portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
                 if (injected && portalRootGranted) {
-                    state = ActivationUiState.Active
+                    state = pressReaderActivation(context, false)
                     return@LaunchedEffect
                 }
                 delay(PORTAL_ACTIVATION_CHECK_INTERVAL_MS)
@@ -1092,7 +1107,17 @@ private fun ActivationStatusCard(
         state = when {
             !injected -> ActivationUiState.NotInjected
             !portalRootGranted -> ActivationUiState.PortalRootUnavailable
-            else -> ActivationUiState.Active
+            else -> pressReaderActivation(context, false)
+        }
+    }
+
+    LaunchedEffect(state, contentCaptureMode) {
+        if (state == ActivationUiState.PressReaderConnecting) {
+            while (state == ActivationUiState.PressReaderConnecting) {
+                delay(300L)
+                state = pressReaderActivation(context,
+                    contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY)
+            }
         }
     }
 
@@ -1108,18 +1133,26 @@ private fun ActivationStatusCard(
         ActivationUiState.Checking -> "正在检测"
         ActivationUiState.NoRoot -> "未获取 Root 权限"
         ActivationUiState.NotInjected -> "未注入到传送门"
-        ActivationUiState.PortalRootUnavailable -> "传送门未获取 Root 权限"
+        ActivationUiState.PortalRootUnavailable -> "传送门 Root 通道不可用"
         ActivationUiState.AccessibilityDisabled -> "无障碍服务未启用"
         ActivationUiState.AccessibilityConnecting -> "无障碍服务正在连接"
+        ActivationUiState.PressReaderConnecting -> "按压取词正在连接"
+        ActivationUiState.PressReaderUnavailable -> "按压取词连接中断"
         ActivationUiState.Active -> "已激活"
     }
     val summary = when (state) {
         ActivationUiState.Checking -> "正在检查运行环境"
         ActivationUiState.NoRoot -> "Root 输入通道当前不可用"
         ActivationUiState.NotInjected -> "当前版本尚未在传送门进程中加载\n如果传送门未启动，该提示为正常现象"
-        ActivationUiState.PortalRootUnavailable -> "传送门进程未通过 Root 权限检测\n如果传送门未启动，该提示为正常现象"
+        ActivationUiState.PortalRootUnavailable -> "传送门的 Root 检测未完成或未成功，请检查作用域运行状态"
         ActivationUiState.AccessibilityDisabled -> "请在系统设置中手动开启“HyperDragShare”服务"
         ActivationUiState.AccessibilityConnecting -> "正在等待无障碍服务和 Root 输入就绪"
+        ActivationUiState.PressReaderConnecting -> "正在准备取词连接，就绪后才能按住取词"
+        ActivationUiState.PressReaderUnavailable -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
+            AccessibilityRuntimeStatus.pressReaderError()
+        } else {
+            ModuleActivation.pressReaderError(context)
+        }
         ActivationUiState.Active -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
             "无障碍服务与 Root 输入均已就绪"
         } else {
@@ -1133,6 +1166,7 @@ private fun ActivationStatusCard(
         ActivationUiState.PortalRootUnavailable -> "传送门 ROOT"
         ActivationUiState.AccessibilityDisabled -> "无障碍"
         ActivationUiState.AccessibilityConnecting -> "ROOT · 无障碍"
+        ActivationUiState.PressReaderConnecting, ActivationUiState.PressReaderUnavailable -> "ROOT · 取词"
         ActivationUiState.Active -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
             "ROOT · 无障碍"
         } else {

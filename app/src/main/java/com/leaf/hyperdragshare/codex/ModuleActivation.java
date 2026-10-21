@@ -13,12 +13,15 @@ final class ModuleActivation {
     static final String EXTRA_VERSION_CODE = "version_code";
     static final String EXTRA_PROCESS_ID = "process_id";
     static final String EXTRA_PORTAL_ROOT_GRANTED = "portal_root_granted";
+    static final String EXTRA_PRESS_READER_READY = "press_reader_ready";
+    static final String EXTRA_PRESS_READER_ERROR = "press_reader_error";
 
     private static final String PREFS_NAME = "module_activation";
     private static final String KEY_INJECTED_VERSION = "injected_version";
     private static final String KEY_PORTAL_ROOT_VERSION = "portal_root_version";
     private static final String KEY_PROCESS_ID = "process_id";
     private static final String KEY_PORTAL_ROOT_GRANTED = "portal_root_granted";
+    private static final String KEY_PRESS_READER_VERSION = "press_reader_version";
     private static final long ROOT_TIMEOUT_SECONDS = 4L;
     private static final String PORTAL_PROVIDER_URI =
             "content://com.miui.contentextension.provider.switchcontrolprovider";
@@ -34,6 +37,19 @@ final class ModuleActivation {
         extras.putLong(EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
         extras.putInt(EXTRA_PROCESS_ID, android.os.Process.myPid());
         return reportPortalStatus(portalContext, extras);
+    }
+
+    static void reportPressReader(Context context, boolean ready, String error) {
+        if (MainHook.TAPLUS_PACKAGE.equals(context.getPackageName())) {
+            Bundle extras = new Bundle();
+            extras.putLong(EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+            extras.putInt(EXTRA_PROCESS_ID, android.os.Process.myPid());
+            extras.putBoolean(EXTRA_PRESS_READER_READY, ready);
+            extras.putString(EXTRA_PRESS_READER_ERROR, error);
+            reportPortalStatus(context, extras);
+        } else if (BuildConfig.APPLICATION_ID.equals(context.getPackageName())) {
+            AccessibilityRuntimeStatus.setPressReader(ready, error);
+        }
     }
 
     /** Runs in the injected portal process so the root manager evaluates the portal UID. */
@@ -93,9 +109,13 @@ final class ModuleActivation {
         if (!matchesCurrentBuild(reportedVersion)) {
             return;
         }
-        SharedPreferences.Editor editor = moduleContext
-                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
+        SharedPreferences preferences = moduleContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = preferences.edit();
+        if (extras.getInt(EXTRA_PROCESS_ID, 0) != preferences.getInt(KEY_PROCESS_ID, 0)) {
+            editor.remove(KEY_PORTAL_ROOT_VERSION).remove(KEY_PORTAL_ROOT_GRANTED)
+                    .remove(KEY_PRESS_READER_VERSION).remove(EXTRA_PRESS_READER_READY).remove(EXTRA_PRESS_READER_ERROR);
+        }
+        editor
                 .putLong(KEY_INJECTED_VERSION, reportedVersion)
                 .putInt(KEY_PROCESS_ID, extras.getInt(EXTRA_PROCESS_ID, 0));
         if (extras != null && extras.containsKey(EXTRA_PORTAL_ROOT_GRANTED)) {
@@ -103,6 +123,11 @@ final class ModuleActivation {
                     .putBoolean(
                             KEY_PORTAL_ROOT_GRANTED,
                             extras.getBoolean(EXTRA_PORTAL_ROOT_GRANTED));
+        }
+        if (extras.containsKey(EXTRA_PRESS_READER_READY)) {
+            editor.putLong(KEY_PRESS_READER_VERSION, reportedVersion)
+                    .putBoolean(EXTRA_PRESS_READER_READY, extras.getBoolean(EXTRA_PRESS_READER_READY))
+                    .putString(EXTRA_PRESS_READER_ERROR, extras.getString(EXTRA_PRESS_READER_ERROR, ""));
         }
         editor.apply();
     }
@@ -132,6 +157,18 @@ final class ModuleActivation {
         return runRootCommand("id -u");
     }
 
+    static boolean isPressReaderReady(Context context) {
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return matchesCurrentBuild(preferences.getLong(KEY_PRESS_READER_VERSION, -1L))
+                && preferences.getBoolean(EXTRA_PRESS_READER_READY, false);
+    }
+
+    static String pressReaderError(Context context) {
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return matchesCurrentBuild(preferences.getLong(KEY_PRESS_READER_VERSION, -1L))
+                ? preferences.getString(EXTRA_PRESS_READER_ERROR, "") : "";
+    }
+
     /** Root reads the no-op provider to start the host without opening an Activity. */
     static boolean requestPortalInjectionHandshake() {
         return runRootCommand(portalHandshakeCommand());
@@ -148,6 +185,7 @@ final class ModuleActivation {
     static void clearPortalReport(Context context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
                 .remove(KEY_INJECTED_VERSION).remove(KEY_PORTAL_ROOT_VERSION)
+                .remove(KEY_PRESS_READER_VERSION).remove(EXTRA_PRESS_READER_READY).remove(EXTRA_PRESS_READER_ERROR)
                 .remove(KEY_PORTAL_ROOT_GRANTED).remove(KEY_PROCESS_ID).apply();
     }
 
