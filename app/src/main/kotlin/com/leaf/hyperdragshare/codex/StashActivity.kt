@@ -42,7 +42,8 @@ class StashActivity : ComponentActivity() {
         super.onResume()
         lifecycleScope.launch {
             importPendingShare()
-            if (!receiveOnly || shareImported) StashOverlayPanel.show(this@StashActivity)
+            if (shareImported) StashOverlayPanel.contentAdded(this@StashActivity)
+            else if (!receiveOnly) StashOverlayPanel.show(this@StashActivity)
             else Toast.makeText(this@StashActivity,
                 message ?: "保存失败，请重新分享后重试", Toast.LENGTH_LONG).show()
             finish()

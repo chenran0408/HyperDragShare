@@ -13,7 +13,7 @@ import android.widget.LinearLayout;
 
 import com.leaf.hyperdragshare.codex.BoomChipPage.BoomChip;
 
-import smartisanos.util.SidebarUtils;
+import java.util.TreeSet;
 
 public class SwipeSelectView extends LinearLayout {
 
@@ -28,19 +28,30 @@ public class SwipeSelectView extends LinearLayout {
     private BoomChipPage mBoomPage;
     private boolean mDragStarted;
     private boolean mDeferInitialSelectionVisual;
-    private boolean mVisualSelectionApplied;
     private int mAutoScrollTopInset;
     private int mAutoScrollBottomInset;
     private int mAutoScrollVelocity;
 
-    private String mDragText;
-    private Runnable mStartDrag = new Runnable() {
-        @Override
-        public void run() {
-            if (!TextUtils.isEmpty(mDragText) && SidebarUtils.isSidebarShowing(getContext())) {
-                mDragStarted = true;
-                SidebarUtils.dragText(SwipeSelectView.this, getContext(), mDragText);
-            }
+    private boolean mGestureActive;
+    private float mDownX;
+    private float mDownY;
+    private TreeSet<Integer> mSelectionBeforeGesture = new TreeSet<>();
+    private final Runnable mStartDrag = () -> {
+        if (!mGestureActive || mStartIndex < 0) return;
+        if (mIsSelected) {
+            performSelect(true);
+            mBoomPage.mBoomActionHandler.onSelect(mStartIndex, mStartIndex);
+        }
+        String text = mBoomPage.mBoomActionHandler.getSelectedText();
+        if (TextUtils.isEmpty(text)) return;
+        // startDragAndDrop can synchronously cancel this View's touch stream.
+        mDragStarted = true;
+        mGestureActive = false;
+        mAutoScrollVelocity = 0;
+        removeCallbacks(this.mAutoScroll);
+        if (!mBoomPage.mActions.dragText(this, text)) {
+            mDragStarted = false;
+            mBoomPage.restoreSelectionNow(mSelectionBeforeGesture);
         }
     };
 
@@ -74,10 +85,20 @@ public class SwipeSelectView extends LinearLayout {
     public boolean onTouchEvent(MotionEvent ev) {
         final float x = ev.getX();
         final float y = ev.getY();
-        switch (ev.getAction()) {
+        if (ev.getPointerCount() > 1) {
+            removeCallbacks(mStartDrag);
+            mBoomPage.restoreSelectionNow(mSelectionBeforeGesture);
+            finishTouch();
+            return true;
+        }
+        switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                mGestureActive = true;
+                mDragStarted = false;
+                mDownX = x;
+                mDownY = y;
+                mSelectionBeforeGesture = new TreeSet<>(mBoomPage.mBoomActionHandler.mSelectedId);
                 mDeferInitialSelectionVisual = isAtScrollEdge();
-                mVisualSelectionApplied = false;
                 BoomChip touchedChip = findChip(x, y, false);
                 if (touchedChip != null) {
                     initSelection(touchedChip.index);
@@ -85,17 +106,20 @@ public class SwipeSelectView extends LinearLayout {
                     if (!mDeferInitialSelectionVisual) {
                         applyInitialSelectionVisual(touchedChip);
                     }
+                    postDelayed(mStartDrag, ViewConfiguration.getLongPressTimeout());
                 } else {
                     initSelection(-1);
                 }
                 mAutoScrollVelocity = 0;
                 break;
             case MotionEvent.ACTION_MOVE:
+                int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                if (Math.abs(x - mDownX) > slop || Math.abs(y - mDownY) > slop) removeCallbacks(mStartDrag);
+                if (mDragStarted) return true;
                 if (mLastTouchIndex != -1) {
                     scrollIfNeeded((int) ev.getRawY());
                     touchedChip = findChip(x, y, mSelEnd > mSelStart);
                     if (touchedChip != null && touchedChip.index != mLastTouchIndex) {
-                        mVisualSelectionApplied = true;
                         requestDisallowInterceptTouchEvent(true);
                         removeCallbacks(mStartDrag);
                         mLastTouchIndex = touchedChip.index;
@@ -110,7 +134,7 @@ public class SwipeSelectView extends LinearLayout {
             case MotionEvent.ACTION_UP:
                 removeCallbacks(mStartDrag);
                 requestDisallowInterceptTouchEvent(false);
-                if (mSelStart != -1) {
+                if (mGestureActive && !mDragStarted && mSelStart != -1) {
                     if (mSelStart == mSelEnd) {
                         performSelect(mIsSelected);
                     }
@@ -135,22 +159,12 @@ public class SwipeSelectView extends LinearLayout {
                         performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE);
                     }
                 }
-                mAutoScrollVelocity = 0;
-                mDeferInitialSelectionVisual = false;
-                mVisualSelectionApplied = false;
+                finishTouch();
                 break;
             case MotionEvent.ACTION_CANCEL:
                 removeCallbacks(mStartDrag);
-                requestDisallowInterceptTouchEvent(false);
-                if (mVisualSelectionApplied && mSelStart != -1 && mSelStart == mSelEnd) {
-                    if (!mDragStarted || !mBoomPage.mBoomActionHandler.hasSelection()) {
-                        performSelect(!mIsSelected);
-                    }
-                }
-                mDragStarted = false;
-                mAutoScrollVelocity = 0;
-                mDeferInitialSelectionVisual = false;
-                mVisualSelectionApplied = false;
+                if (!mDragStarted) mBoomPage.restoreSelectionNow(mSelectionBeforeGesture);
+                finishTouch();
                 break;
             default:
                 removeCallbacks(mStartDrag);
@@ -200,17 +214,21 @@ public class SwipeSelectView extends LinearLayout {
     }
 
     private void applyInitialSelectionVisual(BoomChip touchedChip) {
-        mVisualSelectionApplied = true;
-        if (mIsSelected) {
-            touchedChip.setSelected(true);
-            if (!mBoomPage.mBoomActionHandler.hasSelection() && SidebarUtils.isSidebarShowing(getContext())) {
-                mDragText = touchedChip.word.getText().toString();
-                postDelayed(mStartDrag, ViewConfiguration.getLongPressTimeout());
-            }
-        } else if (SidebarUtils.isSidebarShowing(getContext())) {
-            mDragText = mBoomPage.mBoomActionHandler.getSelectedText();
-            postDelayed(mStartDrag, ViewConfiguration.getLongPressTimeout());
-        }
+        if (mIsSelected) touchedChip.setSelected(true);
+    }
+
+    private void finishTouch() {
+        mGestureActive = false;
+        requestDisallowInterceptTouchEvent(false);
+        mAutoScrollVelocity = 0;
+        removeCallbacks(mAutoScroll);
+        mDeferInitialSelectionVisual = false;
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        removeCallbacks(mStartDrag);
+        finishTouch();
+        super.onDetachedFromWindow();
     }
 
     private boolean isAtScrollEdge() {

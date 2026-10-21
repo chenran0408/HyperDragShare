@@ -10,7 +10,6 @@ import android.widget.ScrollView;
  * Created by denglinling on 16-11-11.
  */
 public class CustomScrollView extends ScrollView{
-    private OnScrollListener mOnScrollListener;
     private OnEdgeDragListener mOnEdgeDragListener;
     private float mDownX;
     private float mLastY;
@@ -36,10 +35,6 @@ public class CustomScrollView extends ScrollView{
         setOverScrollMode(OVER_SCROLL_NEVER);
     }
 
-    public void setOnScrollListener(OnScrollListener onScrollListener) {
-        mOnScrollListener = onScrollListener;
-    }
-
     public void setOnEdgeDragListener(OnEdgeDragListener onEdgeDragListener) {
         mOnEdgeDragListener = onEdgeDragListener;
     }
@@ -54,10 +49,6 @@ public class CustomScrollView extends ScrollView{
     public interface OnEdgeDragListener {
         void onEdgeDrag(float offset);
         void onEdgeDragRelease(float offset, boolean triggered);
-    }
-
-    public interface OnScrollListener{
-        void onScrollChanged();
     }
 
     @Override
@@ -126,7 +117,8 @@ public class CustomScrollView extends ScrollView{
             case MotionEvent.ACTION_CANCEL:
                 if (mEdgeDragging || mEdgeOffset != 0f) {
                     float releaseOffset = mEdgeOffset;
-                    boolean triggered = Math.abs(releaseOffset) >= mTriggerDistance;
+                    boolean triggered = ev.getActionMasked() == MotionEvent.ACTION_UP
+                            && Math.abs(releaseOffset) >= mTriggerDistance;
                     resetEdgeDrag(false);
                     if (mOnEdgeDragListener != null) {
                         mOnEdgeDragListener.onEdgeDragRelease(releaseOffset, triggered);
@@ -138,14 +130,6 @@ public class CustomScrollView extends ScrollView{
                 break;
         }
         return super.onTouchEvent(ev);
-    }
-
-    @Override
-    protected void onScrollChanged(int l, int t, int oldl, int oldt) {
-        super.onScrollChanged(l, t, oldl, oldt);
-        if (mOnScrollListener != null) {
-            mOnScrollListener.onScrollChanged();
-        }
     }
 
     private boolean shouldStartEdgeDrag(float dy) {

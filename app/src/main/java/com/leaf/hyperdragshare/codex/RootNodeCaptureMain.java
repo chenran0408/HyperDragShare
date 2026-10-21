@@ -141,6 +141,9 @@ public final class RootNodeCaptureMain {
         watchdog.postDelayed(timeout, 4000L);
         try {
             long started = SystemClock.uptimeMillis();
+            if (pressHitsInputMethod(automation, request)) {
+                return new JSONObject().put("found", false).put("reason", "excluded_input_method");
+            }
             AccessibilityNodeInfo root = awaitRoot(automation, eventLock, eventVersion);
             long rootAt = SystemClock.uptimeMillis();
             try {
@@ -156,6 +159,9 @@ public final class RootNodeCaptureMain {
                 } finally {
                     if (current != null) current.recycle();
                 }
+                if (pressHitsInputMethod(automation, request)) {
+                    result = new JSONObject().put("found", false).put("reason", "excluded_input_method");
+                }
                 return result.put("window_id", root.getWindowId()).put("root_ms", rootAt - started)
                         .put("capture_ms", capturedAt - rootAt)
                         .put("verify_ms", SystemClock.uptimeMillis() - capturedAt);
@@ -166,6 +172,32 @@ public final class RootNodeCaptureMain {
             watchdog.removeCallbacks(timeout);
         }
     }
+
+    private static boolean pressHitsInputMethod(UiAutomation automation, JSONObject request)
+            throws org.json.JSONException {
+        if (!request.optBoolean("press_lookup", false)) return false;
+        automation.clearCache();
+        List<AccessibilityWindowInfo> windows = automation.getWindows();
+        try {
+            return inputMethodAtPoint(windows, (float) request.getDouble("x"),
+                    (float) request.getDouble("y"));
+        } finally {
+            for (AccessibilityWindowInfo window : windows) window.recycle();
+        }
+    }
+
+    static boolean inputMethodAtPoint(List<AccessibilityWindowInfo> windows, float x, float y) {
+        Rect bounds = new Rect();
+        for (AccessibilityWindowInfo window : windows) {
+            if (window.getType() != AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
+            window.getBoundsInScreen(bounds);
+            if (x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static AccessibilityNodeInfo awaitRoot(UiAutomation automation, Object lock,
                                                    int[] version) throws Exception {
         long deadline = SystemClock.uptimeMillis() + 1200L;

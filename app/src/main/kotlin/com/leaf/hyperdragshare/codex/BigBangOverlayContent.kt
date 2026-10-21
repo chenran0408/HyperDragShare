@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
@@ -24,8 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DocumentScanner
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.runtime.Composable
@@ -40,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -67,6 +63,10 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 internal enum class BigBangMoreAction {
+    Dictionary,
+    Split,
+    Merge,
+    ReopenOcr,
     Translate,
     SaveToStash,
     UndoEdit,
@@ -92,13 +92,19 @@ internal fun BigBangOverlayContent(
     panelOffsetYdp: Float,
     onLegacyThemeChanged: (Int, Int, Int, Int, Int, Int) -> Unit,
     onDismissRequesterChanged: ((() -> Unit)?) -> Unit,
-    onDismissRequest: () -> Boolean,
     onDismissFinished: () -> Unit,
+    onCollapseFinished: () -> Unit,
     originalText: () -> String,
     onEditText: (String) -> Unit,
     canUndoEdit: Boolean,
     canCaptureMoreText: Boolean,
     onSelectAll: () -> Unit,
+    onCopy: () -> Unit,
+    onSearch: () -> Unit,
+    onShare: () -> Unit,
+    copying: Boolean,
+    canSplit: Boolean,
+    canMerge: Boolean,
     totalCharacterCount: Int,
     selectedCharacterCount: Int,
     hasTextSelection: Boolean,
@@ -107,7 +113,6 @@ internal fun BigBangOverlayContent(
     onClearSelection: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
     onPanelPositionChanged: (Float, Float) -> Unit,
-    onOcr: () -> Unit,
 ) {
     val dark = MiuixTheme.colorScheme.background.luminance() < 0.5f
     val maximumMetrics = rememberOverlayPanelMetrics(panelHeightFraction = panelHeightFraction)
@@ -153,6 +158,7 @@ internal fun BigBangOverlayContent(
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var dismissing by remember { mutableStateOf(false) }
+    var collapsing by remember { mutableStateOf(false) }
     var panelBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val enterProgress by animateFloatAsState(
         targetValue = if (panelVisible) 1f else 0f,
@@ -160,7 +166,7 @@ internal fun BigBangOverlayContent(
         label = "bigbang_panel_enter",
         finishedListener = {
             if (dismissing && it == 0f) {
-                onDismissFinished()
+                if (collapsing) onCollapseFinished() else onDismissFinished()
             }
         },
     )
@@ -188,11 +194,19 @@ internal fun BigBangOverlayContent(
         }
     }
     val requestDismiss: () -> Unit = {
-        if (!dismissing && onDismissRequest()) closePanel()
+        when {
+            showEditor -> {
+                focusManager.clearFocus()
+                keyboard?.hide()
+                showEditor = false
+            }
+            showMoreMenu -> showMoreMenu = false
+            !dismissing -> { collapsing = true; closePanel() }
+        }
     }
 
-    DisposableEffect(closePanel) {
-        onDismissRequesterChanged(closePanel)
+    DisposableEffect(requestDismiss) {
+        onDismissRequesterChanged(requestDismiss)
         onDispose { onDismissRequesterChanged(null) }
     }
     LaunchedEffect(Unit) { panelVisible = true }
@@ -255,16 +269,6 @@ internal fun BigBangOverlayContent(
                         rightInset = panelMetrics.rightSystemInset,
                         leading = {
                             OverlayIconAction(
-                                imageVector = Icons.Outlined.Edit,
-                                enabled = !isSegmenting,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                onClick = {
-                                    editorText = originalText()
-                                    showEditor = true
-                                },
-                                contentDescription = stringResource(R.string.bigbang_action_edit),
-                            )
-                            OverlayIconAction(
                                 imageVector = Icons.Outlined.SelectAll,
                                 enabled = !isSegmenting,
                                 tint = MiuixTheme.colorScheme.onSurface,
@@ -298,6 +302,10 @@ internal fun BigBangOverlayContent(
                                 onClick = { showMoreMenu = true },
                                 contentDescription = stringResource(R.string.bigbang_action_more),
                             )
+                            OverlayIconAction(Icons.Outlined.Close,
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                onClick = closePanel,
+                                contentDescription = "关闭分词窗口")
                         },
                     )
                 },
@@ -308,35 +316,14 @@ internal fun BigBangOverlayContent(
                         leftInset = panelMetrics.leftSystemInset,
                         rightInset = panelMetrics.rightSystemInset,
                         leading = {
-                            if (sourceImageAvailable) OverlayIconAction(
-                                imageVector = Icons.Outlined.DocumentScanner,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                onClick = onOcr,
-                                contentDescription = stringResource(R.string.bigbang_action_ocr),
-                            )
+                            TextButton(if (copying) "复制中…" else "复制", onCopy,
+                                enabled = !isSegmenting && !copying && totalCharacterCount > 0)
                         },
                         center = {
-                            OverlayIconAction(
-                                imageVector = Icons.Outlined.Close,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                onClick = closePanel,
-                                contentDescription = stringResource(R.string.search_overlay_close),
-                            )
+                            TextButton("搜索", onSearch, enabled = !isSegmenting && totalCharacterCount > 0)
                         },
                         trailing = {
-                            if (hasTextSelection) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize()
-                                        .clickable(role = Role.Button, onClick = onClearSelection),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = "取消选择",
-                                        color = MiuixTheme.colorScheme.primary,
-                                        fontSize = 14.sp,
-                                    )
-                                }
-                            }
+                            TextButton("分享", onShare, enabled = !isSegmenting && totalCharacterCount > 0)
                         },
                     )
                 },
@@ -417,7 +404,17 @@ internal fun BigBangOverlayContent(
                 .heightIn(max = (configuration.screenHeightDp * 0.55f).dp)
                 .verticalScroll(rememberScrollState()),
         ) {
+            TextButton("编辑原文", {
+                showMoreMenu = false
+                editorText = originalText()
+                showEditor = true
+            }, modifier = Modifier.fillMaxWidth())
+            if (hasTextSelection) TextButton("取消选择", {
+                showMoreMenu = false
+                onClearSelection()
+            }, modifier = Modifier.fillMaxWidth())
             val actions = listOf(
+                BigBangMoreAction.Dictionary to "查词",
                 BigBangMoreAction.Translate to stringResource(R.string.bigbang_more_translate),
                 BigBangMoreAction.SaveToStash to "存入中转站",
                 BigBangMoreAction.TextSize to stringResource(R.string.bigbang_more_text_size, textSizeSp),
@@ -435,6 +432,9 @@ internal fun BigBangOverlayContent(
                 ),
             )
             val availableActions = buildList {
+                if (canSplit) add(BigBangMoreAction.Split to "拆分选词")
+                if (canMerge) add(BigBangMoreAction.Merge to "合并相邻选词")
+                if (sourceImageAvailable) add(BigBangMoreAction.ReopenOcr to "重新识别原图文字")
                 if (canUndoEdit) add(BigBangMoreAction.UndoEdit to "撤销编辑")
                 if (canCaptureMoreText) add(BigBangMoreAction.CaptureMore to "追加屏幕文字")
                 if (sourceImageAvailable) add(BigBangMoreAction.ReadQr to "识别原图二维码")

@@ -137,9 +137,7 @@ public class BoomChipPage {
         mDismissClickListener = new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (!handleClick()) {
-                    mActions.dismiss();
-                }
+                mActions.dismiss();
             }
         };
         mBoomPage.setOnClickListener(mDismissClickListener);
@@ -147,8 +145,7 @@ public class BoomChipPage {
         mScroller.setOnClickListener(mDismissClickListener);
         mBoomConent.setOnClickListener(mDismissClickListener);
         mCancel.setOnClickListener(mDismissClickListener);
-        mBoomActionHandler = new BoomActionHandler(this, mEnableLegacyMask);
-        mScroller.setOnScrollListener(mBoomActionHandler);
+        mBoomActionHandler = new BoomActionHandler(this);
         mScroller.setOnEdgeDragListener(new CustomScrollView.OnEdgeDragListener() {
             @Override
             public void onEdgeDrag(float offset) {
@@ -175,7 +172,6 @@ public class BoomChipPage {
     }
 
     void notifySelectionChanged() {
-        if (mBoomActionHandler != null) mBoomActionHandler.updateEditActions();
         if (mOnSelectionChanged != null) mOnSelectionChanged.run();
     }
 
@@ -188,9 +184,6 @@ public class BoomChipPage {
     }
 
     private void removeLegacyChromeSpacing() {
-        int selectBarHeadroom = Math.abs(
-                mContext.getResources().getDimensionPixelOffset(R.dimen.chip_row_move_up_offset)
-        );
         ViewGroup.MarginLayoutParams scrollerParams = (ViewGroup.MarginLayoutParams) mScroller.getLayoutParams();
         scrollerParams.topMargin = 0;
         scrollerParams.bottomMargin = 0;
@@ -209,7 +202,7 @@ public class BoomChipPage {
         mBoomTable.setLayoutParams(tableParams);
         mBoomTable.setPadding(
                 mBoomTable.getPaddingLeft(),
-                selectBarHeadroom,
+                0,
                 mBoomTable.getPaddingRight(),
                 mBoomTable.getPaddingBottom()
         );
@@ -557,6 +550,13 @@ public class BoomChipPage {
         if (animate) {
             mBoomConent.getViewTreeObserver().addOnGlobalLayoutListener(mDoBoomAnimation);
         }
+    }
+
+    void restoreSelectionNow(TreeSet<Integer> selection) {
+        resetChips();
+        mSavedData = selection;
+        if (!restoreSelectedState()) mBoomActionHandler.clearSelectionStateForRelayout();
+        mSavedData = null;
     }
 
     private boolean restoreSelectedState() {

@@ -103,7 +103,21 @@ object StashOverlayPanel {
             }
             val shelf = active ?: Shelf(app).also { active = it }
             shelf.collapse()
-            shelf.overlay.show()
+            shelf.refresh()
+        }
+    }
+
+    /** Saving should leave the source application usable, without opening a tray over it. */
+    @JvmStatic fun contentAdded(context: Context) {
+        val app = context.applicationContext
+        main.post {
+            if (app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return@post
+            if (!Settings.canDrawOverlays(app)) {
+                Toast.makeText(app, "内容已保存；开启模块悬浮窗权限后可使用中转站侧条", Toast.LENGTH_LONG).show()
+                return@post
+            }
+            val shelf = active ?: Shelf(app).also { active = it; it.collapse() }
+            shelf.refresh()
         }
     }
 
@@ -164,6 +178,10 @@ object StashOverlayPanel {
             app.registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF),
                 Context.RECEIVER_NOT_EXPORTED)
             displayManager.registerDisplayListener(displayListener, main)
+        }
+
+        fun refresh() {
+            if (overlay.show()) reload()
         }
 
         fun expand() {
@@ -501,7 +519,21 @@ object StashOverlayPanel {
                                         OverlayIconAction(Icons.Outlined.DocumentScanner,
                                             MiuixTheme.colorScheme.onSurfaceVariantActions,
                                             onClick = {
-                                                if (ImageOcrOverlay.start(app, StashImageProvider.uriForEntry(image.id))) {
+                                                val uri = StashImageProvider.uriForEntry(image.id)
+                                                if (ImageOcrOverlay.startWithResult(app, uri) { text ->
+                                                    if (active === this@Shelf &&
+                                                        !app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
+                                                        if (text == null) {
+                                                            if (entries.any { it.id == image.id }) {
+                                                                preview = image
+                                                                expand()
+                                                            }
+                                                        } else {
+                                                            BigBangOverlayLauncher.showText(app, text, -1, -1, uri)
+                                                            collapse()
+                                                        }
+                                                    }
+                                                }) {
                                                     collapse()
                                                 }
                                             }, contentDescription = "识别图片文字")

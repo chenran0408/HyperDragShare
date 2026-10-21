@@ -79,6 +79,11 @@ object BigBangOverlayLauncher {
         val originalText = text
         session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
             override fun dismiss() = overlay.dismiss()
+            override fun collapse() {
+                val state = Bundle().also(session::saveState)
+                overlay.dismiss()
+                showReturnTab(app) { open(app, originalText, x, y, sourceImage, state, sourceArea = sourceArea) }
+            }
             override fun search(text: String, type: Int) {
                 SearchOverlayWindow.show(context, overlay.window.decorView, text, type,
                     openExternal = { launch(it) })
@@ -114,18 +119,27 @@ object BigBangOverlayLauncher {
                         View.DragShadowBuilder(preview), null, View.DRAG_FLAG_GLOBAL)
                 } catch (error: SecurityException) {
                     report(app, error)
-                    return true
+                    return false
                 }
                 if (started) {
                     DragShareLog.i("DragShare/BigBangWindow", "selected text drag started length=${text.length}")
                     overlay.dismiss()
                     showReturnTab(app) { open(app, originalText, x, y, sourceImage, state, sourceArea = sourceArea) }
                 } else Toast.makeText(app, "系统未能开始拖拽，已保留选词", Toast.LENGTH_SHORT).show()
-                return true
+                return started
             }
             override fun reopenOcr(uri: Uri) {
-                ImageOcrOverlay.start(app, uri)
-                overlay.dismiss()
+                val state = Bundle().also(session::saveState)
+                val accepted = ImageOcrOverlay.startWithResult(app, uri) { result ->
+                    if (generation == windowGeneration &&
+                        !app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
+                        if (result == null) open(app, originalText, x, y, sourceImage, state, sourceArea = sourceArea)
+                        else open(app, result, x, y, uri, Bundle().apply {
+                            putBundle(BigBangPanelSession.UNDO_EDIT, state)
+                        })
+                    }
+                }
+                if (accepted) overlay.dismiss()
             }
             override fun readQr(uri: Uri) {
                 ImageOcrOverlay.startQr(app, uri, overlay.window.decorView)
@@ -147,7 +161,10 @@ object BigBangOverlayLauncher {
                 Thread({
                     try {
                         StashStore(app).use { it.addText(text) }
-                        main.post { Toast.makeText(app, "文字已存入中转站", Toast.LENGTH_SHORT).show() }
+                        main.post {
+                            StashOverlayPanel.contentAdded(app)
+                            Toast.makeText(app, "文字已存入中转站", Toast.LENGTH_SHORT).show()
+                        }
                     } catch (error: java.io.IOException) {
                         main.post { report(app, error) }
                     } catch (error: android.database.sqlite.SQLiteException) {

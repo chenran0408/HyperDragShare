@@ -4,14 +4,18 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import android.graphics.Rect;
+import android.view.accessibility.AccessibilityWindowInfo;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadow.api.Shadow;
+import org.robolectric.shadows.ShadowAccessibilityWindowInfo;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
@@ -71,6 +75,35 @@ public final class RootImageSelectionTest {
                         .bounds(new Rect(600, 800, 800, 1100)).build()), List.of()));
         assertNotNull(RootNodeCaptureMain.safeEmptyOcrRegion(500, 1000, window, 1000, 2000, 1f, false,
                 "reader", List.of(), List.of(new Rect(950, 1800, 990, 1900))));
+    }
+
+    @Test public void keyboardBlocksPressOverUnderlyingFullSizeApplication() {
+        AccessibilityWindowInfo application = window(AccessibilityWindowInfo.TYPE_APPLICATION,
+                new Rect(0, 0, 1000, 2000));
+        AccessibilityWindowInfo keyboard = window(AccessibilityWindowInfo.TYPE_INPUT_METHOD,
+                new Rect(0, 1300, 1000, 2000));
+        List<AccessibilityWindowInfo> windows = List.of(application, keyboard);
+        assertFalse(RootNodeCaptureMain.inputMethodAtPoint(List.of(application), 500, 1700));
+        assertTrue(RootNodeCaptureMain.inputMethodAtPoint(windows, 500, 1700));
+        assertFalse(RootNodeCaptureMain.inputMethodAtPoint(windows, 500, 1000));
+    }
+
+    @Test public void floatingKeyboardUsesItsOwnBoundsNotTheUnderlyingApplication() {
+        List<AccessibilityWindowInfo> windows = List.of(
+                window(AccessibilityWindowInfo.TYPE_APPLICATION, new Rect(0, 0, 1000, 2000)),
+                window(AccessibilityWindowInfo.TYPE_SYSTEM, new Rect(0, 0, 1000, 2000)),
+                window(AccessibilityWindowInfo.TYPE_INPUT_METHOD, new Rect(200, 800, 800, 1400)));
+        assertTrue(RootNodeCaptureMain.inputMethodAtPoint(windows, 300, 900));
+        assertFalse(RootNodeCaptureMain.inputMethodAtPoint(windows, 100, 900));
+        assertFalse(RootNodeCaptureMain.inputMethodAtPoint(windows, 800, 900));
+    }
+
+    private static AccessibilityWindowInfo window(int type, Rect bounds) {
+        AccessibilityWindowInfo window = AccessibilityWindowInfo.obtain();
+        ShadowAccessibilityWindowInfo shadow = Shadow.extract(window);
+        shadow.setType(type);
+        shadow.setBoundsInScreen(bounds);
+        return window;
     }
 
     private AccessibilityCandidateSelector.Selection select(AccessibilityNodeSnapshot node,

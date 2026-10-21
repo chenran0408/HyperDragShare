@@ -43,10 +43,14 @@ object ImageOcrOverlay {
 
     @JvmStatic fun start(context: Context, uri: Uri): Boolean = open(context, uri, false, null)
 
+    @JvmStatic fun startWithResult(context: Context, uri: Uri, onResult: (String?) -> Unit): Boolean =
+        open(context, uri, false, null, onResult)
+
     @JvmStatic fun startQr(context: Context, uri: Uri, owner: android.view.View? = null): Boolean =
         open(context, uri, true, owner)
 
-    private fun open(context: Context, uri: Uri, qr: Boolean, owner: android.view.View?): Boolean {
+    private fun open(context: Context, uri: Uri, qr: Boolean, owner: android.view.View?,
+        onResult: ((String?) -> Unit)? = null): Boolean {
         if (!Settings.canDrawOverlays(context)) {
             main.post {
                 android.widget.Toast.makeText(context.applicationContext, "请先在模块设置中允许悬浮窗权限",
@@ -56,10 +60,16 @@ object ImageOcrOverlay {
         }
         val app = context.applicationContext
         main.post {
-            if (owner != null && !owner.isAttachedToWindow) return@post
-            active?.window?.dismiss()
-            if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) return@post
-            val job = Job(app, uri, qr, owner)
+            if (owner != null && !owner.isAttachedToWindow) {
+                onResult?.invoke(null)
+                return@post
+            }
+            active?.dismissForReplacement()
+            if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
+                onResult?.invoke(null)
+                return@post
+            }
+            val job = Job(app, uri, qr, owner, onResult)
             active = job
             if (job.window.show()) job.decode()
         }
@@ -67,7 +77,7 @@ object ImageOcrOverlay {
     }
 
     private class Job(private val app: Context, private val uri: Uri, private val qr: Boolean,
-        private val owner: android.view.View?) {
+        private val owner: android.view.View?, private val onResult: ((String?) -> Unit)?) {
         private val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
         private val context = app.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
@@ -77,6 +87,7 @@ object ImageOcrOverlay {
         private var copying by mutableStateOf(false)
         private var actionError by mutableStateOf<String?>(null)
         private var cancelled = false
+        private var resultDelivered = false
         private var aicr: AicrOcrClient.Request? = null
         private val screenOff: android.content.BroadcastReceiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: Context, intent: android.content.Intent) = window.dismiss()
@@ -92,6 +103,10 @@ object ImageOcrOverlay {
                 app.unregisterReceiver(screenOff)
                 owner?.removeOnAttachStateChangeListener(ownerListener)
                 if (active === this) active = null
+                if (!resultDelivered) {
+                    resultDelivered = true
+                    onResult?.invoke(null)
+                }
             },
             onFailure = {
                 DragShareLog.w("DragShare/ImageOcrWindow", "window failed", it)
@@ -178,9 +193,15 @@ object ImageOcrOverlay {
             }, "image-window-decode").start()
         }
 
-        private fun restart(qr: Boolean) {
+        fun dismissForReplacement() {
+            resultDelivered = true
             window.dismiss()
-            open(app, uri, qr, owner)
+        }
+
+        private fun restart(qr: Boolean) {
+            // The next recognition owns the same result; dismissing this attempt is not cancellation.
+            dismissForReplacement()
+            if (!open(app, uri, qr, owner, onResult)) onResult?.invoke(null)
         }
 
         private fun copyCode(value: String) {
@@ -243,8 +264,10 @@ object ImageOcrOverlay {
                 errorText = "这张图片没有识别到文字"
                 return
             }
+            resultDelivered = true
             window.dismiss()
-            BigBangOverlayLauncher.showText(app, text, -1, -1, uri)
+            if (onResult != null) onResult.invoke(text)
+            else BigBangOverlayLauncher.showText(app, text, -1, -1, uri)
         }
 
         private fun failed(error: Exception) {

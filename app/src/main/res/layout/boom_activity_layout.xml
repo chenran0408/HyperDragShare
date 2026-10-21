@@ -25,14 +25,6 @@
             android:clipChildren="false"
             android:layout_marginTop="7dp">
 
-            <LinearLayout
-                android:id="@+id/boom_multi_selected_bg"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:background="@drawable/boom_multi_select_bg"
-                android:orientation="vertical"
-                android:visibility="gone" />
-
             <com.leaf.hyperdragshare.codex.SwipeSelectView
                 android:id="@+id/boom_content"
                 android:layout_width="match_parent"
@@ -46,8 +38,7 @@
                 android:paddingBottom="@dimen/content_padding_bottom"
                 android:paddingTop="@dimen/content_padding_top" />
 
-            <include android:id="@+id/multi_selected_bar"
-                     layout="@layout/multi_select_bar"/>
+
         </FrameLayout>
     </com.leaf.hyperdragshare.codex.CustomScrollView>
 
@@ -119,13 +110,5 @@
                 android:layout_centerHorizontal="true"
                 android:background="@drawable/boom_cancel_bg" />
         </RelativeLayout>
-    </RelativeLayout>
-    <RelativeLayout
-        android:layout_marginTop="@dimen/fake_select_bar_margin_top"
-        android:layout_marginBottom="@dimen/fake_select_bar_margin_bottom"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <include android:id="@+id/fake_multi_selected_bar"
-                layout="@layout/multi_select_bar"/>
     </RelativeLayout>
 </FrameLayout>

@@ -149,9 +149,7 @@ public final class ShareImageProvider extends ContentProvider {
             result.putString(StashClient.RESULT_ID, entry.id);
             DragShareLog.i(TAG, "saved content to stash kind=" + entry.kind);
             new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-                if (android.provider.Settings.canDrawOverlays(contextOrThrow())) {
-                    StashOverlayPanel.show(contextOrThrow());
-                }
+                StashOverlayPanel.contentAdded(contextOrThrow());
             });
             return result;
         } catch (IOException error) {

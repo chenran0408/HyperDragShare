@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -31,6 +30,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private val captureMoreText: (() -> Unit)? = null) {
     interface Actions {
         fun dismiss()
+        fun collapse()
         fun search(text: String, type: Int)
         fun share(text: String)
         fun dragText(source: View, text: String): Boolean
@@ -63,7 +63,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
     private var isSegmenting by mutableStateOf(true)
-    private var copying = false
+    private var copying by mutableStateOf(false)
     private var copyFeedback by mutableStateOf<String?>(null)
     private var undoEditState by mutableStateOf<Bundle?>(null)
     private var beforeText: String? = null
@@ -132,8 +132,8 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     panelOffsetYdp = panelOffsetYdp,
                     onLegacyThemeChanged = ::updateLegacyTheme,
                     onDismissRequesterChanged = { animatedDismissRequester = it },
-                    onDismissRequest = { shouldDismissPage() },
                     onDismissFinished = { actions.dismiss() },
+                    onCollapseFinished = { actions.collapse() },
                     originalText = { boomChipPage?.originalText.orEmpty() },
                     onEditText = { text ->
                         if (text != boomChipPage?.originalText) {
@@ -148,6 +148,14 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     canUndoEdit = undoEditState != null,
                     canCaptureMoreText = captureMoreText != null && totalCharacterCount > 0,
                     onSelectAll = { selectAll() },
+                    onCopy = { copyText(selectedTextOrOriginal()) },
+                    onSearch = { openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_WEB) },
+                    onShare = { actions.share(selectedTextOrOriginal()) },
+                    copying = copying,
+                    canSplit = hasTextSelection && boomChipPage?.let {
+                        it.mLayout.canSplitSelectedWords(it.mBoomActionHandler.mSelectedId) } == true,
+                    canMerge = hasTextSelection && boomChipPage?.let {
+                        it.mLayout.canMergeSelectedWords(it.mBoomActionHandler.mSelectedId) } == true,
                     totalCharacterCount = totalCharacterCount,
                     selectedCharacterCount = selectedCharacterCount,
                     hasTextSelection = hasTextSelection,
@@ -156,7 +164,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     onClearSelection = { boomChipPage?.handleClick() },
                     onMoreAction = ::handleMoreAction,
                     onPanelPositionChanged = ::savePanelPosition,
-                    onOcr = ::reopenOcr,
                     )
             }
         }
@@ -267,7 +274,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
         if (text.isNotBlank()) actions.search(text.trim(), type)
     }
 
-    private fun shouldDismissPage(): Boolean = boomChipPage?.handleClick() != true
     private fun selectAll() { boomChipPage?.selectAll() }
     private fun selectedTextOrOriginal(): String = boomChipPage?.selectedTextOrOriginal().orEmpty()
     private fun saveToStash() {
@@ -281,7 +287,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     fun closeAfterCopyIfEnabled() {
         if (BigBangSettings.isExitAfterCopyEnabled(context)) {
-            requestAnimatedDismissFromLegacy()
+            actions.dismiss()
         }
     }
 
@@ -346,6 +352,10 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     private fun handleMoreAction(action: BigBangMoreAction) {
         when (action) {
+            BigBangMoreAction.Dictionary -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_DICTIONARY)
+            BigBangMoreAction.Split -> boomChipPage?.splitSelectedWordsToChars()
+            BigBangMoreAction.Merge -> boomChipPage?.mergeSelectedWords()
+            BigBangMoreAction.ReopenOcr -> reopenOcr()
             BigBangMoreAction.ReadQr -> sourceImageUri?.let(actions::readQr)
             BigBangMoreAction.CaptureMore -> captureMoreText?.invoke()
             BigBangMoreAction.UndoEdit -> {
@@ -441,7 +451,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
             state.putIntArray(SAVED_SEGMENT, combinedSegments)
             if (shifted != null) state.putSerializable(SELECTED_STATE, shifted)
         }
-        private const val UNDO_EDIT = "undo_edit"
+        const val UNDO_EDIT = "undo_edit"
         private const val TAG = "DragShare/BigBang"
         private const val SELECTED_STATE = "selected_state"
         private const val SAVED_TEXT = "saved_text"
@@ -475,37 +485,5 @@ private fun applyLegacySegmentationTheme(
             }
         }
         tintText(content)
-    }
-    contentView.findViewById<View>(R.id.boom_multi_selected_bg)
-        ?.backgroundTintList = ColorStateList.valueOf(selectionColor)
-    contentView.findViewById<android.widget.TextView>(R.id.boom_adjacent_top_hint)
-        ?.apply {
-            setTextColor(summaryColor)
-            backgroundTintList = ColorStateList.valueOf(surfaceColor)
-        }
-    contentView.findViewById<android.widget.TextView>(R.id.boom_adjacent_bottom_hint)
-        ?.apply {
-            setTextColor(summaryColor)
-            backgroundTintList = ColorStateList.valueOf(surfaceColor)
-        }
-    listOf(R.id.multi_selected_bar, R.id.fake_multi_selected_bar).forEach { actionBarId ->
-        contentView.findViewById<ViewGroup>(actionBarId)?.let { actions ->
-            fun tintActions(view: View) {
-                if (view is android.widget.ImageView) {
-                    view.imageTintList = ColorStateList.valueOf(actionColor)
-                    view.background = RippleDrawable(
-                        ColorStateList.valueOf(selectionColor),
-                        GradientDrawable().apply {
-                            setColor(surfaceColor)
-                            cornerRadius = 16f * view.resources.displayMetrics.density
-                        },
-                        null,
-                    )
-                } else if (view is ViewGroup) {
-                    for (index in 0 until view.childCount) tintActions(view.getChildAt(index))
-                }
-            }
-            tintActions(actions)
-        }
     }
 }
