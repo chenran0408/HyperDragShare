@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.concurrent.TimeUnit;
 
-/** A legacy drop receiver needs a public path; never give it the private stash path. */
+/** A legacy drop receiver needs a public MediaStore URI; never give it the private stash path. */
 final class StashDragImageCache {
     private static final String PREFS = "stash_drag_images";
     private static final long MAX_AGE = TimeUnit.HOURS.toMillis(24);
@@ -25,14 +25,14 @@ final class StashDragImageCache {
     private StashDragImageCache() {}
 
     @SuppressWarnings("deprecation")
-    static synchronized String path(Context context, StashStore.Entry entry, File source) throws IOException {
+    static synchronized Uri uri(Context context, StashStore.Entry entry, File source) throws IOException {
         cleanup(context);
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         ContentResolver resolver = context.getContentResolver();
         long row = prefs.getLong(entry.id, -1);
         if (row != -1) {
-            String existing = dataPath(resolver, ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, row));
-            if (existing != null) return existing;
+            Uri existing = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, row);
+            if (dataPath(resolver, existing) != null) return existing;
             prefs.edit().remove(entry.id).remove(entry.id + ".time").apply();
         }
         String extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(entry.mime);
@@ -52,11 +52,10 @@ final class StashDragImageCache {
             ContentValues ready = new ContentValues();
             ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
             if (resolver.update(copy, ready, null, null) != 1) throw new IOException("图片拖放副本未能就绪");
-            String path = dataPath(resolver, copy);
-            if (path == null) throw new IOException("系统未提供图片拖放副本路径");
+            if (dataPath(resolver, copy) == null) throw new IOException("系统未提供图片拖放副本路径");
             prefs.edit().putLong(entry.id, ContentUris.parseId(copy))
                     .putLong(entry.id + ".time", System.currentTimeMillis()).apply();
-            return path;
+            return copy;
         } catch (IOException | SecurityException | IllegalArgumentException error) {
             try { resolver.delete(copy, null, null); }
             catch (SecurityException | IllegalArgumentException cleanupError) { error.addSuppressed(cleanupError); }

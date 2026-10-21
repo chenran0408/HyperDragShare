@@ -10,7 +10,6 @@ import android.os.Binder;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.OpenableColumns;
-import android.provider.MediaStore;
 import android.widget.Toast;
 
 import java.io.FileNotFoundException;
@@ -61,11 +60,8 @@ public final class StashImageProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) {
         DragShareLog.i("DragShare/Stash", "image query callerUid=" + Binder.getCallingUid());
-        // This receiver queries _data instead of opening the granted content URI.
-        boolean legacyDrop = "com.tencent.mm".equals(getCallingPackage());
         String[] columns = projection == null
-                ? legacyDrop ? new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE, MediaStore.MediaColumns.DATA}
-                    : new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE} : projection;
+                ? new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE} : projection;
         MatrixCursor cursor = new MatrixCursor(columns);
         StashStore.Entry entry = entry(uri);
         if (entry == null) return cursor;
@@ -75,8 +71,6 @@ public final class StashImageProvider extends ContentProvider {
             for (String column : columns) {
                 if (OpenableColumns.DISPLAY_NAME.equals(column)) row.add("HyperDragShare-" + entry.id);
                 else if (OpenableColumns.SIZE.equals(column)) row.add(store.openImage(entry.id).length());
-                else if (legacyDrop && MediaStore.MediaColumns.DATA.equals(column))
-                    row.add(StashDragImageCache.path(getContext(), entry, store.openImage(entry.id)));
                 else row.add(null);
             }
             return cursor;

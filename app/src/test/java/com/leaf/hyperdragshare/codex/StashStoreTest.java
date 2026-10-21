@@ -54,15 +54,17 @@ public final class StashStoreTest {
         StashStore.Entry text = store.addText("generated drag sample");
         StashStore.Entry png = store.addImage(new ByteArrayInputStream(new byte[]{1}), "image/png");
         StashStore.Entry jpeg = store.addImage(new ByteArrayInputStream(new byte[]{2}), "image/jpeg");
-        android.content.ClipData clip = StashDragHandleKt.clipForStash(List.of(png, text, jpeg));
+        android.content.ClipData clip = StashDragHandleKt.clipForStash(List.of(png, text, jpeg), List.of(
+                android.net.Uri.parse("content://media/external/downloads/1"),
+                android.net.Uri.parse("content://media/external/downloads/2")));
         assertTrue(clip.getDescription().hasMimeType("image/png"));
         assertTrue(clip.getDescription().hasMimeType("image/jpeg"));
         assertTrue(clip.getDescription().hasMimeType("image/*"));
         assertTrue(clip.getDescription().hasMimeType("text/plain"));
         assertEquals(3, clip.getItemCount());
-        assertEquals(StashImageProvider.uriForEntry(png.id), clip.getItemAt(0).getUri());
+        assertEquals(android.net.Uri.parse("content://media/external/downloads/1"), clip.getItemAt(0).getUri());
         assertEquals(text.text, clip.getItemAt(1).getText());
-        assertEquals(StashImageProvider.uriForEntry(jpeg.id), clip.getItemAt(2).getUri());
+        assertEquals(android.net.Uri.parse("content://media/external/downloads/2"), clip.getItemAt(2).getUri());
     }
 
     @Test
