@@ -161,8 +161,11 @@ final class PressWindowSnapshot {
                 || x < usable.left || x >= usable.right || y < usable.top || y >= usable.bottom) {
             return null;
         }
-        int regionWidth = Math.min(usable.width(), Math.max(1, Math.round(width * 0.60f)));
-        int regionHeight = Math.min(usable.height(), Math.max(1, Math.round(height * 0.32f)));
+        // Wider than the original 60% crop so a pressed sentence keeps both ends. This mirrors
+        // the useful context ratio observed in the reference implementation without copying
+        // its blind full-screen OCR fallbacks.
+        int regionWidth = Math.min(usable.width(), Math.max(1, Math.round(width * 0.78f)));
+        int regionHeight = Math.min(usable.height(), Math.max(1, Math.round(height * 0.34f)));
         int left = Math.max(usable.left, Math.min(Math.round(x - regionWidth / 2f), usable.right - regionWidth));
         int top = Math.max(usable.top, Math.min(Math.round(y - regionHeight / 2f), usable.bottom - regionHeight));
         Rect region = new Rect(left, top, left + regionWidth, top + regionHeight);

@@ -1,5 +1,9 @@
 # 当前任务目录
 
+## 当前批次186及后续Root-only收敛
+
+186 已完成微信 `ocr_region` 直达同一分词浮窗的 Root helper 截图改造，并在小米 15 Pro / HyperOS 4.0.0.17 / Android 17 上用 Root evdev 注入验证两次完整结果回填。下一步按用户最新约束清理系统无障碍服务作为非 Root 来源的整条产品路径：保留 Root helper 使用的 `UiAutomation`、节点分类器和框架 Hook，只删除“传送门／无障碍来源”二选一、BIND_ACCESSIBILITY_SERVICE 声明、服务运行时及对应页面分支。此项以完整批次构建、集中安装和真机核对 Portal/Root 状态后再提交，不按单按钮增版。
+
 ## 当前批次179
 
 以CURRENT_STATUS的179节为最新入口。整批包含：四模块分类与共享目录离线搜索、Miuix组件图标、中转站有效空间、仅系统AICR V2、检查更新，以及用户后加的微信普通页面适配。原178候选合并入本批，不再单独安装；旧验收心跳已暂停。

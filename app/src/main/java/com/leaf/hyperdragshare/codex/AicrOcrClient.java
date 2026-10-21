@@ -14,6 +14,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Parcel;
 import android.os.RemoteException;
+import android.os.SystemClock;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -72,6 +73,7 @@ public final class AicrOcrClient {
         private final String address;
         private final AtomicBoolean cancelled = new AtomicBoolean();
         private final CountDownLatch connected = new CountDownLatch(1);
+        private final long startedAt = SystemClock.elapsedRealtime();
         private volatile IBinder core;
         private boolean bound;
         private String stage = "连接服务";
@@ -117,6 +119,7 @@ public final class AicrOcrClient {
                 deliver(null, null, true);
                 return;
             }
+            trace("bind_request");
             try {
                 ServiceInfo service = context.getPackageManager().getServiceInfo(
                         SERVICE_COMPONENT, PackageManager.MATCH_DISABLED_COMPONENTS);
@@ -139,6 +142,7 @@ public final class AicrOcrClient {
                 deliver(null, error, true);
                 return;
             }
+            trace("service_checked");
             Intent intent = new Intent("com.xiaomi.aicr.access.AICR_ENGINE")
                     .setComponent(SERVICE_COMPONENT)
                     .putExtra("bind_type", address);
@@ -157,6 +161,7 @@ public final class AicrOcrClient {
                         : new IOException("连接 AICR 失败：" + error.getMessage(), error), true);
                 return;
             }
+            trace("bind_service");
             new Thread(this::recognize, "AicrOcr").start();
         }
 
@@ -169,6 +174,7 @@ public final class AicrOcrClient {
                 if (!connected.await(15, TimeUnit.SECONDS)) {
                     throw new IOException("连接 AICR 超时，请稍后重试");
                 }
+                trace("service_connected");
                 checkCancelled();
                 service = core;
                 if (service == null) throw new IOException("AICR 未提供可用连接");
@@ -178,6 +184,7 @@ public final class AicrOcrClient {
                 stage = "取得识别引擎";
                 requestedPlugin = true;
                 IBinder vision = plugin(service, address);
+                trace("plugin_ready");
                 checkCancelled();
                 if (!VISION.equals(vision.getInterfaceDescriptor())) {
                     throw new IOException("当前 AICR 视觉接口不受支持");
@@ -185,16 +192,20 @@ public final class AicrOcrClient {
                 if (!"V2".equals(version(vision))) {
                     throw new IOException("当前 AICR OCR 版本不受支持，需要 V2");
                 }
+                trace("v2_ready");
                 checkCancelled();
                 stage = "传入图片";
                 int session = setImage(vision, bitmap);
                 if (session < 0) throw new IOException("AICR 无法读取这张图片");
+                trace("image_accepted");
                 checkCancelled();
                 stage = "检测文字";
                 detect(vision, session);
+                trace("text_detected");
                 checkCancelled();
                 stage = "识别文字";
                 recognized = recognizeResult(vision, session);
+                trace("text_recognized");
                 checkCancelled();
                 if (recognized == null || recognized.text == null) throw new IOException("AICR 图片会话已失效，请重试");
                 if (recognized.text.trim().isEmpty()) throw new IOException("这张图片没有识别到文字");
@@ -217,6 +228,7 @@ public final class AicrOcrClient {
                         if (failure == null) failure = new IOException("AICR 连接未能正常释放，请稍后重试", error);
                         else failure.addSuppressed(error);
                     }
+                    trace("released");
                 }
                 AicrOcrResult result = recognized;
                 Exception error = failure;
@@ -226,6 +238,11 @@ public final class AicrOcrClient {
 
         private void checkCancelled() {
             if (cancelled.get()) throw new CancellationException("AICR 识别已取消");
+        }
+
+        private void trace(String state) {
+            DragShareLog.i(TAG, "stage=" + state + " elapsed_ms="
+                    + (SystemClock.elapsedRealtime() - startedAt));
         }
 
         /** Only invoked on main; worker has finished using the image before reaching this point. */

@@ -163,6 +163,21 @@ final class SharedRootNodeCapture {
             } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
         }
 
+        @Override public Bundle captureOcrRegion(String source, int windowId, Bundle requestedBounds) {
+            enforceOwner();
+            if (!io.tryLock()) throw new IllegalStateException("取词服务正忙，本次图片读取已取消");
+            long identity = Binder.clearCallingIdentity();
+            try {
+                Rect bounds = requestedBounds.getParcelable("bounds", Rect.class);
+                return root.captureOcrRegion(source, windowId, bounds);
+            } catch (IOException | InterruptedException error) {
+                if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+                invalidate(root);
+                DragShareLog.w("DragShare/SharedNodes", "Root screenshot failed", error);
+                throw new IllegalStateException(error.getMessage());
+            } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
+        }
+
         @Override public boolean verifySource(String source) {
             enforceOwner();
             if (!manual && manualActive()) return false;
@@ -269,18 +284,29 @@ final class SharedRootNodeCapture {
                 }
                 String rejectionReason = pressLookup && node != null
                         ? node.getString(RootNodeCaptureClient.KEY_CAPTURE_REASON) : null;
-                CapturedContent content = RootNodeCaptureClient.contentFromNode(context, node, (source, windowId, bounds) -> {
-                    try {
-                        if (closed) return null;
-                        Bundle requestBounds = new Bundle();
-                        requestBounds.putParcelable("bounds", bounds);
-                        Bundle result = lease.verifyWindow(source, windowId, requestBounds);
-                        return result == null ? null : result.getParcelable("bounds", Rect.class);
-                    }
-                    catch (RemoteException | IllegalStateException error) {
-                        throw requestFailure("核验来源窗口失败", error);
-                    }
-                });
+                CapturedContent content = RootNodeCaptureClient.contentFromNode(
+                        context, node,
+                        (source, windowId, bounds) -> {
+                            try {
+                                if (closed) return null;
+                                Bundle requestBounds = new Bundle();
+                                requestBounds.putParcelable("bounds", bounds);
+                                Bundle result = lease.verifyWindow(source, windowId, requestBounds);
+                                return result == null ? null : result.getParcelable("bounds", Rect.class);
+                            } catch (RemoteException | IllegalStateException error) {
+                                throw requestFailure("核验来源窗口失败", error);
+                            }
+                        },
+                        (source, windowId, bounds) -> {
+                            try {
+                                if (closed) return null;
+                                Bundle requestBounds = new Bundle();
+                                requestBounds.putParcelable("bounds", bounds);
+                                return lease.captureOcrRegion(source, windowId, requestBounds);
+                            } catch (RemoteException | IllegalStateException error) {
+                                throw requestFailure("截取按压区域失败", error);
+                            }
+                        });
                 return new PressResult(content, false, content == null ? rejectionReason : null);
             } catch (RemoteException | IllegalStateException error) {
                 throw requestFailure("读取当前页面失败", error);

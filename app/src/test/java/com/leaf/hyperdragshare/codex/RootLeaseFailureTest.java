@@ -30,6 +30,9 @@ public final class RootLeaseFailureTest {
             @Override public Bundle verifyWindow(String source, int windowId, Bundle requestedBounds) {
                 throw new AssertionError("Excluded content must not be converted or verified");
             }
+            @Override public Bundle captureOcrRegion(String source, int windowId, Bundle requestedBounds) {
+                throw new AssertionError("Excluded content must not be captured");
+            }
             @Override public boolean verifySource(String source) { return true; }
             @Override public Bundle insertTextAt(float x, float y, String text) { return null; }
             @Override public boolean isOpen() { return true; }
@@ -53,6 +56,9 @@ public final class RootLeaseFailureTest {
             @Override public Bundle capture(float x, float y, String[] blocked, boolean text, boolean images,
                                             boolean press, boolean early, IRootNodeCandidate callback) { throw failure; }
             @Override public Bundle verifyWindow(String source, int windowId, Bundle requestedBounds) {
+                return requestedBounds;
+            }
+            @Override public Bundle captureOcrRegion(String source, int windowId, Bundle requestedBounds) {
                 return requestedBounds;
             }
             @Override public boolean verifySource(String source) { return true; }

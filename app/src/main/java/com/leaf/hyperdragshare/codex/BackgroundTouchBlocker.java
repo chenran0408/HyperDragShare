@@ -9,9 +9,12 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 /**
@@ -34,8 +37,14 @@ final class BackgroundTouchBlocker {
     private final Context context;
     private final MethodInvoker methodInvoker;
     private final RootTouchCanceller rootTouchCanceller;
+    private final ExecutorService background = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "drag-share-touch-blocker");
+        thread.setDaemon(true);
+        return thread;
+    });
     private Object inputMonitor;
     private boolean started;
+    private boolean nativeInputUnavailable;
 
     BackgroundTouchBlocker(Context context) {
         this(context, new ReflectiveMethodInvoker(), new RootServiceCallCanceller());
@@ -57,6 +66,34 @@ final class BackgroundTouchBlocker {
         this.rootTouchCanceller.prepare();
     }
 
+    /** Removes the hidden-input command from the overlay first-frame path. */
+    void startAsync() {
+        startAsync(() -> true);
+    }
+
+    /** Drops a queued cancellation when its press has already ended or been replaced. */
+    void startAsync(BooleanSupplier stillCurrent) {
+        background.execute(() -> {
+            if (!stillCurrent.getAsBoolean()) return;
+            long startedAt = android.os.SystemClock.elapsedRealtime();
+            boolean active = start();
+            DragShareLog.i(TAG, "async start elapsed_ms="
+                    + (android.os.SystemClock.elapsedRealtime() - startedAt) + " active=" + active);
+        });
+    }
+
+    void stopAsync() {
+        if (!background.isShutdown()) background.execute(this::stop);
+    }
+
+    void close() {
+        if (background.isShutdown()) return;
+        background.execute(() -> {
+            stop();
+            background.shutdown();
+        });
+    }
+
     synchronized boolean start() {
         if (started) {
             return true;
@@ -66,53 +103,57 @@ final class BackgroundTouchBlocker {
             return false;
         }
 
-        Object monitor = null;
-        try {
-            Object inputManager = context.getSystemService(Context.INPUT_SERVICE);
-            if (inputManager == null) {
-                log("InputManager service is null");
-                return false;
-            }
-
-            // Android 14 exposes a simpler hidden operation that cancels the
-            // current targets without requiring an input channel to be kept
-            // alive. Prefer it when the ROM makes it available.
+        Object inputManager = context.getSystemService(Context.INPUT_SERVICE);
+        if (inputManager == null) {
+            log("InputManager service is null");
+            return false;
+        }
+        if (!nativeInputUnavailable) {
+            Object monitor = null;
             try {
-                methodInvoker.invoke(inputManager, "cancelCurrentTouch");
-                started = true;
-                log("foreground touch stream cancelled");
-                return true;
-            } catch (Throwable unavailable) {
-                log("cancelCurrentTouch unavailable; trying gesture monitor", unavailable);
-            }
-
-            int displayId = resolveDisplayId();
-
-            monitor = methodInvoker.invoke(
-                    inputManager,
-                    "monitorGestureInput",
-                    MONITOR_NAME,
-                    displayId);
-            if (monitor == null) {
-                log("monitorGestureInput returned null");
-            } else {
-                // This sends ACTION_CANCEL to the previous touch target and makes
-                // the monitor the target for the remainder of the pointer stream.
-                methodInvoker.invoke(monitor, "pilferPointers");
-                inputMonitor = monitor;
-                started = true;
-                log("foreground touch stream pilfered");
-                return true;
-            }
-        } catch (Throwable error) {
-            if (monitor != null) {
+                // Android 14 exposes a simpler hidden operation that cancels the
+                // current targets without requiring an input channel to be kept
+                // alive. Prefer it when the ROM makes it available.
                 try {
-                    methodInvoker.invoke(monitor, "dispose");
-                } catch (Throwable ignored) {
-                    // Keep the original failure as the diagnostic signal.
+                    methodInvoker.invoke(inputManager, "cancelCurrentTouch");
+                    started = true;
+                    log("foreground touch stream cancelled");
+                    return true;
+                } catch (Exception unavailable) {
+                    log("cancelCurrentTouch unavailable (" + unavailable.getClass().getSimpleName()
+                            + "); trying gesture monitor");
                 }
+
+                int displayId = resolveDisplayId();
+
+                monitor = methodInvoker.invoke(
+                        inputManager,
+                        "monitorGestureInput",
+                        MONITOR_NAME,
+                        displayId);
+                if (monitor == null) {
+                    log("monitorGestureInput returned null");
+                } else {
+                    // This sends ACTION_CANCEL to the previous touch target and makes
+                    // the monitor the target for the remainder of the pointer stream.
+                    methodInvoker.invoke(monitor, "pilferPointers");
+                    inputMonitor = monitor;
+                    started = true;
+                    log("foreground touch stream pilfered");
+                    return true;
+                }
+            } catch (Exception error) {
+                if (monitor != null) {
+                    try {
+                        methodInvoker.invoke(monitor, "dispose");
+                    } catch (Exception ignored) {
+                        // Keep the original failure as the diagnostic signal.
+                    }
+                }
+                nativeInputUnavailable = true;
+                log("gesture monitor unavailable; using root cancellation for this process", error);
             }
-            log("gesture monitor unavailable; trying root cancellation", error);
+            nativeInputUnavailable = true;
         }
 
         try {
@@ -122,7 +163,7 @@ final class BackgroundTouchBlocker {
                 return true;
             }
             log("root cancelCurrentTouch command failed");
-        } catch (Throwable error) {
+        } catch (Exception error) {
             log("unable to cancel foreground touch stream through root", error);
         }
         return false;
@@ -150,7 +191,7 @@ final class BackgroundTouchBlocker {
             if (display != null) {
                 return display.getDisplayId();
             }
-        } catch (Throwable ignored) {
+        } catch (Exception ignored) {
             // A Service application context on recent Android versions is not visual.
             log("context has no display; using the default display for gesture monitor");
         }
@@ -166,7 +207,7 @@ final class BackgroundTouchBlocker {
         }
         try {
             methodInvoker.invoke(monitor, "dispose");
-        } catch (Throwable error) {
+        } catch (Exception error) {
             log("unable to dispose gesture monitor", error);
         }
     }
@@ -180,11 +221,11 @@ final class BackgroundTouchBlocker {
     }
 
     interface MethodInvoker {
-        Object invoke(Object target, String methodName, Object... args) throws Throwable;
+        Object invoke(Object target, String methodName, Object... args) throws Exception;
     }
 
     interface RootTouchCanceller {
-        boolean cancelCurrentTouch() throws Throwable;
+        boolean cancelCurrentTouch() throws Exception;
 
         default void prepare() {}
     }
@@ -213,7 +254,7 @@ final class BackgroundTouchBlocker {
         }
 
         @Override
-        public boolean cancelCurrentTouch() throws Throwable {
+        public boolean cancelCurrentTouch() throws Exception {
             prepare();
             int transactionCode = awaitTransactionCode();
             if (transactionCode <= 0) {
@@ -246,16 +287,14 @@ final class BackgroundTouchBlocker {
             }
         }
 
-        private int awaitTransactionCode() throws Throwable {
+        private int awaitTransactionCode() throws Exception {
             try {
                 return transactionCodeTask.get(ROOT_TRANSACTION_WAIT_MILLIS, TimeUnit.MILLISECONDS);
             } catch (TimeoutException ignored) {
                 return -1;
             } catch (ExecutionException error) {
-                if (error.getCause() != null) {
-                    throw error.getCause();
-                }
-                throw error;
+                if (error.getCause() instanceof Exception cause) throw cause;
+                throw new IllegalStateException("Unable to resolve input transaction", error.getCause());
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
                 throw error;
@@ -265,7 +304,7 @@ final class BackgroundTouchBlocker {
 
     private static final class ReflectiveMethodInvoker implements MethodInvoker {
         @Override
-        public Object invoke(Object target, String methodName, Object... args) throws Throwable {
+        public Object invoke(Object target, String methodName, Object... args) throws Exception {
             if (target == null) {
                 throw new NullPointerException("target");
             }
@@ -274,9 +313,7 @@ final class BackgroundTouchBlocker {
             try {
                 return method.invoke(target, args);
             } catch (InvocationTargetException error) {
-                if (error.getCause() != null) {
-                    throw error.getCause();
-                }
+                if (error.getCause() instanceof Exception cause) throw cause;
                 throw error;
             }
         }

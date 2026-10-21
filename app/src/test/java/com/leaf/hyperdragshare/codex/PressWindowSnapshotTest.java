@@ -25,10 +25,10 @@ public final class PressWindowSnapshotTest {
 
         assertEquals("com.tencent.mm/com.tencent.mm.ui.LauncherUI", snapshot.windowName);
         Rect region = snapshot.regionAt(250, 800, 1000, 2000, 1f);
-        assertEquals(new Rect(0, 480, 400, 1120), region);
+        assertEquals(new Rect(0, 460, 400, 1140), region);
         assertTrue(snapshot.permits(region));
         Rect nearby = snapshot.regionAt(500, 800, 1000, 2000, 1f);
-        assertEquals(new Rect(200, 60, 800, 700), nearby);
+        assertEquals(new Rect(110, 20, 890, 700), nearby);
         assertTrue(snapshot.permits(nearby));
         assertFalse(snapshot.permits(new Rect(350, 750, 450, 850)));
     }
@@ -60,11 +60,11 @@ public final class PressWindowSnapshotTest {
                 "com.tencent.mm/com.tencent.mm.ui.LauncherUI"));
         assertFalse(PressWindowSnapshot.isSupportedWeChatWindow("com.tencent.mm",
                 "com.example/.Overlay"));
-        assertEquals(new Rect(424, 488, 1288, 1512),
+        assertEquals(new Rect(295, 456, 1418, 1544),
                 parsed.snapshot.regionAt(856, 1000, 1440, 3200, 3f));
-        assertEquals(new Rect(0, 488, 864, 1025),
+        assertEquals(new Rect(0, 456, 1123, 1025),
                 parsed.snapshot.regionAt(50, 1000, 1440, 3200, 3f));
-        assertEquals(new Rect(288, 2176, 1152, 3125),
+        assertEquals(new Rect(159, 2112, 1282, 3125),
                 parsed.snapshot.regionAt(720, 3100, 1440, 3200, 3f));
     }
 

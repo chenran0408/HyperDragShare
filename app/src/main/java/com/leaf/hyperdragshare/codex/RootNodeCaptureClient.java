@@ -3,9 +3,11 @@ package com.leaf.hyperdragshare.codex;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Rect;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Rect;
 import android.os.Bundle;
+import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.view.WindowManager;
 
@@ -37,6 +39,10 @@ final class RootNodeCaptureClient {
 
     interface WindowVerifier {
         Rect currentBounds(String source, int windowId, Rect requestedBounds) throws IOException, InterruptedException;
+    }
+
+    interface PressRegionCapture {
+        Bundle capture(String source, int windowId, Rect requestedBounds) throws IOException, InterruptedException;
     }
 
     static Session open(Context context) throws IOException, InterruptedException {
@@ -90,7 +96,7 @@ final class RootNodeCaptureClient {
                                              CandidateHandler handler)
                 throws IOException, InterruptedException {
             return contentFromNode(context, captureNode(x, y, blockedPackages, allowText, allowImages, handler),
-                    this::currentBounds);
+                    this::currentBounds, this::captureOcrRegion);
         }
 
         synchronized Bundle captureNode(float x, float y, Set<String> blockedPackages,
@@ -133,7 +139,6 @@ final class RootNodeCaptureClient {
                 boolean accepted = notified && handler.onCandidate(result.getString("package"));
                 if (notified) result = awaitResponse();
                 DragShareLog.i(TAG, "semantic lookup elapsedMs=" + result.getLong("elapsed_ms"));
-                if (keyguard.isKeyguardLocked()) return null;
                 if (!result.getBoolean("found")) {
                     String reason = result.optString("reason", "unknown");
                     DragShareLog.i(TAG, "no content candidate reason=" + reason);
@@ -241,6 +246,41 @@ final class RootNodeCaptureClient {
             }
         }
 
+        synchronized Bundle captureOcrRegion(String source, int windowId, Rect requestedBounds)
+                throws IOException, InterruptedException {
+            try {
+                JSONObject request = new JSONObject().put("operation", "capture_ocr_region")
+                        .put("package", source).put("window_id", windowId)
+                        .put("left", requestedBounds.left).put("top", requestedBounds.top)
+                        .put("right", requestedBounds.right).put("bottom", requestedBounds.bottom);
+                process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
+                process.getOutputStream().flush();
+                JSONObject result = awaitResponse();
+                if (!result.getBoolean("same_window")) {
+                    String reason = result.optString("reason");
+                    if (!reason.isEmpty()) throw new IOException(reason);
+                    return null;
+                }
+                byte[] encoded = Base64.decode(result.getString("image_base64"), Base64.DEFAULT);
+                Bitmap bitmap = BitmapFactory.decodeByteArray(encoded, 0, encoded.length);
+                if (bitmap == null) throw new IOException("系统截取了无效图片");
+                Bundle image = new Bundle();
+                image.putParcelable("bitmap", bitmap);
+                image.putParcelable("bounds", new Rect(result.getInt("left"), result.getInt("top"),
+                        result.getInt("right"), result.getInt("bottom")));
+                image.putBoolean("image_cropped", result.optBoolean("image_cropped"));
+                image.putLong("screenshot_ms", result.optLong("screenshot_ms"));
+                image.putLong("verify_ms", result.optLong("verify_ms"));
+                return image;
+            } catch (JSONException error) {
+                close();
+                throw new IOException("Invalid Root screenshot response", error);
+            } catch (IOException | InterruptedException error) {
+                close();
+                throw error;
+            }
+        }
+
         synchronized boolean isCurrentSource(String source) throws IOException, InterruptedException {
             if (closed) throw new IOException("Root node process has stopped; reload the Portal scope");
             try {
@@ -281,6 +321,7 @@ final class RootNodeCaptureClient {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    DragShareLog.w(TAG, "helper stderr: " + line);
                     synchronized (diagnostics) {
                         if (diagnostics.length() < 16384) diagnostics.append(line).append('\n');
                     }
@@ -308,7 +349,8 @@ final class RootNodeCaptureClient {
         }
     }
 
-    static CapturedContent contentFromNode(Context context, Bundle node, WindowVerifier verifier)
+    static CapturedContent contentFromNode(Context context, Bundle node, WindowVerifier verifier,
+                                           PressRegionCapture pressRegionCapture)
             throws IOException, InterruptedException {
         if (node == null || context.getSystemService(KeyguardManager.class).isKeyguardLocked()) return null;
         String source = node.getString("package");
@@ -317,16 +359,36 @@ final class RootNodeCaptureClient {
             return CapturedContent.text(node.getString("text"), source, bounds,
                     node.getString("before"), node.getString("after"));
         }
-        Rect verifiedBounds = verifier.currentBounds(source, node.getInt("window_id"), bounds);
-        if (verifiedBounds == null) {
-            DragShareLog.i(TAG, "image capture rejected source=" + source + " reason=window_or_region_changed");
-            return null;
-        }
-        Bitmap screen = new RootScreenshotter().capture();
+        boolean pressOcrRegion = node.getBoolean("press_ocr_region");
+        Bitmap screen = null;
         try {
+            Rect verifiedBounds;
+            boolean imageCropped = false;
+            if (pressOcrRegion) {
+                Bundle captured = pressRegionCapture.capture(source, node.getInt("window_id"), bounds);
+                if (captured == null) return null;
+                screen = captured.getParcelable("bitmap", Bitmap.class);
+                verifiedBounds = captured.getParcelable("bounds", Rect.class);
+                imageCropped = captured.getBoolean("image_cropped");
+                DragShareLog.i(TAG, "press OCR helper screenshot_ms="
+                        + captured.getLong("screenshot_ms") + " verify_ms="
+                        + captured.getLong("verify_ms"));
+            } else {
+                verifiedBounds = verifier.currentBounds(source, node.getInt("window_id"), bounds);
+                if (verifiedBounds != null) screen = new RootScreenshotter().capture();
+            }
+            if (verifiedBounds == null || screen == null) {
+                DragShareLog.i(TAG, "image capture rejected source=" + source + " reason=window_or_region_changed");
+                return null;
+            }
             if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()) {
                 DragShareLog.i(TAG, "image capture rejected source=" + source + " reason=screen_locked");
                 return null;
+            }
+            if (imageCropped) {
+                Bitmap image = screen;
+                screen = null;
+                return CapturedContent.pressOcrRegion(image, source, verifiedBounds);
             }
             int width = node.getInt("width"), height = node.getInt("height");
             if (screen.getWidth() != width || screen.getHeight() != height) {
@@ -339,7 +401,7 @@ final class RootNodeCaptureClient {
             }
             Bitmap image = Bitmap.createBitmap(screen, crop.left, crop.top, crop.width(), crop.height());
             if (image == screen) screen = null;
-            if (node.getBoolean("press_ocr_region")) {
+            if (pressOcrRegion) {
                 return CapturedContent.pressOcrRegion(image, source, crop);
             }
             return CapturedContent.image(image, source, crop, true);

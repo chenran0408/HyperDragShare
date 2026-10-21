@@ -1,5 +1,17 @@
 # 当前功能与验证状态
 
+## 186 微信直接 OCR 真机通过（已安装）
+
+1.7.186 将微信安全窗口的按压截图移到常驻 Root helper，由同一 helper 在 `UiAutomation.takeScreenshot()` 后复核微信窗口并直接裁出安全区域，经 JPEG/Base64 返回 Portal。常规微信长按不再启动独立 `su screencap`、不再暂存图片或创建中间识字窗；AICR V2 结果直接回填已打开的同一分词浮窗。
+
+设备为小米 15 Pro / HyperOS 4.0.0.17 / Android 17。已覆盖安装 1.7.186 / versionCode 210，安装时间 2026-10-22 01:44:26，未清数据。Portal PID 23660 自报注入、Root 输入、PressReader 和 Portal Root 均为 210，输入与 reader ready。测试使用 Root evdev 注入长按，不是物理手指验收，也未读取或输出聊天正文。
+
+微信普通页面实测两次有效完整链路。首轮冷路径中，120ms 预分类查询 55ms，按压在 251ms 确认，Root helper 截图 219ms、窗口复核 58ms，截图总耗时 382ms；之后 AICR 587ms，已识别文字并回填浮窗。热路径中，查询 45ms，确认后 65ms 完成截图交接，156ms 面板首绘，AICR 294ms 完成，84 字直接交付现有浮窗。另一条同会话记录为 192ms 截图捕获、250ms 确认、156ms 首绘、288ms AICR，84 字回填。相比旧 `<screencap>` + 模块侧复核约 797–1066ms 的捕获阶段，新 helper 路径在本轮记录中约 190–382ms。
+
+日志明确出现 `WeChat OCR direct start`、`window first draw`、AICR `stage=image_accepted/text_detected/text_recognized/released`、`WeChat OCR finished characters=84` 和 `WeChat OCR result delivered to existing panel`。结论限定为源码实现、构建通过、已安装、Portal/Root Hook 已加载、Root evdev 注入操作通过；物理手指手感、长时间稳定性和其他聊天页面仍需后续验收。
+
+APK：`outputs/HyperDragShare-1.7.186-arm64-v8a.apk`，7,446,367 bytes，SHA256 `03048CF12E9EB86E5250F7D93FF00F18A40783696362BCFC12E233E15A88C77D`。Release 启用 R8 与资源压缩，仅 arm64-v8a，签名证书 SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`。
+
 ## 184 微信按住识字直达分词浮窗（构建完成，设备待加载与实测）
 
 用户反馈微信长按比其他应用慢，且先打开独立“图片识字”窗口。根路径是微信安全窗口的 `ocr_region` 捕获结果被当成普通图片，先暂存图片，再经 Provider 打开图片识字浮窗；识别后又关闭该窗并新建分词浮窗。本版仅为 Root press 返回的 `ocr_region` 增加来源标记，直接把同一截图交给现有 AICR V2，并立即显示分词浮窗内的识别进度；识别文本填回同一个浮窗。普通图片识字路径不变，不按包名把所有图片改道。取消仍遵守 AICR 的 bitmap 生命周期：调用取消后等 Binder 识别回调再回收图片。

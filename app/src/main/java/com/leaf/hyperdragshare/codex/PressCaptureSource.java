@@ -114,7 +114,7 @@ final class PressCaptureSource {
         if (action == MotionEvent.ACTION_UP && hadFired) {
             main.removeCallbacks(classify);
             main.removeCallbacks(fire);
-            blocker.stop();
+            blocker.stopAsync();
             return;
         }
         if (!detector.isActive()) {
@@ -173,12 +173,16 @@ final class PressCaptureSource {
         excluded.addAll(AccessibilityBlacklist.builtInPackages(context));
         AtomicBoolean excludedByPolicy = new AtomicBoolean();
         worker.execute(() -> {
+            long lookupStarted = SystemClock.elapsedRealtime();
             try {
                 if (request != generation || stopped) return;
                 SharedRootNodeCapture.Connection.PressResult result = session.capturePress(x, y, excluded,
                         settings.isSharingEnabled(false), settings.isSharingEnabled(true), earlyCapture, source ->
                                 acceptAutomaticSource(request, source, excludedByPolicy));
                 CapturedContent content = result.content;
+                DragShareLog.i(TAG, "press capture returned elapsed_ms="
+                        + (SystemClock.elapsedRealtime() - lookupStarted)
+                        + " kind=" + (content == null ? "none" : content.isImage() ? "image" : "text"));
                 if (content == null && result.rejectionReason != null) {
                     DragShareLog.i(TAG, "press lookup rejected reason=" + result.rejectionReason);
                 }
@@ -234,54 +238,17 @@ final class PressCaptureSource {
         CapturedContent content = cached;
         cached = null;
         long request = generation;
-        SharedRootNodeCapture.Connection session = nodeSession;
-        worker.execute(() -> {
-            try {
-                if (request != generation || !allowed() || session == null
-                        || !session.isCurrentSource(content.sourcePackage)) {
-                    recycle(content);
-                    return;
-                }
-                if (request != generation || !allowed()) {
-                    recycle(content);
-                    return;
-                }
-                if (pointerDown && !blocker.start()) {
-                    recycle(content);
-                    main.post(() -> {
-                        if (request == generation && !stopped) showFailure("无法接管此页面的按压，已保留原操作");
-                    });
-                    return;
-                }
-                main.post(() -> {
-                    if (request != generation || !allowed()) {
-                        recycle(content);
-                        blocker.stop();
-                        return;
-                    }
-                    if (content.isImage()) openImage(request, content);
-                    else openText(content);
-                });
-            } catch (IOException | SecurityException error) {
-                recycle(content);
-                DragShareLog.w(TAG, "cannot confirm press source", error);
-                main.post(() -> {
-                    if (stopped) return;
-                    if (error instanceof SharedRootNodeCapture.ConnectionFailedException || error instanceof SecurityException) {
-                        readerFailed(session, "取词连接已中断，请重载作用域。" + error.getMessage());
-                    } else if (request == generation) {
-                        showFailure("按压来源核验失败：" + error.getMessage());
-                        cancelGesture();
-                    }
-                });
-            } catch (InterruptedException error) {
-                recycle(content);
-                Thread.currentThread().interrupt();
-            }
-        });
+        if (request != generation || !allowed()) {
+            recycle(content);
+            return;
+        }
+        DragShareLog.i(TAG, "press handoff ready elapsedFromConfirmMs="
+                + (SystemClock.uptimeMillis() - confirmedAt));
+        if (content.isImage()) openImage(request, content);
+        else openText(request, content);
     }
 
-    private void openText(CapturedContent content) {
+    private void openText(long request, CapturedContent content) {
         Bundle text = new Bundle();
         text.putString("text", content.text);
         text.putLong("press_confirmed_at", confirmedAt);
@@ -292,11 +259,11 @@ final class PressCaptureSource {
         try {
             Bundle result = context.getContentResolver().call(
                     ImageStagingClient.BASE_URI, "open_bigbang_window", null, text);
-            completeHandoff(result);
+            completeHandoff(result, request);
         } catch (SecurityException | IllegalStateException error) {
             DragShareLog.w(TAG, "cannot open press text window", error);
             showFailure("无法打开分词窗口：" + error.getMessage());
-            blocker.stop();
+            blocker.stopAsync();
         }
     }
 
@@ -316,11 +283,11 @@ final class PressCaptureSource {
                     try {
                         Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
                                 ImageOcrOverlay.METHOD_RECOGNIZE, null, image);
-                        completeHandoff(result);
+                        completeHandoff(result, request);
                     } catch (SecurityException | IllegalStateException error) {
                         DragShareLog.w(TAG, "cannot open press image window", error);
                         showFailure("无法打开图片识字：" + error.getMessage());
-                        blocker.stop();
+                        blocker.stopAsync();
                     }
                 });
             }
@@ -330,7 +297,7 @@ final class PressCaptureSource {
                 main.post(() -> {
                     if (request == generation && !stopped) {
                         showFailure("无法暂存识字图片：" + error.getMessage());
-                        blocker.stop();
+                        blocker.stopAsync();
                     }
                 });
             }
@@ -338,6 +305,7 @@ final class PressCaptureSource {
     }
 
     private void openWeChatOcrDirect(long request, CapturedContent content) {
+        long panelRequestedAt = SystemClock.elapsedRealtime();
         long pressId = SystemClock.elapsedRealtimeNanos();
         Bundle pending = new Bundle();
         pending.putBoolean("ocr_pending", true);
@@ -350,21 +318,24 @@ final class PressCaptureSource {
                     ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN, null, pending);
             if (result == null || !result.getBoolean("accepted")) {
                 recycle(content);
-                blocker.stop();
+                blocker.stopAsync();
                 showFailure("无法打开微信识字窗口");
                 return;
             }
+            startTouchBlocker(request);
             controller.handoffToPress(downTime);
         } catch (SecurityException | IllegalStateException | IllegalArgumentException error) {
             recycle(content);
-            blocker.stop();
+            blocker.stopAsync();
             DragShareLog.w(TAG, "cannot open WeChat OCR panel", error);
             showFailure("无法打开微信识字窗口：" + error.getMessage());
             return;
         }
 
         long started = SystemClock.elapsedRealtime();
-        DragShareLog.i(TAG, "WeChat OCR direct start; image staging and intermediate window skipped");
+        DragShareLog.i(TAG, "WeChat OCR direct start elapsedFromConfirmMs="
+                + (SystemClock.uptimeMillis() - confirmedAt) + " panelRequestMs=" + (started - panelRequestedAt)
+                + "; image staging and intermediate window skipped");
         activeOcrRequest = AicrOcrClient.recognize(context, content.bitmap, (text, error) -> {
             if (!content.bitmap.isRecycled()) content.bitmap.recycle();
             activeOcrRequest = null;
@@ -376,12 +347,12 @@ final class PressCaptureSource {
                 DragShareLog.w(TAG, "WeChat OCR direct failed", error);
                 abortWeChatOcrPanel(pressId);
                 showFailure("微信文字识别失败：" + error.getMessage());
-                blocker.stop();
+                blocker.stopAsync();
                 return;
             }
             if (request != generation || stopped) {
                 abortWeChatOcrPanel(pressId);
-                blocker.stop();
+                blocker.stopAsync();
                 return;
             }
             Bundle recognized = new Bundle();
@@ -416,12 +387,19 @@ final class PressCaptureSource {
         }
     }
 
-    private void completeHandoff(Bundle result) {
+    private void completeHandoff(Bundle result, long request) {
         if (result != null && result.getBoolean("accepted")) {
+            startTouchBlocker(request);
             controller.handoffToPress(downTime);
         } else {
             DragShareLog.w(TAG, "press window request was not accepted");
-            blocker.stop();
+            blocker.stopAsync();
+        }
+    }
+
+    private void startTouchBlocker(long request) {
+        if (pointerDown) {
+            blocker.startAsync(() -> !stopped && request == generation && pointerDown);
         }
     }
 
@@ -443,7 +421,7 @@ final class PressCaptureSource {
         displayQueued = false;
         recycle(cached);
         cached = null;
-        blocker.stop();
+        blocker.stopAsync();
     }
 
     private void showFailure(String reason) {
@@ -467,6 +445,7 @@ final class PressCaptureSource {
             nodeSession = null;
             ModuleActivation.reportPressReader(context, false, "");
             if (session != null) session.close();
+            blocker.close();
             worker.shutdownNow();
         };
         if (Looper.myLooper() == Looper.getMainLooper()) stop.run();

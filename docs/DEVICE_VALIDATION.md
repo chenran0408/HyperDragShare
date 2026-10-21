@@ -1,5 +1,14 @@
 # 目标设备验证记录
 
+## 2026-10-22：1.7.186 微信直达 OCR 真机通过
+
+- 源码/安装 APK 为 1.7.186 / 210，设备 2410DPN6CC、HyperOS 4.0.0.17、Android 17。01:44:26 同包名覆盖安装，未清数据；Portal PID 23660 的注入、Root 输入、PressReader 与 Portal Root 均报告 210。
+- 微信普通页面 Root evdev 注入长按命中 `press capture source=com.tencent.mm kind=ocr_region`。热路径记录：语义查询 45ms；确认后 65ms 完成 helper 截图与窗口复核交接；`window first draw=156ms`；AICR V2 连接、图片接收、检测、识别和释放共 288ms；84 字经 `WeChat OCR result delivered to existing panel` 直接进入同一分词浮窗。
+- 另一条同会话有效记录：helper 截图 192ms、WMS 复核约 45ms，确认后 65ms 交接、156ms 首绘、288ms AICR。首轮冷路径中截图 219ms、复核 58ms、AICR 587ms，并完成结果回填；首轮整套 UI 冷启动仍约 1.36s，是后续速度优化对象。
+- Root helper 路径替代独立 `su screencap` 后，本轮捕获阶段约 190–382ms；旧路径记录约 797–1066ms。该对比来自同一目标设备和当前实现日志，包含真实微信窗口，不记录聊天正文。
+- 以上证明源码、R8 构建、安装、Portal/Root Hook 加载及 Root evdev 注入操作通过。它是注入触摸，不是物理手指验收；未证明所有微信页面、长期并发或物理手感。
+- 交付包 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.186-arm64-v8a.apk`，7,446,367 bytes，SHA256 `03048CF12E9EB86E5250F7D93FF00F18A40783696362BCFC12E233E15A88C77D`；R8、arm64-v8a、同签名校验通过。
+
 ## 2026-10-22：1.7.184 微信按住识字直达分词面板（候选包）
 
 用户提供的428 APK静态核验确认其Root长按回退分支约4秒后使用Root screencap，拿到截图裁剪，图片识别结束后才打开分词；OCR中间窗与文本分词不是其这条回退路径的两次独立交接。183已安装但未重载Portal；复核发现它显示全屏交互浮窗后还会检查微信焦点，必然可能因浮窗接管焦点而否决识别。184移除这一步重复校验，保留截图捕获前的WMS窗口/可见区域检查。
@@ -12,9 +21,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前源码/安装与未完成事项以 [`CURRENT_STATUS.md`](CURRENT_STATUS.md) 为准；设备记录按批次追加，旧条目保留历史意义。最近一次已知安装为1.7.157 / versionCode181，同包名、同debug签名覆盖安装；Portal PID30012报告Root、输入及reader ready。系统/SystemUI/AICR仍为179，未随157重启。ready只代表通道就绪，不代表按住、OCR或拖放行为通过。
+- 当前源码/安装与未完成事项以 [`CURRENT_STATUS.md`](CURRENT_STATUS.md) 为准；设备记录按批次追加，旧条目保留历史意义。最近一次已知安装为1.7.186 / versionCode210；Portal PID23660报告注入、Root输入及reader均210并ready。ready只代表通道就绪；微信直达OCR的Root evdev注入路径已通过，物理手指与其他交互仍分别记账。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 最近构建为build323：228项测试、0失败/错误/跳过，Lint 0 errors/163 warnings/2 hints，完整检查51秒；157安装与APK信息见本文件末尾。历史版本的构建和设备结果不覆盖当前功能状态。
+- 186构建执行既有单元测试、Lint、Debug与Release R8/资源压缩；最终复构建的404项单元测试0失败、Lint0错误186警告2提示。历史版本的构建和设备结果不覆盖当前功能状态。
 
 ## 2026-10-20：1.7.62 作用域软重启
 

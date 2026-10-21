@@ -9,6 +9,7 @@ interface IRootNodeLease {
                    IRootNodeCandidate callback);
     Bundle insertTextAt(float x, float y, String text);
     Bundle verifyWindow(String sourcePackage, int windowId, in Bundle requestedBounds);
+    Bundle captureOcrRegion(String sourcePackage, int windowId, in Bundle requestedBounds);
     boolean verifySource(String sourcePackage);
     boolean isOpen();
     void close();
