@@ -2,7 +2,7 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前小米15Pro/HyperOS4.0.0.17/Android17，已安装153/177。全选/拆词固定相邻，拆词与合并可撤销，再次识屏追加整链已删除。Portal23857/177、Root输入与reader均ready；新UI未实测。android裁剪Hook未重载，新增SystemUI旁路尚未启用设备scope，没有面积/接管证据。
+当前小米15Pro/HyperOS4.0.0.17/Android17，已安装154/178。全选/拆词相邻且可撤销；分词中转站入口移除，独立中转站保留；词典图标直达，返回中间层与再次识屏追加均已删。结果关闭回原session选区；拖放取消保留原窗的行为待实测。原生尺寸旁路设备scope未启用，android裁剪Hook未重载，未称面积/接管已完成。
 
 除设置外，文字、图片OCR、屏幕OCR、搜索与中转站以原页独立浮窗工作；外部分享使用透明接收桥，不打开设置首页。中转站仅保留临时拖放托盘和灰条，标题或灰条拖动、松手就近贴边、展开面积≤16%；系统小窗、搜索、复制和手动左右切换已删除，保留原有数据。141补系统栏避让与显示变化后的重新定位；142直接按住已选条目/组卡拖出整个选区，预览图也能拖出，删除底部专用拖动行并复用列表可见顺序；新交互未实测。
 
@@ -1139,3 +1139,14 @@ RootTouchSource每Run持解析器/坐标/process，生命周期与回调在主Lo
 NativePressSystemUiHooks精确Hook目标WM Shell EventReceiver.onInputEvent(InputEvent) before，位于任何handler/边缘/小窗分支前。不钩原生handler入口，因为HyperGesture前置代理消费会让循环break而漏事件。只记录最多32个至少200ms手势的size/major/minor和时长；不读坐标/文本，不改参数/结果/finish/handler顺序，不pilfer。scope尚未在设备启用，未完成原生面积触发。
 
 build317完整212 tests/0 failures/0 errors，Lint0 errors/157 warnings/2 hints，assembleDebug通过。316因被删除API的TextInsertionProbe停止，删除旧Probe及manifest入口后317通过。153集中安装一次。下一批新要求：分词去中转站、查词图标、删返回/关闭中间层；这些不是153已完成项。
+
+
+## 1.7.154：精简分词及删除中间窗口
+
+只删除分词的中转站按钮、SaveToStash动作/Actions接口及Launcher专用存入转发，独立Stash存取/拖放不动。全选与拆词保持主行相邻；全选80dp固定槽位、选中主题色和selected无障碍状态；拆词按实际可拆词禁用。词典使用同文件简单书本A矢量图标（Miuix0.9.3没有可用词典图标，不加新依赖），Tooltip/无障碍为词典查词，直达Dictionary。图标44dp点击区、22dp图形、4dp间距，Header更多/关闭统一Miuix图标。
+
+Launcher.showReturnTab及所有三处调用整段删除，不留空窗。主窗Back/收起结束当前窗；查词/搜索用已有SearchOverlayWindow直接叠加结果，原session保持，关闭结果直接露原选区。系统Back先退IME输入，否则关闭结果；网页历史只由导航按钮处理。外部浏览器/分享成功交接结束当前分词窗，不创造返回页。
+
+文字拖出不再以startDrag成功冒充完成：临时decor listener接受STARTED后alpha0/不可触摸聚焦，原窗口仍attached、session/选区不销毁；真实ENDED失败恢复同窗，成功关闭；不接受源窗DROP。启动失败、dismiss、锁屏清理listener，generation/active阻止旧窗恢复。该状态流程基于目标ROM DragState/ViewRoot/ViewGroup契约核对，仍未物理验收。
+
+build318完整212tests/0failures/0errors，Lint0errors/157warnings/2hints与assembleDebug通过；没有新增镜像按钮测试。154集中覆盖安装一次，同签名，前台微信t2387保持；后台只重载Portal，不开新测试页、不动私人内容。

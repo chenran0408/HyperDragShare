@@ -25,9 +25,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,12 +46,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -74,6 +76,8 @@ import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.icon.extended.Translate
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 internal enum class BigBangMoreAction {
@@ -82,7 +86,6 @@ internal enum class BigBangMoreAction {
     Merge,
     ReopenOcr,
     Translate,
-    SaveToStash,
     UndoEdit,
     ReadQr,
     TextSize,
@@ -303,18 +306,16 @@ internal fun BigBangOverlayContent(
                             }
                         },
                         trailing = {
-                            OverlayIconAction(
-                                imageVector = Icons.Outlined.MoreHoriz,
+                            BigBangIconAction(
+                                icon = MiuixIcons.More,
+                                label = "更多操作与窗口外观",
                                 enabled = !isSegmenting,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = { showMoreMenu = true },
-                                contentDescription = "更多操作与窗口外观",
-                                touchSize = 44.dp,
                             )
-                            OverlayIconAction(Icons.Outlined.Close,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            BigBangIconAction(MiuixIcons.Close,
+                                label = "关闭分词窗口",
                                 onClick = closePanel,
-                                contentDescription = "关闭分词窗口", touchSize = 44.dp)
+                                enabled = true)
                         },
                     )
                 },
@@ -333,7 +334,8 @@ internal fun BigBangOverlayContent(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             BigBangToolAction(if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
-                                modifier = Modifier.width(80.dp), primary = allTextSelected)
+                                modifier = Modifier.width(80.dp).semantics { selected = allTextSelected },
+                                primary = allTextSelected)
                             BigBangToolAction("拆词", { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
                             BigBangIconAction(MiuixIcons.Copy, if (copying) "正在复制" else "复制", onCopy,
                                 ready && !copying, primary = true)
@@ -342,18 +344,16 @@ internal fun BigBangOverlayContent(
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             BigBangIconAction(MiuixIcons.Edit, "编辑原文", {
                                 editorText = originalText()
                                 showEditor = true
                             }, ready)
-                            BigBangToolAction("中转站", { onMoreAction(BigBangMoreAction.SaveToStash) },
-                                ready)
                             BigBangToolAction("合并", { onMoreAction(BigBangMoreAction.Merge) }, ready && canMerge)
                             BigBangIconAction(MiuixIcons.Undo, "撤销", { onMoreAction(BigBangMoreAction.UndoEdit) }, ready && canUndoEdit)
                             BigBangIconAction(MiuixIcons.Translate, "翻译", { onMoreAction(BigBangMoreAction.Translate) }, ready)
-                            BigBangToolAction("查词", { onMoreAction(BigBangMoreAction.Dictionary) }, ready)
+                            BigBangIconAction(DictionaryIcon, "词典查词", { onMoreAction(BigBangMoreAction.Dictionary) }, ready)
                             if (sourceImageAvailable) {
                                 BigBangToolAction("重新识字", { onMoreAction(BigBangMoreAction.ReopenOcr) }, ready)
                                 BigBangToolAction("二维码", { onMoreAction(BigBangMoreAction.ReadQr) }, ready)
@@ -467,6 +467,35 @@ internal fun BigBangOverlayContent(
         }
     }
 }
+
+// Miuix 0.9.3 has no dictionary icon. An outlined book with an A distinguishes lookup from translation.
+private val DictionaryIcon = ImageVector.Builder(
+    name = "Dictionary", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f,
+).apply {
+    path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+        strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        moveTo(6f, 3f)
+        lineTo(18f, 3f)
+        quadTo(20f, 3f, 20f, 5f)
+        lineTo(20f, 20.5f)
+        lineTo(6f, 20.5f)
+        quadTo(3.5f, 20.5f, 3.5f, 18f)
+        lineTo(3.5f, 5.5f)
+        quadTo(3.5f, 3f, 6f, 3f)
+        close()
+        moveTo(3.5f, 18f)
+        quadTo(3.5f, 16f, 6f, 16f)
+        lineTo(20f, 16f)
+        moveTo(6.5f, 3f)
+        lineTo(6.5f, 16f)
+        moveTo(10f, 12.5f)
+        lineTo(13f, 6.5f)
+        lineTo(16f, 12.5f)
+        moveTo(11f, 10.5f)
+        lineTo(15f, 10.5f)
+    }
+}.build()
 
 @Composable
 private fun BigBangIconAction(

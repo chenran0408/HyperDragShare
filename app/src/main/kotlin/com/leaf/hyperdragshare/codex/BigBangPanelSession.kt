@@ -33,7 +33,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
         fun search(text: String, type: Int)
         fun share(text: String)
         fun dragText(source: View, text: String): Boolean
-        fun saveToStash(text: String, selectedOnly: Boolean)
         fun reopenOcr(uri: Uri)
         fun readQr(uri: Uri)
     }
@@ -275,11 +274,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
 
     private fun selectAll() { boomChipPage?.selectAll() }
     private fun selectedTextOrOriginal(): String = boomChipPage?.selectedTextOrOriginal().orEmpty()
-    private fun saveToStash() {
-        val text = selectedTextOrOriginal()
-        if (text.isBlank()) Toast.makeText(context, "没有可存入中转站的文字", Toast.LENGTH_SHORT).show()
-        else actions.saveToStash(text, text != boomChipPage?.originalText.orEmpty())
-    }
     fun requestAnimatedDismissFromLegacy() {
         animatedDismissRequester?.invoke() ?: actions.dismiss()
     }
@@ -404,7 +398,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     Toast.LENGTH_SHORT,
                 ).show()
             }
-            BigBangMoreAction.SaveToStash -> saveToStash()
             BigBangMoreAction.Translate -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_TRANSLATE)
         }
     }

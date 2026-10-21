@@ -222,8 +222,6 @@ internal class SearchOverlaySession(
         val page = webView
         if (page?.canGoBack() == true) {
             page.goBack()
-        } else {
-            onClose()
         }
     }
 
@@ -346,13 +344,12 @@ private fun SearchPanel(
         keyboard?.hide()
         onClose()
     }
+    // Exit query input first; otherwise Back and Close both return to the retained selection.
     BackHandler {
         if (imeVisible) {
             focusManager.clearFocus()
             keyboard?.hide()
-        } else {
-            onBack()
-        }
+        } else close()
     }
 
     Box(

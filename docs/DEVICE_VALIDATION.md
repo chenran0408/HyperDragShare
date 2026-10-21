@@ -1060,3 +1060,13 @@ build317完整212 tests/0 failures/0 errors，Lint0errors/157warnings/2hints及a
 只读LSPosed副本确认scope为Portal/AICR/system，尚无SystemUI；APK声明推荐作用域不等于启用。原生旁路未加载/未验，android窄裁剪Hook也未重载、无跳过证据。手机持续用户输入，未强停SystemUI。新拆词/撤销手感未实测。
 
 云端152run39557048439已success/head361bfde；153按新推送run核对。后续新要求分词去中转站/查词图标/删除返回关闭中间层，下一UI批继续，不写成153已完成。
+
+
+## 2026-10-21 1.7.154：分词取用UI整批
+
+build318：212tests/0failures/0errors，Lint0errors/157warnings/2hints，assembleDebug通过。包com.leaf.hyperdragshare.codex，178/1.7.154，同证书b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0；APK SHA256 C1D26158C3BCA43770870BA88435497578206A4A08FF538EF8FE6C98D17A500E，任务outputs/HyperDragShare-1.7.154-debug.apk，单次覆盖安装成功。前台微信LauncherUI/t2387不动，后台仅Portal重载为29641。
+
+分词去中转站/查词图标/选中语义/无返回中间层均已实现；拖放cancel恢复同窗、成功落点结束，以及结果Back/关闭保留选区仅源码检查，未做物理新UI验收。不重复旧生成样本或截图矩阵，没有新增UI测试页。独立中转站数据、权限、剪贴板与用户App内容未改。SystemUI新作用域尚未启用/加载、androidHook尚未重载，原生尺寸仍未验证。
+
+153云端run39559036559/head7f591a3已success；154待推送后按新run核对，不沿用153结果。
+154后台最终读回：Portal29641，injected178、root178true、root_input178true、press_reader178true，两error为空。15:06:46输入ready，reader随后ready；这是运行准备确认，不等同新界面或原生面积验收。

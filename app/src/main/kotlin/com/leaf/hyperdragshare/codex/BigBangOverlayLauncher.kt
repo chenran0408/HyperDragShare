@@ -16,12 +16,6 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
-import androidx.compose.foundation.layout.Row
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.ThemeController
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 /** Requests enter through the provider's module/portal UID check; UI stays in the module process. */
 object BigBangOverlayLauncher {
@@ -77,11 +71,7 @@ object BigBangOverlayLauncher {
         val originalText = text
         session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
             override fun dismiss() = overlay.dismiss()
-            override fun collapse() {
-                val state = Bundle().also(session::saveState)
-                overlay.dismiss()
-                showReturnTab(app) { open(app, originalText, x, y, sourceImage, state) }
-            }
+            override fun collapse() = overlay.dismiss()
             override fun search(text: String, type: Int) {
                 SearchOverlayWindow.show(context, overlay.window.decorView, text, type,
                     openExternal = { launch(it) })
@@ -111,19 +101,22 @@ object BigBangOverlayLauncher {
                         View.MeasureSpec.makeMeasureSpec((120 * density).toInt(), View.MeasureSpec.AT_MOST))
                     layout(0, 0, measuredWidth, measuredHeight)
                 }
-                val state = Bundle().also(session::saveState)
+                overlay.observeTextDrag { generation == windowGeneration && active === overlay }
                 val started = try {
                     source.startDragAndDrop(ClipData.newPlainText("选中文字", text),
                         View.DragShadowBuilder(preview), null, View.DRAG_FLAG_GLOBAL)
                 } catch (error: SecurityException) {
+                    overlay.cancelTextDragObservation()
                     report(app, error)
                     return false
                 }
                 if (started) {
                     DragShareLog.i("DragShare/BigBangWindow", "selected text drag started length=${text.length}")
-                    overlay.dismiss()
-                    showReturnTab(app) { open(app, originalText, x, y, sourceImage, state) }
-                } else Toast.makeText(app, "系统未能开始拖拽，已保留选词", Toast.LENGTH_SHORT).show()
+                    // The attached window waits for ENDED; cancellation restores this same selection.
+                } else {
+                    overlay.cancelTextDragObservation()
+                    Toast.makeText(app, "系统未能开始拖拽，已保留选词", Toast.LENGTH_SHORT).show()
+                }
                 return started
             }
             override fun reopenOcr(uri: Uri) {
@@ -145,32 +138,12 @@ object BigBangOverlayLauncher {
             private fun launch(intent: Intent) {
                 try {
                     context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    val state = Bundle()
-                    session.saveState(state)
                     overlay.dismiss()
-                    showReturnTab(app) { open(app, text, x, y, sourceImage, state) }
                 } catch (error: android.content.ActivityNotFoundException) {
                     report(app, error)
                 } catch (error: SecurityException) {
                     report(app, error)
                 }
-            }
-            override fun saveToStash(text: String, selectedOnly: Boolean) {
-                Thread({
-                    try {
-                        StashStore(app).use { it.addText(text) }
-                        main.post {
-                            StashOverlayPanel.contentAdded(app)
-                            Toast.makeText(app, "文字已存入中转站", Toast.LENGTH_SHORT).show()
-                        }
-                    } catch (error: java.io.IOException) {
-                        main.post { report(app, error) }
-                    } catch (error: android.database.sqlite.SQLiteException) {
-                        main.post { report(app, error) }
-                    } catch (error: SecurityException) {
-                        main.post { report(app, error) }
-                    }
-                }, "bigbang-stash").start()
             }
         })
         overlay = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
@@ -184,47 +157,6 @@ object BigBangOverlayLauncher {
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
         if (overlay.show()) session.open(text, x, y, sourceImage, savedState, before, after)
-    }
-
-    private fun showReturnTab(app: Context, resume: () -> Unit) {
-        val display = app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
-        val context = app.createDisplayContext(display)
-            .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
-        lateinit var tab: InteractiveOverlayWindow
-        val screenOff = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) = tab.dismiss()
-        }
-        tab = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
-            onDismissed = {
-                app.unregisterReceiver(screenOff)
-                if (active === tab) active = null
-            },
-            onFailure = { report(app, it) },
-        ) {
-            val dark = DragShareSettings.readLocal(app).isDarkThemeInComposition()
-            MiuixTheme(controller = androidx.compose.runtime.remember(dark) {
-                ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
-            }) {
-                Card {
-                    Row {
-                        TextButton("返回分词", { tab.dismiss(); resume() })
-                        TextButton("关闭", tab::dismiss)
-                    }
-                }
-            }
-        }
-        val density = context.resources.displayMetrics.density
-        tab.window.attributes = tab.window.attributes.apply {
-            width = (180 * density).toInt()
-            height = (56 * density).toInt()
-            gravity = android.view.Gravity.END or android.view.Gravity.TOP
-            y = (120 * density).toInt()
-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-        }
-        app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
-        active = tab
-        tab.show()
     }
 
     private fun report(context: Context, error: Exception) {
