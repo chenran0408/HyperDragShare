@@ -26,8 +26,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.basic.Scaffold
 
 /** A module-UID panel session shared by Activity and interactive overlay hosts. */
-internal class BigBangPanelSession(private val context: Context, private val actions: Actions,
-    private val captureMoreText: (() -> Unit)? = null) {
+internal class BigBangPanelSession(private val context: Context, private val actions: Actions) {
     interface Actions {
         fun dismiss()
         fun collapse()
@@ -146,7 +145,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
                         }
                     },
                     canUndoEdit = undoEditState != null,
-                    canCaptureMoreText = captureMoreText != null && totalCharacterCount > 0,
                     onSelectAll = { selectAll() },
                     onCopy = { copyText(selectedTextOrOriginal()) },
                     onSearch = { openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_WEB) },
@@ -354,11 +352,18 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private fun handleMoreAction(action: BigBangMoreAction) {
         when (action) {
             BigBangMoreAction.Dictionary -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_DICTIONARY)
-            BigBangMoreAction.Split -> boomChipPage?.splitSelectedWordsToChars()
-            BigBangMoreAction.Merge -> boomChipPage?.mergeSelectedWords()
+            BigBangMoreAction.Split, BigBangMoreAction.Merge -> {
+                val page = boomChipPage ?: return
+                val previous = Bundle().also {
+                    saveState(it)
+                    it.remove(UNDO_EDIT)
+                }
+                val changed = if (action == BigBangMoreAction.Split) page.splitSelectedWordsToChars()
+                    else page.mergeSelectedWords()
+                if (changed) undoEditState = previous
+            }
             BigBangMoreAction.ReopenOcr -> reopenOcr()
             BigBangMoreAction.ReadQr -> sourceImageUri?.let(actions::readQr)
-            BigBangMoreAction.CaptureMore -> captureMoreText?.invoke()
             BigBangMoreAction.UndoEdit -> {
                 val state = undoEditState ?: return
                 open(state.getString(SAVED_TEXT).orEmpty(), launchTouchX, launchTouchY, sourceImageUri, state)
@@ -432,26 +437,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
         }
     }
     companion object {
-        /** Called off the UI thread; only the inserted parts are segmented. */
-        fun insertIntoSavedState(context: Context, state: Bundle, before: String, after: String) {
-            val original = requireNotNull(state.getString(SAVED_TEXT))
-            val originalSegments = requireNotNull(state.getIntArray(SAVED_SEGMENT))
-            val segmenter = TextSegmenter.get(context)
-            val prefix = if (before.isNotBlank()) "$before\n" else ""
-            var combined = prefix + original
-            var combinedSegments = if (prefix.isEmpty()) originalSegments else BoomWordsLayout.concatenateSegments(
-                segmenter.segment(before), originalSegments, prefix.length)
-            if (after.isNotBlank()) {
-                combinedSegments = BoomWordsLayout.concatenateSegments(
-                    combinedSegments, segmenter.segment(after), combined.length + 1)
-                combined += "\n$after"
-            }
-            val selection = state.getSerializable(SELECTED_STATE, Array<IntArray>::class.java)
-            val shifted = selection?.map { intArrayOf(it[0] + prefix.length, it[1] + prefix.length) }?.toTypedArray()
-            state.putString(SAVED_TEXT, combined)
-            state.putIntArray(SAVED_SEGMENT, combinedSegments)
-            if (shifted != null) state.putSerializable(SELECTED_STATE, shifted)
-        }
         const val UNDO_EDIT = "undo_edit"
         private const val TAG = "DragShare/BigBang"
         private const val SELECTED_STATE = "selected_state"

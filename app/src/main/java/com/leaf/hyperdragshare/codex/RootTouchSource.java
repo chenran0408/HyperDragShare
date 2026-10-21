@@ -1,91 +1,117 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.WindowManager;
 
-import java.io.BufferedReader;
-import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class RootTouchSource {
     interface Listener {
-        void onPointerEvent(
-                int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor);
+        void onPointerEvent(int action, float x, float y, long eventTime,
+                            int rawTouchMajor, int rawTouchMinor, int rawWidthMajor);
+    }
+
+    interface StateListener {
+        void onState(boolean ready, String reason);
     }
 
     private static final String TAG = "DragShare/RootInput";
+    private static final String READY_LINE = "HDS_INPUT_READY";
     private static final Pattern EVENT_HANDLER = Pattern.compile("\\b(event\\d+)\\b");
-    private static final Pattern MAX_X = Pattern.compile(
-            "ABS_MT_POSITION_X\\s*:.*?max\\s+(\\d+)");
-    private static final Pattern MAX_Y = Pattern.compile(
-            "ABS_MT_POSITION_Y\\s*:.*?max\\s+(\\d+)");
+    private static final Pattern MAX_X = Pattern.compile("ABS_MT_POSITION_X\\s*:.*?max\\s+(\\d+)");
+    private static final Pattern MAX_Y = Pattern.compile("ABS_MT_POSITION_Y\\s*:.*?max\\s+(\\d+)");
     private final Context context;
     private final Listener listener;
-    private final EvdevTouchParser parser;
-
-    private volatile boolean running;
+    private final StateListener stateListener;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Run currentRun;
     private volatile boolean ready;
-    private volatile String failureReason;
-    private volatile java.lang.Process process;
-    private volatile InputStream inputStream;
-    private Thread thread;
+    private volatile String failureReason = "";
+    private boolean statePublished;
 
-    private int rawMaxX;
-    private int rawMaxY;
-    private boolean firstEventLogged;
-    private String discoveredDevices = "";
-    private int rawEventsInFrame;
-    private long rawFrameCount;
+    /** Resources are transferred under this lock; no I/O or listener runs with it held. */
+    static final class Run {
+        volatile boolean cancelled;
+        private Process process;
+        EvdevTouchParser parser;
+        int rawMaxX;
+        int rawMaxY;
+        // Main-queue state of the gesture actually delivered to the host.
+        boolean pointerDown;
+        float lastX;
+        float lastY;
 
-    RootTouchSource(Context context, Listener listener) {
+        synchronized boolean attach(Process value) {
+            if (cancelled) return false;
+            process = value;
+            return true;
+        }
+
+        synchronized boolean release(Process value) {
+            if (process != value) return false;
+            process = null;
+            return true;
+        }
+
+        synchronized Process cancel() {
+            cancelled = true;
+            Process owned = process;
+            process = null;
+            return owned;
+        }
+    }
+
+    RootTouchSource(Context context, Listener listener, StateListener stateListener) {
         this.context = context;
         this.listener = listener;
-        this.parser = new EvdevTouchParser(this::onRawFrame);
+        this.stateListener = stateListener;
     }
 
-    synchronized void start() {
-        if (running) {
-            return;
-        }
-        ready = false;
-        failureReason = null;
-        running = true;
-        firstEventLogged = false;
-        discoveredDevices = "";
-        rawEventsInFrame = 0;
-        rawFrameCount = 0L;
-        DragShareLog.d(TAG, "root input start requested");
-        thread = new Thread(this::runLoop, "drag-share-root-input");
-        thread.setDaemon(true);
-        thread.start();
+    // Lifecycle and callbacks share the main queue. A listener can reenter stop/start safely.
+    void start() {
+        onMain(() -> {
+            if (currentRun != null) return;
+            Run run = new Run();
+            currentRun = run;
+            publishState(false, "");
+            launch("drag-share-root-input", () -> runLoop(run));
+        });
     }
 
-    synchronized void stop() {
-        running = false;
-        ready = false;
-        parser.cancel();
-        closeQuietly(inputStream);
-        inputStream = null;
-        java.lang.Process currentProcess = process;
-        process = null;
-        if (currentProcess != null) {
-            currentProcess.destroy();
-        }
-        Thread currentThread = thread;
-        thread = null;
-        if (currentThread != null) {
-            currentThread.interrupt();
-        }
+    void stop() {
+        onMain(() -> {
+            Run run = currentRun;
+            currentRun = null;
+            if (run != null) {
+                Process owned = run.cancel();
+                if (owned != null) launch("drag-share-input-stop", () -> endProcess(owned));
+                if (run.pointerDown) {
+                    run.pointerDown = false;
+                    listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
+                            SystemClock.uptimeMillis(), 0, 0, 0);
+                }
+            }
+            if (currentRun == null) publishState(false, "");
+        });
     }
 
     boolean isReady() {
@@ -96,337 +122,295 @@ final class RootTouchSource {
         return failureReason;
     }
 
-    private void runLoop() {
+    private void onMain(Runnable action) {
+        if (Looper.myLooper() == mainHandler.getLooper()) action.run();
+        else mainHandler.post(action);
+    }
+
+    private void publishState(boolean value, String reason) {
+        if (statePublished && ready == value && Objects.equals(failureReason, reason)) return;
+        statePublished = true;
+        ready = value;
+        failureReason = reason;
+        stateListener.onState(value, reason);
+    }
+
+    private void runLoop(Run run) {
+        String failure = "";
+        InputStream stream = null;
         try {
-            DragShareLog.d(TAG, "starting touchscreen discovery");
-            String devicePath = findTouchDevice();
-            if (devicePath == null) {
-                log("no direct touchscreen device found");
-                failureReason = "未找到可读取的直接触摸屏设备。";
-                DragShareDiagnostics.captureInputFailure(
-                        context,
-                        "no touchscreen candidate",
-                        discoveredDevices,
-                        null);
-                return;
+            run.parser = new EvdevTouchParser((action, x, y, major, minor, width) ->
+                    onRawFrame(run, action, x, y, major, minor, width));
+            String devices = rootText(run, "cat /proc/bus/input/devices");
+            checkRunning(run);
+            String devicePath = findTouchDevicePath(devices);
+            if (devicePath == null) throw new IOException("未找到直接触摸屏设备。");
+            String ranges = rootText(run, "getevent -lp " + devicePath);
+            checkRunning(run);
+            run.rawMaxX = parseMaximum(MAX_X, ranges);
+            run.rawMaxY = parseMaximum(MAX_Y, ranges);
+            if (run.rawMaxX <= 0 || run.rawMaxY <= 0) {
+                throw new IOException("触摸设备没有可用的坐标范围。");
             }
-            int[] ranges = readCoordinateRanges(devicePath);
-            rawMaxX = ranges[0];
-            rawMaxY = ranges[1];
-            if (rawMaxX <= 0 || rawMaxY <= 0) {
-                log("invalid coordinate range for " + devicePath);
-                failureReason = "触摸设备没有可用的坐标范围。";
-                DragShareDiagnostics.captureInputFailure(
-                        context,
-                        "invalid coordinate range for " + devicePath,
-                        discoveredDevices,
-                        null);
-                return;
+            DragShareDiagnostics.captureInputInventory(context,
+                    "root input range probe " + devicePath, devices, ranges);
+            checkRunning(run);
+            Process process = startProcess(run, readerCommand(devicePath));
+            StringBuilder errors = drainErrors(process);
+            stream = process.getInputStream();
+            InputStream input = stream;
+            String header = readWithDeadline(() -> readLine(input));
+            if (!READY_LINE.equals(header)) {
+                throw new IOException("Root 输入连接未就绪（" + processStatus(process) + "）：" + errorText(errors));
             }
-            InputStream stream = openDevice(devicePath);
-            inputStream = stream;
-            ready = true;
-            DisplayMetrics metrics = currentDisplayMetrics();
-            log("ready device=" + devicePath
-                    + " raw=" + rawMaxX + "x" + rawMaxY
-                    + " screen=" + metrics.widthPixels + "x" + metrics.heightPixels
-                    + " eventSize=" + inputEventSize());
-            DragShareLog.d(TAG, "starting evdev read loop path=" + devicePath);
-            readEvents(stream);
+            checkRunning(run);
+            mainHandler.post(() -> {
+                if (currentRun == run && !run.cancelled) publishState(true, "");
+            });
+            DragShareLog.i(TAG, "ready device=" + devicePath + " raw="
+                    + run.rawMaxX + "x" + run.rawMaxY);
+            readEvents(run, stream);
+            if (!run.cancelled) {
+                throw new IOException("Root 触摸事件流已结束（" + processStatus(process) + "）：" + errorText(errors));
+            }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            if (running) {
-                failureReason = "读取触摸设备时被中断。";
-                log("input loop interrupted", interrupted);
-                DragShareDiagnostics.captureInputFailure(
-                        context,
-                        "input loop interrupted",
-                        discoveredDevices,
-                        null);
+            if (!run.cancelled) {
+                failure = "触摸输入连接被中断。";
+                DragShareLog.w(TAG, failure, interrupted);
             }
         } catch (IOException | SecurityException error) {
-            if (running) {
-                failureReason = describeInputFailure(error);
-                log("input loop failed", error);
-                DragShareDiagnostics.captureInputFailure(
-                        context,
-                        "input loop failed:" + error.getClass().getSimpleName(),
-                        discoveredDevices,
-                        null);
+            if (!run.cancelled) {
+                failure = "触摸输入不可用：" + error.getMessage();
+                DragShareLog.w(TAG, failure, error);
             }
         } finally {
-            if (running && !firstEventLogged) {
-                DragShareLog.d(TAG, "input stream ended before a decoded pointer action");
-                if (failureReason == null) {
-                    failureReason = "触摸事件流在产生输入前结束。";
+            Process owned = run.cancel();
+            String reason = failure;
+            mainHandler.post(() -> {
+                if (currentRun != run) return;
+                if (run.pointerDown) {
+                    run.pointerDown = false;
+                    listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
+                            SystemClock.uptimeMillis(), 0, 0, 0);
+                    if (currentRun != run) return;
                 }
-                DragShareDiagnostics.captureInputFailure(
-                        context,
-                        "stream ended without decoded pointer action",
-                        discoveredDevices,
-                        null);
-            }
-            parser.cancel();
-            ready = false;
-            closeQuietly(inputStream);
-            inputStream = null;
-            java.lang.Process currentProcess = process;
-            process = null;
-            if (currentProcess != null) {
-                currentProcess.destroy();
-            }
-            running = false;
+                currentRun = null;
+                publishState(false, reason);
+            });
+            if (owned != null) endProcess(owned);
+            // Cleanup stays on the old worker and never delays its state notification.
+            if (stream != null) closeReadStream(stream);
         }
     }
 
-    private String findTouchDevice() throws IOException {
-        String devices = "";
-        try (InputStream stream = new FileInputStream("/proc/bus/input/devices")) {
-            devices = readText(stream);
-        } catch (IOException ignored) {
-            // Some Android builds deny the read; others return an empty filtered view.
-        }
-        discoveredDevices = devices;
-        DragShareLog.d(TAG, "host /proc/bus/input/devices:\n" + devices);
+    private static void checkRunning(Run run) throws InterruptedException {
+        if (run.cancelled) throw new InterruptedException("input run cancelled");
+    }
 
-        String devicePath = findTouchDevicePath(devices);
-        if (devicePath != null) {
-            return devicePath;
+    private static Process startProcess(Run run, String command)
+            throws IOException, InterruptedException {
+        checkRunning(run);
+        Process process = new ProcessBuilder("su", "-c", command).start();
+        if (!run.attach(process)) {
+            endProcess(process);
+            throw new InterruptedException("input run cancelled during root startup");
         }
+        return process;
+    }
 
-        log("touchscreen hidden from host process; retrying device discovery as root");
+    /** A stdin watcher kills only this shell's child when its Java owner disappears. */
+    static String supervise(String command) {
+        return "exec 3<&0\n" + command + " &\nchild=$!\nguard=\n"
+                + "cleanup() { trap - EXIT HUP INT TERM; kill \"$child\" 2>/dev/null; "
+                + "if [ -n \"$guard\" ]; then kill \"$guard\" 2>/dev/null; fi; "
+                + "wait \"$child\" 2>/dev/null; "
+                + "if [ -n \"$guard\" ]; then wait \"$guard\" 2>/dev/null; fi; }\n"
+                + "trap cleanup EXIT\ntrap 'exit 143' HUP INT TERM\n"
+                + "(trap - EXIT HUP INT TERM; IFS= read -r control <&3; "
+                + "kill \"$child\" 2>/dev/null) &\nguard=$!\n"
+                + "wait \"$child\"\nresult=$?\nkill \"$guard\" 2>/dev/null\n"
+                + "wait \"$guard\" 2>/dev/null\ntrap - EXIT HUP INT TERM\nexit \"$result\"";
+    }
+
+    static String readerCommand(String devicePath) {
+        if (!devicePath.matches("/dev/input/event[0-9]+")) {
+            throw new IllegalArgumentException("Invalid input device path");
+        }
+        return "exec 4<" + devicePath + " || exit $?\n"
+                + "printf '" + READY_LINE + "\\n'\n"
+                + supervise("cat <&4 4<&-");
+    }
+
+    private String rootText(Run run, String command) throws IOException, InterruptedException {
+        Process process = startProcess(run, supervise(command + " </dev/null"));
+        StringBuilder errors = drainErrors(process);
         try {
-            devices = runRootTextCommand("cat /proc/bus/input/devices");
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted while finding touchscreen", interrupted);
+            String text = readWithDeadline(() -> {
+                try (InputStream input = process.getInputStream()) {
+                    return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            });
+            checkRunning(run);
+            if (run.release(process)) {
+                int exit = endProcess(process);
+                if (exit != 0) {
+                    throw new IOException(command + " 退出码=" + exit + "：" + errorText(errors));
+                }
+            }
+            checkRunning(run);
+            return text;
+        } finally {
+            if (run.release(process)) endProcess(process);
         }
-        discoveredDevices = devices;
-        DragShareLog.d(TAG, "root /proc/bus/input/devices:\n" + devices);
-        return findTouchDevicePath(devices);
+    }
+
+    private static <T> T readWithDeadline(Callable<T> read)
+            throws IOException, InterruptedException {
+        FutureTask<T> task = new FutureTask<>(read);
+        launch("drag-share-input-read", task);
+        try {
+            return task.get(4, TimeUnit.SECONDS);
+        } catch (TimeoutException timeout) {
+            throw new IOException("Root 输入命令在 4 秒内没有响应。", timeout);
+        } catch (ExecutionException failed) {
+            if (failed.getCause() instanceof IOException) throw (IOException) failed.getCause();
+            throw new IllegalStateException("Unexpected input read failure", failed.getCause());
+        } finally {
+            task.cancel(true);
+        }
+    }
+
+    /** Called only on workers. Never close stdout while another thread is blocked reading it. */
+    static int endProcess(Process process) {
+        try {
+            process.getOutputStream().close();
+        } catch (IOException error) {
+            DragShareLog.w(TAG, "Unable to send input supervisor EOF", error);
+        }
+        try {
+            if (process.waitFor(1500, TimeUnit.MILLISECONDS)) return process.exitValue();
+            DragShareLog.w(TAG, "Root input supervisor did not exit after stdin EOF");
+            process.destroyForcibly();
+            if (process.waitFor(500, TimeUnit.MILLISECONDS)) return process.exitValue();
+            DragShareLog.w(TAG, "Root input process did not exit after termination");
+        } catch (InterruptedException interrupted) {
+            process.destroyForcibly();
+            Thread.currentThread().interrupt();
+            DragShareLog.w(TAG, "Interrupted while stopping root input", interrupted);
+        }
+        return -1;
+    }
+
+    private static StringBuilder drainErrors(Process process) {
+        StringBuilder errors = new StringBuilder();
+        launch("drag-share-input-errors", () -> {
+            try (InputStream error = process.getErrorStream()) {
+                byte[] buffer = new byte[512];
+                for (int count; (count = error.read(buffer)) != -1;) {
+                    synchronized (errors) {
+                        if (errors.length() < 4096) {
+                            errors.append(new String(buffer, 0, Math.min(count, 4096 - errors.length()),
+                                    StandardCharsets.UTF_8));
+                        }
+                    }
+                }
+            } catch (IOException error) {
+                synchronized (errors) {
+                    errors.append(" stderr: ").append(error.getMessage());
+                }
+                DragShareLog.w(TAG, "Unable to read root input stderr", error);
+            }
+        });
+        return errors;
+    }
+
+    private static String processStatus(Process process) {
+        return process.isAlive() ? "Root 监督进程尚未退出" : "退出码=" + process.exitValue();
+    }
+
+    private static String errorText(StringBuilder errors) {
+        synchronized (errors) {
+            return errors.length() == 0 ? "Root 进程未返回错误详情" : errors.toString().trim();
+        }
+    }
+
+    private static String readLine(InputStream input) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        for (int value; (value = input.read()) != -1;) {
+            if (value == '\n') return bytes.toString(StandardCharsets.UTF_8.name());
+            if (bytes.size() >= 128) throw new IOException("Invalid root input ready header");
+            bytes.write(value);
+        }
+        return bytes.toString(StandardCharsets.UTF_8.name());
+    }
+
+    private void readEvents(Run run, InputStream stream) throws IOException {
+        int size = android.os.Process.is64Bit() ? 24 : 16;
+        byte[] event = new byte[size];
+        while (!run.cancelled) {
+            int offset = 0;
+            while (!run.cancelled && offset < size) {
+                int count = stream.read(event, offset, size - offset);
+                if (count < 0) return;
+                offset += count;
+            }
+            if (run.cancelled) return;
+            ByteBuffer buffer = ByteBuffer.wrap(event).order(ByteOrder.LITTLE_ENDIAN);
+            buffer.position(size == 24 ? 16 : 8);
+            run.parser.consume(buffer.getShort() & 0xffff, buffer.getShort() & 0xffff, buffer.getInt());
+        }
+    }
+
+    private void onRawFrame(Run run, int action, float rawX, float rawY,
+                            int major, int minor, int width) {
+        long eventTime = SystemClock.uptimeMillis();
+        mainHandler.post(() -> {
+            if (currentRun != run || run.cancelled) return;
+            WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+            DisplayMetrics metrics = new DisplayMetrics();
+            manager.getDefaultDisplay().getRealMetrics(metrics);
+            float[] point = GestureMath.mapRawPoint(rawX, rawY, run.rawMaxX, run.rawMaxY,
+                    metrics.widthPixels, metrics.heightPixels, manager.getDefaultDisplay().getRotation());
+            if (action == MotionEvent.ACTION_DOWN) run.pointerDown = true;
+            else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) run.pointerDown = false;
+            run.lastX = point[0];
+            run.lastY = point[1];
+            listener.onPointerEvent(action, point[0], point[1], eventTime, major, minor, width);
+        });
     }
 
     static String findTouchDevicePath(CharSequence devices) {
-        if (devices == null) {
-            return null;
-        }
+        if (devices == null) return null;
         for (String block : devices.toString().split("(?:\\r?\\n){2,}")) {
-            String event = eventFromBlock(block);
-            if (event != null) {
-                return "/dev/input/" + event;
+            boolean direct = block.contains("B: PROP=2") || block.contains("INPUT_PROP_DIRECT");
+            boolean touchNamed = block.toLowerCase(Locale.ROOT).contains("touch");
+            if (!block.contains("B: ABS=") || (!direct && !touchNamed)) continue;
+            for (String line : block.split("\\n")) {
+                if (!line.startsWith("H: Handlers=")) continue;
+                Matcher matcher = EVENT_HANDLER.matcher(line);
+                if (matcher.find()) return "/dev/input/" + matcher.group(1);
             }
         }
         return null;
     }
 
-    private static String eventFromBlock(String block) {
-        boolean direct = block.contains("B: PROP=2") || block.contains("INPUT_PROP_DIRECT");
-        boolean touchNamed = block.toLowerCase(Locale.ROOT).contains("touch");
-        boolean hasAbsoluteAxes = block.contains("B: ABS=");
-        if (!hasAbsoluteAxes || (!direct && !touchNamed)) {
-            return null;
-        }
-        for (String line : block.split("\\n")) {
-            if (!line.startsWith("H: Handlers=")) {
-                continue;
-            }
-            Matcher matcher = EVENT_HANDLER.matcher(line);
-            if (matcher.find()) {
-                return matcher.group(1);
-            }
-        }
-        return null;
-    }
-
-    private int[] readCoordinateRanges(String devicePath) throws IOException, InterruptedException {
-        String output = runRootTextCommand("getevent -lp " + devicePath);
-        DragShareLog.d(TAG, "input capability path=" + devicePath + ":\n" + output);
-        DragShareDiagnostics.captureInputInventory(
-                context,
-                "root input range probe " + devicePath,
-                discoveredDevices,
-                output);
-        return new int[]{
-                parseMaximum(MAX_X, output),
-                parseMaximum(MAX_Y, output),
-        };
-    }
-
-    private int parseMaximum(Pattern pattern, CharSequence value) {
+    private static int parseMaximum(Pattern pattern, CharSequence value) {
         Matcher matcher = pattern.matcher(value);
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 
-    private InputStream openDevice(String devicePath) throws IOException {
-        try {
-            InputStream stream = new FileInputStream(devicePath);
-            DragShareLog.d(TAG, "opened input device directly path=" + devicePath);
-            return stream;
-        } catch (IOException directFailure) {
-            DragShareLog.d(TAG, "direct input open failed path=" + devicePath
-                    + " error=" + directFailure.getClass().getSimpleName()
-                    + ':' + String.valueOf(directFailure.getMessage())
-                    + "; retrying through root");
-            java.lang.Process rootProcess = new ProcessBuilder(
-                    "su", "-c", "exec cat " + devicePath)
-                    .start();
-            process = rootProcess;
-            DragShareLog.d(TAG, "opened input device through root cat path=" + devicePath);
-            return rootProcess.getInputStream();
-        }
-    }
-
-    private void readEvents(InputStream stream) throws IOException {
-        int eventSize = inputEventSize();
-        byte[] event = new byte[eventSize];
-        while (running && readFully(stream, event)) {
-            ByteBuffer buffer = ByteBuffer.wrap(event).order(ByteOrder.LITTLE_ENDIAN);
-            if (eventSize == 24) {
-                buffer.position(16);
-            } else {
-                buffer.position(8);
-            }
-            int type = buffer.getShort() & 0xffff;
-            int code = buffer.getShort() & 0xffff;
-            int value = buffer.getInt();
-            consumeEvent(type, code, value);
-        }
-    }
-
-    private int inputEventSize() {
-        return android.os.Process.is64Bit() ? 24 : 16;
-    }
-
-    private boolean readFully(InputStream stream, byte[] buffer) throws IOException {
-        int offset = 0;
-        while (running && offset < buffer.length) {
-            int count = stream.read(buffer, offset, buffer.length - offset);
-            if (count < 0) {
-                return false;
-            }
-            offset += count;
-        }
-        return offset == buffer.length;
-    }
-
-    private void consumeEvent(int type, int code, int value) {
-        if (DragShareLog.isDebugEnabled()) {
-            rawEventsInFrame++;
-            if (rawFrameCount < 12L) {
-                DragShareLog.d(TAG, "raw evdev event type=" + type
-                        + " code=" + code + " value=" + value);
-            }
-            if (type == EvdevTouchParser.EV_SYN && code == EvdevTouchParser.SYN_REPORT) {
-                rawFrameCount++;
-                DragShareLog.d(TAG, "raw evdev frame=" + rawFrameCount
-                        + " events=" + rawEventsInFrame);
-                rawEventsInFrame = 0;
-            }
-        }
-        parser.consume(type, code, value);
-    }
-
-    private void onRawFrame(int action, float rawX, float rawY, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
-        if (rawMaxX <= 0 || rawMaxY <= 0) {
-            return;
-        }
-        float[] screenPoint = toScreenCoordinates(rawX, rawY);
-        DragShareLog.d(TAG, "decoded " + MotionEvent.actionToString(action)
-                + " raw=" + Math.round(rawX) + ',' + Math.round(rawY)
-                + " mapped=" + Math.round(screenPoint[0]) + ',' + Math.round(screenPoint[1]));
-        emit(action, screenPoint[0], screenPoint[1], rawTouchMajor, rawTouchMinor, rawWidthMajor);
-    }
-
-    private void emit(int action, float x, float y, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
-        if (!firstEventLogged) {
-            firstEventLogged = true;
-            log("first event action=" + MotionEvent.actionToString(action)
-                    + " point=" + Math.round(x) + "," + Math.round(y));
-        }
-        listener.onPointerEvent(
-                action, x, y, SystemClock.uptimeMillis(), rawTouchMajor, rawTouchMinor, rawWidthMajor);
-    }
-
-    private float[] toScreenCoordinates(float rawX, float rawY) {
-        WindowManager windowManager = (WindowManager)
-                context.getSystemService(Context.WINDOW_SERVICE);
-        DisplayMetrics metrics = currentDisplayMetrics();
-        int rotation = windowManager.getDefaultDisplay().getRotation();
-        return GestureMath.mapRawPoint(
-                rawX,
-                rawY,
-                rawMaxX,
-                rawMaxY,
-                metrics.widthPixels,
-                metrics.heightPixels,
-                rotation);
-    }
-
-    private DisplayMetrics currentDisplayMetrics() {
-        WindowManager windowManager = (WindowManager)
-                context.getSystemService(Context.WINDOW_SERVICE);
-        DisplayMetrics metrics = new DisplayMetrics();
-        windowManager.getDefaultDisplay().getRealMetrics(metrics);
-        return metrics;
-    }
-
-    private String runRootTextCommand(String command) throws IOException, InterruptedException {
-        java.lang.Process commandProcess = new ProcessBuilder("su", "-c", command)
-                .redirectErrorStream(true)
-                .start();
-        String output;
-        try (InputStream stream = commandProcess.getInputStream()) {
-            output = readText(stream);
-        }
-        int exitCode = commandProcess.waitFor();
-        if (exitCode != 0) {
-            throw new IOException("Command failed (" + exitCode + "): " + output);
-        }
-        return output;
-    }
-
-    private String readText(InputStream stream) throws IOException {
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append('\n');
-            }
-        }
-        return output.toString();
-    }
-
-    private String describeInputFailure(Exception error) {
-        String detail = error.getMessage();
-        if (error instanceof SecurityException) {
-            return "系统拒绝读取触摸设备：请检查 Root 授权和模块权限。";
-        }
-        if (detail != null && detail.contains("Permission denied")) {
-            return "读取触摸设备被拒绝：请检查 Root 授权和模块权限。";
-        }
-        if (detail != null && detail.contains("su")) {
-            return "无法启动 Root 命令：请确认设备上的 Root 服务可用。";
-        }
-        return "读取触摸设备失败：" + error.getClass().getSimpleName()
-                + (detail == null || detail.isEmpty() ? "" : "（" + detail + "）");
-    }
-
-    private void closeQuietly(InputStream stream) {
-        if (stream == null) {
-            return;
-        }
+    private static void closeReadStream(InputStream stream) {
         try {
             stream.close();
-        } catch (IOException ignored) {
-            // Ignore shutdown races.
+        } catch (IOException error) {
+            DragShareLog.w(TAG, "Unable to close root input stream", error);
         }
     }
 
-    private static void log(String message) {
-        DragShareLog.i(TAG, message);
-    }
-
-    private static void log(String message, Throwable error) {
-        DragShareLog.w(TAG, message, error);
+    private static void launch(String name, Runnable action) {
+        Thread thread = new Thread(action, name);
+        thread.setDaemon(true);
+        thread.start();
     }
 }

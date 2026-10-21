@@ -110,6 +110,41 @@ public class BoomWordsLayoutTest {
     }
 
     @Test
+    public void splittingPartialSelectionKeepsOtherWordsAndSelectedCharacterOrder() {
+        BoomWordsLayout layout = layout("保留 小米 😀手机 尾巴", 0, 1, 3, 4, 6, 9, 11, 12, -1);
+
+        assertEquals(selected(1, 2, 3, 4, 5), layout.splitSelectedWordsToChars(selected(1, 2)));
+        assertEquals(7, layout.getWordCount());
+        assertEquals("保留", layout.getWord(0));
+        assertEquals("小", layout.getWord(1));
+        assertEquals("米", layout.getWord(2));
+        assertEquals("😀", layout.getWord(3));
+        assertEquals("手", layout.getWord(4));
+        assertEquals("机", layout.getWord(5));
+        assertEquals("尾巴", layout.getWord(6));
+        assertEquals(6, layout.getWordStart(3));
+        assertEquals(11, layout.getWordStart(6));
+        assertEquals("保留 小米 😀手机 尾巴", layout.getOriText());
+        assertFalse(layout.canSplitSelectedWords(selected(1, 2, 3, 4, 5)));
+    }
+
+    @Test
+    public void splittingAllKeepsPunctuationParagraphsAndTheOriginalSnapshot() {
+        BoomWordsLayout layout = layout("小米，\n😀手机", 0, 1, 4, 7, -1, 2, 2);
+        int[] before = layout.getSegments();
+
+        assertEquals(selected(0, 1, 2, 3, 4, 5), layout.splitSelectedWordsToChars(selected(0, 1, 2)));
+        assertEquals("小米，\n😀手机", layout.getOriText());
+        assertArrayEquals(new int[]{0, 0, 1, 1, 4, 5, 6, 6, 7, 7, -1, 2, 2}, layout.getSegments());
+        assertTrue(layout.isPunc(2));
+        assertEquals("😀", layout.getWord(3));
+        BoomWordsLayout restored = layout(layout.getOriText(), before);
+        assertArrayEquals(new int[]{0, 1, 4, 7, -1, 2, 2}, restored.getSegments());
+        assertEquals("小米", restored.getWord(0));
+        assertEquals("😀手机", restored.getWord(2));
+    }
+
+    @Test
     public void nonAdjacentSelectionDoesNotChangeChips() {
         BoomWordsLayout layout = layout("甲乙丙", 0, 0, 1, 1, 2, 2, -1);
 

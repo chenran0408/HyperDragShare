@@ -7,10 +7,6 @@
             android:process=":root_probe" />
     </application>
     <instrumentation
-        android:name=".TextInsertionProbe"
-        android:targetPackage="com.leaf.hyperdragshare.codex"
-        android:label="Generated native text insertion check" />
-    <instrumentation
         android:name=".AicrGeometryProbe"
         android:targetPackage="com.leaf.hyperdragshare.codex"
         android:label="Generated AICR line coordinate inspection" />

@@ -2,7 +2,7 @@
 
 本文记录 HyperDragShare fork 当前拖拽链路的实现边界；个别历史章节保留早期设计背景，实时安装和行为结论以 [DEVICE_VALIDATION.md](DEVICE_VALIDATION.md) 为准。目标是传送门识别长按文字或图片后，在手指附近立即显示预览，同一手势继续拖动并在有效目标上松手分享。简洁、流光、环形和现代菜单共用上、下、左、右四个方向，并在热区支持滚动。
 
-当前设备Xiaomi15Pro / HyperOS4.0.0.17 / Android17，已安装1.7.151（175）。分词功能已放一级并用Miuix图标，保留二次爆炸独立入口；新UI待实测。按住入口使用时长/位移，148处理录音控件与冷却，149缺窗不退出helper，150补交互窗口标志。最新Portal15214加载175、输入ready，但节点reader准备失败；系统phantom裁剪原因已确认，窄Hook待实现。146文字跨UID及保留选区证据仍有效，完整新手势不称通过。
+当前小米15Pro/HyperOS4.0.0.17/Android17，已安装153/177。全选/拆词固定相邻，拆词与合并可撤销，再次识屏追加整链已删除。Portal23857/177、Root输入与reader均ready；新UI未实测。android裁剪Hook未重载，新增SystemUI旁路尚未启用设备scope，没有面积/接管证据。
 
 除设置外，文字、图片OCR、屏幕OCR、搜索与中转站以原页独立浮窗工作；外部分享使用透明接收桥，不打开设置首页。中转站仅保留临时拖放托盘和灰条，标题或灰条拖动、松手就近贴边、展开面积≤16%；系统小窗、搜索、复制和手动左右切换已删除，保留原有数据。141补系统栏避让与显示变化后的重新定位；142直接按住已选条目/组卡拖出整个选区，预览图也能拖出，删除底部专用拖动行并复用列表可见顺序；新交互未实测。
 
@@ -66,7 +66,7 @@ build304完整testDebugUnitTest/lintDebug/assembleDebug成功：208项测试0失
 - 可靠输入：root + Linux evdev
 
 LSPosed 作用域由 `res/values/arrays.xml` 声明，且 `MainHook` 在运行时再次检查包名。传送门
-Hook、AICR 文本直取 Hook 与背部轻敲框架 Hook 分别限制在这三个进程；不加入
+Hook、AICR文本直取、框架背敲/自有Root裁剪及原生触摸旁路分别限制在传送门、AICR、android和SystemUI四个进程；不加入
 `com.miui.contentcatcher`。不要强行停止 Application Extension Service；部分 HyperOS 版本会
 因此连带强停其他应用。
 
@@ -1128,3 +1128,14 @@ PressCaptureSource只在reader建立后接受自动按压；Binder断开或共�
 新增RootProcessFrameworkHooks，android/system_server精确Hook PhantomProcessRecord.killLocked(String,boolean)。仅Root UID、本模块或Portal活宿主、真实映射与父PID一致、原因完全等于Trimming phantom processes才跳过数量裁剪。isKilled/isKilledByAm为目标ROM继承的公开方法，安装时解析。未改系统全局phantom配置。字段/反射失败保留原系统裁剪并记录。
 
 215项本地检查及build314完整构建通过，Lint0 errors/157 warnings/2 hints；312和313分别因错误设置字段引用、隐藏ServiceSpecificException无法编译而停止，均未安装，后者已删除并使用自有AIDL租约状态。152只安装一次。框架Hook尚未重载；14:40 Portal13588的su再次被旧框架数量裁剪，Root输入失败137，而取词reader ready，不能称整个入口可用。待手机空闲再重载系统作用域。
+
+
+## 1.7.153：完整拆词及输入生命周期批次
+
+全选/取消全选与拆词相邻；只拆所选词并保持原文/未选词，Unicode code point拆单字。拆词/合并成功保存segments及选区快照供现有撤销。按最新要求删除CaptureMore、source_area、ResultReceiver再次截图追加链、附近OCR工具/测试及专用Debug Probe；保留初次OCR、原图识字及邻近节点文字展开。
+
+RootTouchSource每Run持解析器/坐标/process，生命周期与回调在主Looper串行；stop后台EOF清理、自有child监督，旧Run不能清理新Run。真实开设备并收到就绪头才ready；正常stop/输入异常补CANCEL。无障碍旧三次重启轮询已删除，首页和应用重载按实际输入/reader判断。
+
+NativePressSystemUiHooks精确Hook目标WM Shell EventReceiver.onInputEvent(InputEvent) before，位于任何handler/边缘/小窗分支前。不钩原生handler入口，因为HyperGesture前置代理消费会让循环break而漏事件。只记录最多32个至少200ms手势的size/major/minor和时长；不读坐标/文本，不改参数/结果/finish/handler顺序，不pilfer。scope尚未在设备启用，未完成原生面积触发。
+
+build317完整212 tests/0 failures/0 errors，Lint0 errors/157 warnings/2 hints，assembleDebug通过。316因被删除API的TextInsertionProbe停止，删除旧Probe及manifest入口后317通过。153集中安装一次。下一批新要求：分词去中转站、查词图标、删返回/关闭中间层；这些不是153已完成项。

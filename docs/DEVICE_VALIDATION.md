@@ -1045,3 +1045,18 @@ build309/310后用户继续要求二次爆炸和图标，同一151未安装，�
 - 14:40:00.747 system_server仍以Trimming phantom processes杀Portal所属su13888；Root输入发现命令同期退出137。新android Hook未加载；reader随后ready不能代表输入就绪或完整按压成功。手机亮屏且最近用户输入，未软重启。
 - 自动按压失效后的停止复用/忙状态分类由源码与新回归验证；未人为杀手机helper制造故障，真实恢复及Hook自然裁剪命中待系统作用域重载。
 - 云端151 run39555560460已读回completed/success，head8f013d0。152需按新推送run重新核对，不能沿用151结果。
+
+
+## 2026-10-21 1.7.153：拆词、删除再次识屏及输入完整批次
+
+build317完整212 tests/0 failures/0 errors，Lint0errors/157warnings/2hints及assembleDebug通过。316因遗留专用TextInsertionProbe引用已删API停止，删除Probe/manifest后317通过，316未装。数量变化含删除附近OCR10项，新增拆词2、Run所有权4、输入状态1项，不以测试数等同功能数。
+
+包名com.leaf.hyperdragshare.codex，177/1.7.153，同证书b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0；APK SHA256 2042AEBD3FFE6DB4D5D4101ADDDCB3F613B8F14643DB8814EB12434723F9A1B0，任务outputs/HyperDragShare-1.7.153-debug.apk，单次覆盖安装成功。后台只重载Portal23857；前台Coolapk t2422保持。
+
+14:57:22 Root输入ready event7/raw143999x319999，reader随后ready；只读状态injected177/root177true/input177true/reader177true，errors空。同PID有300/301ms时长确认日志，不等于物理面积或完整词窗验收。未截图、取用户文字、清剪贴板/中转站、改权限、抢屏或重启系统。
+
+新Root监督脚本的必要边界实验：有限命令保持owner stdin为73ms/exit0/固定HDS_FINITE；owner EOF后自有sleep child269ms/exit143。首次测试communicate过早关stdin造成finite143，修正测试保持stdin后自然退出通过，未改产品掩盖。无evdev注入、UiAutomation占位或重复OCR样本。
+
+只读LSPosed副本确认scope为Portal/AICR/system，尚无SystemUI；APK声明推荐作用域不等于启用。原生旁路未加载/未验，android窄裁剪Hook也未重载、无跳过证据。手机持续用户输入，未强停SystemUI。新拆词/撤销手感未实测。
+
+云端152run39557048439已success/head361bfde；153按新推送run核对。后续新要求分词去中转站/查词图标/删除返回关闭中间层，下一UI批继续，不写成153已完成。

@@ -182,11 +182,6 @@ object PointCaptureOverlay {
                     putString("after_text", content.afterText)
                     putInt("x", x.toInt())
                     putInt("y", y.toInt())
-                    putBundle("source_area", Bundle().apply {
-                        putParcelable("bounds", content.sourceBounds)
-                        putInt("width", sourceDisplay.width())
-                        putInt("height", sourceDisplay.height())
-                    })
                 })
                 close()
             } catch (error: IllegalStateException) {

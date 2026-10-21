@@ -4,11 +4,8 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.os.Bundle
-import android.os.ResultReceiver
 import android.os.Handler
 import android.os.Looper
-import android.app.Activity
 import android.hardware.display.DisplayManager
 import android.view.Display
 import android.view.WindowManager
@@ -64,7 +61,6 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -81,22 +77,14 @@ import java.util.concurrent.Executors
 internal class ScreenOcrSession(
     private val context: Context,
     private val selectRegion: Boolean,
-    private val resultReceiver: ResultReceiver?,
-    private val sourceArea: Bundle?,
     private val onClosed: () -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val captureExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var window: InteractiveOverlayWindow? = null
     private var closed = false
-    private var resultSent = false
     private var regionVisible by mutableStateOf(false)
     private var resultText by mutableStateOf<List<String>>(emptyList())
-    private var selectedLines by mutableStateOf<Set<Int>>(emptySet())
-    private var nearbySelection by mutableStateOf(false)
-    private var insertionSource: android.graphics.Rect? = null
-    private var insertionReferenceHeight = 0
-    private var resultBounds: List<android.graphics.Rect?> = emptyList()
     private var statusMessage by mutableIntStateOf(R.string.screen_ocr_capturing)
     private var isRecognizing by mutableStateOf(true)
     private var screenshotForRegion: Bitmap? = null
@@ -109,7 +97,7 @@ internal class ScreenOcrSession(
     private var copyMessage by mutableStateOf<String?>(null)
     private val pendingCapture = Runnable { captureAndRecognize() }
     private val screenOff = object : android.content.BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = close(restorePanel = false)
+        override fun onReceive(context: Context, intent: Intent) = close()
     }
 
     fun start(beforeCapture: () -> Unit) {
@@ -129,7 +117,7 @@ internal class ScreenOcrSession(
         if (closed) return
         if (context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(context, R.string.screen_ocr_locked, Toast.LENGTH_SHORT).show()
-            close(restorePanel = false)
+            close()
             return
         }
         isRecognizing = true
@@ -159,43 +147,19 @@ internal class ScreenOcrSession(
         }
     }
 
-    private fun recognizeScreenshot(bitmap: Bitmap, nearbySource: android.graphics.Rect? = null) {
+    private fun recognizeScreenshot(bitmap: Bitmap) {
         readingBitmap = bitmap
         resultText = emptyList()
-        selectedLines = emptySet()
-        nearbySelection = nearbySource != null
-        insertionSource = nearbySource
-        val referenceHeight = nearbySource?.let {
-            sourceArea?.getInt("distance_height", it.height()) ?: it.height()
-        } ?: 0
-        insertionReferenceHeight = referenceHeight
-        resultBounds = emptyList()
         failureDetail = null
         if (IntegrationSettings.isAicrOcrEnabled(context)) {
-            aicrRequest = AicrOcrClient.recognizeWithLines(context, bitmap) { result, error ->
+            aicrRequest = AicrOcrClient.recognize(context, bitmap) { result, error ->
                 aicrRequest = null
                 finishReading(bitmap)
                 if (!closed && error !is java.util.concurrent.CancellationException) {
                     if (error != null) {
                         reportFailure(R.string.screen_ocr_failed, error)
                     } else {
-                        if (nearbySource == null) {
-                            recognitionCompleted(result.text.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() })
-                        } else {
-                            val lines = result.lines.filter { !it.text.isNullOrBlank() }
-                            try {
-                                val bounds = lines.map { aicrLineBounds(it) }
-                                if (bounds.none { it != null }) {
-                                    reportFailure(R.string.screen_ocr_region_unavailable,
-                                        IllegalStateException("AICR 未返回可定位的文字行，请返回后手动框选"))
-                                } else {
-                                    recognitionCompleted(lines.map { it.text.trim() },
-                                        nearbyOcrLines(bounds, nearbySource, referenceHeight), bounds)
-                                }
-                            } catch (error: IllegalArgumentException) {
-                                reportFailure(R.string.screen_ocr_region_unavailable, error)
-                            }
-                        }
+                        recognitionCompleted(result.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() })
                     }
                 }
             }
@@ -216,11 +180,7 @@ internal class ScreenOcrSession(
                     if (task.isSuccessful) {
                         val recognizedLines = task.result.textBlocks.flatMap { it.lines }
                             .filter { it.text.isNotBlank() }
-                        val suggested = nearbySource?.let { source ->
-                            nearbyOcrLines(recognizedLines.map { it.boundingBox }, source, referenceHeight)
-                        }
-                        recognitionCompleted(recognizedLines.map { it.text.trim() }, suggested,
-                            recognizedLines.map { it.boundingBox })
+                        recognitionCompleted(recognizedLines.map { it.text.trim() })
                     } else {
                         reportFailure(R.string.screen_ocr_failed,
                             task.exception ?: IllegalStateException("ML Kit recognition failed"))
@@ -249,17 +209,14 @@ internal class ScreenOcrSession(
         }
     }
 
-    private fun recognitionCompleted(lines: List<String>, suggested: Set<Int>? = null,
-        bounds: List<android.graphics.Rect?> = emptyList()) {
+    private fun recognitionCompleted(lines: List<String>) {
         if (lines.isEmpty()) {
             showFailure(R.string.screen_ocr_no_text)
             return
         }
         resultText = lines
-        resultBounds = bounds
-        selectedLines = suggested ?: lines.indices.toSet()
         isRecognizing = false
-        if (resultReceiver == null && selectRegion &&
+        if (selectRegion &&
             BigBangOverlayLauncher.showText(context, lines.joinToString("\n"), -1, -1, null)) {
             close()
         } else renderResults()
@@ -355,7 +312,6 @@ internal class ScreenOcrSession(
         screenshotForRegion?.recycle()
         screenshotForRegion = null
         resultText = emptyList()
-        selectedLines = emptySet()
         statusMessage = R.string.screen_ocr_capturing
         isRecognizing = true
         scheduleCapture()
@@ -386,30 +342,7 @@ internal class ScreenOcrSession(
 
     private fun openSegmentation(text: String) {
         if (text.isBlank()) return
-        if (resultReceiver != null) {
-            resultSent = true
-            val source = insertionSource
-            val result = Bundle()
-            if (source == null) result.putString("text", text)
-            else {
-                val (before, after) = splitNearbyOcrSelection(resultText, resultBounds, selectedLines, source)
-                result.putString("prepend_text", before)
-                result.putString("text", after)
-                screenshotForRegion?.let { screenshot ->
-                    expandedNearbyOcrBounds(source, resultBounds, selectedLines,
-                        screenshot.width, screenshot.height)?.let { expanded ->
-                        result.putBundle("source_area", Bundle().apply {
-                            putParcelable("bounds", expanded)
-                            putInt("width", screenshot.width)
-                            putInt("height", screenshot.height)
-                            putInt("distance_height", insertionReferenceHeight)
-                        })
-                    }
-                }
-            }
-            resultReceiver.send(Activity.RESULT_OK, result)
-            close()
-        } else if (BigBangOverlayLauncher.showText(context, text, -1, -1, null)) close()
+        if (BigBangOverlayLauncher.showText(context, text, -1, -1, null)) close()
     }
 
     private fun copyText(text: String) {
@@ -442,15 +375,9 @@ internal class ScreenOcrSession(
         }
     }
 
-    fun close(restorePanel: Boolean = true) {
+    fun close() {
         if (closed) return
         closed = true
-        if (!resultSent) {
-            resultSent = true
-            resultReceiver?.send(Activity.RESULT_CANCELED, Bundle().apply {
-                putBoolean("restore_panel", restorePanel)
-            })
-        }
         main.removeCallbacks(pendingCapture)
         captureExecutor.shutdownNow()
         aicrRequest?.cancel()
@@ -477,7 +404,6 @@ internal class ScreenOcrSession(
         onShare: (String) -> Unit,
     ) {
         val allText = lines.joinToString("\n")
-        val selectedText = lines.filterIndexed { index, _ -> index in selectedLines }.joinToString("\n")
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -567,42 +493,21 @@ internal class ScreenOcrSession(
                         ),
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            if (nearbySelection) {
-                                Text(
-                                    text = "已预选原文附近的行。上方文字放在原文前，其余接在末尾；页面可能已变化，请核对，也可取消。",
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    fontSize = 13.sp,
-                                )
-                            }
                             Text(
-                                text = if (resultReceiver != null) "已选 ${selectedLines.size} / ${lines.size} 行"
-                                    else stringResource(R.string.screen_ocr_result_count, lines.size),
+                                text = stringResource(R.string.screen_ocr_result_count, lines.size),
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
-                            if (resultReceiver == null) {
-                                Text(
-                                    text = stringResource(R.string.screen_ocr_tap_to_segment),
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    fontSize = 13.sp,
-                                )
-                            }
+                            Text(
+                                text = stringResource(R.string.screen_ocr_tap_to_segment),
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 13.sp,
+                            )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(
-                                    text = if (resultReceiver != null) { if (nearbySelection) "插入已选" else "追加已选" }
-                                        else stringResource(R.string.screen_ocr_segment_all),
-                                    onClick = { onSegment(if (resultReceiver != null) selectedText else allText) },
-                                    enabled = resultReceiver == null || selectedLines.isNotEmpty(),
+                                    text = stringResource(R.string.screen_ocr_segment_all),
+                                    onClick = { onSegment(allText) },
                                     colors = ButtonDefaults.textButtonColorsPrimary(),
                                 )
-                                if (resultReceiver != null) {
-                                    TextButton(
-                                        text = if (selectedLines.size == lines.size) "取消全选" else "全选",
-                                        onClick = {
-                                            selectedLines = if (selectedLines.size == lines.size) emptySet()
-                                                else lines.indices.toSet()
-                                        },
-                                    )
-                                } else {
                                 TextButton(
                                     text = stringResource(R.string.screen_ocr_copy_all),
                                     onClick = { onCopy(allText) },
@@ -612,7 +517,6 @@ internal class ScreenOcrSession(
                                     text = stringResource(R.string.screen_ocr_share_all),
                                     onClick = { onShare(allText) },
                                 )
-                                }
                             }
                             if (canSelectRegion) {
                                 TextButton(
@@ -623,58 +527,38 @@ internal class ScreenOcrSession(
                         }
                     }
                 }
-                itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
-                    val toggleLine = {
-                        selectedLines = if (index in selectedLines) selectedLines - index else selectedLines + index
-                    }
+                itemsIndexed(lines, key = { index, _ -> index }) { _, line ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.defaultColors(
                             color = MiuixTheme.colorScheme.surfaceContainer,
                         ),
                     ) {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp,
-                            vertical = if (resultReceiver == null) 4.dp else 12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().then(
-                                    if (resultReceiver != null) Modifier.clickable(onClick = toggleLine) else Modifier),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                if (resultReceiver != null) {
-                                    Checkbox(
-                                        state = if (index in selectedLines) androidx.compose.ui.state.ToggleableState.On
-                                            else androidx.compose.ui.state.ToggleableState.Off,
-                                        onClick = toggleLine,
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                }
-                                Text(
-                                    text = line,
-                                    color = MiuixTheme.colorScheme.onSurface,
-                                    fontSize = 16.sp,
-                                    modifier = Modifier.weight(1f).then(
-                                        if (resultReceiver == null) {
-                                            Modifier.clickable(role = Role.Button) { onSegment(line) }
-                                                .padding(vertical = 12.dp)
-                                        } else Modifier,
-                                    ),
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = line,
+                                color = MiuixTheme.colorScheme.onSurface,
+                                fontSize = 16.sp,
+                                modifier = Modifier.weight(1f)
+                                    .clickable(role = Role.Button) { onSegment(line) }
+                                    .padding(vertical = 12.dp),
+                            )
+                            IconButton(onClick = { onCopy(line) }, enabled = !copying) {
+                                MiuixIcon(
+                                    imageVector = Icons.Outlined.ContentCopy,
+                                    contentDescription = stringResource(R.string.screen_ocr_copy_line),
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 )
-                                if (resultReceiver == null) {
-                                    IconButton(onClick = { onCopy(line) }, enabled = !copying) {
-                                        MiuixIcon(
-                                            imageVector = Icons.Outlined.ContentCopy,
-                                            contentDescription = stringResource(R.string.screen_ocr_copy_line),
-                                            tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        )
-                                    }
-                                    IconButton(onClick = { onShare(line) }) {
-                                        MiuixIcon(
-                                            imageVector = Icons.Outlined.Share,
-                                            contentDescription = stringResource(R.string.screen_ocr_share_line),
-                                            tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        )
-                                    }
-                                }
+                            }
+                            IconButton(onClick = { onShare(line) }) {
+                                MiuixIcon(
+                                    imageVector = Icons.Outlined.Share,
+                                    contentDescription = stringResource(R.string.screen_ocr_share_line),
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                )
                             }
                         }
                     }
@@ -708,17 +592,6 @@ internal class ScreenOcrSession(
         var start by remember(screenshot) { mutableStateOf<Offset?>(null) }
         var end by remember(screenshot) { mutableStateOf<Offset?>(null) }
         var viewSize by remember(screenshot) { mutableStateOf(IntSize.Zero) }
-        val sourceBounds = remember(screenshot) {
-            sourceArea?.let { area ->
-                if (area.getInt("width") == screenshot.width && area.getInt("height") == screenshot.height) {
-                    area.getParcelable("bounds", android.graphics.Rect::class.java)?.let { original ->
-                        android.graphics.Rect(original).takeIf {
-                            it.intersect(0, 0, screenshot.width, screenshot.height) && !it.isEmpty
-                        }
-                    }
-                } else null
-            }
-        }
         val selection = if (start != null && end != null) {
             Rect(
                 left = minOf(start!!.x, end!!.x),
@@ -787,18 +660,6 @@ internal class ScreenOcrSession(
                         style = Stroke(width = 3.dp.toPx()),
                     )
                 }
-                sourceBounds?.let { bounds ->
-                    drawRect(
-                        color = Color(0xFF5AA9FF),
-                        topLeft = Offset(bounds.left * size.width / screenshot.width,
-                            bounds.top * size.height / screenshot.height),
-                        size = Size(bounds.width() * size.width / screenshot.width,
-                            bounds.height() * size.height / screenshot.height),
-                        style = Stroke(width = 2.dp.toPx(),
-                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
-                                floatArrayOf(10.dp.toPx(), 6.dp.toPx()))),
-                    )
-                }
             }
             Column(
                 modifier = Modifier
@@ -827,8 +688,7 @@ internal class ScreenOcrSession(
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = if (sourceBounds != null) "蓝色虚线是原文参考位置，页面可能已变化；请框选要追加的文字"
-                                    else stringResource(R.string.screen_ocr_region_hint),
+                                text = stringResource(R.string.screen_ocr_region_hint),
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 fontSize = 13.sp,
                             )
@@ -846,17 +706,6 @@ internal class ScreenOcrSession(
                     ),
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                        if (sourceBounds != null && resultReceiver != null) {
-                            TextButton(
-                                text = "查找原文附近文字",
-                                onClick = {
-                                    resultText = emptyList()
-                                    statusMessage = R.string.screen_ocr_region_recognizing
-                                    isRecognizing = true
-                                    if (renderResults()) recognizeScreenshot(screenshot, sourceBounds)
-                                },
-                            )
-                        }
                         if (message != 0) {
                             Text(
                                 text = stringResource(message),

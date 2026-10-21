@@ -2,7 +2,6 @@ package com.leaf.hyperdragshare.codex;
 
 import android.app.KeyguardManager;
 import android.content.Context;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -12,7 +11,6 @@ import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.MotionEvent;
-import android.view.WindowManager;
 import android.widget.Toast;
 
 import java.io.IOException;
@@ -46,7 +44,6 @@ final class PressCaptureSource {
     private CapturedContent cached;
     private float downX;
     private float downY;
-    private Rect sourceDisplay;
 
     PressCaptureSource(Context context, RootTouchSource input, DragShareController controller,
                        DragShareSettings settings, BooleanSupplier hostAllowed) {
@@ -93,7 +90,6 @@ final class PressCaptureSource {
             pointerDown = true;
             downX = x;
             downY = y;
-            sourceDisplay = context.getSystemService(WindowManager.class).getMaximumWindowMetrics().getBounds();
         }
         if (!allowed()) {
             cancelGesture();
@@ -265,13 +261,6 @@ final class PressCaptureSource {
         text.putString("text", content.text);
         text.putString("before_text", content.beforeText);
         text.putString("after_text", content.afterText);
-        if (content.sourceBounds != null && !content.sourceBounds.isEmpty()) {
-            Bundle area = new Bundle();
-            area.putParcelable("bounds", content.sourceBounds);
-            area.putInt("width", sourceDisplay.width());
-            area.putInt("height", sourceDisplay.height());
-            text.putBundle("source_area", area);
-        }
         text.putInt("x", Math.round(downX));
         text.putInt("y", Math.round(downY));
         try {

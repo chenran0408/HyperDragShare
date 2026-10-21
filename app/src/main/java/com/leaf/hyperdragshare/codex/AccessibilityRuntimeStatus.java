@@ -10,6 +10,7 @@ import java.util.List;
 final class AccessibilityRuntimeStatus {
     private static volatile boolean connected;
     private static volatile boolean rootInputReady;
+    private static volatile String rootInputError = "";
     private static volatile boolean pressReaderReady;
     private static volatile String pressReaderError = "";
 
@@ -19,11 +20,13 @@ final class AccessibilityRuntimeStatus {
         connected = value;
         if (!value) {
             rootInputReady = false;
+            rootInputError = "";
             setPressReader(false, "");
         }
     }
 
-    static void setRootInputReady(boolean value) {
+    static void setRootInputState(boolean value, String error) {
+        rootInputError = error;
         rootInputReady = value && connected;
     }
 
@@ -34,6 +37,8 @@ final class AccessibilityRuntimeStatus {
     static boolean isRootInputReady() {
         return rootInputReady;
     }
+
+    static String rootInputError() { return rootInputError; }
 
     static void setPressReader(boolean ready, String error) {
         pressReaderError = error;

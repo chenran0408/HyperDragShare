@@ -1016,12 +1016,21 @@ private enum class ActivationUiState {
     PortalRootUnavailable,
     AccessibilityDisabled,
     AccessibilityConnecting,
+    RootInputConnecting,
+    RootInputUnavailable,
     PressReaderConnecting,
     PressReaderUnavailable,
     Active,
 }
 
-private fun pressReaderActivation(context: Context, accessibility: Boolean): ActivationUiState {
+private fun runtimeActivation(context: Context, accessibility: Boolean): ActivationUiState {
+    val inputReady = if (accessibility) AccessibilityRuntimeStatus.isRootInputReady()
+        else ModuleActivation.isRootInputReady(context)
+    if (!inputReady) {
+        val error = if (accessibility) AccessibilityRuntimeStatus.rootInputError()
+            else ModuleActivation.rootInputError(context)
+        return if (error.isEmpty()) ActivationUiState.RootInputConnecting else ActivationUiState.RootInputUnavailable
+    }
     if (!ThumbTriggerSettings.read(context).enabled) return ActivationUiState.Active
     val ready = if (accessibility) AccessibilityRuntimeStatus.isPressReaderReady()
         else ModuleActivation.isPressReaderReady(context)
@@ -1052,6 +1061,18 @@ private fun ActivationStatusCard(
     var state by remember { mutableStateOf(ActivationUiState.Checking) }
     val lifecycleOwner = LocalView.current.context as? LifecycleOwner
 
+    DisposableEffect(context) {
+        val preferences = context.getSharedPreferences(ModuleActivation.PREFS_NAME, Context.MODE_PRIVATE)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == ModuleActivation.EXTRA_ROOT_INPUT_READY || key == ModuleActivation.EXTRA_ROOT_INPUT_ERROR
+                || key == ModuleActivation.EXTRA_PRESS_READER_READY || key == ModuleActivation.EXTRA_PRESS_READER_ERROR) {
+                refreshGeneration++
+            }
+        }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     DisposableEffect(lifecycleOwner) {
         if (lifecycleOwner == null) {
             onDispose { }
@@ -1080,11 +1101,10 @@ private fun ActivationStatusCard(
                 !AccessibilityRuntimeStatus.isServiceEnabled(context) -> {
                     ActivationUiState.AccessibilityDisabled
                 }
-                !AccessibilityRuntimeStatus.isConnected()
-                        || !AccessibilityRuntimeStatus.isRootInputReady() -> {
+                !AccessibilityRuntimeStatus.isConnected() -> {
                     ActivationUiState.AccessibilityConnecting
                 }
-                else -> pressReaderActivation(context, true)
+                else -> runtimeActivation(context, true)
             }
             return@LaunchedEffect
         }
@@ -1098,7 +1118,7 @@ private fun ActivationStatusCard(
                 injected = ModuleActivation.isCurrentBuildInjected(context)
                 portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
                 if (injected && portalRootGranted) {
-                    state = pressReaderActivation(context, false)
+                    state = runtimeActivation(context, false)
                     return@LaunchedEffect
                 }
                 delay(PORTAL_ACTIVATION_CHECK_INTERVAL_MS)
@@ -1107,15 +1127,15 @@ private fun ActivationStatusCard(
         state = when {
             !injected -> ActivationUiState.NotInjected
             !portalRootGranted -> ActivationUiState.PortalRootUnavailable
-            else -> pressReaderActivation(context, false)
+            else -> runtimeActivation(context, false)
         }
     }
 
     LaunchedEffect(state, contentCaptureMode) {
-        if (state == ActivationUiState.PressReaderConnecting) {
-            while (state == ActivationUiState.PressReaderConnecting) {
+        if (state == ActivationUiState.PressReaderConnecting || state == ActivationUiState.RootInputConnecting) {
+            while (state == ActivationUiState.PressReaderConnecting || state == ActivationUiState.RootInputConnecting) {
                 delay(300L)
-                state = pressReaderActivation(context,
+                state = runtimeActivation(context,
                     contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY)
             }
         }
@@ -1136,6 +1156,8 @@ private fun ActivationStatusCard(
         ActivationUiState.PortalRootUnavailable -> "传送门 Root 通道不可用"
         ActivationUiState.AccessibilityDisabled -> "无障碍服务未启用"
         ActivationUiState.AccessibilityConnecting -> "无障碍服务正在连接"
+        ActivationUiState.RootInputConnecting -> "Root 输入正在连接"
+        ActivationUiState.RootInputUnavailable -> "Root 输入不可用"
         ActivationUiState.PressReaderConnecting -> "按压取词正在连接"
         ActivationUiState.PressReaderUnavailable -> "按压取词连接中断"
         ActivationUiState.Active -> "已激活"
@@ -1147,6 +1169,12 @@ private fun ActivationStatusCard(
         ActivationUiState.PortalRootUnavailable -> "传送门的 Root 检测未完成或未成功，请检查作用域运行状态"
         ActivationUiState.AccessibilityDisabled -> "请在系统设置中手动开启“HyperDragShare”服务"
         ActivationUiState.AccessibilityConnecting -> "正在等待无障碍服务和 Root 输入就绪"
+        ActivationUiState.RootInputConnecting -> "正在连接触摸输入，连接成功后才能按住取词"
+        ActivationUiState.RootInputUnavailable -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
+            AccessibilityRuntimeStatus.rootInputError()
+        } else {
+            ModuleActivation.rootInputError(context)
+        }
         ActivationUiState.PressReaderConnecting -> "正在准备取词连接，就绪后才能按住取词"
         ActivationUiState.PressReaderUnavailable -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
             AccessibilityRuntimeStatus.pressReaderError()
@@ -1166,6 +1194,7 @@ private fun ActivationStatusCard(
         ActivationUiState.PortalRootUnavailable -> "传送门 ROOT"
         ActivationUiState.AccessibilityDisabled -> "无障碍"
         ActivationUiState.AccessibilityConnecting -> "ROOT · 无障碍"
+        ActivationUiState.RootInputConnecting, ActivationUiState.RootInputUnavailable -> "ROOT · 输入"
         ActivationUiState.PressReaderConnecting, ActivationUiState.PressReaderUnavailable -> "ROOT · 取词"
         ActivationUiState.Active -> if (contentCaptureMode == DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY) {
             "ROOT · 无障碍"

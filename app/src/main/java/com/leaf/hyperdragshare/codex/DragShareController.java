@@ -1618,13 +1618,6 @@ final class DragShareController {
             input.putString("text", text);
             input.putString("before_text", payload.beforeText);
             input.putString("after_text", payload.afterText);
-            if (payload.sourceBounds != null && !payload.sourceBounds.isEmpty()) {
-                android.os.Bundle area = new android.os.Bundle();
-                area.putParcelable("bounds", payload.sourceBounds);
-                area.putInt("width", screenWidth);
-                area.putInt("height", screenHeight);
-                input.putBundle("source_area", area);
-            }
             input.putInt("x", Math.round(lastX));
             input.putInt("y", Math.round(lastY));
             android.os.Bundle result = context.getContentResolver().call(

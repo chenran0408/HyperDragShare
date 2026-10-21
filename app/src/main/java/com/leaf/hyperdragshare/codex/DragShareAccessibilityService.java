@@ -34,57 +34,13 @@ public final class DragShareAccessibilityService extends AccessibilityService {
     private static final int MAX_NODE_COUNT = 4_000;
     private static final int MAX_NODE_DEPTH = 64;
     private static final long NODE_BUDGET_MILLIS = 120L;
-    private static final long ROOT_RETRY_DELAY_MILLIS = 5_000L;
-    private static final int MAX_ROOT_RESTARTS = 3;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final Runnable rootReadyReporter = new Runnable() {
-        @Override
-        public void run() {
-            RootTouchSource source = rootTouchSource;
-            boolean ready = runtimeStarted && source != null && source.isReady();
-            AccessibilityRuntimeStatus.setRootInputReady(ready);
-            if (ready != lastReportedRootReady) {
-                lastReportedRootReady = ready;
-                trace("root ready=" + ready);
-            }
-            if (!runtimeStarted) {
-                return;
-            }
-            if (ready) {
-                rootNotReadySince = 0L;
-                rootRestartCount = 0;
-            } else {
-                long now = SystemClock.uptimeMillis();
-                if (rootNotReadySince == 0L) {
-                    rootNotReadySince = now;
-                } else if (now - rootNotReadySince >= ROOT_RETRY_DELAY_MILLIS
-                        && rootRestartCount < MAX_ROOT_RESTARTS
-                        && source != null) {
-                    rootRestartCount++;
-                    rootNotReadySince = now;
-                    DragShareLog.w(TAG, "restarting unavailable Root input attempt="
-                            + rootRestartCount);
-                    source.stop();
-                    mainHandler.postDelayed(() -> {
-                        if (runtimeStarted && rootTouchSource == source && !source.isReady()) {
-                            source.start();
-                        }
-                    }, 250L);
-                }
-            }
-            mainHandler.postDelayed(this, ready ? 1_000L : 400L);
-        }
-    };
-
     private ContentObserver settingsObserver;
     private BroadcastReceiver screenReceiver;
     private volatile boolean screenInteractive = true;
     private volatile String foregroundPackage;
     private volatile int windowGeneration;
-    private long rootNotReadySince;
-    private int rootRestartCount;
-    private boolean lastReportedRootReady;
     private boolean runtimeStarted;
     private int runtimeLongPressTimeoutMillis = Integer.MIN_VALUE;
     private int runtimeRecognitionSensitivityPercent = Integer.MIN_VALUE;
@@ -315,9 +271,6 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         runtimeRecognitionSensitivityPercent = settings.accessibilityRecognitionSensitivityPercent;
         ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
         runtimeThumbEnabled = thumb.enabled;
-        rootNotReadySince = 0L;
-        rootRestartCount = 0;
-        lastReportedRootReady = false;
         classifierExecutor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "drag-share-accessibility-classifier");
             thread.setDaemon(true);
@@ -336,14 +289,15 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                         trace("root action=" + android.view.MotionEvent.actionToString(action)
                                 + " point=" + Math.round(x) + "," + Math.round(y));
                     }
-                    mainHandler.post(() -> {
-                        PressCaptureSource pressSource = thumbCaptureSource;
-                        if (pressSource != null) {
-                            pressSource.onPointerEvent(action, x, y, eventTime);
-                        } else if (captureSource != null) {
-                            captureSource.onPointerEvent(action, x, y, eventTime);
-                        }
-                    });
+                    PressCaptureSource pressSource = thumbCaptureSource;
+                    if (pressSource != null) {
+                        pressSource.onPointerEvent(action, x, y, eventTime);
+                    } else if (captureSource != null) {
+                        captureSource.onPointerEvent(action, x, y, eventTime);
+                    }
+                }, (ready, reason) -> {
+                    AccessibilityRuntimeStatus.setRootInputState(ready, reason);
+                    trace("root ready=" + ready);
                 });
         captureSource = new AccessibilityContentCaptureSource(
                 this,
@@ -356,25 +310,19 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                     this, rootTouchSource, controller, settings, this::isThumbCaptureAllowed);
         }
         rootTouchSource.start();
-        mainHandler.removeCallbacks(rootReadyReporter);
-        mainHandler.post(rootReadyReporter);
         DragShareLog.i(TAG, "accessibility runtime started");
         trace("runtime started");
     }
 
     private void stopRuntime() {
         if (!runtimeStarted && controller == null && rootTouchSource == null) {
-            AccessibilityRuntimeStatus.setRootInputReady(false);
+            AccessibilityRuntimeStatus.setRootInputState(false, "");
             return;
         }
         runtimeStarted = false;
         runtimeLongPressTimeoutMillis = Integer.MIN_VALUE;
         runtimeRecognitionSensitivityPercent = Integer.MIN_VALUE;
-        rootNotReadySince = 0L;
-        rootRestartCount = 0;
-        lastReportedRootReady = false;
-        mainHandler.removeCallbacks(rootReadyReporter);
-        AccessibilityRuntimeStatus.setRootInputReady(false);
+        AccessibilityRuntimeStatus.setRootInputState(false, "");
         AccessibilityContentCaptureSource source = captureSource;
         PressCaptureSource areaSource = thumbCaptureSource;
         thumbCaptureSource = null;

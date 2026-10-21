@@ -24,9 +24,19 @@ final class ScopeRestart {
             while (SystemClock.uptimeMillis() < deadline) {
                 int pid = ModuleActivation.injectedProcessId(context);
                 if (pid > 0 && pid != oldPid && ModuleActivation.isCurrentBuildInjected(context)
-                        && ModuleActivation.isCurrentBuildPortalRootGranted(context)) {
-                    DragShareLog.i(TAG, "new portal injection and Root grant confirmed pid=" + pid);
+                        && ModuleActivation.isCurrentBuildPortalRootGranted(context)
+                        && ModuleActivation.isRootInputReady(context)
+                        && (!ThumbTriggerSettings.read(context).enabled || ModuleActivation.isPressReaderReady(context))) {
+                    DragShareLog.i(TAG, "new portal injection and required input/reader confirmed pid=" + pid);
                     return;
+                }
+                if (pid > 0 && pid != oldPid && ModuleActivation.isCurrentBuildInjected(context)) {
+                    String failure = ModuleActivation.rootInputError(context);
+                    if (!failure.isEmpty()) throw new IOException("Root 输入未恢复：" + failure);
+                    if (ThumbTriggerSettings.read(context).enabled) {
+                        failure = ModuleActivation.pressReaderError(context);
+                        if (!failure.isEmpty()) throw new IOException("按压取词未恢复：" + failure);
+                    }
                 }
                 Thread.sleep(100L);
             }
@@ -34,7 +44,7 @@ final class ScopeRestart {
             Thread.currentThread().interrupt();
             throw new IOException("作用域重载等待被中断", error);
         }
-        throw new IOException("尚未收到新传送门进程的当前版本与Root确认；请检查LSPosed作用域及Root授权");
+        throw new IOException("新作用域的输入或取词连接尚未就绪，请查看首页状态；系统框架更新需软重启生效");
     }
 
     static void restartAndroidRuntime() throws IOException {

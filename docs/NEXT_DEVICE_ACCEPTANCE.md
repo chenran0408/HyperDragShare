@@ -42,3 +42,6 @@
 
 
 152当前：新增精确phantom裁剪Hook已构建安装但android尚未重载。Portal13588/176、Root grant和reader ready；输入发现又137并有同刻phantom裁剪证据，不能称已完全激活。用户持续使用手机，不软重启；无需重新申请授权。优先修RootTouchSource生命周期并让激活状态区分实际输入就绪，随后空闲时一次重载系统作用域并看真实日志。不要重跑无数据校准、UI矩阵或生成重复样本。ColorOS BigBang1.0.4静态分析在进行，Oplus私有raw observer＋MotionEvent.size，与MI BigBang已确认的evdev时长方案不同；不得照搬Oplus接口或把参考APK打到手机上。
+
+
+153已单次安装，Portal23857/177及input/reader ready。SystemUI旁路推荐scope已加但实际未启用，android裁剪Hook未重载；手机活跃，不强停/软重启。先继续新UI批：去分词中转站、查词图标、删返回/关闭中间层，结果关闭回原选区。不要等待触摸研究；再次识屏追加已删，不重加。随后空闲时启用SystemUI/重载系统Hook核验真实尺寸，未证实前不拦截或恢复校准。

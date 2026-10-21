@@ -465,7 +465,8 @@ final class PortalHooks {
         controller = new DragShareController(context, OverlayWindowPolicy.portal());
         motionSource = new MiuiMotionSource(classLoader, PortalHooks::dispatchMotion);
         motionSource.start();
-        rootTouchSource = new RootTouchSource(context, PortalHooks::dispatchRootPointer);
+        rootTouchSource = new RootTouchSource(context, PortalHooks::dispatchRootPointer,
+                (ready, reason) -> ModuleActivation.reportRootInput(context, ready, reason));
         configureThumbCapture(context, settings);
         rootTouchSource.start();
         log("portal runtime started");

@@ -39,9 +39,7 @@ object BigBangOverlayLauncher {
         val sourceImage = input.getParcelable("source_image", Uri::class.java)
         val before = input.getString("before_text")
         val after = input.getString("after_text")
-        val sourceArea = input.getBundle("source_area")
-        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after,
-            sourceArea = sourceArea) }
+        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after) }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
@@ -61,7 +59,7 @@ object BigBangOverlayLauncher {
     }
 
     private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null,
-        before: String? = null, after: String? = null, sourceArea: Bundle? = null) {
+        before: String? = null, after: String? = null) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
@@ -82,7 +80,7 @@ object BigBangOverlayLauncher {
             override fun collapse() {
                 val state = Bundle().also(session::saveState)
                 overlay.dismiss()
-                showReturnTab(app) { open(app, originalText, x, y, sourceImage, state, sourceArea = sourceArea) }
+                showReturnTab(app) { open(app, originalText, x, y, sourceImage, state) }
             }
             override fun search(text: String, type: Int) {
                 SearchOverlayWindow.show(context, overlay.window.decorView, text, type,
@@ -124,7 +122,7 @@ object BigBangOverlayLauncher {
                 if (started) {
                     DragShareLog.i("DragShare/BigBangWindow", "selected text drag started length=${text.length}")
                     overlay.dismiss()
-                    showReturnTab(app) { open(app, originalText, x, y, sourceImage, state, sourceArea = sourceArea) }
+                    showReturnTab(app) { open(app, originalText, x, y, sourceImage, state) }
                 } else Toast.makeText(app, "系统未能开始拖拽，已保留选词", Toast.LENGTH_SHORT).show()
                 return started
             }
@@ -133,7 +131,7 @@ object BigBangOverlayLauncher {
                 val accepted = ImageOcrOverlay.startWithResult(app, uri) { result ->
                     if (generation == windowGeneration &&
                         !app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
-                        if (result == null) open(app, originalText, x, y, sourceImage, state, sourceArea = sourceArea)
+                        if (result == null) open(app, originalText, x, y, sourceImage, state)
                         else open(app, result, x, y, uri, Bundle().apply {
                             putBundle(BigBangPanelSession.UNDO_EDIT, state)
                         })
@@ -150,7 +148,7 @@ object BigBangOverlayLauncher {
                     val state = Bundle()
                     session.saveState(state)
                     overlay.dismiss()
-                    showReturnTab(app) { open(app, text, x, y, sourceImage, state, sourceArea = sourceArea) }
+                    showReturnTab(app) { open(app, text, x, y, sourceImage, state) }
                 } catch (error: android.content.ActivityNotFoundException) {
                     report(app, error)
                 } catch (error: SecurityException) {
@@ -174,44 +172,6 @@ object BigBangOverlayLauncher {
                     }
                 }, "bigbang-stash").start()
             }
-        }, captureMoreText = {
-            val state = Bundle()
-            session.saveState(state)
-            val receiver = object : android.os.ResultReceiver(main) {
-                override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
-                    if (generation != windowGeneration) return
-                    if (resultData?.getBoolean("restore_panel", true) == false) {
-                        ++generation
-                        return
-                    }
-                    val extra = resultData?.getString("text")
-                    val before = resultData?.getString("prepend_text")
-                    if (resultCode != android.app.Activity.RESULT_OK || (extra.isNullOrBlank() && before.isNullOrBlank())) {
-                        open(app, text, x, y, sourceImage, state, sourceArea = sourceArea)
-                        return
-                    }
-                    Thread({
-                        var nextSourceArea = sourceArea
-                        try {
-                            BigBangPanelSession.insertIntoSavedState(app, state, before.orEmpty(), extra.orEmpty())
-                            nextSourceArea = resultData?.getBundle("source_area") ?: sourceArea
-                        } catch (error: IllegalStateException) {
-                            main.post { report(app, error) }
-                        } catch (error: UnsatisfiedLinkError) {
-                            main.post { report(app, IllegalStateException("分词库不可用", error)) }
-                        } catch (error: SecurityException) {
-                            main.post { report(app, error) }
-                        } finally {
-                            main.post {
-                                if (generation == windowGeneration) open(app, text, x, y, sourceImage, state,
-                                    sourceArea = nextSourceArea)
-                            }
-                        }
-                    }, "bigbang-append-screen").start()
-                }
-            }
-            ScreenOcrOverlay.start(app, selectRegion = true, resultReceiver = receiver,
-                sourceArea = sourceArea, beforeCapture = { overlay.dismiss() })
         })
         overlay = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
             onDismissed = {

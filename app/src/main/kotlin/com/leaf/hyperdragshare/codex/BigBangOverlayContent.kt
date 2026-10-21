@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,7 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,7 +72,6 @@ import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
@@ -84,7 +84,6 @@ internal enum class BigBangMoreAction {
     Translate,
     SaveToStash,
     UndoEdit,
-    CaptureMore,
     ReadQr,
     TextSize,
     PanelHeight,
@@ -111,7 +110,6 @@ internal fun BigBangOverlayContent(
     originalText: () -> String,
     onEditText: (String) -> Unit,
     canUndoEdit: Boolean,
-    canCaptureMoreText: Boolean,
     onSelectAll: () -> Unit,
     onCopy: () -> Unit,
     onSearch: () -> Unit,
@@ -306,11 +304,11 @@ internal fun BigBangOverlayContent(
                         },
                         trailing = {
                             OverlayIconAction(
-                                imageVector = Icons.Outlined.Tune,
+                                imageVector = Icons.Outlined.MoreHoriz,
                                 enabled = !isSegmenting,
                                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 onClick = { showMoreMenu = true },
-                                contentDescription = "分词窗口外观",
+                                contentDescription = "更多操作与窗口外观",
                                 touchSize = 44.dp,
                             )
                             OverlayIconAction(Icons.Outlined.Close,
@@ -334,35 +332,34 @@ internal fun BigBangOverlayContent(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
+                            BigBangToolAction(if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
+                                modifier = Modifier.width(80.dp), primary = allTextSelected)
+                            BigBangToolAction("拆词", { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
                             BigBangIconAction(MiuixIcons.Copy, if (copying) "正在复制" else "复制", onCopy,
                                 ready && !copying, primary = true)
                             BigBangIconAction(MiuixIcons.Search, "搜索", onSearch, ready)
                             BigBangIconAction(MiuixIcons.Share, "分享", onShare, ready)
-                            BigBangIconAction(MiuixIcons.Edit, "编辑原文", {
-                                editorText = originalText()
-                                showEditor = true
-                            }, ready)
-                            BigBangIconAction(MiuixIcons.SelectAll, if (allTextSelected) "取消全选" else "全选",
-                                onSelectAll, ready, primary = allTextSelected)
-                            BigBangToolAction("中转站", { onMoreAction(BigBangMoreAction.SaveToStash) },
-                                ready)
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            if (canCaptureMoreText) BigBangToolAction("二次爆炸", { onMoreAction(BigBangMoreAction.CaptureMore) }, ready)
-                            if (hasTextSelection && !allTextSelected)
-                                BigBangToolAction("清选", onClearSelection, ready)
-                            if (canMerge) BigBangToolAction("合并", { onMoreAction(BigBangMoreAction.Merge) }, ready)
-                            if (canSplit) BigBangToolAction("拆分", { onMoreAction(BigBangMoreAction.Split) }, ready)
-                            if (canUndoEdit) BigBangIconAction(MiuixIcons.Undo, "撤销编辑", { onMoreAction(BigBangMoreAction.UndoEdit) }, ready)
+                            BigBangIconAction(MiuixIcons.Edit, "编辑原文", {
+                                editorText = originalText()
+                                showEditor = true
+                            }, ready)
+                            BigBangToolAction("中转站", { onMoreAction(BigBangMoreAction.SaveToStash) },
+                                ready)
+                            BigBangToolAction("合并", { onMoreAction(BigBangMoreAction.Merge) }, ready && canMerge)
+                            BigBangIconAction(MiuixIcons.Undo, "撤销", { onMoreAction(BigBangMoreAction.UndoEdit) }, ready && canUndoEdit)
                             BigBangIconAction(MiuixIcons.Translate, "翻译", { onMoreAction(BigBangMoreAction.Translate) }, ready)
                             BigBangToolAction("查词", { onMoreAction(BigBangMoreAction.Dictionary) }, ready)
                             if (sourceImageAvailable) {
                                 BigBangToolAction("重新识字", { onMoreAction(BigBangMoreAction.ReopenOcr) }, ready)
                                 BigBangToolAction("二维码", { onMoreAction(BigBangMoreAction.ReadQr) }, ready)
                             }
+                            if (hasTextSelection && !allTextSelected)
+                                BigBangToolAction("清选", onClearSelection, ready)
                         }
                     }
                 },
@@ -434,7 +431,7 @@ internal fun BigBangOverlayContent(
 
     OverlayDialog(
         show = showMoreMenu,
-        title = "窗口外观",
+        title = "更多",
         onDismissRequest = { showMoreMenu = false },
     ) {
         Column(

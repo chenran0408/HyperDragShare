@@ -4,5 +4,6 @@
         <item>com.miui.contentextension</item>
         <item>com.xiaomi.aicr</item>
         <item>android</item>
+        <item>com.android.systemui</item>
     </string-array>
 </resources>

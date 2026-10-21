@@ -93,8 +93,10 @@ public final class ModuleActivationTest {
         report.putInt(ModuleActivation.EXTRA_PROCESS_ID, 42);
         report.putBoolean(ModuleActivation.EXTRA_PORTAL_ROOT_GRANTED, true);
         report.putBoolean(ModuleActivation.EXTRA_PRESS_READER_READY, true);
+        report.putBoolean(ModuleActivation.EXTRA_ROOT_INPUT_READY, true);
         ModuleActivation.recordInjected(context, report);
         assertTrue(ModuleActivation.isPressReaderReady(context));
+        assertTrue(ModuleActivation.isRootInputReady(context));
 
         Bundle restarted = new Bundle();
         restarted.putLong(ModuleActivation.EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
@@ -103,6 +105,7 @@ public final class ModuleActivationTest {
         assertTrue(ModuleActivation.isCurrentBuildInjected(context));
         assertFalse(ModuleActivation.isCurrentBuildPortalRootGranted(context));
         assertFalse(ModuleActivation.isPressReaderReady(context));
+        assertFalse(ModuleActivation.isRootInputReady(context));
         assertEquals("", ModuleActivation.pressReaderError(context));
     }
 
@@ -120,5 +123,23 @@ public final class ModuleActivationTest {
         assertEquals("Root 子进程已退出", ModuleActivation.pressReaderError(context));
         ModuleActivation.clearPortalReport(context);
         assertEquals("", ModuleActivation.pressReaderError(context));
+    }
+
+    @Test
+    public void inputFailureRemainsVisibleWhenReaderIsReady() {
+        Context context = RuntimeEnvironment.getApplication();
+        Bundle report = new Bundle();
+        report.putLong(ModuleActivation.EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_ROOT_GRANTED, true);
+        report.putBoolean(ModuleActivation.EXTRA_PRESS_READER_READY, true);
+        report.putBoolean(ModuleActivation.EXTRA_ROOT_INPUT_READY, false);
+        report.putString(ModuleActivation.EXTRA_ROOT_INPUT_ERROR, "Root 输入命令被系统结束（137）");
+        ModuleActivation.recordInjected(context, report);
+        assertTrue(ModuleActivation.isCurrentBuildPortalRootGranted(context));
+        assertTrue(ModuleActivation.isPressReaderReady(context));
+        assertFalse(ModuleActivation.isRootInputReady(context));
+        assertEquals("Root 输入命令被系统结束（137）", ModuleActivation.rootInputError(context));
+        ModuleActivation.clearPortalReport(context);
+        assertEquals("", ModuleActivation.rootInputError(context));
     }
 }
