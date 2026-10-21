@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -37,6 +41,12 @@ fun DragShareOpenSourceLicensePage(
     onBack: () -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior()
+    val listState = rememberLazyListState()
+    val hasScrolled by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        }
+    }
     val barBackdrop = rememberDragShareBarBackdrop()
     val cardBackdrop = rememberDragShareCardBackdrop()
     val glassColors = if (cardBackdrop != null) rememberDragShareGlassColors(dark) else null
@@ -50,11 +60,15 @@ fun DragShareOpenSourceLicensePage(
         topBar = {
             DragShareBlurredTopBar(
                 backdrop = barBackdrop,
-                blurActive = barBackdrop != null,
+                blurActive = barBackdrop != null && hasScrolled,
             ) {
                 SmallTopAppBar(
-                    title = "开放源代码许可",
-                    color = if (barBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
+                    title = "开源许可",
+                    color = if (barBackdrop != null && hasScrolled) {
+                        Color.Transparent
+                    } else {
+                        MiuixTheme.colorScheme.surface
+                    },
                     navigationIcon = { BackNavigationIcon(onClick = onBack) },
                     scrollBehavior = scrollBehavior,
                 )
@@ -76,6 +90,7 @@ fun DragShareOpenSourceLicensePage(
                 },
             ) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .nestedScroll(scrollBehavior.nestedScrollConnection),

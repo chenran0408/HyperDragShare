@@ -304,13 +304,12 @@ private fun DragShareAboutContent(
                         colors = CardDefaults.defaultColors(color = cardColor),
                     ) {
                         ArrowPreference(
-                            title = "开放源代码许可",
+                            title = "开源许可",
                             endActions = { DragShareLinkAction("许可证") },
                             onClick = onOpenLicenses,
                         )
                     }
-                    // Deliberately retain a long visual tail after the final row, as in the references.
-                    Spacer(modifier = Modifier.height(280.dp))
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }

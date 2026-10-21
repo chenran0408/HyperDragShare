@@ -9,12 +9,15 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,7 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.leaf.hyperdragshare.gestures.config.ConfigContract as C
 import com.leaf.hyperdragshare.gestures.config.ConfigStore
@@ -34,6 +39,7 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
@@ -60,6 +66,8 @@ fun GestureSettingsContent(
     val localValues = remember(store) { mutableStateMapOf<String, Any>() }
     var revision by remember(store) { mutableIntStateOf(0) }
     var showResetConfirmation by remember { mutableStateOf(false) }
+    var selectedCategory by rememberSaveable { mutableIntStateOf(0) }
+    val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val reportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain"),
@@ -92,6 +100,9 @@ fun GestureSettingsContent(
         }
     }
     val scrollBehavior = MiuixScrollBehavior(state = top.yukonga.miuix.kmp.basic.rememberTopAppBarState())
+    LaunchedEffect(selectedCategory) {
+        listState.scrollToItem(0)
+    }
 
     @Composable
     fun bool(title: String, summary: String, key: String, default: Boolean) {
@@ -150,7 +161,20 @@ fun GestureSettingsContent(
         },
     ) { contentPadding ->
         key(revision) {
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
+        Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+            TabRow(
+                tabs = listOf("通用", "底角", "侧滑", "蜂巢", "任务", "动效", "窗口"),
+                selectedTabIndex = selectedCategory,
+                onTabSelected = { selectedCategory = it },
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                state = listState,
+            ) {
+            if (selectedCategory == 0) {
             item { SmallTitle(text = "通用") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
@@ -198,22 +222,24 @@ fun GestureSettingsContent(
                     )
                 }
             }
+            }
 
+            if (selectedCategory == 1) {
             item { SmallTitle(text = "底角触发与扇形布局") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
                     bool("竖屏底角手势", "启用竖屏底部触发", C.KEY_BOTTOM_PORTRAIT_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_ENABLED)
                     bool("横屏底角手势", "启用横屏底部触发", C.KEY_BOTTOM_LANDSCAPE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_ENABLED)
-                    bool("竖屏二段蜂窝", "底角扇形外继续上滑打开蜂窝", C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED)
-                    bool("横屏二段蜂窝", "底角扇形外继续上滑打开蜂窝", C.KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED)
+                    bool("竖屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED)
+                    bool("横屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED)
                     bool("竖屏扇形全屏启动", "第一段手势启动应用", C.KEY_BOTTOM_PORTRAIT_FULLSCREEN, C.DEFAULT_BOTTOM_PORTRAIT_FULLSCREEN)
                     bool("横屏扇形全屏启动", "第一段手势启动应用", C.KEY_BOTTOM_LANDSCAPE_FULLSCREEN, C.DEFAULT_BOTTOM_LANDSCAPE_FULLSCREEN)
-                    bool("竖屏蜂窝以小窗启动", "第二段手势启动应用", C.KEY_BOTTOM_PORTRAIT_HONEYCOMB_FREEFORM, C.DEFAULT_BOTTOM_PORTRAIT_HONEYCOMB_FREEFORM)
-                    bool("横屏蜂窝以小窗启动", "第二段手势启动应用", C.KEY_BOTTOM_LANDSCAPE_HONEYCOMB_FREEFORM, C.DEFAULT_BOTTOM_LANDSCAPE_HONEYCOMB_FREEFORM)
+                    bool("竖屏蜂巢以小窗启动", "第二段手势启动应用", C.KEY_BOTTOM_PORTRAIT_HONEYCOMB_FREEFORM, C.DEFAULT_BOTTOM_PORTRAIT_HONEYCOMB_FREEFORM)
+                    bool("横屏蜂巢以小窗启动", "第二段手势启动应用", C.KEY_BOTTOM_LANDSCAPE_HONEYCOMB_FREEFORM, C.DEFAULT_BOTTOM_LANDSCAPE_HONEYCOMB_FREEFORM)
                     slider("触发区宽度", C.KEY_HOT_WIDTH_PERCENT, 5, 20, "%")
                     slider("触发区高度", C.KEY_HOT_HEIGHT_PERCENT, 3, C.MAX_HOT_HEIGHT_PERCENT, "%")
                     slider("一段扇形距离", C.KEY_TRIGGER_PERCENT, 6, 24, "%")
-                    slider("蜂窝停顿时间", C.KEY_BOTTOM_HONEYCOMB_SETTLE_MS, C.MIN_BOTTOM_HONEYCOMB_SETTLE_MS, C.MAX_BOTTOM_HONEYCOMB_SETTLE_MS, " ms")
+                    slider("蜂巢停顿时间", C.KEY_BOTTOM_HONEYCOMB_SETTLE_MS, C.MIN_BOTTOM_HONEYCOMB_SETTLE_MS, C.MAX_BOTTOM_HONEYCOMB_SETTLE_MS, " ms")
                     slider("图标选择距离", C.KEY_SELECTION_RADIUS_PERCENT, C.MIN_SELECTION_RADIUS_PERCENT, C.MAX_SELECTION_RADIUS_PERCENT, "%")
                     slider("图标大小", C.KEY_ICON_SIZE_DP, C.MIN_ICON_SIZE_DP, C.MAX_ICON_SIZE_DP, " dp")
                     slider("扇形目标上限", C.KEY_FAN_MAX_TARGETS, C.MIN_FAN_MAX_TARGETS, C.MAX_FAN_MAX_TARGETS, " 个")
@@ -224,7 +250,9 @@ fun GestureSettingsContent(
                     slider("外排数量", C.KEY_FAN_CUSTOM_OUTER_COUNT, C.MIN_FAN_CUSTOM_ROW_COUNT, C.MAX_FAN_CUSTOM_OUTER_COUNT, " 个")
                 }
             }
+            }
 
+            if (selectedCategory == 2) {
             item { SmallTitle(text = "侧滑触发与布局") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
@@ -240,33 +268,35 @@ fun GestureSettingsContent(
                     bool("侧滑停留触发", "达到距离后停住才打开列表", C.KEY_SIDE_HOLD_ENABLED, C.DEFAULT_SIDE_HOLD_ENABLED)
                     slider("侧滑停留时间", C.KEY_SIDE_HOLD_DELAY_MS, C.MIN_SIDE_HOLD_DELAY_MS, C.MAX_SIDE_HOLD_DELAY_MS, " ms")
                     bool("跟随手指", "列表位置随手指移动", C.KEY_SIDE_FOLLOW_FINGER, C.DEFAULT_SIDE_FOLLOW_FINGER)
-                    bool("侧滑打开蜂窝布局", "侧滑目标使用蜂窝排列", C.KEY_SIDE_FOLLOW_HONEYCOMB, C.DEFAULT_SIDE_FOLLOW_HONEYCOMB)
+                    bool("侧滑打开蜂巢布局", "侧滑目标使用蜂巢排列", C.KEY_SIDE_FOLLOW_HONEYCOMB, C.DEFAULT_SIDE_FOLLOW_HONEYCOMB)
                     slider("侧滑应用上限", C.KEY_SIDE_MAX_TARGETS, C.MIN_SIDE_MAX_TARGETS, C.MAX_SIDE_MAX_TARGETS, " 个")
                     slider("侧滑图标大小", C.KEY_SIDE_ICON_SIZE_DP, 34, 64, " dp")
                     slider("侧滑环形大小", C.KEY_SIDE_RING_SIZE_PERCENT, C.MIN_SIDE_RING_SIZE_PERCENT, C.MAX_SIDE_RING_SIZE_PERCENT, "%")
                     chooser("竖屏侧滑启动方式", listOf("小窗", "全屏"), C.KEY_SIDE_PORTRAIT_FULLSCREEN, 0, booleanValue = true)
                     chooser("横屏侧滑启动方式", listOf("小窗", "全屏"), C.KEY_SIDE_LANDSCAPE_FULLSCREEN, 0, booleanValue = true)
                     ArrowPreference(title = "管理侧滑目标", onClick = { onManageTargets("side") })
-                    chooser("竖屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂窝", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_PORTRAIT_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
-                    chooser("横屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂窝", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_LANDSCAPE_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
+                    chooser("竖屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂巢", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_PORTRAIT_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
+                    chooser("横屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂巢", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_LANDSCAPE_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
                 }
             }
+            }
 
-            item { SmallTitle(text = "蜂窝") }
+            if (selectedCategory == 3) {
+            item { SmallTitle(text = "蜂巢") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
-                    bool("启用蜂窝", "底角第二段或侧滑布局使用", C.KEY_HONEYCOMB_ENABLED, C.DEFAULT_HONEYCOMB_ENABLED)
-                    ArrowPreference(title = "管理蜂窝应用与快捷方式", onClick = { onManageTargets("honeycomb") })
-                    bool("横屏蜂窝", "允许横屏打开蜂窝", C.KEY_HONEYCOMB_LANDSCAPE_ENABLED, C.DEFAULT_HONEYCOMB_LANDSCAPE_ENABLED)
+                    bool("启用蜂巢", "底角第二段或侧滑布局使用", C.KEY_HONEYCOMB_ENABLED, C.DEFAULT_HONEYCOMB_ENABLED)
+                    ArrowPreference(title = "管理蜂巢应用与快捷方式", onClick = { onManageTargets("honeycomb") })
+                    bool("横屏蜂巢", "允许横屏打开蜂巢", C.KEY_HONEYCOMB_LANDSCAPE_ENABLED, C.DEFAULT_HONEYCOMB_LANDSCAPE_ENABLED)
                     chooser("操作方式", listOf("浏览模式", "按住滑选"), C.KEY_HONEYCOMB_MODE, C.DEFAULT_HONEYCOMB_MODE)
-                    bool("空白处点击关闭", "点击蜂窝空白区域时收起", C.KEY_HONEYCOMB_EMPTY_TAP_CLOSE, C.DEFAULT_HONEYCOMB_EMPTY_TAP_CLOSE)
-                    bool("跟随手指", "蜂窝中心跟随触点", C.KEY_HONEYCOMB_FOLLOW_FINGER, C.DEFAULT_HONEYCOMB_FOLLOW_FINGER)
+                    bool("空白处点击关闭", "点击蜂巢空白区域时收起", C.KEY_HONEYCOMB_EMPTY_TAP_CLOSE, C.DEFAULT_HONEYCOMB_EMPTY_TAP_CLOSE)
+                    bool("跟随手指", "蜂巢中心跟随触点", C.KEY_HONEYCOMB_FOLLOW_FINGER, C.DEFAULT_HONEYCOMB_FOLLOW_FINGER)
                     slider("固定水平位置", C.KEY_HONEYCOMB_FIXED_X_PERCENT, 0, 100, "%")
                     slider("固定垂直位置", C.KEY_HONEYCOMB_FIXED_Y_PERCENT, 0, 100, "%")
                     slider("应用数量上限", C.KEY_HONEYCOMB_MAX_TARGETS, C.MIN_HONEYCOMB_MAX_TARGETS, C.MAX_HONEYCOMB_MAX_TARGETS, " 个")
                     slider("基础图标大小", C.KEY_HONEYCOMB_ICON_SIZE_DP, C.MIN_HONEYCOMB_ICON_SIZE_DP, C.MAX_HONEYCOMB_ICON_SIZE_DP, " dp")
-                    slider("蜂窝圆盘大小", C.KEY_HONEYCOMB_DISC_SIZE_PERCENT, C.MIN_HONEYCOMB_DISC_SIZE_PERCENT, C.MAX_HONEYCOMB_DISC_SIZE_PERCENT, "%")
-                    slider("蜂窝间距", C.KEY_HONEYCOMB_SPACING_DP, C.MIN_HONEYCOMB_SPACING_DP, C.MAX_HONEYCOMB_SPACING_DP, " dp")
+                    slider("蜂巢圆盘大小", C.KEY_HONEYCOMB_DISC_SIZE_PERCENT, C.MIN_HONEYCOMB_DISC_SIZE_PERCENT, C.MAX_HONEYCOMB_DISC_SIZE_PERCENT, "%")
+                    slider("蜂巢间距", C.KEY_HONEYCOMB_SPACING_DP, C.MIN_HONEYCOMB_SPACING_DP, C.MAX_HONEYCOMB_SPACING_DP, " dp")
                     bool("显示当前应用名称", "按住滑选时固定显示在圆盘上方", C.KEY_HONEYCOMB_SHOW_SELECTED_NAME, C.DEFAULT_HONEYCOMB_SHOW_SELECTED_NAME)
                     chooser("背景样式", listOf("系统壁纸模糊", "纯黑"), C.KEY_HONEYCOMB_BACKGROUND_STYLE, C.DEFAULT_HONEYCOMB_BACKGROUND_STYLE, values = listOf(C.HONEYCOMB_BACKGROUND_BLUR, C.HONEYCOMB_BACKGROUND_BLACK))
                     slider("壁纸模糊强度", C.KEY_HONEYCOMB_BLUR_DP, 0, 60, " dp")
@@ -275,7 +305,7 @@ fun GestureSettingsContent(
                     bool("实时模糊当前界面", "优先使用实时界面模糊背景", C.KEY_HONEYCOMB_LIVE_BLUR_ENABLED, C.DEFAULT_HONEYCOMB_LIVE_BLUR_ENABLED)
                     slider("界面模糊强度", C.KEY_HONEYCOMB_LIVE_BLUR_DP, 0, 60, " dp")
                     slider("界面模糊压暗", C.KEY_HONEYCOMB_BACKGROUND_DIM_PERCENT, 0, 60, "%")
-                    chooser("蜂窝动画速度", listOf("很快", "较快", "标准", "柔和", "慢速"), C.KEY_HONEYCOMB_ANIMATION_SPEED, C.DEFAULT_HONEYCOMB_ANIMATION_SPEED)
+                    chooser("蜂巢动画速度", listOf("很快", "较快", "标准", "柔和", "慢速"), C.KEY_HONEYCOMB_ANIMATION_SPEED, C.DEFAULT_HONEYCOMB_ANIMATION_SPEED)
                     chooser("惯性强度", listOf("低", "中", "高"), C.KEY_HONEYCOMB_INERTIA, C.DEFAULT_HONEYCOMB_INERTIA)
                     slider("中心凸起", C.KEY_HONEYCOMB_CENTER_SCALE, C.MIN_HONEYCOMB_CENTER_SCALE, C.MAX_HONEYCOMB_CENTER_SCALE, "%")
                     slider("边缘缩小", C.KEY_HONEYCOMB_EDGE_SCALE, C.MIN_HONEYCOMB_EDGE_SCALE, C.MAX_HONEYCOMB_EDGE_SCALE, "%")
@@ -283,7 +313,9 @@ fun GestureSettingsContent(
                     bool("中心展开系统动画", "展开时从屏幕中心缩放", C.KEY_HONEYCOMB_CENTERED_SYSTEM_ANIMATION, C.DEFAULT_HONEYCOMB_CENTERED_SYSTEM_ANIMATION)
                 }
             }
+            }
 
+            if (selectedCategory == 4) {
             item { SmallTitle(text = "任务中心") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
@@ -304,7 +336,9 @@ fun GestureSettingsContent(
                     bool("隐藏系统任务中心清除键", "竖屏任务中心遮住清除键；横屏不生效", C.KEY_HIDE_SYSTEM_RECENTS_CLEAR, C.DEFAULT_HIDE_SYSTEM_RECENTS_CLEAR)
                 }
             }
+            }
 
+            if (selectedCategory == 5) {
             item { SmallTitle(text = "扇形与侧滑动效") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
@@ -324,7 +358,9 @@ fun GestureSettingsContent(
                     bool("侧滑应用选择蓝色圈", "显示选中应用的圆圈反馈", C.KEY_SIDE_SELECTION_RING, C.DEFAULT_SIDE_SELECTION_RING)
                 }
             }
+            }
 
+            if (selectedCategory == 6) {
             item { SmallTitle(text = "窗体与窗外行为") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 16.dp)) {
@@ -350,6 +386,8 @@ fun GestureSettingsContent(
                     chooser("窗外双击", listOf("无操作", "关闭小窗", "挂起到右上角", "全屏", "小窗贴边"), C.KEY_OUTSIDE_DOUBLE_ACTION, C.DEFAULT_OUTSIDE_DOUBLE_ACTION)
                     slider("单双击判定时间", C.KEY_OUTSIDE_TAP_WINDOW_MS, C.MIN_OUTSIDE_TAP_WINDOW_MS, C.MAX_OUTSIDE_TAP_WINDOW_MS, " ms")
                 }
+            }
+        }
         }
             }
 

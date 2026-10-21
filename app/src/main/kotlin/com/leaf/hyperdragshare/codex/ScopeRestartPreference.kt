@@ -24,6 +24,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import android.widget.Toast
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 
 private enum class ReloadMode(val label: String, val detail: String) {
     Apps("热重载", "重启系统界面、传送门和AICR，屏幕会短暂闪动。系统框架或桌面代码更新仍需软重启；手势设置保存后自动生效。"),
@@ -60,12 +61,13 @@ internal fun ScopeRestartPreference(context: Context) {
         if (running) {
             CircularProgressIndicator()
         } else {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.fillMaxWidth()) {
                 ReloadMode.entries.forEach { choice ->
-                    TextButton(if (mode == choice) "✓ ${choice.label}" else choice.label,
-                        onClick = { mode = choice; failure = null }, modifier = Modifier.fillMaxWidth(),
-                        colors = if (mode == choice) ButtonDefaults.textButtonColorsPrimary()
-                            else ButtonDefaults.textButtonColors())
+                    RadioButtonPreference(
+                        title = choice.label,
+                        selected = mode == choice,
+                        onClick = { mode = choice; failure = null },
+                    )
                 }
             }
             Row(

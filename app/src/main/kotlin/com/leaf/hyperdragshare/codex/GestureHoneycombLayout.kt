@@ -12,6 +12,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -48,6 +52,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
@@ -55,7 +61,14 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.basic.TooltipAnchorPosition
+import top.yukonga.miuix.kmp.basic.TooltipBox
+import top.yukonga.miuix.kmp.basic.TooltipDefaults
+import top.yukonga.miuix.kmp.basic.PlainTooltip
+import top.yukonga.miuix.kmp.basic.rememberTooltipState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private data class HoneycombLayoutCell(
@@ -92,14 +105,16 @@ fun GestureHoneycombLayout(
     var dragPoint by remember(configStore) { mutableStateOf(Offset.Zero) }
     var showCompactConfirmation by remember(configStore) { mutableStateOf(false) }
     var writing by remember(configStore) { mutableStateOf(false) }
+    var operationFeedback by remember(configStore) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(configStore, context) {
         layout = withContext(Dispatchers.IO) { readHoneycombLayout(context, configStore) }
     }
 
-    fun refreshPositions(update: () -> Unit) {
+    fun refreshPositions(feedback: String, update: () -> Unit) {
         if (writing) return
         writing = true
+        operationFeedback = null
         scope.launch {
             val next = withContext(Dispatchers.IO) {
                 update()
@@ -109,35 +124,32 @@ fun GestureHoneycombLayout(
             selectedSlot = null
             dragFrom = null
             dragTarget = null
+            operationFeedback = feedback
             writing = false
         }
     }
 
     fun swapSlots(first: Int, second: Int) {
         if (first == second || first < 0 || second < 0) return
-        refreshPositions { configStore.swapHoneycombSlots(first, second) }
+        refreshPositions("位置已保存") { configStore.swapHoneycombSlots(first, second) }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = "蜂窝位置",
-                largeTitle = "蜂窝位置",
+                title = "蜂巢位置",
+                largeTitle = "蜂巢位置",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        top.yukonga.miuix.kmp.basic.Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回",
-                            tint = MiuixTheme.colorScheme.onBackground,
-                        )
-                    }
+                    HoneycombIconAction("返回", MiuixIcons.Back, onBack)
                 },
                 actions = {
-                    TextButton(
-                        text = if (editing) "完成" else "编辑",
+                    HoneycombIconAction(
+                        description = if (editing) "完成编辑" else "编辑位置",
+                        imageVector = if (editing) MiuixIcons.Ok else MiuixIcons.Edit,
                         enabled = layout != null && !writing,
                         onClick = {
                             editing = !editing
+                            operationFeedback = null
                             selectedSlot = null
                             dragFrom = null
                             dragTarget = null
@@ -160,16 +172,20 @@ fun GestureHoneycombLayout(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = when {
-                        writing -> "正在保存位置…"
-                        !editing -> "当前位置已保留。点击“编辑”调整图标位置。"
-                        selectedSlot != null -> "已选一个图标；再点一个位置交换，也可长按拖动。"
-                        else -> "点选两个位置交换图标，或长按图标拖到目标位置。空位可用于新应用。"
-                    },
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    fontSize = 14.sp,
-                )
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+                        Text(
+                            text = when {
+                                writing -> "正在保存位置…"
+                                !editing -> operationFeedback ?: "当前位置已保留。点击编辑图标调整蜂巢位置。"
+                                selectedSlot != null -> "已选一个图标；再点一个位置交换，也可长按拖动。"
+                                else -> "点选两个位置交换图标，或长按图标拖到目标位置。空位可用于新应用。"
+                            },
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
                 HoneycombLayoutPreview(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     layout = current,
@@ -229,7 +245,7 @@ fun GestureHoneycombLayout(
                     text = "重新紧凑排列",
                     enabled = !writing && current.cells.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { showCompactConfirmation = true },
+                    onClick = { operationFeedback = null; showCompactConfirmation = true },
                 )
             }
         }
@@ -256,8 +272,38 @@ fun GestureHoneycombLayout(
                     showCompactConfirmation = false
                     editing = false
                     selectedSlot = null
-                    refreshPositions { configStore.compactHoneycombPositions() }
+                    refreshPositions("蜂巢位置已重新排列") { configStore.compactHoneycombPositions() }
                 },
+            )
+        }
+    }
+}
+
+@Composable
+private fun HoneycombIconAction(
+    description: String,
+    imageVector: ImageVector,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(description) } },
+        state = rememberTooltipState(),
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(48.dp).semantics { contentDescription = description },
+            minWidth = 48.dp,
+            minHeight = 48.dp,
+        ) {
+            Icon(
+                imageVector = imageVector,
+                contentDescription = description,
+                tint = if (enabled) MiuixTheme.colorScheme.onBackground
+                    else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.size(22.dp),
             )
         }
     }

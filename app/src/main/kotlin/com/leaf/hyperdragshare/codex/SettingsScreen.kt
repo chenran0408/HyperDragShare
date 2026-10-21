@@ -48,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -87,6 +88,7 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -97,7 +99,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Info
-import top.yukonga.miuix.kmp.icon.extended.SelectAll
+import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
@@ -277,6 +279,7 @@ private fun MainPage(
     onOpenGestures: () -> Unit,
     persist: (DragShareSettings) -> Unit,
 ) {
+    var settingsSection by rememberSaveable { mutableIntStateOf(0) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var aicrOcrEnabled by remember(context) {
@@ -366,24 +369,39 @@ private fun MainPage(
             )
         },
     ) { paddingValues ->
+        Column(Modifier.fillMaxSize().padding(paddingValues)) {
+            TabRow(
+                tabs = listOf("功能", "菜单", "应用"),
+                selectedTabIndex = settingsSection,
+                onTabSelected = { selected ->
+                    settingsSection = selected
+                    coroutineScope.launch { listState.scrollToItem(0) }
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = paddingValues,
+            contentPadding = PaddingValues(bottom = 12.dp),
         ) {
+            if (settingsSection == 0) {
             item(key = "hypergesture-entry") {
-                SmallTitle(text = "手势与小窗")
+                SmallTitle(text = "快捷入口")
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    BasicComponent(title = "Hyper 手势", summary = "底角、侧边、蜂巢、任务中心与小窗",
+                    ArrowPreference(title = "手势与小窗", summary = "底角、侧边、蜂巢与任务中心",
                         onClick = onOpenGestures)
                 }
             }
+            }
+            if (settingsSection == 2) {
             item(key = "app-visibility-title") {
                 SmallTitle(text = "应用显示")
             }
             item(key = "launcher-icon") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
                 SwitchPreference(
                     title = "桌面显示应用图标",
                     summary = stringResource(R.string.launcher_icon_summary),
@@ -409,7 +427,10 @@ private fun MainPage(
                         }
                     },
                 )
+                }
             }
+            }
+            if (settingsSection == 0) {
             item(key = "activation-status") {
                 ActivationStatusCard(
                     context = context,
@@ -660,6 +681,8 @@ private fun MainPage(
                 }
             }
 
+            }
+            if (settingsSection == 1) {
             item(key = "appearance-title") {
                 SmallTitle(text = "外观")
             }
@@ -926,6 +949,8 @@ private fun MainPage(
                 }
             }
 
+            }
+            if (settingsSection == 2) {
             item(key = "logging-title") {
                 SmallTitle(text = "日志")
             }
@@ -1027,6 +1052,8 @@ private fun MainPage(
                     fontSize = 13.sp,
                 )
             }
+            }
+        }
         }
         OverlayDialog(
             show = showAccessibilityDialog,
@@ -1329,8 +1356,8 @@ private fun VisibilityPage(
                     if (pageData != null) {
                         OverlayIconDropdownMenu(entry = bulkEntry) {
                             Icon(
-                                imageVector = MiuixIcons.SelectAll,
-                                contentDescription = "批量设置可见性",
+                                imageVector = MiuixIcons.More,
+                                contentDescription = "批量操作",
                                 tint = MiuixTheme.colorScheme.onBackground,
                             )
                         }

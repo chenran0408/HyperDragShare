@@ -13,7 +13,7 @@ import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,10 +28,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -48,8 +47,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.leaf.hyperdragshare.gestures.config.AppTarget
 import com.leaf.hyperdragshare.gestures.config.ConfigContract
 import com.leaf.hyperdragshare.gestures.config.ConfigStore
@@ -66,6 +66,8 @@ import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
@@ -73,8 +75,21 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.AddCircle
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.ExpandLess
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
+import top.yukonga.miuix.kmp.icon.extended.MoreCircle
+import top.yukonga.miuix.kmp.icon.basic.Search
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.basic.TooltipAnchorPosition
+import top.yukonga.miuix.kmp.basic.TooltipBox
+import top.yukonga.miuix.kmp.basic.TooltipDefaults
+import top.yukonga.miuix.kmp.basic.PlainTooltip
+import top.yukonga.miuix.kmp.basic.rememberTooltipState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.Collator
 import java.util.Locale
@@ -112,9 +127,9 @@ fun GestureTargetsContent(
     val scope = rememberCoroutineScope()
     val validGroup = remember(group) { group in setOf("bottom", "honeycomb", "side") }
     val pageTitle = when (group) {
-        "bottom" -> "底部扇形应用与快捷方式"
-        "honeycomb" -> "蜂巢应用与快捷方式"
-        "side" -> "侧滑应用与快捷方式"
+        "bottom" -> "底部扇形"
+        "honeycomb" -> "蜂巢目标"
+        "side" -> "侧滑目标"
         else -> "手势目标"
     }
     val moreEntry = remember {
@@ -144,25 +159,34 @@ fun GestureTargetsContent(
                 title = pageTitle,
                 largeTitle = pageTitle,
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回",
-                            tint = MiuixTheme.colorScheme.onBackground,
-                        )
-                    }
+                    TargetIconAction("返回", MiuixIcons.Back, onBack)
                 },
                 actions = {
                     if (group == "honeycomb" && onEditHoneycombLayout != null) {
-                        TextButton(text = "编辑位置", onClick = onEditHoneycombLayout)
+                        TargetIconAction("编辑蜂巢位置", MiuixIcons.Edit, onEditHoneycombLayout)
                     }
                     if (pageData != null && validGroup) {
-                        OverlayIconDropdownMenu(entry = moreEntry) {
-                            Text("更多", color = MiuixTheme.colorScheme.onBackground)
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                            tooltip = { PlainTooltip { Text("更多目标选项") } },
+                            state = rememberTooltipState(),
+                        ) {
+                            OverlayIconDropdownMenu(
+                                entry = moreEntry,
+                                modifier = Modifier.size(48.dp).semantics {
+                                    contentDescription = "更多目标选项"
+                                },
+                                minWidth = 48.dp,
+                                minHeight = 48.dp,
+                            ) {
+                                Icon(MiuixIcons.MoreCircle, "更多目标选项",
+                                    tint = MiuixTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
+                            }
                         }
                     }
-                    TextButton(
-                        text = "添加",
+                    TargetIconAction(
+                        description = "添加应用或快捷方式",
+                        imageVector = MiuixIcons.AddCircle,
                         enabled = pageData != null && validGroup,
                         onClick = { showPicker = true },
                     )
@@ -230,8 +254,9 @@ fun GestureTargetsContent(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
-                                TextButton(
-                                    text = "↑",
+                                TargetIconAction(
+                                    description = "上移 ${row.label}",
+                                    imageVector = MiuixIcons.ExpandLess,
                                     enabled = index > 0,
                                     onClick = {
                                         if (index > 0) {
@@ -241,8 +266,9 @@ fun GestureTargetsContent(
                                         }
                                     },
                                 )
-                                TextButton(
-                                    text = "↓",
+                                TargetIconAction(
+                                    description = "下移 ${row.label}",
+                                    imageVector = MiuixIcons.ExpandMore,
                                     enabled = index < targets.lastIndex,
                                     onClick = {
                                         if (index in 0 until targets.lastIndex) {
@@ -252,8 +278,9 @@ fun GestureTargetsContent(
                                         }
                                     },
                                 )
-                                TextButton(
-                                    text = "移除",
+                                TargetIconAction(
+                                    description = "移除 ${row.label}",
+                                    imageVector = MiuixIcons.Delete,
                                     onClick = {
                                         if (group != "bottom" || targets.size > ConfigContract.MIN_FAN_MAX_TARGETS) {
                                             targets.remove(target)
@@ -396,110 +423,105 @@ private fun TargetPickerDialog(
         entries.sortedWith(compareBy<GestureTargetRow>({ !selection.contains(it.target) }, { it.label.lowercase(Locale.ROOT) }))
     }
 
-    Dialog(
+    OverlayDialog(
+        show = true,
+        title = "添加目标",
+        summary = "已选 ${selection.size} / $maximum",
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        outsideMargin = androidx.compose.ui.unit.DpSize(16.dp, 24.dp),
+        insideMargin = androidx.compose.ui.unit.DpSize(20.dp, 16.dp),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(0.94f).fillMaxSize(0.90f),
-            shape = RoundedCornerShape(24.dp),
-            color = MiuixTheme.colorScheme.surface,
-        ) {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                Text("添加应用或快捷方式", fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
-                    color = MiuixTheme.colorScheme.onSurface)
-                Text("已选 ${selection.size} / $maximum", fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(text = "应用", onClick = { tab = TargetPickerTab.Apps })
-                    TextButton(text = "快捷方式", onClick = {
-                        tab = TargetPickerTab.Shortcuts
-                        store.requestShortcutCatalog()
-                    })
-                    if (tab == TargetPickerTab.Shortcuts) {
-                        TextButton(text = "刷新目录", onClick = {
+        BoxWithConstraints(Modifier.fillMaxWidth().widthIn(max = 520.dp)) {
+            val listHeight = (maxHeight - 320.dp).coerceIn(0.dp, 420.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TabRow(
+                    tabs = listOf("应用", "快捷方式"),
+                    selectedTabIndex = if (tab == TargetPickerTab.Apps) 0 else 1,
+                    onTabSelected = {
+                        if (it == 0) tab = TargetPickerTab.Apps else {
+                            tab = TargetPickerTab.Shortcuts
                             store.requestShortcutCatalog()
-                        })
-                    }
-                }
-                if (tab == TargetPickerTab.Apps) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        TextButton(text = "全部", onClick = { category = AppCategory.All })
-                        TextButton(text = "用户应用", onClick = { category = AppCategory.User })
-                        TextButton(text = "系统应用", onClick = { category = AppCategory.System })
-                        TextButton(text = "双开应用", onClick = {
-                            category = AppCategory.Dual
-                            store.requestActivityCatalog()
-                        })
-                    }
-                }
-                BasicTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
-                    decorationBox = { inner ->
-                        Box {
-                            if (query.isEmpty()) Text(
-                                if (tab == TargetPickerTab.Apps) "搜索应用" else "搜索快捷方式",
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            )
-                            inner()
                         }
                     },
                 )
-                if (loading) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (filteredRows.isEmpty()) {
-                    Text(
-                        text = if (tab == TargetPickerTab.Shortcuts) {
-                            "目录中没有可用快捷方式。请在桌面刷新快捷方式目录后，再点“刷新目录”。"
-                        } else "没有匹配的应用",
-                        modifier = Modifier.weight(1f).padding(20.dp),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                if (tab == TargetPickerTab.Apps) {
+                    val categories = listOf(AppCategory.All, AppCategory.User, AppCategory.System, AppCategory.Dual)
+                    TabRow(
+                        tabs = listOf("全部", "个人", "系统", "双开"),
+                        selectedTabIndex = categories.indexOf(category),
+                        onTabSelected = {
+                            category = categories[it]
+                            if (category == AppCategory.Dual) store.requestActivityCatalog()
+                        },
+                        height = 40.dp,
                     )
                 } else {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(text = "刷新目录", onClick = { store.requestShortcutCatalog() })
+                    }
+                }
+                TextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = if (tab == TargetPickerTab.Apps) "搜索应用" else "搜索快捷方式",
+                    useLabelAsPlaceholder = true,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions.Default,
+                    leadingIcon = {
+                        Icon(MiuixIcons.Basic.Search, contentDescription = null,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier.size(20.dp))
+                    },
+                    trailingIcon = if (query.isNotEmpty()) {
+                        { TargetIconAction("清除搜索", MiuixIcons.Close, onClick = { query = "" }) }
+                    } else null,
+                )
+                when {
+                    loading -> Box(
+                        Modifier.fillMaxWidth().height(listHeight),
+                        contentAlignment = Alignment.Center,
+                    ) { CircularProgressIndicator() }
+                    filteredRows.isEmpty() -> Box(
+                        Modifier.fillMaxWidth().height(listHeight).padding(16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (tab == TargetPickerTab.Shortcuts) {
+                                "目录中没有可用快捷方式。请在桌面刷新目录后，再点“刷新目录”。"
+                            } else "没有匹配的应用",
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = listHeight),
+                    ) {
                         items(filteredRows, key = { targetKey(it.target) }) { row ->
                             val checked = selection.contains(row.target)
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            BasicComponent(
+                                modifier = Modifier.fillMaxWidth(),
+                                startAction = { TargetIcon(row, Modifier.padding(end = 8.dp)) },
+                                endActions = {
+                                    Checkbox(
+                                        state = if (checked) androidx.compose.ui.state.ToggleableState.On
+                                            else androidx.compose.ui.state.ToggleableState.Off,
+                                        onClick = {
+                                            if (checked) selection.remove(row.target)
+                                            else if (selection.size < maximum) selection.add(row.target)
+                                        },
+                                    )
+                                },
+                                insideMargin = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                 onClick = {
                                     if (checked) selection.remove(row.target)
                                     else if (selection.size < maximum) selection.add(row.target)
                                 },
-                                insideMargin = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                             ) {
-                                BasicComponent(
-                                    startAction = { TargetIcon(row, Modifier.padding(end = 8.dp)) },
-                                    endActions = {
-                                        Checkbox(
-                                            state = if (checked) androidx.compose.ui.state.ToggleableState.On
-                                                else androidx.compose.ui.state.ToggleableState.Off,
-                                            onClick = {
-                                                if (checked) selection.remove(row.target)
-                                                else if (selection.size < maximum) selection.add(row.target)
-                                            },
-                                        )
-                                    },
-                                    insideMargin = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                    onClick = {
-                                        if (checked) selection.remove(row.target)
-                                        else if (selection.size < maximum) selection.add(row.target)
-                                    },
-                                ) {
-                                    Text(row.label, color = MiuixTheme.colorScheme.onSurface,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(row.summary, fontSize = 12.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
+                                Text(row.label, color = MiuixTheme.colorScheme.onSurface,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(row.summary, fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -507,14 +529,43 @@ private fun TargetPickerDialog(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(text = "取消", onClick = onDismiss)
                     Spacer(Modifier.width(8.dp))
-                    TextButton(text = "保存", enabled = selection.isNotEmpty(),
-                        onClick = {
-                            onApply(selection.map { target ->
-                                pickerRows.firstOrNull { it.target == target } ?: fallbackRow(target)
-                            })
+                    TextButton(text = "添加", enabled = selection.isNotEmpty(), onClick = {
+                        onApply(selection.map { target ->
+                            pickerRows.firstOrNull { it.target == target } ?: fallbackRow(target)
                         })
+                    })
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TargetIconAction(
+    description: String,
+    imageVector: ImageVector,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(description) } },
+        state = rememberTooltipState(),
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(48.dp).semantics { contentDescription = description },
+            minWidth = 48.dp,
+            minHeight = 48.dp,
+        ) {
+            Icon(
+                imageVector = imageVector,
+                contentDescription = description,
+                tint = if (enabled) MiuixTheme.colorScheme.onSurface
+                    else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }
