@@ -241,6 +241,7 @@ private fun MainPage(
     var aicrOcrEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isAicrOcrEnabled(context))
     }
+    val ocrEngineNames = listOf("ML Kit（默认）", "系统 AICR V2（实验）")
     var copyDirectEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
     }
@@ -536,8 +537,10 @@ private fun MainPage(
                     )
                     OverlayDropdownPreference(
                         title = "文字识别引擎",
-                        summary = "用于图片、整屏和区域识字。AICR 为实验选项，失败会显示原因，不自动切换引擎",
-                        items = listOf("ML Kit（默认）", "系统 AICR V2（实验）"),
+                        summary = ocrEngineNames[if (aicrOcrEnabled) 1 else 0] +
+                            "\n图片、整屏和选区共用；失败提示原因，不自动切换引擎",
+                        showValue = false,
+                        items = ocrEngineNames,
                         selectedIndex = if (aicrOcrEnabled) 1 else 0,
                         onSelectedIndexChange = { selected ->
                             aicrOcrEnabled = selected == 1

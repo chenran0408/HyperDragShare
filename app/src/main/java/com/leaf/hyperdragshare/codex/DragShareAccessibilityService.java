@@ -418,6 +418,10 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo activeRoot = null;
         try {
             activeRoot = getRootInActiveWindow();
+            if (activeRoot != null && getPackageName().equals(asString(activeRoot.getPackageName()))) {
+                recycleNode(activeRoot);
+                return result;
+            }
             addRootIfUsable(result, seen, activeRoot, Integer.MAX_VALUE, settings);
         } catch (Throwable ignored) {
             recycleNode(activeRoot);

@@ -2,7 +2,7 @@
 
 这是基于 HyperDragShare 代码继续开发的独立 fork，目标是在小米 HyperOS 4 上增强文字和图片拖拽分享。项目按本分支代码和适配目标维护；MI Big Bang APK 与 BigBang/NovaText 项目只作为行为和技术分析参考，不作为本项目的需求清单。
 
-当前适配目标是 Xiaomi 15 Pro、HyperOS 4.0.0.17、Android 17。设备已安装 1.7.133（versionCode 157），传送门注入与 Root 握手均为 157。199 项单测、Lint 和构建通过；功能的实际操作结果与未验收范围分别记录。
+当前适配目标是 Xiaomi 15 Pro、HyperOS 4.0.0.17、Android 17。设备已安装 1.7.134（versionCode 158），传送门注入与 Root 握手均为 158。199 项单测、Lint 和构建通过；功能的实际操作结果与未验收范围分别记录。
 
 ## 当前开发状态
 

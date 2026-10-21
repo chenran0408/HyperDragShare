@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.133 / versionCode 157。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 157。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.134 / versionCode 158。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 158。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.133 / 157；199 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
+- 当前源码与设备均为 1.7.134 / 158；199 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -784,3 +784,14 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 最终276/157原位安装，debug证书不变；outputs/HyperDragShare-1.7.133-debug.apk与设备base.apk SHA256一致：51EF5AAAF744F9E1B727FF605FC3C7001043BD01DAB253BEE03B49698FB2524B。hds133-installed-hash.txt。真实设置滚动后清晰显示期限与后台限制，hds133-cache-setting.xml/png；Miuix BasicComponent保持原主题，不是新开关。功能Job在同生产代码275上测试，276仅新增此说明，未重复跑删除实验。
 - 仅重载传送门，等待异步Root回报后157/157/granted=true，hds133-activation.xml；未重启android/AICR/整机。无Root助手/远端probe/分词菜单悬窗残留；MainActivity任务留后台属正常。原Bili2183置前，未关闭休息提醒或恢复播放。device临时截图/XML已删，所有画面/备份只留本机不提交。
 - 额外只读参考结论：所谓后台隐藏的具体对象仍未确定；已定位生命周期链只是自身Activity前台时抑制传送门入口，不能据此增加关闭全部浮窗的开关。待办仍含真实面积、Bili评论普通长按、真实四样式四边、115旧侧条ANR/复制浮层。自然周期/进程停止中断/深色错误提示未验。
+
+## 2026-10-21：1.7.134 设置排版与自身来源边界
+
+- 从已固定的Miuix0.9.3官方sources.jar核对OverlayDropdownPreference API：支持showValue=false，原尾部Text会和标题说明竞争宽度。本批只对长引擎项使用该参数，当前引擎挪至summary首行，仍使用原组件/Popup/主题，短选项不改；没有拉新版本或复制其源码。
+- 原133真实XML说明框[105,1677][715,1957]为610×280px；新134浅色[105,1671][1267,1881]为1162×210px，包含当前值及说明。字体缩放实际1.0；不能据此宣称所有字号/横屏都通过。hds133-cache-setting.xml/png与hds134-ocr.xml/png分别是前后证据。
+- 实际点开Miuix下拉选ML Kit，标题下当前值即时变化，drag_share_integrations.xml的aicr_ocr_enabled=false；Back只关闭菜单，主设置仍在，hds134-ml.xml、integrations-ml.xml、back.xml。首次快速尝试恢复AICR后立即强停未取得保存证据，重开仍是ML；不能据此声称AICR保存成功，也未无依据归因为产品bug或apply丢写。后续按新dump实际坐标选择AICR，屏幕和文件同时确认true，hds134-restored-aicr.xml、integrations-restored.xml。冷重开保留ML已有独立证据，恢复后原AICR值也已落盘。
+- 通过产品主题菜单浅→深，color_mode=1；同引擎项与Popup深色文字、选中勾及背景可读，hds134-dark-ocr.xml/png、dark-popup.xml/png。Back关闭下拉后经产品主题恢复浅色0；最终drag_share_settings与drag_share_integrations按键值前后完全相同。系统cmd uimode night前后不变，未用全局夜间模式或直接改XML做恢复。
+- 同批修复源码明确缺口：Portal自来源早退；无障碍active root为模块时不再读底层窗口。Root原来已排除自身，不改。现有Robolectric ShadowAccessibilityService无直接setRootInActiveWindow接口，服务为final，未为此堆mock/反射连接。新分支仅源码/编译验证，真实Portal自身来源及无障碍底层窗口场景未验；没有启用无障碍，服务列表前后相同。不能当Bili评论、面积或Portal残留来源已修复。
+- 277 testDebugUnitTest/lintDebug/assembleDebug通过，199项0失败，Lint0 errors/139 warnings/2 hints。可逆排版不新增单测。原位安装158，包名和debug证书不变；outputs/HyperDragShare-1.7.134-debug.apk与base.apk SHA256一致：B2B0669EAD5A42ABD13E1C92959708ABBBCF9E277DBD69059011D2D9382C0617，hds134-installed-hash.txt。
+- 仅重载Portal并等待Root异步回报158/158/granted=true（hds134-activation.xml），没有android/AICR/整机重启。本轮不存入、编辑或删除收藏，也不重复做数据哈希试验；133现有备份和旧UI/schema回退限制保留。无取词helper/远端probe，临时device XML/PNG已删，原Bili2183置前未点击休息提醒/播放；截图只留本机不提交。
+- 仍缺真实拇指面积、Bili评论普通长按、四样式四边真实分享、115旧侧条ANR与复制编辑浮层共存。未验大字号/横屏的新引擎行和自身隔离实际输入，不用本批少量UI通过替代完整UI验收。

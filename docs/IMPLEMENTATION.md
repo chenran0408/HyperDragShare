@@ -1013,3 +1013,11 @@ SharedImageCleanupJob由模块Application启动时安排同一Job ID133，12小�
 清理只列cache/shared-images和cache/ocr-input第一层文件，沿用24小时mtime期限，目录不递归。成功删除共享图后撤销对应URI授权，不读数据库、files/stash、相册或外部存储。Provider暂存和IncomingImageCache复用该清理，Binder入口清除调用方身份后以本模块身份撤销，finally恢复；导入时非关键清理失败记录原因并保留正常导入。明确IOException/SecurityException持久记录，在Miuix设置日志区域显示；调度失败也记录，不伪装成已安排。正常系统集成区显示暂存期限/收藏不受影响/后台限制时下次使用清理，不增加开关。
 
 276最终构建/199项测试/Lint通过。真实Job首次启动0项、正常启动后删除3个旧生成文件，再强制同一系统Job0项；verify确认新PNG可读、其它目录保留。冷进程强制Job曾被AutoStartManagerService拒绝并取消，未改变权限或换Root代扫，因此只证明进程可启动时的真实系统Job，不声称本机冷后台可靠。细节见DEVICE_VALIDATION。
+
+## 2026-10-21：1.7.134 引擎项排版与自身来源隔离
+
+识字引擎项沿用Miuix0.9.3官方OverlayDropdownPreference，showValue=false隐藏挤压左侧的尾部值；当前引擎置于summary首行，后接简短完整说明。名称列表同时用于弹出选项和当前值，不新增组件库fork/长度猜测/兼容层。其它短选项仍保留原布局。真机浅深色、选择切换、Back与保存验证见DEVICE_VALIDATION；没有更改OCR请求/失败回退策略。
+
+PortalContentCaptureSource在读取getInjectorPackage后，来源为BuildConfig.APPLICATION_ID直接返回null，早于正文/Bitmap复制与窗口抑制，宿主原逻辑继续。不要比较宿主Context.getPackageName()，它属于传送门。无障碍rootsAtPoint若实际activeRoot属于本模块，回收并返回空，避免addRootIfUsable丢弃自身后继续枚举底层窗口；无候选的OCR入口也复用该方法。Root原有按active root包及完成后窗口核验保持。
+
+两条新自身隔离分支未完成真机触发验收；不能说已全面覆盖自身Activity前台，更不能把残留Portal来源别包当当前前台证据。没有前后台Provider/计数/轮询，也没有新增Hook或开启无障碍。277构建/199项测试/Lint通过，未为一行判断扩张mock或写镜像测试。
