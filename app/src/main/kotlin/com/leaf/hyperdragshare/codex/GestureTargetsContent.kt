@@ -79,8 +79,6 @@ import top.yukonga.miuix.kmp.icon.extended.AddCircle
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.ExpandLess
-import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.icon.basic.Search
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
@@ -194,169 +192,171 @@ fun GestureTargetsContent(
             )
         },
     ) { paddingValues ->
-        if (!validGroup) {
-            Text(
-                text = "无法识别这组手势目标",
-                modifier = Modifier.padding(paddingValues).padding(24.dp),
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-        } else if (pageData == null) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
-        } else {
-            val data = pageData!!
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(bottom = 20.dp),
-            ) {
-                item(key = "target-count") {
-                    SmallTitle(
-                        text = "已选 ${targets.size} / ${data.maximum} · 使用箭头调整顺序",
-                    )
-                }
-                if (targets.isEmpty()) {
-                    item(key = "target-empty") {
-                        Text(
-                            text = "还没有添加目标。点击右上角“添加”，可选择应用或快捷方式。",
-                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        Box(Modifier.fillMaxSize()) {
+            if (!validGroup) {
+                Text(
+                    text = "无法识别这组手势目标",
+                    modifier = Modifier.padding(paddingValues).padding(24.dp),
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            } else if (pageData == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(paddingValues),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator() }
+            } else {
+                val data = pageData!!
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(paddingValues),
+                    contentPadding = PaddingValues(bottom = 20.dp),
+                ) {
+                    item(key = "target-count") {
+                        SmallTitle(
+                            text = "已选 ${targets.size} / ${data.maximum} · 用“上移/下移”调整顺序",
                         )
                     }
-                } else {
-                    items(targets.toList(), key = { targetKey(it) }) { target ->
-                        val row = data.rows.firstOrNull { it.target == target }
-                            ?: fallbackRow(target)
-                        val index = targets.indexOf(target)
-                        Card(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                    if (targets.isEmpty()) {
+                        item(key = "target-empty") {
+                            Text(
+                                text = "还没有添加目标。点击右上角“添加”，可选择应用或快捷方式。",
+                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    } else {
+                        items(targets.toList(), key = { targetKey(it) }) { target ->
+                            val row = data.rows.firstOrNull { it.target == target }
+                                ?: fallbackRow(target)
+                            val index = targets.indexOf(target)
+                            Card(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
                             ) {
-                                TargetIcon(row = row, modifier = Modifier.padding(end = 12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = row.label,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MiuixTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    TargetIcon(row = row, modifier = Modifier.padding(end = 12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = row.label,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MiuixTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = row.summary,
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    TextButton(
+                                        text = "上移",
+                                        enabled = index > 0,
+                                        modifier = Modifier.widthIn(min = 48.dp),
+                                        onClick = {
+                                            if (index > 0) {
+                                                val moved = targets.removeAt(index)
+                                                targets.add(index - 1, moved)
+                                                saveTargets(store, group, targets, pageData) { pageData = it }
+                                            }
+                                        },
                                     )
-                                    Text(
-                                        text = row.summary,
-                                        fontSize = 12.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                    TextButton(
+                                        text = "下移",
+                                        enabled = index < targets.lastIndex,
+                                        modifier = Modifier.widthIn(min = 48.dp),
+                                        onClick = {
+                                            if (index in 0 until targets.lastIndex) {
+                                                val moved = targets.removeAt(index)
+                                                targets.add(index + 1, moved)
+                                                saveTargets(store, group, targets, pageData) { pageData = it }
+                                            }
+                                        },
+                                    )
+                                    TargetIconAction(
+                                        description = "移除 ${row.label}",
+                                        imageVector = MiuixIcons.Delete,
+                                        onClick = {
+                                            if (group != "bottom" || targets.size > ConfigContract.MIN_FAN_MAX_TARGETS) {
+                                                targets.remove(target)
+                                                saveTargets(store, group, targets, pageData) { pageData = it }
+                                            }
+                                        },
                                     )
                                 }
-                                TargetIconAction(
-                                    description = "上移 ${row.label}",
-                                    imageVector = MiuixIcons.ExpandLess,
-                                    enabled = index > 0,
-                                    onClick = {
-                                        if (index > 0) {
-                                            val moved = targets.removeAt(index)
-                                            targets.add(index - 1, moved)
-                                            saveTargets(store, group, targets, pageData) { pageData = it }
-                                        }
-                                    },
-                                )
-                                TargetIconAction(
-                                    description = "下移 ${row.label}",
-                                    imageVector = MiuixIcons.ExpandMore,
-                                    enabled = index < targets.lastIndex,
-                                    onClick = {
-                                        if (index in 0 until targets.lastIndex) {
-                                            val moved = targets.removeAt(index)
-                                            targets.add(index + 1, moved)
-                                            saveTargets(store, group, targets, pageData) { pageData = it }
-                                        }
-                                    },
-                                )
-                                TargetIconAction(
-                                    description = "移除 ${row.label}",
-                                    imageVector = MiuixIcons.Delete,
-                                    onClick = {
-                                        if (group != "bottom" || targets.size > ConfigContract.MIN_FAN_MAX_TARGETS) {
-                                            targets.remove(target)
-                                            saveTargets(store, group, targets, pageData) { pageData = it }
-                                        }
-                                    },
-                                )
                             }
                         }
                     }
+                    item(key = "target-footer") { Spacer(Modifier.height(12.dp)) }
                 }
-                item(key = "target-footer") { Spacer(Modifier.height(12.dp)) }
             }
-        }
-    }
 
-    if (showPicker && validGroup && pageData != null && store != null) {
-        TargetPickerDialog(
-            context = appContext,
-            store = store!!,
-            savedTargets = targets.toList(),
-            maximum = pageData!!.maximum,
-            onDismiss = { showPicker = false },
-            onApply = { selectedRows ->
-                targets.clear()
-                val selected = selectedRows.map { it.target }.take(pageData!!.maximum)
-                targets.addAll(selected)
-                saveTargets(store, group, targets, pageData) { pageData = it }
-                pageData = pageData?.let {
-                    it.copy(rows = mergeRows(it.rows + selectedRows, targets))
-                }
-                showPicker = false
-            },
-        )
-    }
+            if (showPicker && validGroup && pageData != null && store != null) {
+                TargetPickerDialog(
+                    context = appContext,
+                    store = store!!,
+                    savedTargets = targets.toList(),
+                    maximum = pageData!!.maximum,
+                    onDismiss = { showPicker = false },
+                    onApply = { selectedRows ->
+                        targets.clear()
+                        val selected = selectedRows.map { it.target }.take(pageData!!.maximum)
+                        targets.addAll(selected)
+                        saveTargets(store, group, targets, pageData) { pageData = it }
+                        pageData = pageData?.let {
+                            it.copy(rows = mergeRows(it.rows + selectedRows, targets))
+                        }
+                        showPicker = false
+                    },
+                )
+            }
 
-    OverlayDialog(
-        show = showResetDialog,
-        title = "恢复预设目标",
-        summary = "这会用当前设备可用的预设应用替换${when (group) {
-            "bottom" -> "底部扇形"
-            "honeycomb" -> "蜂巢"
-            else -> "侧滑"
-        }}清单，当前排序和快捷方式会被覆盖。",
-        onDismissRequest = { showResetDialog = false },
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(
-                text = "取消",
-                modifier = Modifier.weight(1f),
-                onClick = { showResetDialog = false },
-            )
-            TextButton(
-                text = "恢复预设",
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    showResetDialog = false
-                    scope.launch {
-                        val result = withContext(Dispatchers.IO) {
-                            val configStore = store ?: return@withContext null
-                            when (group) {
-                                "honeycomb" -> configStore.resetHoneycombTargets()
-                                "side" -> configStore.resetSideTargets()
-                                else -> configStore.resetBottomTargets()
+            OverlayDialog(
+                show = showResetDialog,
+                title = "恢复预设目标",
+                summary = "这会用当前设备可用的预设应用替换${when (group) {
+                    "bottom" -> "底部扇形"
+                    "honeycomb" -> "蜂巢"
+                    else -> "侧滑"
+                }}清单，当前排序和快捷方式会被覆盖。",
+                onDismissRequest = { showResetDialog = false },
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(
+                        text = "取消",
+                        modifier = Modifier.weight(1f),
+                        onClick = { showResetDialog = false },
+                    )
+                    TextButton(
+                        text = "恢复预设",
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            showResetDialog = false
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    val configStore = store ?: return@withContext null
+                                    when (group) {
+                                        "honeycomb" -> configStore.resetHoneycombTargets()
+                                        "side" -> configStore.resetSideTargets()
+                                        else -> configStore.resetBottomTargets()
+                                    }
+                                    val newTargets = readTargets(configStore, group)
+                                    newTargets to loadSavedTargetRows(appContext, configStore, newTargets)
+                                }
+                                if (result != null) {
+                                    targets.clear()
+                                    targets.addAll(result.first)
+                                    pageData = GestureTargetPageData(result.second, maximumFor(store!!, group))
+                                }
                             }
-                            val newTargets = readTargets(configStore, group)
-                            newTargets to loadSavedTargetRows(appContext, configStore, newTargets)
-                        }
-                        if (result != null) {
-                            targets.clear()
-                            targets.addAll(result.first)
-                            pageData = GestureTargetPageData(result.second, maximumFor(store!!, group))
-                        }
-                    }
-                },
-            )
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -498,13 +498,16 @@ private fun TargetPickerDialog(
                     ) {
                         items(filteredRows, key = { targetKey(it.target) }) { row ->
                             val checked = selection.contains(row.target)
+                            val canSelect = checked || selection.size < maximum
                             BasicComponent(
                                 modifier = Modifier.fillMaxWidth(),
+                                enabled = canSelect,
                                 startAction = { TargetIcon(row, Modifier.padding(end = 8.dp)) },
                                 endActions = {
                                     Checkbox(
                                         state = if (checked) androidx.compose.ui.state.ToggleableState.On
                                             else androidx.compose.ui.state.ToggleableState.Off,
+                                        enabled = canSelect,
                                         onClick = {
                                             if (checked) selection.remove(row.target)
                                             else if (selection.size < maximum) selection.add(row.target)

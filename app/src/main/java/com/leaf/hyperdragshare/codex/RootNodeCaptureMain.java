@@ -31,6 +31,11 @@ public final class RootNodeCaptureMain {
     private static java.lang.reflect.Method connect;
     private static java.lang.reflect.Method disconnect;
 
+    // WMS identity is used only for a node-less WeChat conversation capture.
+    private static final int WINDOW_MANAGER_CAPTURE = -2;
+    private static PressWindowSnapshot pressWindow;
+    private static Rect pressRegion;
+
     // Runs as Root app_process, not as the targetSdk-restricted application process.
     // These exact ROM signatures were exercised by diagnostics/root-node.
     @android.annotation.SuppressLint({"BlockedPrivateApi", "SoonBlockedPrivateApi"})
@@ -115,36 +120,42 @@ public final class RootNodeCaptureMain {
     static JSONObject captureRequest(JSONObject request, UiAutomation automation,
                                             Object eventLock, int[] eventVersion, Handler watchdog)
             throws Exception {
-        if ("verify_window".equals(request.optString("operation"))) {
-            automation.clearCache();
-            AccessibilityNodeInfo current = automation.getRootInActiveWindow();
-            try {
-                return new JSONObject().put("same_window", current != null
-                        && current.getWindowId() == request.getInt("window_id")
-                        && request.getString("package").equals(string(current.getPackageName())));
-            } finally {
-                if (current != null) current.recycle();
-            }
-        }
-        if ("verify_source".equals(request.optString("operation"))) {
-            automation.clearCache();
-            AccessibilityNodeInfo current = automation.getRootInActiveWindow();
-            AccessibilityWindowInfo window = current == null ? null : current.getWindow();
-            try {
-                return new JSONObject().put("same_source", current != null && current.isVisibleToUser()
-                        && window != null && window.getType() == AccessibilityWindowInfo.TYPE_APPLICATION
-                        && request.getString("package").equals(string(current.getPackageName())));
-            } finally {
-                if (window != null) window.recycle();
-                if (current != null) current.recycle();
-            }
-        }
         Runnable timeout = () -> {
             System.err.println("Root node capture exceeded deadline");
             System.exit(2);
         };
         watchdog.postDelayed(timeout, 4000L);
         try {
+            if ("verify_window".equals(request.optString("operation"))) {
+                if (request.getInt("window_id") == WINDOW_MANAGER_CAPTURE) {
+                    return new JSONObject().put("same_window", verifyPressWindow(request.getString("package")));
+                }
+                automation.clearCache();
+                AccessibilityNodeInfo current = automation.getRootInActiveWindow();
+                try {
+                    return new JSONObject().put("same_window", current != null
+                            && current.getWindowId() == request.getInt("window_id")
+                            && request.getString("package").equals(string(current.getPackageName())));
+                } finally {
+                    if (current != null) current.recycle();
+                }
+            }
+            if ("verify_source".equals(request.optString("operation"))) {
+                if (pressWindow != null && request.getString("package").equals(pressWindow.packageName)) {
+                    return new JSONObject().put("same_source", verifyPressWindow(request.getString("package")));
+                }
+                automation.clearCache();
+                AccessibilityNodeInfo current = automation.getRootInActiveWindow();
+                AccessibilityWindowInfo window = current == null ? null : current.getWindow();
+                try {
+                    return new JSONObject().put("same_source", current != null && current.isVisibleToUser()
+                            && window != null && window.getType() == AccessibilityWindowInfo.TYPE_APPLICATION
+                            && request.getString("package").equals(string(current.getPackageName())));
+                } finally {
+                    if (window != null) window.recycle();
+                    if (current != null) current.recycle();
+                }
+            }
             if ("insert_text".equals(request.optString("operation"))) {
                 try { return insertTextAt(automation, request); }
                 catch (ReflectiveOperationException | SecurityException | IllegalStateException error) {
@@ -156,9 +167,26 @@ public final class RootNodeCaptureMain {
             if (pressHitsInputMethod(automation, request)) {
                 return new JSONObject().put("found", false).put("reason", "excluded_input_method");
             }
-            AccessibilityNodeInfo root = awaitRoot(automation, eventLock, eventVersion);
-            if (root == null) {
-                return new JSONObject().put("found", false).put("reason", "window_not_ready");
+            pressWindow = null;
+            pressRegion = null;
+            boolean press = request.optBoolean("press_lookup", false);
+            automation.clearCache();
+            AccessibilityNodeInfo root = press ? automation.getRootInActiveWindow()
+                    : awaitRoot(automation, eventLock, eventVersion);
+            if (root == null && press && request.optBoolean("allow_text")) {
+                JSONObject conversation = captureUnexposedConversation(request);
+                if (conversation.optBoolean("found")
+                        || !"no_supported_visible_conversation".equals(conversation.optString("reason")))
+                    return conversation;
+                // Keep the existing semantics-startup wait for other applications.
+                root = awaitRoot(automation, eventLock, eventVersion);
+            }
+            if (root == null) return new JSONObject().put("found", false).put("reason", "window_not_ready");
+            // HyperOS may expose a system root while withholding the focused WeChat window.
+            if (press && request.optBoolean("allow_text")
+                    && "com.android.systemui".equals(string(root.getPackageName()))) {
+                root.recycle();
+                return captureUnexposedConversation(request);
             }
             long rootAt = SystemClock.uptimeMillis();
             try {
@@ -185,6 +213,59 @@ public final class RootNodeCaptureMain {
             }
         } finally {
             watchdog.removeCallbacks(timeout);
+        }
+    }
+
+    private static PressWindowSnapshot readPressWindow() throws IOException, InterruptedException {
+        Process dump = new ProcessBuilder("/system/bin/dumpsys", "-t", "1", "window")
+                .redirectErrorStream(true).start();
+        try {
+            String output = new String(dump.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            if (dump.waitFor() != 0) throw new IOException("系统窗口查询失败");
+            return PressWindowSnapshot.parse(output);
+        } finally {
+            dump.destroy();
+        }
+    }
+
+    private static JSONObject captureUnexposedConversation(JSONObject request) throws Exception {
+        JSONObject absent = new JSONObject().put("found", false);
+        if (!request.optBoolean("allow_text") || keyguardLocked())
+            return absent.put("reason", "text_disabled_or_locked");
+        final PressWindowSnapshot window;
+        try { window = readPressWindow(); }
+        catch (IOException error) {
+            System.err.println("Press window inspection failed: " + error.getMessage());
+            return absent.put("reason", "window_inspection_failed");
+        }
+        // Deliberately scoped to the verified conversation host, not payment/login activities.
+        if (window == null || !"com.tencent.mm".equals(window.packageName)
+                || !"com.tencent.mm/com.tencent.mm.ui.LauncherUI".equals(window.windowName))
+            return absent.put("reason", "no_supported_visible_conversation");
+        JSONArray blocked = request.getJSONArray("blocked");
+        for (int i = 0; i < blocked.length(); i++) {
+            if (window.packageName.equals(blocked.getString(i))) return absent.put("reason", "excluded_app");
+        }
+        Rect region = window.regionAt((float) request.getDouble("x"), (float) request.getDouble("y"),
+                request.getInt("width"), request.getInt("height"), (float) request.getDouble("density"));
+        if (region == null) return absent.put("reason", "press_region_obscured");
+        pressWindow = window;
+        pressRegion = region;
+        return new JSONObject().put("found", true).put("package", window.packageName)
+                .put("kind", "ocr_region").put("window_id", WINDOW_MANAGER_CAPTURE)
+                .put("left", region.left).put("top", region.top)
+                .put("right", region.right).put("bottom", region.bottom);
+    }
+
+    private static boolean verifyPressWindow(String source) throws Exception {
+        if (pressWindow == null || pressRegion == null || !source.equals(pressWindow.packageName)
+                || keyguardLocked()) return false;
+        try {
+            PressWindowSnapshot current = readPressWindow();
+            return current != null && pressWindow.sameWindow(current) && current.permits(pressRegion);
+        } catch (IOException error) {
+            System.err.println("Press window verification failed: " + error.getMessage());
+            return false;
         }
     }
 

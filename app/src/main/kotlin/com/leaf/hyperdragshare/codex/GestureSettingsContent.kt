@@ -228,6 +228,11 @@ fun GestureSettingsContent(
             item { SmallTitle(text = "底角触发与扇形布局") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
+                    ArrowPreference(
+                        title = "应用与快捷方式",
+                        summary = "选择底角扇形可打开的应用和快捷方式",
+                        onClick = { onManageTargets("bottom") },
+                    )
                     bool("竖屏底角手势", "启用竖屏底部触发", C.KEY_BOTTOM_PORTRAIT_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_ENABLED)
                     bool("横屏底角手势", "启用横屏底部触发", C.KEY_BOTTOM_LANDSCAPE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_ENABLED)
                     bool("竖屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED)
@@ -243,7 +248,6 @@ fun GestureSettingsContent(
                     slider("图标选择距离", C.KEY_SELECTION_RADIUS_PERCENT, C.MIN_SELECTION_RADIUS_PERCENT, C.MAX_SELECTION_RADIUS_PERCENT, "%")
                     slider("图标大小", C.KEY_ICON_SIZE_DP, C.MIN_ICON_SIZE_DP, C.MAX_ICON_SIZE_DP, " dp")
                     slider("扇形目标上限", C.KEY_FAN_MAX_TARGETS, C.MIN_FAN_MAX_TARGETS, C.MAX_FAN_MAX_TARGETS, " 个")
-                    ArrowPreference(title = "管理小窗应用与快捷方式", onClick = { onManageTargets("bottom") })
                     chooser("扇形排列", listOf("智能排布", "自定义排数"), C.KEY_FAN_LAYOUT_MODE, C.DEFAULT_FAN_LAYOUT_MODE, values = listOf(C.FAN_LAYOUT_SMART, C.FAN_LAYOUT_CUSTOM))
                     slider("内排数量", C.KEY_FAN_CUSTOM_INNER_COUNT, C.MIN_FAN_CUSTOM_ROW_COUNT, C.MAX_FAN_CUSTOM_INNER_COUNT, " 个")
                     slider("中排数量", C.KEY_FAN_CUSTOM_MIDDLE_COUNT, C.MIN_FAN_CUSTOM_ROW_COUNT, C.MAX_FAN_CUSTOM_MIDDLE_COUNT, " 个")
@@ -256,6 +260,11 @@ fun GestureSettingsContent(
             item { SmallTitle(text = "侧滑触发与布局") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
+                    ArrowPreference(
+                        title = "应用与快捷方式",
+                        summary = "选择侧滑可打开的应用和快捷方式",
+                        onClick = { onManageTargets("side") },
+                    )
                     bool("启用侧滑手势", "侧边向内长滑打开目标", C.KEY_SIDE_GESTURE_ENABLED, C.DEFAULT_SIDE_GESTURE_ENABLED)
                     bool("竖屏侧滑", "启用竖屏侧滑", C.KEY_SIDE_PORTRAIT_ENABLED, C.DEFAULT_SIDE_PORTRAIT_ENABLED)
                     bool("横屏侧滑", "启用横屏侧滑", C.KEY_SIDE_LANDSCAPE_ENABLED, C.DEFAULT_SIDE_LANDSCAPE_ENABLED)
@@ -274,7 +283,6 @@ fun GestureSettingsContent(
                     slider("侧滑环形大小", C.KEY_SIDE_RING_SIZE_PERCENT, C.MIN_SIDE_RING_SIZE_PERCENT, C.MAX_SIDE_RING_SIZE_PERCENT, "%")
                     chooser("竖屏侧滑启动方式", listOf("小窗", "全屏"), C.KEY_SIDE_PORTRAIT_FULLSCREEN, 0, booleanValue = true)
                     chooser("横屏侧滑启动方式", listOf("小窗", "全屏"), C.KEY_SIDE_LANDSCAPE_FULLSCREEN, 0, booleanValue = true)
-                    ArrowPreference(title = "管理侧滑目标", onClick = { onManageTargets("side") })
                     chooser("竖屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂巢", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_PORTRAIT_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
                     chooser("横屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂巢", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_LANDSCAPE_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
                 }
@@ -285,8 +293,12 @@ fun GestureSettingsContent(
             item { SmallTitle(text = "蜂巢") }
             item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp)) {
+                    ArrowPreference(
+                        title = "应用与快捷方式",
+                        summary = "选择蜂巢可打开的应用和快捷方式",
+                        onClick = { onManageTargets("honeycomb") },
+                    )
                     bool("启用蜂巢", "底角第二段或侧滑布局使用", C.KEY_HONEYCOMB_ENABLED, C.DEFAULT_HONEYCOMB_ENABLED)
-                    ArrowPreference(title = "管理蜂巢应用与快捷方式", onClick = { onManageTargets("honeycomb") })
                     bool("横屏蜂巢", "允许横屏打开蜂巢", C.KEY_HONEYCOMB_LANDSCAPE_ENABLED, C.DEFAULT_HONEYCOMB_LANDSCAPE_ENABLED)
                     chooser("操作方式", listOf("浏览模式", "按住滑选"), C.KEY_HONEYCOMB_MODE, C.DEFAULT_HONEYCOMB_MODE)
                     bool("空白处点击关闭", "点击蜂巢空白区域时收起", C.KEY_HONEYCOMB_EMPTY_TAP_CLOSE, C.DEFAULT_HONEYCOMB_EMPTY_TAP_CLOSE)

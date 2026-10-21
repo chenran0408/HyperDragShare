@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +33,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -124,6 +124,7 @@ fun GestureHoneycombLayout(
             selectedSlot = null
             dragFrom = null
             dragTarget = null
+            dragPoint = Offset.Zero
             operationFeedback = feedback
             writing = false
         }
@@ -153,6 +154,7 @@ fun GestureHoneycombLayout(
                             selectedSlot = null
                             dragFrom = null
                             dragTarget = null
+                            dragPoint = Offset.Zero
                         },
                     )
                 },
@@ -172,14 +174,28 @@ fun GestureHoneycombLayout(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                val activeDragFrom = dragFrom
+                val activeDragTarget = dragTarget
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
                         Text(
                             text = when {
                                 writing -> "正在保存位置…"
-                                !editing -> operationFeedback ?: "当前位置已保留。点击编辑图标调整蜂巢位置。"
-                                selectedSlot != null -> "已选一个图标；再点一个位置交换，也可长按拖动。"
-                                else -> "点选两个位置交换图标，或长按图标拖到目标位置。空位可用于新应用。"
+                                activeDragFrom != null -> {
+                                    val source = current.cells.getOrNull(activeDragFrom)
+                                    val target = activeDragTarget?.let { current.cells.getOrNull(it) }
+                                    when {
+                                        source == null -> "拖动位置无效，松手取消"
+                                        activeDragTarget == null -> "没有有效落点，松手取消"
+                                        activeDragTarget == activeDragFrom -> "正在拖动「${source.label}」，松手保持原位"
+                                        target == null -> "没有有效落点，松手取消"
+                                        target.target == null -> "将「${source.label}」移动到空位"
+                                        else -> "将「${source.label}」与「${target.label}」交换"
+                                    }
+                                }
+                                selectedSlot != null -> "已选一个图标；再点一个位置交换，或长按图标直接拖动。"
+                                !editing -> operationFeedback ?: "长按图标即可拖到目标位置；点击编辑图标可用点选交换。"
+                                else -> operationFeedback ?: "长按图标拖到目标位置，也可点选两个位置交换。空位可用于新应用。"
                             },
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             fontSize = 14.sp,
@@ -208,7 +224,7 @@ fun GestureHoneycombLayout(
                         }
                     },
                     onDragStart = { point ->
-                        if (!editing || writing) return@HoneycombLayoutPreview
+                        if (writing) return@HoneycombLayoutPreview
                         val frame = honeycombFrame(
                             current, point.width, point.height,
                             context.resources.displayMetrics.density,
@@ -230,7 +246,7 @@ fun GestureHoneycombLayout(
                         )
                         dragPoint = Offset(point.x, point.y)
                         dragTarget = nearestHoneycombSlot(frame, point.x, point.y,
-                            frame.radius * 1.8f)
+                            frame.radius * 1.8f).takeIf { it >= 0 }
                         if (source >= current.cells.size) dragTarget = null
                     },
                     onDragEnd = {
@@ -238,7 +254,13 @@ fun GestureHoneycombLayout(
                         val to = dragTarget
                         dragFrom = null
                         dragTarget = null
+                        dragPoint = Offset.Zero
                         if (from != null && to != null) swapSlots(from, to)
+                    },
+                    onDragCancel = {
+                        dragFrom = null
+                        dragTarget = null
+                        dragPoint = Offset.Zero
                     },
                 )
                 TextButton(
@@ -249,32 +271,31 @@ fun GestureHoneycombLayout(
                 )
             }
         }
-    }
-
-    OverlayDialog(
-        show = showCompactConfirmation,
-        title = "重新紧凑排列？",
-        summary = "将移除空位并重新排列所有蜂窝应用，当前手动位置会被替换。",
-        onDismissRequest = { showCompactConfirmation = false },
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(
-                text = "取消",
-                modifier = Modifier.weight(1f),
-                onClick = { showCompactConfirmation = false },
-            )
-            TextButton(
-                text = "重新排列",
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColorsPrimary(),
-                enabled = !writing,
-                onClick = {
-                    showCompactConfirmation = false
-                    editing = false
-                    selectedSlot = null
-                    refreshPositions("蜂巢位置已重新排列") { configStore.compactHoneycombPositions() }
-                },
-            )
+        OverlayDialog(
+            show = showCompactConfirmation,
+            title = "重新紧凑排列？",
+            summary = "将移除空位并重新排列所有蜂巢应用，当前手动位置会被替换。",
+            onDismissRequest = { showCompactConfirmation = false },
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextButton(
+                    text = "取消",
+                    modifier = Modifier.weight(1f),
+                    onClick = { showCompactConfirmation = false },
+                )
+                TextButton(
+                    text = "重新排列",
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    enabled = !writing,
+                    onClick = {
+                        showCompactConfirmation = false
+                        editing = false
+                        selectedSlot = null
+                        refreshPositions("蜂巢位置已重新排列") { configStore.compactHoneycombPositions() }
+                    },
+                )
+            }
         }
     }
 }
@@ -322,10 +343,18 @@ private fun HoneycombLayoutPreview(
     onDragStart: (PointerSize) -> Unit,
     onDrag: (PointerSize) -> Unit,
     onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val currentOnTapSlot = rememberUpdatedState(onTapSlot)
+    val currentOnDragStart = rememberUpdatedState(onDragStart)
+    val currentOnDrag = rememberUpdatedState(onDrag)
+    val currentOnDragEnd = rememberUpdatedState(onDragEnd)
+    val currentOnDragCancel = rememberUpdatedState(onDragCancel)
     val primary = MiuixTheme.colorScheme.primary
+    val background = MiuixTheme.colorScheme.background
     val onSurface = MiuixTheme.colorScheme.onSurface
+    val emptySlot = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.12f)
     val surface = MiuixTheme.colorScheme.surfaceContainer
     Canvas(
         modifier = modifier
@@ -335,41 +364,45 @@ private fun HoneycombLayoutPreview(
                         val frame = honeycombFrame(layout, size.width.toFloat(), size.height.toFloat(), density)
                         val index = nearestHoneycombSlot(frame, point.x, point.y,
                             frame.radius * 1.7f)
-                        if (index >= 0) onTapSlot(index)
+                        if (index >= 0) currentOnTapSlot.value(index)
                     }
                 },
             )
             .pointerInput(layout, editing) {
                 detectDragGesturesAfterLongPress(
-                    onDragStart = { point -> onDragStart(PointerSize(
+                    onDragStart = { point -> currentOnDragStart.value(PointerSize(
                         point.x, point.y, size.width.toFloat(), size.height.toFloat(),
                     )) },
                     onDrag = { change, _ ->
-                        onDrag(PointerSize(
+                        currentOnDrag.value(PointerSize(
                             change.position.x, change.position.y,
                             size.width.toFloat(), size.height.toFloat(),
                         ))
                         change.consume()
                     },
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragEnd,
+                    onDragEnd = { currentOnDragEnd.value() },
+                    onDragCancel = { currentOnDragCancel.value() },
                 )
             },
     ) {
         val frame = honeycombFrame(layout, size.width.toFloat(), size.height.toFloat(), density)
         drawRoundRect(
-            color = Color(0xFF202127),
+            color = background,
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
         )
         frame.centers.forEachIndexed { index, center ->
             val cell = layout.cells[index]
             val isDragged = index == dragFrom
             drawCircle(
-                color = if (cell.target == null) Color.White.copy(alpha = 0.12f) else surface,
+                color = when {
+                    cell.target == null -> emptySlot
+                    isDragged -> surface.copy(alpha = 0.55f)
+                    else -> surface
+                },
                 radius = frame.radius,
-                center = if (isDragged) center else center,
+                center = center,
             )
-            if (cell.icon != null && (!isDragged || dragTarget == null)) {
+            if (cell.icon != null) {
                 val image = cell.icon.asImageBitmap()
                 val inset = frame.radius * 0.16f
                 val imageSize = (frame.radius - inset) * 2f
@@ -380,14 +413,14 @@ private fun HoneycombLayoutPreview(
                         (center.y - imageSize / 2f).toInt(),
                     ),
                     dstSize = androidx.compose.ui.unit.IntSize(imageSize.toInt(), imageSize.toInt()),
-                    alpha = if (isDragged) 0.38f else 1f,
+                    alpha = if (isDragged) 0.24f else 1f,
                 )
             }
             if (editing && selectedSlot == index) {
                 drawCircle(color = primary, radius = frame.radius + 7.dp.toPx(),
                     center = center, style = Stroke(width = 3.dp.toPx()))
             }
-            if (editing && dragTarget == index) {
+            if (dragFrom != null && dragTarget == index) {
                 drawCircle(color = primary.copy(alpha = 0.85f),
                     radius = frame.radius + 6.dp.toPx(), center = center,
                     style = Stroke(width = 3.dp.toPx()))
@@ -399,6 +432,22 @@ private fun HoneycombLayoutPreview(
                 val image = cell.icon.asImageBitmap()
                 val radius = frame.radius * 1.08f
                 val imageSize = radius * 1.68f
+                drawCircle(
+                    color = primary.copy(alpha = 0.18f),
+                    radius = radius + 8.dp.toPx(),
+                    center = dragPoint,
+                )
+                drawCircle(
+                    color = primary,
+                    radius = radius + 5.dp.toPx(),
+                    center = dragPoint,
+                    style = Stroke(width = 2.dp.toPx()),
+                )
+                drawCircle(
+                    color = surface,
+                    radius = radius,
+                    center = dragPoint,
+                )
                 drawImage(
                     image = image,
                     dstOffset = androidx.compose.ui.unit.IntOffset(

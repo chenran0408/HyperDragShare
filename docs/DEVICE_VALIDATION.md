@@ -1179,3 +1179,11 @@ build323的`testDebugUnitTest lintDebug assembleDebug`完整通过，228 tests/0
 - R8包54,235,609 bytes，SHA256=6A021AB64F899D94D7B5387F820EFB6B17406CBE2099C7E76C343F5772315639；与既有安装相同签名，adb install -r成功，dumpsys确认1.7.163/187。APK位于任务outputs/HyperDragShare-1.7.163.apk。
 - 本轮前台从系统分享选择页切到系统设置、再到DockSettingsActivity；只后台安装，没有启动本模块页面或重启SystemUI/Portal/AICR。没有当前Hook187加载证据；此前186/184进程记录不能替代本轮活性核验。
 - 分类导航、48dp图标、目标选择搜索/键盘、蜂巢提示、重载单选、深色/横屏尚未实机操作；只确认源码、构建、安装，不宣称视觉或交互验收通过。用户设置、目标和私人内容未主动修改。
+
+## 164 蜂巢预览拖动与微信按压补链（2026-10-21）
+
+- 旧163实际打开目标页，添加按钮多次输入到达但不显示选择窗口；对应弹窗位于Miuix Scaffold之外。本批将其及恢复预设、蜂巢紧凑排列弹窗放入正确宿主。新163现场记录和窗口dump仅本地保存。
+- build338发现新测试构造的Window标题缺闭合括号；339发现透明度字段的右花括号边界与旧无文本请求回归；均修正后build340完整通过381tests/0failures/0errors/0skips，Lint0errors/180warnings/3hints，Debug和Release成功。未跳过检查。
+- 1.7.164/188同包名同证书覆盖安装一次成功。APK SHA256=9E51F497A4023B6D6D1D65DA6C372F35247448F65EF40002F9B4571EE4880379。传送门单次后台重载后PID31048，module_activation明确injected/root/reader/input均188，Root granted、输入和reader ready，错误空；取词helper31136已进入新版入口。
+- 手机从自有页面切换淘宝并持续切页，本批不再抢占界面或发送手势；安装后仍为淘宝前台。未点击聊天、未发送内容。SystemUI/框架/AICR本批不重启，最后确认版本分别186/184/184，不冒称当前188。
+- 未实测：新版选择器显示、蜂巢长按跟手预览/换位保存/无效落点取消，以及微信真实按压局部OCR。自动测试仅验证窗口解析和已有逻辑，不能代替上述操作结果。微信中转站文字填框/图片接收问题仍未解决。
