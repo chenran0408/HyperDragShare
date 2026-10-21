@@ -12,6 +12,7 @@ import android.os.Binder;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
+import android.os.RemoteException;
 import android.provider.OpenableColumns;
 import android.provider.MediaStore;
 import android.webkit.MimeTypeMap;
@@ -41,6 +42,28 @@ public final class ShareImageProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (NativeSidebarState.REPORT.equals(method)) {
+            enforcePackageCaller("com.miui.securitycenter", "native sidebar region report");
+            try {
+                return NativeSidebarState.report(contextOrThrow(), extras);
+            } catch (RemoteException error) {
+                DragShareLog.w(TAG, "native sidebar reporter binder already died", error);
+                throw new IllegalStateException("Native sidebar reporter is no longer alive", error);
+            }
+        }
+        if (NativeSidebarState.READ.equals(method)) {
+            enforcePackageCaller("com.android.systemui", "native sidebar region read");
+            return NativeSidebarState.read(contextOrThrow());
+        }
+        if (StashSurfaceHost.METHOD_OPEN.equals(method)) {
+            int callerUid = enforcePackageCaller("com.miui.securitycenter", "native sidebar stash surface open");
+            long identity = Binder.clearCallingIdentity();
+            try {
+                return StashSurfaceHost.open(contextOrThrow(), extras, callerUid);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
         if (SharedRootNodeCapture.METHOD_OPEN.equals(method)) {
             enforcePortalCaller();
             int uid = Binder.getCallingUid();
@@ -418,6 +441,21 @@ public final class ShareImageProvider extends ContentProvider {
             }
         }
         throw new SecurityException("Only Xiaomi AICR can read its integration setting");
+    }
+
+    private int enforcePackageCaller(String packageName, String operation) {
+        int callingUid = Binder.getCallingUid();
+        try {
+            int packageUid = contextOrThrow().getPackageManager()
+                    .getApplicationInfo(packageName, 0).uid;
+            if (callingUid == packageUid) return callingUid;
+            DragShareLog.w(TAG, operation + " denied callerUid=" + callingUid
+                    + " expectedUid=" + packageUid);
+            throw new SecurityException("Only " + packageName + " may perform " + operation);
+        } catch (PackageManager.NameNotFoundException error) {
+            DragShareLog.w(TAG, operation + " denied; caller package is unavailable: " + packageName, error);
+            throw new SecurityException("Required caller package is unavailable: " + packageName, error);
+        }
     }
 
     private File resolveFile(Uri uri) {

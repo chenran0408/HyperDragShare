@@ -234,7 +234,10 @@
 
         <!--
           Image staging and grant management accept calls only from this app or
-          Taplus. Read URIs use unguessable UUID tokens and expire from cache.
+          Taplus. The exported provider also serves ephemeral sidebar geometry
+          to SystemUI and a leased surface to the verified SecurityCenter UID;
+          those methods enforce their caller UIDs in ShareImageProvider.call().
+          Read URIs use unguessable UUID tokens and expire from cache.
         -->
         <provider
             android:name=".StashImageProvider"

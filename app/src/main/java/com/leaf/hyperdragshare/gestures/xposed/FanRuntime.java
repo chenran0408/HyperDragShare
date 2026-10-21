@@ -30,6 +30,7 @@ import android.view.WindowManager;
 import android.view.WindowMetrics;
 import com.leaf.hyperdragshare.gestures.config.ConfigContract;
 import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
+import com.leaf.hyperdragshare.codex.NativeSidebarState;
 import com.leaf.hyperdragshare.gestures.config.AppTarget;
 import com.leaf.hyperdragshare.gestures.config.ShortcutIconLoader;
 import java.util.ArrayList;
@@ -344,6 +345,8 @@ final class FanRuntime {
         });
         outsideCapture = new OutsideTouchCapture(context, mainHandler, this::onCapturedOutsideTouch);
         OverlayTouchRegions.observe(context, configHandler,
+                () -> mainHandler.post(this::refreshOutsideCapture));
+        NativeSidebarState.observe(context, configHandler,
                 () -> mainHandler.post(this::refreshOutsideCapture));
         freeform = new HyperOsFreeformBridge(context, classLoader, mainHandler);
         outsideGestures = new OutsideGestureRecognizer(mainHandler, viewConfiguration, density, this::performOutsideAction);
@@ -895,12 +898,12 @@ final class FanRuntime {
             return;
         }
         boolean overlayDown = action == MotionEvent.ACTION_DOWN
-                && OverlayTouchRegions.contains(x, y);
+                && (OverlayTouchRegions.contains(x, y) || NativeSidebarState.owns(x, y));
         if (overlayTouchDownGate.shouldYield(action, event.getDownTime(), overlayDown)) {
             if (action == MotionEvent.ACTION_DOWN) {
                 if (state != State.IDLE) resetFan();
                 outsideGestures.clearAll();
-                Log.i("Module floating window owns touch stream from DOWN");
+                Log.i("Module panel or native sidebar owns touch stream from DOWN");
             }
             return;
         }
@@ -1976,6 +1979,7 @@ final class FanRuntime {
             visibleWindows.add(new Rect(display.left, display.top, display.right, Math.min(display.bottom, display.top + statusBarHeight)));
         }
         visibleWindows.addAll(OverlayTouchRegions.snapshot());
+        visibleWindows.addAll(NativeSidebarState.snapshot());
         if (ime == null && !visibleWindows.isEmpty() && (triggerCapture.isCapturing() || inputSources.usesNativeInput())) {
             Rect display = displayBounds();
             int hotWidth = Math.round(display.width() * config.hotWidthPercent / 100f);

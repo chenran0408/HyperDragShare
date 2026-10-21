@@ -73,7 +73,7 @@ class InteractiveOverlayWindowTest {
         OverlayWindowPolicy.portal(),
         onDismissed,
         { throw AssertionError("Unexpected window failure", it) },
-        {},
+        content = {},
     )
 
     private class ClearableModel : ViewModel() {

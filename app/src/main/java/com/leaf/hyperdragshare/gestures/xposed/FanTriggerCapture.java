@@ -13,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
+import com.leaf.hyperdragshare.codex.NativeSidebarState;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -376,7 +377,8 @@ final class FanTriggerCapture {
                 recordCapturedEvent(screenEvent);
                 if (!gestureHandoffInProgress
                         && screenEvent.getActionMasked() == MotionEvent.ACTION_DOWN
-                        && OverlayTouchRegions.contains(screenEvent.getX(), screenEvent.getY())) {
+                        && (OverlayTouchRegions.contains(screenEvent.getX(), screenEvent.getY())
+                        || NativeSidebarState.owns(screenEvent.getX(), screenEvent.getY()))) {
                     // The fallback window can sit above an app overlay. Replay its DOWN
                     // after removing the capture layer, then keep forwarding this stream.
                     passthroughCapturedGesture(context.getDisplay() == null ? 0

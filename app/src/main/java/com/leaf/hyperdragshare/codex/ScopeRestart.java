@@ -17,6 +17,8 @@ final class ScopeRestart {
         int oldPid = ModuleActivation.injectedProcessId(context);
         ModuleActivation.clearPortalReport(context);
         runRoot("killall com.android.systemui && "
+                + "{ sidebar_pid=$(pidof com.miui.securitycenter:ui); "
+                + "if [ -n \"$sidebar_pid\" ]; then kill $sidebar_pid; fi; } && "
                 + "am force-stop --user current com.miui.contentextension && "
                 + "am force-stop --user current com.xiaomi.aicr && "
                 + ModuleActivation.portalHandshakeCommand(), "应用作用域重载");

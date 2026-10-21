@@ -25,8 +25,8 @@
 
 ## 不可破坏的约束
 
-1. LSPosed 作用域只包含 `com.miui.contentextension`、`com.xiaomi.aicr`、`android` 、`com.android.systemui` 和 `com.miui.home`，
-   分别用于传送门拖拽、AICR 文本直取、可选背部轻敲与自有 Root 子进程数量裁剪、合并手势运行时和桌面快捷方式。已停止面积研究并从入口移除旧SystemUI面积诊断。手势运行时继承157的方向判定与接管策略；不得与旧Hyper手势模块同时接管。不要加入
+1. LSPosed 作用域包含 `com.miui.contentextension`、`com.xiaomi.aicr`、`android` 、`com.android.systemui`、`com.miui.home` 和原生侧边栏整合所需 `com.miui.securitycenter`（仅 `:ui` 进程）。
+   分别用于传送门拖拽、AICR 文本直取、可选背部轻敲与自有 Root 子进程数量裁剪、合并手势运行时、桌面快捷方式和用户交接的原生侧边栏；安全中心入口精确限定已核对40001365/SDK37，不能扩展到其他服务进程。已停止面积研究并从入口移除旧SystemUI面积诊断。手势运行时继承157的方向判定与接管策略；不得与旧Hyper手势模块同时接管。不要加入
    `com.miui.contentcatcher`（Application Extension Service），也不要在部署脚本中强停它；
    已知部分系统上强停它会连带结束其他应用。
 2. root 输入源一旦 `isReady()`，它就是一次拖拽的唯一权威输入源。不得把 MIUI
@@ -64,7 +64,7 @@
 13. 内容获取方式默认是传送门。无障碍模式只由 `DragShareAccessibilityService` 在模块进程中
     工作，仍依赖 Root evdev，不得因此新增 LSPosed 作用域或静默启用无障碍服务。Xposed API
     仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
-    `AicrCopyHooks`、`BackTapFrameworkHooks`、`RootProcessFrameworkHooks` 和合并后的 `gestures.xposed` 包；AICR 与框架 Hook 必须保持包名、目标类和方法
+    `AicrCopyHooks`、`BackTapFrameworkHooks`、`RootProcessFrameworkHooks`、`NativeSidebarHooks` 和合并后的 `gestures.xposed` 包；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
 14. 节点树只在一次明确请求后读取：无障碍长按超时、用户已启用按压入口且单指静止按住120ms后的分类、按住时长确认或用户主动点取。
     按压分类按MI行为仅缓存本次内容，到确认时才接管并打开窗口；松手、移位或多指取消，不在空闲时读取。

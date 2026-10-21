@@ -28,15 +28,18 @@ internal class InteractiveOverlayWindow(
     policy: OverlayWindowPolicy,
     private val onDismissed: () -> Unit,
     private val onFailure: (RuntimeException) -> Unit,
+    private val embeddedHost: StashSurfaceHost? = null,
     content: @Composable () -> Unit,
 ) : ViewModelStoreOwner {
     override val viewModelStore = ViewModelStore()
     private val dialog = ComponentDialog(context, android.R.style.Theme_Translucent_NoTitleBar)
-    internal val composeView = ComposeView(dialog.context)
+    internal val composeView = ComposeView(embeddedHost?.context ?: dialog.context)
     internal val window: Window = requireNotNull(dialog.window)
     private var disposed = false
     private var dragWindowAttributes: WindowManager.LayoutParams? = null
     private var onDragFinished: ((Boolean) -> Unit)? = null
+    private var dismissAfterDrag = false
+    private val dragView get() = if (embeddedHost == null) window.decorView else composeView
     private val touchRegionId = OverlayTouchRegions.newWindowId()
     private var observedTree: android.view.ViewTreeObserver? = null
     private val touchRegionListener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
@@ -47,24 +50,29 @@ internal class InteractiveOverlayWindow(
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.setCanceledOnTouchOutside(false)
         composeView.setViewTreeViewModelStoreOwner(this)
+        embeddedHost?.prepare(composeView)
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         composeView.setContent(content)
-        dialog.setContentView(composeView)
-        window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        window.setWindowAnimations(0)
-        window.attributes = window.attributes.apply {
-            type = policy.windowType
-            width = ViewGroup.LayoutParams.MATCH_PARENT
-            height = ViewGroup.LayoutParams.MATCH_PARENT
-            gravity = Gravity.TOP or Gravity.START
-            flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        if (embeddedHost == null) {
+            dialog.setContentView(composeView)
+            window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            window.setWindowAnimations(0)
+            window.attributes = window.attributes.apply {
+                type = policy.windowType
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+                gravity = Gravity.TOP or Gravity.START
+                flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            }
         }
         dialog.setOnDismissListener { dispose() }
+        embeddedHost?.dismiss = ::dismiss
     }
 
     fun show(pressConfirmedAt: Long = 0L): Boolean {
         check(!disposed) { "Create a new interactive window after dismissal" }
+        if (embeddedHost != null) return embeddedHost.show(composeView)
         return try {
             dialog.show()
             val decor = window.decorView
@@ -103,6 +111,14 @@ internal class InteractiveOverlayWindow(
     }
 
     fun dismiss() {
+        if (embeddedHost != null && isDragHandoffActive) {
+            dismissAfterDrag = true
+            return
+        }
+        if (embeddedHost != null) {
+            dispose()
+            return
+        }
         dialog.dismiss()
         dispose()
     }
@@ -119,35 +135,39 @@ internal class InteractiveOverlayWindow(
         onFinished: ((Boolean) -> Unit)? = null,
     ) {
         check(!disposed && dragWindowAttributes == null)
-        val original = WindowManager.LayoutParams().also { it.copyFrom(window.attributes) }
-        dragWindowAttributes = original
+        val original = if (embeddedHost == null) WindowManager.LayoutParams().also {
+            it.copyFrom(window.attributes)
+        } else null
+        dragWindowAttributes = original ?: WindowManager.LayoutParams()
         onDragFinished = onFinished
-        // This class owns the decor's listener; Compose children retain their own listeners.
-        window.decorView.setOnDragListener { _, event ->
+        // Observe on the source root without consuming the child drag target.
+        dragView.setOnDragListener { _, event ->
             when (event.action) {
                 DragEvent.ACTION_DRAG_STARTED -> {
-                    window.attributes = WindowManager.LayoutParams().also {
-                        it.copyFrom(original)
-                        if (onStarted == null) it.alpha = 0f
-                        it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    if (original != null) {
+                        window.attributes = WindowManager.LayoutParams().also {
+                            it.copyFrom(original)
+                            if (onStarted == null) it.alpha = 0f
+                            it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        }
+                        publishTouchRegion()
                     }
-                    publishTouchRegion()
                     onStarted?.invoke()
                     true
                 }
                 DragEvent.ACTION_DRAG_ENDED -> {
                     DragShareLog.i("DragShare/InteractiveWindow", "content drag ended accepted=${event.result}")
-                    window.decorView.setOnDragListener(null)
+                    dragView.setOnDragListener(null)
                     dragWindowAttributes = null
                     val finished = onDragFinished
                     onDragFinished = null
                     if (!disposed) {
                         // A successful drop hands focus to the target; restoring the source first closes its editor.
-                        if (!event.result) window.attributes = original
-                        publishTouchRegion()
+                        if (!event.result && original != null) window.attributes = original
+                        if (original != null) publishTouchRegion()
                         finished?.invoke(event.result)
-                        if (!isCurrent()) dismiss()
+                        if (dismissAfterDrag || !isCurrent()) dismiss()
                         else if (event.result) onDropped()
                     }
                     true
@@ -160,14 +180,17 @@ internal class InteractiveOverlayWindow(
     }
 
     fun cancelTextDragObservation() {
-        val original = dragWindowAttributes ?: return
-        window.decorView.setOnDragListener(null)
+        if (dragWindowAttributes == null) return
+        val original = if (embeddedHost == null) dragWindowAttributes else null
+        dragView.setOnDragListener(null)
         dragWindowAttributes = null
         val finished = onDragFinished
         onDragFinished = null
         if (!disposed) {
-            window.attributes = original
-            publishTouchRegion()
+            if (original != null) {
+                window.attributes = original
+                publishTouchRegion()
+            }
             finished?.invoke(false)
         }
     }
@@ -184,17 +207,18 @@ internal class InteractiveOverlayWindow(
         disposed = true
         observedTree?.let { if (it.isAlive) it.removeOnGlobalLayoutListener(touchRegionListener) }
         observedTree = null
-        OverlayTouchRegions.update(dialog.context, touchRegionId, null)
-        window.decorView.setOnDragListener(null)
+        if (embeddedHost == null) OverlayTouchRegions.update(dialog.context, touchRegionId, null)
+        dragView.setOnDragListener(null)
         dragWindowAttributes = null
         onDragFinished = null
         composeView.disposeComposition()
         viewModelStore.clear()
+        embeddedHost?.release()
         onDismissed()
     }
 
     private fun publishTouchRegion() {
-        if (disposed) return
+        if (disposed || embeddedHost != null) return
         val decor = window.decorView
         val flags = window.attributes.flags
         if (!dialog.isShowing || !decor.isShown

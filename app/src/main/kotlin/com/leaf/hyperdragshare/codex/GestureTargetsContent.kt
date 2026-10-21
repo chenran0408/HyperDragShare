@@ -79,7 +79,10 @@ import top.yukonga.miuix.kmp.icon.extended.AddCircle
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.ExpandLess
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.basic.Search
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
@@ -244,16 +247,26 @@ fun GestureTargetsContent(
                                     endActions = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             if (group != "honeycomb") {
-                                                TextButton("上移", enabled = index > 0, onClick = {
-                                                    val moved = targets.removeAt(index)
-                                                    targets.add(index - 1, moved)
-                                                    saveTargets(store, group, targets, pageData) { pageData = it }
-                                                })
-                                                TextButton("下移", enabled = index < targets.lastIndex, onClick = {
-                                                    val moved = targets.removeAt(index)
-                                                    targets.add(index + 1, moved)
-                                                    saveTargets(store, group, targets, pageData) { pageData = it }
-                                                })
+                                                TargetIconAction(
+                                                    description = "上移 ${row.label}",
+                                                    imageVector = MiuixIcons.ExpandLess,
+                                                    enabled = index > 0,
+                                                    onClick = {
+                                                        val moved = targets.removeAt(index)
+                                                        targets.add(index - 1, moved)
+                                                        saveTargets(store, group, targets, pageData) { pageData = it }
+                                                    },
+                                                )
+                                                TargetIconAction(
+                                                    description = "下移 ${row.label}",
+                                                    imageVector = MiuixIcons.ExpandMore,
+                                                    enabled = index < targets.lastIndex,
+                                                    onClick = {
+                                                        val moved = targets.removeAt(index)
+                                                        targets.add(index + 1, moved)
+                                                        saveTargets(store, group, targets, pageData) { pageData = it }
+                                                    },
+                                                )
                                             }
                                             TargetIconAction(
                                                 description = "移除 ${row.label}",
@@ -443,8 +456,20 @@ private fun TargetPickerDialog(
                         height = 40.dp,
                     )
                 } else {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(text = "刷新目录", onClick = { store.requestShortcutCatalog() })
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "刷新目录",
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        TargetIconAction(
+                            description = "刷新快捷方式目录",
+                            imageVector = MiuixIcons.Refresh,
+                            onClick = { store.requestShortcutCatalog() },
+                        )
                     }
                 }
                 TextField(

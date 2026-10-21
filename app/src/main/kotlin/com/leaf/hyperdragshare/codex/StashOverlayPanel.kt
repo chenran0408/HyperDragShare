@@ -95,6 +95,7 @@ object StashOverlayPanel {
         val app = context.applicationContext
         main.post {
             if (app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return@post
+            active?.takeIf { it.embedded != null }?.let { it.expand(); return@post }
             if (!Settings.canDrawOverlays(app)) {
                 Toast.makeText(app, "请先在“模块设置→悬浮窗权限”中授权，再打开侧边中转站", Toast.LENGTH_LONG).show()
                 return@post
@@ -108,6 +109,7 @@ object StashOverlayPanel {
         val app = context.applicationContext
         main.post {
             if (app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return@post
+            active?.takeIf { it.embedded != null }?.let { it.collapse(); return@post }
             if (!Settings.canDrawOverlays(app)) {
                 Toast.makeText(app, "悬浮窗权限已关闭，无法恢复中转站侧条", Toast.LENGTH_LONG).show()
                 return@post
@@ -123,6 +125,7 @@ object StashOverlayPanel {
         val app = context.applicationContext
         main.post {
             if (app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return@post
+            active?.takeIf { it.embedded != null }?.let { it.refresh(); return@post }
             if (!Settings.canDrawOverlays(app)) {
                 Toast.makeText(app, "内容已保存；开启模块悬浮窗权限后可使用中转站侧条", Toast.LENGTH_LONG).show()
                 return@post
@@ -133,10 +136,40 @@ object StashOverlayPanel {
     }
 
     @JvmStatic fun dismiss() {
-        main.post { active?.overlay?.dismiss() }
+        main.post {
+            active?.let { shelf ->
+                if (shelf.embedded != null) shelf.embedded.requestClose() else shelf.overlay.dismiss()
+            }
+        }
     }
 
-    private class Shelf(private val app: Context) {
+    /** Mount the same module-owned shelf content in the native sidebar's passive surface. */
+    @JvmStatic internal fun attachSurface(app: Context, host: StashSurfaceHost) {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Sidebar surfaces attach on the main thread" }
+        check(!app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
+            "Unlock before opening stash"
+        }
+        if (active?.embedded === host) {
+            active?.expand()
+            return
+        }
+        check(active?.overlay?.isDragHandoffActive != true) { "Finish the active content drag first" }
+        active?.let { previous ->
+            if (previous.embedded != null) previous.embedded.requestClose()
+            previous.overlay.dismiss()
+        }
+        check(active == null) { "Previous stash surface is still active" }
+        val shelf = Shelf(app.applicationContext, host).also { active = it }
+        host.onBack = shelf::handleHostBack
+        try {
+            shelf.expand()
+        } catch (error: RuntimeException) {
+            shelf.overlay.dismiss()
+            throw error
+        }
+    }
+
+    private class Shelf @JvmOverloads constructor(private val app: Context, val embedded: StashSurfaceHost? = null) {
         private val position = app.getSharedPreferences("stash_window_position", Context.MODE_PRIVATE)
         private var onLeft by mutableStateOf(position.getBoolean("left", false))
         private var centerY = position.getFloat("center_y", .5f)
@@ -149,8 +182,9 @@ object StashOverlayPanel {
         private var moving = false
         private var imeBottomInset = 0
         private val displayManager = app.getSystemService(DisplayManager::class.java)
-        private val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
-        private val context = app.createDisplayContext(display)
+        private val display = embedded?.context?.display
+            ?: requireNotNull(displayManager.getDisplay(Display.DEFAULT_DISPLAY))
+        private val context = embedded?.context ?: app.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -171,14 +205,14 @@ object StashOverlayPanel {
         private var openedBatchId by mutableStateOf<String?>(null)
         private val screenOffReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                overlay.dismiss()
+                if (embedded != null) embedded.requestClose() else overlay.dismiss()
             }
         }
         private val displayListener = object : DisplayManager.DisplayListener {
             override fun onDisplayAdded(displayId: Int) = Unit
             override fun onDisplayRemoved(displayId: Int) = Unit
             override fun onDisplayChanged(displayId: Int) {
-                if (displayId == Display.DEFAULT_DISPLAY && active === this@Shelf) resize()
+                if (displayId == display.displayId && active === this@Shelf) resize()
             }
         }
         val overlay: InteractiveOverlayWindow = InteractiveOverlayWindow(context, OverlayWindowPolicy.application(),
@@ -189,10 +223,11 @@ object StashOverlayPanel {
                 if (active === this) active = null
             },
             onFailure = { report("中转站窗口无法显示", it) },
+            embeddedHost = embedded,
         ) { Content() }
 
         init {
-            overlay.window.decorView.setOnApplyWindowInsetsListener { _, insets ->
+            if (embedded == null) overlay.window.decorView.setOnApplyWindowInsetsListener { _, insets ->
                 // Decor insets are relative to this small window. Placement uses display coordinates.
                 val displayInsets = context.getSystemService(WindowManager::class.java)
                     .maximumWindowMetrics.windowInsets
@@ -227,6 +262,10 @@ object StashOverlayPanel {
         fun collapse() {
             if (overlay.isDragHandoffActive) return
             confirmDelete = false
+            if (embedded != null) {
+                embedded.requestClose()
+                return
+            }
             expanded = false
             resize()
         }
@@ -237,8 +276,10 @@ object StashOverlayPanel {
                 onDropped = ::collapse,
                 onStarted = {
                     val density = context.resources.displayMetrics.density
-                    dragContentWidthDp = overlay.window.attributes.width / density
-                    dragContentHeightDp = overlay.window.attributes.height / density
+                    val width = if (embedded == null) overlay.window.attributes.width else overlay.composeView.width
+                    val height = if (embedded == null) overlay.window.attributes.height else overlay.composeView.height
+                    dragContentWidthDp = width / density
+                    dragContentHeightDp = height / density
                     draggingContent = true
                     resize(allowDuringDrag = true)
                 },
@@ -262,7 +303,10 @@ object StashOverlayPanel {
             }
         }
 
+        fun handleHostBack() = back()
+
         private fun resize(allowDuringDrag: Boolean = false) {
+            if (embedded != null) return
             if (overlay.isDragHandoffActive && !allowDuringDrag) return
             val windowMetrics = context.getSystemService(WindowManager::class.java).maximumWindowMetrics
             val metrics = windowMetrics.bounds
@@ -337,9 +381,10 @@ object StashOverlayPanel {
         @OptIn(ExperimentalComposeUiApi::class)
         @Composable private fun MoveHandle() {
             Column(
-                Modifier.fillMaxWidth().height(48.dp).systemGestureExclusion()
-                    .semantics { contentDescription = "拖动中转站，松手自动贴边" }
-                    .pointerInteropFilter { handleMove(it, false) },
+                Modifier.fillMaxWidth().height(48.dp)
+                    .then(if (embedded == null) Modifier.systemGestureExclusion()
+                        .pointerInteropFilter { handleMove(it, false) } else Modifier)
+                    .semantics { contentDescription = if (embedded == null) "拖动中转站，松手自动贴边" else "中转站" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -699,7 +744,7 @@ object StashOverlayPanel {
                             }
                         }
                     }
-                    if (!expanded || draggingContent) CollapsedHandle()
+                    if (embedded == null && (!expanded || draggingContent)) CollapsedHandle()
                 }
             }
         }

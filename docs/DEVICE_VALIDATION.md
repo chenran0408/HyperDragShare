@@ -1252,3 +1252,7 @@ build351/352 Lint/Release成功，无单元重跑；候选实机发现TopAppBar�
 候选1.7.172/196同签名安装成功；Portal与SystemUI重载，Portal Root输入/reader ready且错误空；SystemUI诊断明确version=196。已打开中转站确认Miuix卡片/拖柄/预览缩略项显示。发现透明底板与背景混杂后同批加圆角底板，用户随后追加1dp描边。没有发送内容、移动已有中转站位置或更改用户数据；位置仍为right/center_y=.44625。私有截图和运行摘要在work/overlay172，未进Git。
 
 依用户“少检查，多推进”，不重复截图矩阵/微信拖放验收，IME避让和DOWN仲裁当前是源码/自动测试层证据，不称实机通过。最终APK另见CURRENT_STATUS。
+
+## 173 原生侧边栏批次（2026-10-21）
+
+173交付：build358成功，389项单测0失败/错误/跳过，Lint、Debug、Release通过。APK outputs/HyperDragShare-1.7.173.apk，SHA256 6E45EDF729BE85E748D24DCD5F8A76372180C0324066BA11B6986D3D0650C04F；同签名覆盖安装成功，本批一次安装。通过通知栏LSPosed寄生管理器启用安全服务作用域，保留原有作用域。重载SystemUI、Portal及安全服务:ui后，19:43:17日志明确PID21536加载exact sidebar hooks installed build=197。只证明新入口Hook安装成功，尚未确认rail/Surface实际显示、拖放、键盘和返回行为。系统框架/AICR未重载；SystemUI/Portal已发重载但未另采新版本诊断，不能推定全作用域运行197。设备截图/日志保留本机work/sidebar173，不提交私人截图。
