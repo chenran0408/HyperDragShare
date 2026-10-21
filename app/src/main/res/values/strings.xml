@@ -33,6 +33,7 @@
     <string name="bigbang_edit_apply">重新分词</string>
     <string name="bigbang_action_select_all">全选</string>
     <string name="bigbang_action_share_all">分享全部</string>
+    <string name="bigbang_action_share_drag">分享，长按拖出选中文字</string>
     <string name="bigbang_action_more">更多</string>
     <string name="bigbang_action_ocr">OCR</string>
     <string name="bigbang_action_language">语言</string>

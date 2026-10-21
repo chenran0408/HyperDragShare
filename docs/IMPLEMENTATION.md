@@ -997,3 +997,11 @@ StashStore.groupEntries/ungroupEntries只在事务中改已有批次字段，调
 Controller提前取消后仍接受真实UP的宿主完成回调，UP自身触发窗口失败也在finally收尾；CANCEL/窗口失败时不提前回放原生取消。Portal原队列清空后才调用original的规则未变。受控回调计数1不等于实际宿主延迟队列/真实手指已经验收，不能承诺恢复已被接管的原始触摸流。
 
 最终271构建、197项测试和Lint通过。真实设备的无效窗口类型实验从暗中换窗、无提示、取消后UP回调0，变为取消/释放/提示且回调1；正常现代换边/离开重开通过。实验不撤销实际权限，不是权限撤销测试。证据与限制见DEVICE_VALIDATION。
+
+## 2026-10-21：1.7.132 分词选词原生拖出
+
+BoomActionHandler两组分享图标新增长按入口，BoomChipPage/BigBangPanelSession窄Actions转发来源View和真实选中文字；无选择明确提示并消费长按，点击仍走原分享。没有复活失效的Sidebar旧手势，不把未选词替换为全文，也不新增常驻按钮。
+
+BigBangOverlayLauncher使用ClipData.newPlainText和DRAG_FLAG_GLOBAL；阴影为Miuix当前色板、最多三行的真实选词预览。先保存完整Panel状态，仅系统startDragAndDrop返回true后关闭大面板并复用返回条；返回恢复合并/选择和原来源区域。系统返回false/拒绝权限明确提示、原面板保留并消费长按，避免松手落到点击分享。不写中转站、不授图片权限、不打开本App Activity。拖出成功启动不等于目标已接收，成功与未接收分别验收。
+
+272构建、197项测试及Lint通过。真机将合并“小米15”拖进系统设置EditText，读回严格一致；原页仍是Settings，返回后合并单块且已选4/41保留。拖到空白未接收后同样恢复；点击分享显示真实Chooser预览“小米”，未发送。详见DEVICE_VALIDATION。其他接收App、多段/超长/emoji、深色/横屏、拒绝权限分支尚未实测。

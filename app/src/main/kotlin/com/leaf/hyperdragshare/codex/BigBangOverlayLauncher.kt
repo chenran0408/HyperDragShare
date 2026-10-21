@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex
 
 import android.content.Context
+import android.content.ClipData
 import android.content.Intent
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
@@ -11,7 +12,9 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Display
+import android.view.View
 import android.view.WindowManager
+import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.foundation.layout.Row
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -73,6 +76,7 @@ object BigBangOverlayLauncher {
             override fun onReceive(context: Context, intent: Intent) = overlay.dismiss()
         }
         lateinit var session: BigBangPanelSession
+        val originalText = text
         session = BigBangPanelSession(context, object : BigBangPanelSession.Actions {
             override fun dismiss() = overlay.dismiss()
             override fun search(text: String, type: Int) {
@@ -84,6 +88,40 @@ object BigBangOverlayLauncher {
                     this.type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, text)
                 }, null))
+            }
+            override fun dragText(source: View, text: String): Boolean {
+                val density = context.resources.displayMetrics.density
+                val colors = OverlayThemeColors.colors(DragShareSettings.readLocal(context).isDarkTheme(context))
+                val preview = TextView(context).apply {
+                    this.text = text
+                    textSize = 14f
+                    maxLines = 3
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setTextColor(colors[1])
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(colors[0])
+                        cornerRadius = 12 * density
+                    }
+                    val padding = (12 * density).toInt()
+                    setPadding(padding, padding, padding, padding)
+                    measure(View.MeasureSpec.makeMeasureSpec((200 * density).toInt(), View.MeasureSpec.AT_MOST),
+                        View.MeasureSpec.makeMeasureSpec((120 * density).toInt(), View.MeasureSpec.AT_MOST))
+                    layout(0, 0, measuredWidth, measuredHeight)
+                }
+                val state = Bundle().also(session::saveState)
+                val started = try {
+                    source.startDragAndDrop(ClipData.newPlainText("选中文字", text),
+                        View.DragShadowBuilder(preview), null, View.DRAG_FLAG_GLOBAL)
+                } catch (error: SecurityException) {
+                    report(app, error)
+                    return true
+                }
+                if (started) {
+                    DragShareLog.i("DragShare/BigBangWindow", "selected text drag started length=${text.length}")
+                    overlay.dismiss()
+                    showReturnTab(app) { open(app, originalText, x, y, sourceImage, state, sourceArea = sourceArea) }
+                } else Toast.makeText(app, "系统未能开始拖拽，已保留选词", Toast.LENGTH_SHORT).show()
+                return true
             }
             override fun reopenOcr(uri: Uri) {
                 ImageOcrOverlay.start(app, uri)

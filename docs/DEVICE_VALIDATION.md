@@ -761,3 +761,13 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 269唯一失败是既有方向测试将已改为void的refreshDisplayGeometry反射返回值强转Boolean；修正测试调用，方向断言不变。270全部通过；删除本批产生的未用错误文案后最终271 testDebugUnitTest/lintDebug/assembleDebug通过，197项0失败，Lint0 errors/139 warnings/2 hints。没有重复执行资源删除不影响的设备探针。
 - 最终155原位安装，包名com.leaf.hyperdragshare.codex和debug证书不变。outputs/HyperDragShare-1.7.131-debug.apk与设备base.apk SHA256严格一致：274976183D2635312774BE8A497DF4DB56352DCAF9823C051C6584361BC3163A。hds131-installed-hash.txt。首次快速启动服务返回app is in background，不能记为重载成功；最终等待BlacklistSettingActivity启动完再启动服务，实际握手155/Root155/granted=true，hds131-activation.xml。仅重载Portal，不重启android/AICR/整机。
 - 设置前后XML一致，本轮不写中转站，schema2和旧UI先拆文字/混合组约束保留。无Root取词helper、远端probe或测试菜单残留；原Bili2183休息提醒置前，不关闭提醒/不播放。授权持续有效，无需再询问。真实拇指面积、Bili评论普通长按、四样式四边真实分享、115旧ANR及复制浮层共存仍未解决。
+
+## 2026-10-21：1.7.132 原页分词选词拖出
+
+- 既有分享图标长按拖出当前选择，点击分享不变；不增加常驻按钮、App Activity或中转站记录。真实选词Miuix阴影，系统确认启动后收面板留返回条，失败保留原面板。Actions接口仅转发View/文字，滑动选词和旧Sidebar路径不改。
+- build272 testDebugUnitTest/lintDebug/assembleDebug通过，197项0失败，Lint0 errors/139 warnings/2 hints。原位安装156，包名及debug证书不变。outputs/HyperDragShare-1.7.132-debug.apk与base.apk SHA256一致：20EC5816717EB383653D7645B5B5BB0341C466678711239E8C32DB5B652765C5；hds132-installed-hash.txt。
+- 通过原生Settings搜索入口准备可接收EditText，再由debug OverlayInteractionProbe显示生成41字原页分词。点选“小米”“15”→合并为一块→长按分享拖到Settings搜索框，10:03:17日志确认真实GLOBAL启动，hds132-dropped.xml中com.android.settings的EditText严格为“小米15”；hds132-dropped.png同时显示小返回条和原Settings，没有进入本App Activity。这是真实跨UID文字DROP，不能替代其它目标App。hds132-panel/selected/merged.xml保存前态，日志hds132-drag.log，不截屏识字或Root取词。
+- 点击“返回分词”恢复同一“小米15”合并单块(selected=true)及“已选4/41”，hds132-restored.xml/png。再拖到非接收空白，系统DRAG_ENDED后返回，仍同一块和4/41，hds132-cancel-restored.xml。证明未接收不丢原选择；不把它写成目标已接收。
+- 首次随后的快速点击分享未取得Chooser证据，恰逢90秒诊断寿命结束，不据此判断产品成功/失败。另一次有充足寿命的真实产品点击，hds132-short-share.xml显示系统com.android.intentresolver Chooser和“小米”预览、目标列表；未点任意分享目标，不发送内容。关闭分享/分词后回原Bili2183，hds132-restored-source.png确认休息提醒仍在、未恢复播放。
+- 实际Portal/Root握手156/156/granted=true，hds132-activation.xml；仅重载传送门，没有android/AICR/整机重启。设置前后XML相同，无Stash写入/迁移、无Root助手或测试菜单遗留；原schema2/旧UI先拆组的回退限制保持。临时截图/XML只留本机，不提交私人画面。
+- 未验：其他接收App、多段/emoji/超长选择、深色/横屏、系统拒绝拖拽与权限撤销。实际拇指面积、Bili评论普通长按、四样式四边完整实手指分享、115旧ANR/复制浮层共存仍未解决。本功能不当作入口触发修复。

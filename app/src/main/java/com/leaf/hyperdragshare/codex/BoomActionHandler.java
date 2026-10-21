@@ -206,6 +206,15 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
         mBoomPage.mActions.share(getSelectedText());
     }
 
+    private boolean dragSelectedText(View source) {
+        if (!hasSelection()) {
+            mToast.setText("请先选中要拖出的文字");
+            mToast.show();
+            return true;
+        }
+        return mBoomPage.mActions.dragText(source, getSelectedText());
+    }
+
     private void initViews(View contentView) {
         mSelectRect = (LinearLayout) contentView.findViewById(R.id.boom_multi_selected_bg);
         mSelectBar = (RelativeLayout) contentView.findViewById(R.id.multi_selected_bar);
@@ -238,6 +247,9 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
             }
         });
         ImageView shareView = (ImageView) mSelectBar.findViewById(R.id.all_share);
+        shareView.setContentDescription(mBoomPage.mContext.getText(R.string.bigbang_action_share_drag));
+        shareView.setTooltipText(mBoomPage.mContext.getText(R.string.bigbang_action_share_drag));
+        shareView.setOnLongClickListener(this::dragSelectedText);
         shareView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -278,6 +290,9 @@ public class BoomActionHandler implements CustomScrollView.OnScrollListener {
             }
         });
         ImageView topShareView = (ImageView) mFakeSelectBar.findViewById(R.id.all_share);
+        topShareView.setContentDescription(mBoomPage.mContext.getText(R.string.bigbang_action_share_drag));
+        topShareView.setTooltipText(mBoomPage.mContext.getText(R.string.bigbang_action_share_drag));
+        topShareView.setOnLongClickListener(this::dragSelectedText);
         topShareView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

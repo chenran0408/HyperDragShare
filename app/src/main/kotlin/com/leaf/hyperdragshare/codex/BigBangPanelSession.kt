@@ -33,6 +33,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         fun dismiss()
         fun search(text: String, type: Int)
         fun share(text: String)
+        fun dragText(source: View, text: String): Boolean
         fun saveToStash(text: String, selectedOnly: Boolean)
         fun reopenOcr(uri: Uri)
         fun readQr(uri: Uri)
@@ -90,6 +91,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
             override fun copy(text: String) = copyText(text)
             override fun search(text: String, type: Int) = openSearch(text, type)
             override fun share(text: String) = actions.share(text)
+            override fun dragText(source: View, text: String) = actions.dragText(source, text)
         }).also { page ->
             page.setOnChipsChangedListener(::refreshLegacyTheme)
             page.setOnSelectionChangedListener(::updateSelectionSummary)

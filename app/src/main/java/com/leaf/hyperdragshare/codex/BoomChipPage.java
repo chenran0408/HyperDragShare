@@ -29,6 +29,7 @@ public class BoomChipPage {
         void copy(String text);
         void search(String text, int type);
         void share(String text);
+        boolean dragText(View source, String text);
     }
     final View mBoomTable;
     final View mMask;
