@@ -4,7 +4,7 @@
 
 用户提供的428 APK静态核验确认其Root长按回退分支约4秒后使用Root screencap，拿到截图裁剪，图片识别结束后才打开分词；OCR中间窗与文本分词不是其这条回退路径的两次独立交接。183已安装但未重载Portal；复核发现它显示全屏交互浮窗后还会检查微信焦点，必然可能因浮窗接管焦点而否决识别。184移除这一步重复校验，保留截图捕获前的WMS窗口/可见区域检查。
 
-184的 `testDebugUnitTest lintDebug assembleDebug assembleRelease` 全部通过。Release采用R8、arm64-v8a，签名与apksigner校验通过；APK `outputs/HyperDragShare-1.7.184-arm64-v8a.apk`，7,446,367 bytes，SHA256 `143A64D4A6A0EF26A4C181B5B78BCE68FD83EE247ABE67B7D132026FDD586BD7`。设备183已安装，尚未安装/加载184；微信长按、AICR结果及延迟仍待实测。预期日志为 `WeChat OCR direct start`、`WeChat OCR finished elapsedMs=... characters=...` 和 `WeChat OCR result delivered to existing panel`，日志不含识别文本.
+184的 `testDebugUnitTest lintDebug assembleDebug assembleRelease` 全部通过。Release采用R8、arm64-v8a，签名与apksigner校验通过；APK `outputs/HyperDragShare-1.7.184-arm64-v8a.apk`，7,446,367 bytes，SHA256 `143A64D4A6A0EF26A4C181B5B78BCE68FD83EE247ABE67B7D132026FDD586BD7`。设备已覆盖安装184（versionCode 208，lastUpdateTime 2026-10-22 01:13:12），前台仍是微信会话。仅重载Portal/AICR后，Portal PID 13444日志显示 `portal hooks installed`、`portal runtime started`；Root helper PID 12729 `connection ready elapsed_ms=450`，按压 reader `ready elapsed_ms=465`。AICR将在下次识别绑定新代码，SystemUI未重载。微信真实长按、识别结果及延迟仍待用户实测。预期日志为 `WeChat OCR direct start`、`WeChat OCR finished elapsedMs=... characters=...` 和 `WeChat OCR result delivered to existing panel`，日志不含识别文本.
 
 继续工作前先阅读本文件与 MIBIGBANG_MIGRATION_PLAN.md。代码与设备现状优先于历史计划；未执行的行为不得标成通过。
 
