@@ -138,6 +138,8 @@ public final class ConfigContract {
     public static final String KEY_LANDSCAPE_POSITION_X = "landscape_position_x";
     public static final String KEY_LANDSCAPE_POSITION_Y = "landscape_position_y";
     public static final String KEY_COMPONENTS = "components";
+    public static final String KEY_GESTURE_EXCLUDED_PACKAGES =
+            "gesture_excluded_packages";
     public static final String KEY_SHORTCUT_CATALOG = "shortcut_catalog";
     public static final String KEY_SHORTCUT_CATALOG_REQUEST = "shortcut_catalog_request";
     public static final String KEY_ACTIVITY_CATALOG = "activity_catalog";

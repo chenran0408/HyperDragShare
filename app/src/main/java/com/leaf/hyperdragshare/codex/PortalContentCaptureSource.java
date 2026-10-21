@@ -31,7 +31,9 @@ final class PortalContentCaptureSource {
         try {
             String sourcePackage = (String) XposedHelpers.callStaticMethod(serviceClass, "getInjectorPackage");
             if (BuildConfig.APPLICATION_ID.equals(sourcePackage)) return null;
-            if (GameCapturePolicy.shouldPause((android.content.Context) taplusService, settings, sourcePackage)) return null;
+            android.content.Context context = (android.content.Context) taplusService;
+            if (AccessibilityBlacklist.isBlocked(context, settings, sourcePackage)
+                    || GameCapturePolicy.shouldPause(context, settings, sourcePackage)) return null;
             Rect sourceBounds = (Rect) XposedHelpers.callMethod(taplusService, "getContentRect");
             Object textMode = XposedHelpers.getStaticObjectField(serviceClass, "sIsTextMode");
             if (Boolean.TRUE.equals(textMode)) {

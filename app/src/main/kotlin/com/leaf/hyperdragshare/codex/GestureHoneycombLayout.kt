@@ -95,10 +95,59 @@ fun GestureHoneycombLayout(
     configStore: ConfigStore,
     onBack: () -> Unit,
 ) {
+    HoneycombEditorScreen(configStore, onBack)
+}
+
+/** Inline editor for pages that manage honeycomb targets. */
+@Composable
+fun HoneycombInlineEditor(
+    configStore: ConfigStore,
+    revision: Any?,
+    modifier: Modifier = Modifier,
+) {
+    HoneycombEditorContent(configStore, revision, inline = true, modifier = modifier)
+}
+
+@Composable
+private fun HoneycombEditorScreen(configStore: ConfigStore, onBack: () -> Unit) {
+    var editing by remember(configStore) { mutableStateOf(false) }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = "蜂巢位置",
+                largeTitle = "蜂巢位置",
+                navigationIcon = { HoneycombIconAction("返回", MiuixIcons.Back, onBack) },
+                actions = {
+                    HoneycombIconAction(
+                        description = if (editing) "完成编辑" else "编辑位置",
+                        imageVector = if (editing) MiuixIcons.Ok else MiuixIcons.Edit,
+                        onClick = { editing = !editing },
+                    )
+                },
+            )
+        },
+    ) { contentPadding ->
+        HoneycombEditorContent(
+            configStore = configStore,
+            revision = null,
+            inline = false,
+            modifier = Modifier.fillMaxSize().padding(contentPadding),
+            fullPageEditing = editing,
+        )
+    }
+}
+
+@Composable
+private fun HoneycombEditorContent(
+    configStore: ConfigStore,
+    revision: Any?,
+    inline: Boolean,
+    modifier: Modifier,
+    fullPageEditing: Boolean = false,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var layout by remember(configStore) { mutableStateOf<HoneycombLayoutState?>(null) }
-    var editing by remember(configStore) { mutableStateOf(false) }
     var selectedSlot by remember(configStore) { mutableStateOf<Int?>(null) }
     var dragFrom by remember(configStore) { mutableStateOf<Int?>(null) }
     var dragTarget by remember(configStore) { mutableStateOf<Int?>(null) }
@@ -107,8 +156,19 @@ fun GestureHoneycombLayout(
     var writing by remember(configStore) { mutableStateOf(false) }
     var operationFeedback by remember(configStore) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(configStore, context) {
+    LaunchedEffect(configStore, context, revision) {
         layout = withContext(Dispatchers.IO) { readHoneycombLayout(context, configStore) }
+        selectedSlot = null
+        dragFrom = null
+        dragTarget = null
+        dragPoint = Offset.Zero
+    }
+    LaunchedEffect(fullPageEditing) {
+        selectedSlot = null
+        dragFrom = null
+        dragTarget = null
+        dragPoint = Offset.Zero
+        operationFeedback = null
     }
 
     fun refreshPositions(feedback: String, update: () -> Unit) {
@@ -135,45 +195,17 @@ fun GestureHoneycombLayout(
         refreshPositions("位置已保存") { configStore.swapHoneycombSlots(first, second) }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = "蜂巢位置",
-                largeTitle = "蜂巢位置",
-                navigationIcon = {
-                    HoneycombIconAction("返回", MiuixIcons.Back, onBack)
-                },
-                actions = {
-                    HoneycombIconAction(
-                        description = if (editing) "完成编辑" else "编辑位置",
-                        imageVector = if (editing) MiuixIcons.Ok else MiuixIcons.Edit,
-                        enabled = layout != null && !writing,
-                        onClick = {
-                            editing = !editing
-                            operationFeedback = null
-                            selectedSlot = null
-                            dragFrom = null
-                            dragTarget = null
-                            dragPoint = Offset.Zero
-                        },
-                    )
-                },
-            )
-        },
-    ) { contentPadding ->
-        val current = layout
-        if (current == null) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(contentPadding),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
-        } else {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(contentPadding).padding(
-                    horizontal = 16.dp, vertical = 8.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+    val current = layout
+    if (current == null) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        Column(
+            modifier = if (inline) modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                else modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
                 val activeDragFrom = dragFrom
                 val activeDragTarget = dragTarget
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -194,7 +226,8 @@ fun GestureHoneycombLayout(
                                     }
                                 }
                                 selectedSlot != null -> "已选一个图标；再点一个位置交换，或长按图标直接拖动。"
-                                !editing -> operationFeedback ?: "长按图标即可拖到目标位置；点击编辑图标可用点选交换。"
+                                inline -> operationFeedback ?: "长按图标拖动排序，松手保存；可拖到空位。"
+                                !fullPageEditing -> operationFeedback ?: "长按图标即可拖到目标位置；点击编辑图标可用点选交换。"
                                 else -> operationFeedback ?: "长按图标拖到目标位置，也可点选两个位置交换。空位可用于新应用。"
                             },
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -205,13 +238,14 @@ fun GestureHoneycombLayout(
                 HoneycombLayoutPreview(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     layout = current,
-                    editing = editing && !writing,
+                    showLabels = !inline,
+                    editing = !inline && fullPageEditing && !writing,
                     selectedSlot = selectedSlot,
                     dragFrom = dragFrom,
                     dragTarget = dragTarget,
                     dragPoint = dragPoint,
                     onTapSlot = { index ->
-                        if (!editing || writing) return@HoneycombLayoutPreview
+                        if (inline || !fullPageEditing || writing) return@HoneycombLayoutPreview
                         val selected = selectedSlot
                         if (selected == null) {
                             if (current.cells.getOrNull(index)?.target != null) {
@@ -263,15 +297,16 @@ fun GestureHoneycombLayout(
                         dragPoint = Offset.Zero
                     },
                 )
-                TextButton(
-                    text = "重新紧凑排列",
-                    enabled = !writing && current.cells.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { operationFeedback = null; showCompactConfirmation = true },
-                )
-            }
+            if (!inline) {
+            TextButton(
+                text = "重新紧凑排列",
+                enabled = !writing && current.cells.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { operationFeedback = null; showCompactConfirmation = true },
+            )
         }
-        OverlayDialog(
+        }
+        if (!inline) OverlayDialog(
             show = showCompactConfirmation,
             title = "重新紧凑排列？",
             summary = "将移除空位并重新排列所有蜂巢应用，当前手动位置会被替换。",
@@ -290,7 +325,6 @@ fun GestureHoneycombLayout(
                     enabled = !writing,
                     onClick = {
                         showCompactConfirmation = false
-                        editing = false
                         selectedSlot = null
                         refreshPositions("蜂巢位置已重新排列") { configStore.compactHoneycombPositions() }
                     },
@@ -334,6 +368,7 @@ private fun HoneycombIconAction(
 private fun HoneycombLayoutPreview(
     modifier: Modifier,
     layout: HoneycombLayoutState,
+    showLabels: Boolean,
     editing: Boolean,
     selectedSlot: Int?,
     dragFrom: Int?,
@@ -458,7 +493,7 @@ private fun HoneycombLayoutPreview(
                 )
             }
         }
-        drawIntoCanvas { canvas ->
+        if (showLabels) drawIntoCanvas { canvas ->
             val textPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
                 color = onSurface.copy(alpha = 0.86f).toArgb()
                 textAlign = AndroidPaint.Align.CENTER

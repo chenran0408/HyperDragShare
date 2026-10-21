@@ -906,6 +906,8 @@ public final class DragShareSettings {
         DragShareLog.i("DragShare/Settings", "logging configured level=" + logLevel
                 + " destination=" + logDestination);
         context.getContentResolver().notifyChange(settingsUri(), null);
+        context.getContentResolver().notifyChange(
+                com.leaf.hyperdragshare.gestures.config.ConfigContract.RUNTIME_URI, null);
     }
 
     static DragShareSettings readFromProvider(Context portalContext) {

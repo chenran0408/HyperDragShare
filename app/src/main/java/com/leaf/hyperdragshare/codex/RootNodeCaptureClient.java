@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 final class RootNodeCaptureClient {
     private static final String TAG = "DragShare/RootNodes";
     private static final long RESPONSE_TIMEOUT_MILLIS = 4500L;
+    static final String KEY_POLICY_EXCLUDED = "capture_policy_excluded";
 
     private RootNodeCaptureClient() {}
 
@@ -125,13 +126,26 @@ final class RootNodeCaptureClient {
                 DragShareLog.i(TAG, "semantic lookup elapsedMs=" + result.getLong("elapsed_ms"));
                 if (keyguard.isKeyguardLocked()) return null;
                 if (!result.getBoolean("found")) {
-                    DragShareLog.i(TAG, "no content candidate reason=" + result.optString("reason", "unknown"));
+                    String reason = result.optString("reason", "unknown");
+                    DragShareLog.i(TAG, "no content candidate reason=" + reason);
+                    if (pressLookup && "excluded_app".equals(reason)) {
+                        Bundle excluded = new Bundle();
+                        excluded.putBoolean(KEY_POLICY_EXCLUDED, true);
+                        return excluded;
+                    }
                     return null;
                 }
                 if (!notified) accepted = handler.onCandidate(result.getString("package"));
                 if (!accepted) return null;
                 source = result.getString("package");
-                if (blockedPackages.contains(source)) return null;
+                if (blockedPackages.contains(source)) {
+                    if (pressLookup) {
+                        Bundle excluded = new Bundle();
+                        excluded.putBoolean(KEY_POLICY_EXCLUDED, true);
+                        return excluded;
+                    }
+                    return null;
+                }
                 String kind = result.getString("kind");
                 if (!"text".equals(kind) && !"image".equals(kind)
                         && !(pressLookup && "ocr_region".equals(kind))) throw new JSONException("Unknown node kind");

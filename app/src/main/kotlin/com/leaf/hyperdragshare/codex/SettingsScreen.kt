@@ -100,6 +100,14 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
+import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Sort
+import top.yukonga.miuix.kmp.icon.extended.Show
+import top.yukonga.miuix.kmp.icon.extended.Blocklist
+import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Layers
+import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.menu.OverlayIconDropdownMenu
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
@@ -382,7 +390,7 @@ private fun MainPage(
     ) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues)) {
             TabRow(
-                tabs = listOf("功能", "菜单", "应用"),
+                tabs = listOf("功能", "菜单", "其他"),
                 selectedTabIndex = settingsSection,
                 onTabSelected = { selected ->
                     settingsSection = selected
@@ -398,15 +406,6 @@ private fun MainPage(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = PaddingValues(bottom = 12.dp),
         ) {
-            if (settingsSection == 0) {
-            item(key = "hypergesture-entry") {
-                SmallTitle(text = "快捷入口")
-                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    ArrowPreference(title = "手势与小窗", summary = "底角、侧边、蜂巢与任务中心",
-                        onClick = onOpenGestures)
-                }
-            }
-            }
             if (settingsSection == 2) {
             item(key = "app-visibility-title") {
                 SmallTitle(text = "应用显示")
@@ -454,7 +453,14 @@ private fun MainPage(
                 )
             }
             item(key = "scope-restart") {
+                SmallTitle(text = "常用入口")
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    SettingsNavigationPreference(
+                        title = "手势与小窗",
+                        summary = "底角、侧边、蜂巢与任务中心",
+                        icon = MiuixIcons.GridView,
+                        onClick = onOpenGestures,
+                    )
                     ScopeRestartPreference(context)
                 }
             }
@@ -486,31 +492,11 @@ private fun MainPage(
                             }
                         },
                     )
-                    ArrowPreference(
+                    SettingsNavigationPreference(
                         title = "应用黑名单",
-                        summary = if (settings.isPortalCaptureMode) {
-                            "使用传送门的系统黑名单设置"
-                        } else {
-                            "无障碍识别时跳过指定应用"
-                        },
-                        onClick = {
-                            if (settings.isPortalCaptureMode) {
-                                coroutineScope.launch {
-                                    val started = withContext(Dispatchers.IO) {
-                                        ModuleActivation.openPortalBlacklistSettings()
-                                    }
-                                    if (!started) {
-                                        Toast.makeText(
-                                            context,
-                                            "无法打开传送门应用黑名单",
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
-                                    }
-                                }
-                            } else {
-                                onOpenBlacklist()
-                            }
-                        },
+                        summary = "自动取词和 Hyper 手势共用此名单；桌面、输入法的内置排除只影响取词",
+                        icon = MiuixIcons.Blocklist,
+                        onClick = onOpenBlacklist,
                     )
                     if (settings.isAccessibilityCaptureMode) {
                         SwitchPreference(
@@ -646,28 +632,30 @@ private fun MainPage(
                     }
                     SwitchPreference(
                         title = "游戏内暂停自动触发",
-                        summary = "游戏类别、常见游戏名单和手动添加的应用只暂停自动触发；手动点取、识屏仍可用",
+                        summary = "游戏中暂停自动取词和 Hyper 手势；手动点取、主动识屏仍可用",
                         checked = settings.pauseAutomaticInGames,
                         onCheckedChange = { enabled ->
                             persist(copySettings(settings, pauseAutomaticInGames = enabled))
                         },
                     )
-                    ArrowPreference(
+                    SettingsNavigationPreference(
                         title = "手动添加游戏",
                         summary = if (settings.manualGamePackages.isEmpty()) {
-                            "可搜索并添加未被识别的游戏"
+                            "手动选择应用，自动取词和 Hyper 手势均会避让"
                         } else {
-                            "已添加 ${settings.manualGamePackages.size} 个应用"
+                            "已选 ${settings.manualGamePackages.size} 个；自动取词和 Hyper 手势均会避让"
                         },
+                        icon = MiuixIcons.Play,
                         onClick = onOpenGames,
                     )
                 }
             }
             item(key = "text-panel-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ArrowPreference(
+                    SettingsNavigationPreference(
                         title = "悬浮窗权限",
                         summary = "用于原页分词和侧边中转站，允许在其他应用上层操作",
+                        icon = MiuixIcons.Layers,
                         onClick = {
                             context.startActivity(Intent(
                                 android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -675,9 +663,10 @@ private fun MainPage(
                             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         },
                     )
-                    ArrowPreference(
+                    SettingsNavigationPreference(
                         title = "打开侧边中转站",
                         summary = "临时收集并拖出文字或图片；拖动标题贴边，可收起为侧条",
+                        icon = MiuixIcons.Folder,
                         onClick = { StashOverlayPanel.show(context) },
                     )
                     SwitchPreference(
@@ -884,14 +873,16 @@ private fun MainPage(
             }
             item(key = "menu-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ArrowPreference(
+                    SettingsNavigationPreference(
                         title = "菜单可见性",
                         summary = "按应用分别控制每个分享入口",
+                        icon = MiuixIcons.Show,
                         onClick = onOpenVisibility,
                     )
-                    ArrowPreference(
+                    SettingsNavigationPreference(
                         title = "菜单排序",
                         summary = "拖动应用条目调整显示顺序",
+                        icon = MiuixIcons.Sort,
                         onClick = onOpenOrder,
                     )
                 }
@@ -911,8 +902,8 @@ private fun MainPage(
                         },
                     )
                     SwitchPreference(
-                        title = "手指移开时关闭分享菜单",
-                        summary = "四种样式均适用，可重新移入屏幕边缘触发",
+                        title = "离开菜单区域时关闭",
+                        summary = "离开菜单或触发区域后关闭；重新进入可再次打开",
                         checked = settings.closeMenuWhenPointerLeaves,
                         onCheckedChange = { checked ->
                             persist(
@@ -1791,7 +1782,7 @@ private fun GameAppsPage(
             ) {
                 item(key = "game-picker-description") {
                     Text(
-                        text = "系统游戏类别和常见游戏会自动识别。也可以搜索其他应用并手动添加；此名单只影响自动触发。",
+                        text = "系统游戏类别和常见游戏会自动识别。也可手动选择应用；自动取词和 Hyper 手势都会避让所选应用。",
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         fontSize = 13.sp,
@@ -2120,6 +2111,51 @@ internal fun BackNavigationIcon(onClick: () -> Unit) {
             imageVector = MiuixIcons.Back,
             contentDescription = "返回",
             tint = MiuixTheme.colorScheme.onBackground,
+        )
+    }
+}
+
+@Composable
+internal fun SettingsNavigationPreference(
+    title: String,
+    summary: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    BasicComponent(
+        startAction = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                modifier = Modifier.padding(end = 8.dp).size(22.dp),
+            )
+        },
+        endActions = {
+            Icon(
+                imageVector = MiuixIcons.ChevronForward,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        insideMargin = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        onClick = onClick,
+    ) {
+        Text(
+            text = title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = MiuixTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = summary,
+            fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

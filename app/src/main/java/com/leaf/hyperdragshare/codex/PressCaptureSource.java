@@ -16,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
 /** One press pipeline for both hosts: classify once, then use the confirmed gesture's result. */
@@ -72,7 +73,14 @@ final class PressCaptureSource {
     }
 
     void updateSettings(DragShareSettings updated) {
+        DragShareSettings previous = settings;
         settings = updated;
+        if (previous.pauseAutomaticInGames != updated.pauseAutomaticInGames
+                || !previous.manualGamePackages.equals(updated.manualGamePackages)
+                || !previous.accessibilityBlacklistedPackages.equals(updated.accessibilityBlacklistedPackages)) {
+            if (Looper.myLooper() == Looper.getMainLooper()) cancelGesture();
+            else main.post(this::cancelGesture);
+        }
     }
 
     void onPointerEvent(int action, float x, float y, long time) {
@@ -157,13 +165,15 @@ final class PressCaptureSource {
         boolean earlyCapture = !detector.isFired();
         Set<String> excluded = new LinkedHashSet<>(settings.accessibilityBlacklistedPackages);
         excluded.addAll(AccessibilityBlacklist.builtInPackages(context));
+        AtomicBoolean excludedByPolicy = new AtomicBoolean();
         worker.execute(() -> {
             try {
                 if (request != generation || stopped) return;
-                CapturedContent content = session.capturePress(x, y, excluded,
+                SharedRootNodeCapture.Connection.PressResult result = session.capturePress(x, y, excluded,
                         settings.isSharingEnabled(false), settings.isSharingEnabled(true), earlyCapture, source ->
-                                request == generation && allowed()
-                                        && !GameCapturePolicy.shouldPause(context, settings, source));
+                                acceptAutomaticSource(request, source, excludedByPolicy));
+                CapturedContent content = result.content;
+                if (result.policyExcluded) excludedByPolicy.set(true);
                 main.post(() -> {
                     if (request != generation || !allowed()) {
                         recycle(content);
@@ -171,7 +181,9 @@ final class PressCaptureSource {
                     }
                     lookupRunning = false;
                     if (content == null) {
-                        if (detector.isFired()) showFailure("当前位置没有可读取的文字或安全识字区域");
+                        if (detector.isFired() && !excludedByPolicy.get()) {
+                            showFailure("当前位置没有可读取的文字或安全识字区域");
+                        }
                         cancelGesture();
                         return;
                     }
@@ -195,6 +207,16 @@ final class PressCaptureSource {
                 DragShareLog.i(TAG, "press lookup stopped");
             }
         });
+    }
+
+    private boolean acceptAutomaticSource(long request, String source, AtomicBoolean excludedByPolicy) {
+        if (request != generation || !allowed()) return false;
+        if (AccessibilityBlacklist.isBlocked(context, settings, source)
+                || GameCapturePolicy.shouldPause(context, settings, source)) {
+            excludedByPolicy.set(true);
+            return false;
+        }
+        return request == generation && allowed();
     }
 
     private void display() {

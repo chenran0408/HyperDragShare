@@ -4,6 +4,8 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
@@ -25,7 +27,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
+
+import com.leaf.hyperdragshare.codex.DragShareSettings;
+import com.leaf.hyperdragshare.codex.GameCapturePolicy;
 
 public final class ConfigProvider extends ContentProvider {
     private static final String TAG = "HyperDragShareConfig";
@@ -520,6 +526,8 @@ public final class ConfigProvider extends ContentProvider {
                     ConfigContract.DEFAULT_HONEYCOMB_DISC_SIZE_PERCENT),
                     ConfigContract.MIN_HONEYCOMB_DISC_SIZE_PERCENT,
                     ConfigContract.MAX_HONEYCOMB_DISC_SIZE_PERCENT));
+            out.putStringArrayList(ConfigContract.KEY_GESTURE_EXCLUDED_PACKAGES,
+                    gestureExcludedPackages(context));
             return out;
         }
 
@@ -586,6 +594,29 @@ public final class ConfigProvider extends ContentProvider {
             return Bundle.EMPTY;
         }
         return super.call(method, arg, extras);
+    }
+
+    private static ArrayList<String> gestureExcludedPackages(Context context) {
+        DragShareSettings settings = DragShareSettings.readLocal(context);
+        LinkedHashSet<String> excluded = new LinkedHashSet<>(
+                settings.accessibilityBlacklistedPackages);
+        if (settings.pauseAutomaticInGames) {
+            excluded.addAll(settings.manualGamePackages);
+            try {
+                PackageManager packageManager = context.getPackageManager();
+                for (ApplicationInfo application : packageManager.getInstalledApplications(
+                        PackageManager.ApplicationInfoFlags.of(0))) {
+                    if (application.packageName != null
+                            && (application.category == ApplicationInfo.CATEGORY_GAME
+                            || GameCapturePolicy.isBuiltInGame(application.packageName))) {
+                        excluded.add(application.packageName);
+                    }
+                }
+            } catch (SecurityException error) {
+                Log.w(TAG, "Cannot enumerate installed games for gesture exclusions", error);
+            }
+        }
+        return new ArrayList<>(excluded);
     }
 
     private Context requireProviderContext() {

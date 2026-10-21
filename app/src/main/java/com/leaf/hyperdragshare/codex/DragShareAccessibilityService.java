@@ -527,6 +527,10 @@ public final class DragShareAccessibilityService extends AccessibilityService {
             public void onChange(boolean selfChange) {
                 DragShareSettings settings = DragShareSettings.readLocal(
                         DragShareAccessibilityService.this);
+                PressCaptureSource pressSource = thumbCaptureSource;
+                if (pressSource != null) {
+                    pressSource.updateSettings(settings);
+                }
                 ThumbTriggerSettings thumb = ThumbTriggerSettings.read(DragShareAccessibilityService.this);
                 if (runtimeStarted && (settings.accessibilityLongPressTimeoutMillis
                         != runtimeLongPressTimeoutMillis

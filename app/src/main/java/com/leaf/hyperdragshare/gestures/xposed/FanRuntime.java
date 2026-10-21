@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.gestures.xposed;
 
 import android.app.KeyguardManager;
+import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentCallbacks;
 import android.content.ComponentName;
@@ -189,6 +190,9 @@ final class FanRuntime {
     private long ignoredPassthroughDownTime = -1L;
 
     private long systemPanelInputDownTime = -1L;
+    private long gestureExcludedDownTime = -1L;
+    private volatile boolean foregroundGestureExcluded;
+    private volatile String foregroundPackageForGesture;
 
     private boolean activeSideList;
 
@@ -503,12 +507,16 @@ final class FanRuntime {
 
     void onTaskAppeared(int taskId) {
         freeform.onTaskAppeared(taskId);
+        refreshForegroundGestureExclusion();
+        refreshTriggerCapture();
         mainHandler.postDelayed(this::refreshOutsideCapture, 60L);
     }
 
     void onTaskInfo(Object info) {
         freeform.onTaskInfo(info);
         releaseOutsideCaptureTransitionIfSettled();
+        refreshForegroundGestureExclusion();
+        refreshTriggerCapture();
         refreshOutsideCapture();
         // HyperOS reports the normal state before the mini-to-freeform animation has
         // committed its final bounds. Re-read the live bounds while that animation settles.
@@ -523,6 +531,8 @@ final class FanRuntime {
     void onTaskVanished(int taskId) {
         freeform.onTaskVanished(taskId);
         releaseOutsideCaptureTransitionIfSettled();
+        refreshForegroundGestureExclusion();
+        refreshTriggerCapture();
         refreshOutsideCapture();
         if (freeform.trackedTaskId() < 0 && freeform.pendingLaunchBounds() == null) {
             outsideGestures.clearAll();
@@ -757,6 +767,12 @@ final class FanRuntime {
 
     private void handleMotion(MotionEvent event, Object inputMonitor) {
         int action = event.getActionMasked();
+        if (gestureExcludedDownTime == event.getDownTime()) {
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                gestureExcludedDownTime = -1L;
+            }
+            return;
+        }
         if (triggerCapture.isInjectedEvent(event))
             return;
         if (event.getDownTime() == ignoredPassthroughDownTime) {
@@ -856,6 +872,20 @@ final class FanRuntime {
             if (state != State.IDLE)
                 resetFan();
             outsideGestures.clearAll();
+            return;
+        }
+        if (action == MotionEvent.ACTION_DOWN) refreshForegroundGestureExclusion();
+        if (action == MotionEvent.ACTION_DOWN && foregroundGestureExcluded) {
+            gestureExcludedDownTime = event.getDownTime();
+            Log.i("Gesture excluded package=" + foregroundPackageForGesture);
+            if (triggerCapture.isCapturing()) {
+                int displayId = context.getDisplay() == null ? 0 : context.getDisplay().getDisplayId();
+                triggerCapture.passthroughCapturedGesture(displayId);
+                triggerCapture.update(false, config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+            }
+            outsideCapture.remove();
+            outsideGestures.clearAll();
+            if (state != State.IDLE) resetFan();
             return;
         }
         boolean nativeSideEdge = action == MotionEvent.ACTION_DOWN && GestureGeometry.sideAt(x, width, systemSideGestureInsets().left, systemSideGestureInsets().right) != null;
@@ -1836,6 +1866,10 @@ final class FanRuntime {
     }
 
     private void refreshTriggerCapture() {
+        if (foregroundGestureExcluded) {
+            triggerCapture.update(false, config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+            return;
+        }
         if (inputSources.usesNativeInput()) {
             triggerCapture.update(false, config.hotWidthPercent, config.hotHeightPercent, 0, 0);
             return;
@@ -1886,6 +1920,11 @@ final class FanRuntime {
             outsideGestures.clearAll();
             return;
         }
+        if (foregroundGestureExcluded) {
+            outsideCapture.remove();
+            outsideGestures.clearAll();
+            return;
+        }
         if (outsideCaptureWindowTransitionBlocked) {
             outsideCapture.remove();
             return;
@@ -1926,6 +1965,34 @@ final class FanRuntime {
         // Edge DOWN events must be captured too; waiting until UP to pilfer lets the
         // application underneath receive a real click. Side swipes are handled below.
         outsideCapture.update(visibleWindows, ime, 0, 0);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void refreshForegroundGestureExclusion() {
+        if (config.gestureExcludedPackages.isEmpty()) {
+            foregroundPackageForGesture = null;
+            foregroundGestureExcluded = false;
+            return;
+        }
+        try {
+            ActivityManager activityManager = context.getSystemService(ActivityManager.class);
+            List<ActivityManager.RunningTaskInfo> tasks = activityManager == null
+                    ? null : activityManager.getRunningTasks(1);
+            if (tasks == null || tasks.isEmpty()) {
+                foregroundPackageForGesture = null;
+                foregroundGestureExcluded = false;
+                return;
+            }
+            ComponentName top = tasks.get(0).topActivity != null
+                    ? tasks.get(0).topActivity : tasks.get(0).baseActivity;
+            foregroundPackageForGesture = top == null ? null : top.getPackageName();
+            foregroundGestureExcluded = foregroundPackageForGesture != null
+                    && config.gestureExcludedPackages.contains(foregroundPackageForGesture);
+        } catch (SecurityException | IllegalStateException error) {
+            foregroundPackageForGesture = null;
+            foregroundGestureExcluded = false;
+            Log.e("Cannot determine foreground package for gesture exclusion", error);
+        }
     }
 
     private int statusBarGestureHeight() {
@@ -2295,6 +2362,7 @@ final class FanRuntime {
                 config = next;
                 ShortcutHostRuntime.installCatalogSource(context);
                 updateRecentsCleanCover(next);
+                refreshForegroundGestureExclusion();
                 outsideGestures.setDoubleTapTimeout(next.outsideTapWindowMs);
                 targets = nextTargets;
                 honeycombTargets = nextHoneycombTargets;

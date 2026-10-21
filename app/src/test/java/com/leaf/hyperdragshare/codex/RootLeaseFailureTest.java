@@ -19,6 +19,30 @@ import org.robolectric.annotation.Config;
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public final class RootLeaseFailureTest {
+    @Test public void policyExclusionSurvivesLeaseWithoutBecomingAnEmptyCapture() throws Exception {
+        IRootNodeLease lease = new IRootNodeLease.Stub() {
+            @Override public Bundle capture(float x, float y, String[] blocked, boolean text, boolean images,
+                                            boolean press, boolean early, IRootNodeCandidate callback) {
+                Bundle result = new Bundle();
+                result.putBoolean(RootNodeCaptureClient.KEY_POLICY_EXCLUDED, true);
+                return result;
+            }
+            @Override public boolean verifyWindow(String source, int windowId) {
+                throw new AssertionError("Excluded content must not be converted or verified");
+            }
+            @Override public boolean verifySource(String source) { return true; }
+            @Override public Bundle insertTextAt(float x, float y, String text) { return null; }
+            @Override public boolean isOpen() { return true; }
+            @Override public void close() {}
+        };
+        SharedRootNodeCapture.Connection connection = new SharedRootNodeCapture.Connection(
+                RuntimeEnvironment.getApplication(), null, new Binder(), 10000, lease);
+        SharedRootNodeCapture.Connection.PressResult result = connection.capturePress(
+                10, 10, Set.of("test.excluded"), true, false, true, source -> true);
+        assertTrue(result.policyExcluded);
+        org.junit.Assert.assertNull(result.content);
+    }
+
     @Test public void closedLeaseAndBusyRequestHaveDifferentLifecycles() throws InterruptedException {
         assertFailureKind(new IllegalStateException("process exited"), true);
         assertFailureKind(new IllegalStateException("another request is running"), false);

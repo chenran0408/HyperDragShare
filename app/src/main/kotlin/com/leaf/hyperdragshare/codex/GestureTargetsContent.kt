@@ -210,9 +210,19 @@ fun GestureTargetsContent(
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     contentPadding = PaddingValues(bottom = 20.dp),
                 ) {
+                    if (group == "honeycomb" && store != null) {
+                        item(key = "honeycomb-preview") {
+                            HoneycombInlineEditor(
+                                configStore = store!!,
+                                revision = targets.toList(),
+                                modifier = Modifier.fillMaxWidth().height(400.dp),
+                            )
+                        }
+                    }
                     item(key = "target-count") {
                         SmallTitle(
-                            text = "已选 ${targets.size} / ${data.maximum} · 用“上移/下移”调整顺序",
+                            text = if (group == "honeycomb") "应用与快捷方式 · ${targets.size} / ${data.maximum}"
+                                else "已选 ${targets.size} / ${data.maximum} · 用“上移/下移”调整顺序",
                         )
                     }
                     if (targets.isEmpty()) {
@@ -228,65 +238,42 @@ fun GestureTargetsContent(
                             val row = data.rows.firstOrNull { it.target == target }
                                 ?: fallbackRow(target)
                             val index = targets.indexOf(target)
-                            Card(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                            Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+                                BasicComponent(
+                                    startAction = { TargetIcon(row, Modifier.padding(end = 12.dp)) },
+                                    endActions = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (group != "honeycomb") {
+                                                TextButton("上移", enabled = index > 0, onClick = {
+                                                    val moved = targets.removeAt(index)
+                                                    targets.add(index - 1, moved)
+                                                    saveTargets(store, group, targets, pageData) { pageData = it }
+                                                })
+                                                TextButton("下移", enabled = index < targets.lastIndex, onClick = {
+                                                    val moved = targets.removeAt(index)
+                                                    targets.add(index + 1, moved)
+                                                    saveTargets(store, group, targets, pageData) { pageData = it }
+                                                })
+                                            }
+                                            TargetIconAction(
+                                                description = "移除 ${row.label}",
+                                                imageVector = MiuixIcons.Delete,
+                                                enabled = group != "bottom" || targets.size > ConfigContract.MIN_FAN_MAX_TARGETS,
+                                                onClick = {
+                                                    targets.remove(target)
+                                                    saveTargets(store, group, targets, pageData) { pageData = it }
+                                                },
+                                            )
+                                        }
+                                    },
+                                    insideMargin = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                 ) {
-                                    TargetIcon(row = row, modifier = Modifier.padding(end = 12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = row.label,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MiuixTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            text = row.summary,
-                                            fontSize = 12.sp,
-                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    TextButton(
-                                        text = "上移",
-                                        enabled = index > 0,
-                                        modifier = Modifier.widthIn(min = 48.dp),
-                                        onClick = {
-                                            if (index > 0) {
-                                                val moved = targets.removeAt(index)
-                                                targets.add(index - 1, moved)
-                                                saveTargets(store, group, targets, pageData) { pageData = it }
-                                            }
-                                        },
-                                    )
-                                    TextButton(
-                                        text = "下移",
-                                        enabled = index < targets.lastIndex,
-                                        modifier = Modifier.widthIn(min = 48.dp),
-                                        onClick = {
-                                            if (index in 0 until targets.lastIndex) {
-                                                val moved = targets.removeAt(index)
-                                                targets.add(index + 1, moved)
-                                                saveTargets(store, group, targets, pageData) { pageData = it }
-                                            }
-                                        },
-                                    )
-                                    TargetIconAction(
-                                        description = "移除 ${row.label}",
-                                        imageVector = MiuixIcons.Delete,
-                                        onClick = {
-                                            if (group != "bottom" || targets.size > ConfigContract.MIN_FAN_MAX_TARGETS) {
-                                                targets.remove(target)
-                                                saveTargets(store, group, targets, pageData) { pageData = it }
-                                            }
-                                        },
-                                    )
+                                    Text(row.label, fontSize = 16.sp, fontWeight = FontWeight.Medium,
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(row.summary, fontSize = 12.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }

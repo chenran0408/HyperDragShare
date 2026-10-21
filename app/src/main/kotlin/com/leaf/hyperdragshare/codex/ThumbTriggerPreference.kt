@@ -19,6 +19,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Blocklist
 import kotlin.math.roundToInt
 
 @Composable
@@ -115,9 +117,10 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         onValueChange = { duration = it },
         onValueChangeFinished = { onDurationChanged(duration.roundToInt()) },
     )
-    ArrowPreference(
+    SettingsNavigationPreference(
         title = "按压触发应用黑名单",
-        summary = "在指定应用中暂停触发，桌面和输入法自动排除",
+        summary = "用户名单避让自动取词和 Hyper 手势；桌面、输入法的内置排除只影响取词",
+        icon = MiuixIcons.Blocklist,
         onClick = onOpenBlacklist,
     )
 }

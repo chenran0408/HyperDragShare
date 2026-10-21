@@ -194,6 +194,16 @@ final class SharedRootNodeCapture {
     }
 
     static final class Connection implements AutoCloseable {
+        static final class PressResult {
+            final CapturedContent content;
+            final boolean policyExcluded;
+
+            PressResult(CapturedContent content, boolean policyExcluded) {
+                this.content = content;
+                this.policyExcluded = policyExcluded;
+            }
+        }
+
         private final Context context;
         private final ContentProviderClient provider;
         // Retain this Binder until close so the server can observe a remote client's death.
@@ -213,14 +223,21 @@ final class SharedRootNodeCapture {
             return capture(x, y, blocked, text, images, false, false, handler);
         }
 
-        CapturedContent capturePress(float x, float y, Set<String> blocked, boolean text, boolean images, boolean earlyCapture,
-                                    RootNodeCaptureClient.CandidateHandler handler)
+        PressResult capturePress(float x, float y, Set<String> blocked, boolean text, boolean images, boolean earlyCapture,
+                                 RootNodeCaptureClient.CandidateHandler handler)
                 throws IOException, InterruptedException {
-            return capture(x, y, blocked, text, images, true, earlyCapture, handler);
+            return captureResult(x, y, blocked, text, images, true, earlyCapture, handler);
         }
 
         private CapturedContent capture(float x, float y, Set<String> blocked, boolean text, boolean images,
                                         boolean pressLookup, boolean earlyCapture, RootNodeCaptureClient.CandidateHandler handler)
+                throws IOException, InterruptedException {
+            return captureResult(x, y, blocked, text, images, pressLookup, earlyCapture, handler).content;
+        }
+
+        private PressResult captureResult(float x, float y, Set<String> blocked, boolean text, boolean images,
+                                          boolean pressLookup, boolean earlyCapture,
+                                          RootNodeCaptureClient.CandidateHandler handler)
                 throws IOException, InterruptedException {
             if (closed) throw new ConnectionFailedException("取词连接已关闭", null);
             try {
@@ -235,13 +252,18 @@ final class SharedRootNodeCapture {
                                 finally { Binder.restoreCallingIdentity(identity); }
                             }
                         });
-                if (closed) return null;
-                return RootNodeCaptureClient.contentFromNode(context, node, (source, windowId) -> {
+                if (closed) return new PressResult(null, false);
+                if (pressLookup && node != null
+                        && node.getBoolean(RootNodeCaptureClient.KEY_POLICY_EXCLUDED)) {
+                    return new PressResult(null, true);
+                }
+                CapturedContent content = RootNodeCaptureClient.contentFromNode(context, node, (source, windowId) -> {
                     try { return !closed && lease.verifyWindow(source, windowId); }
                     catch (RemoteException | IllegalStateException error) {
                         throw requestFailure("核验来源窗口失败", error);
                     }
                 });
+                return new PressResult(content, false);
             } catch (RemoteException | IllegalStateException error) {
                 throw requestFailure("读取当前页面失败", error);
             }

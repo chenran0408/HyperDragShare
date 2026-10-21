@@ -10,7 +10,9 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 final class GestureConfig {
     final boolean enabled;
@@ -158,6 +160,7 @@ final class GestureConfig {
     boolean outsidePortraitEnabled = ConfigContract.DEFAULT_OUTSIDE_PORTRAIT_ENABLED;
     boolean outsideLandscapeEnabled = ConfigContract.DEFAULT_OUTSIDE_LANDSCAPE_ENABLED;
     List<TargetSpec> sideTargets = Collections.emptyList();
+    Set<String> gestureExcludedPackages = Collections.emptySet();
 
     static final class TargetSpec {
         final String component;
@@ -444,6 +447,8 @@ final class GestureConfig {
                 honeycombTargets);
         result.fanMaxTargets = clamp(bundle.getInt(ConfigContract.KEY_FAN_MAX_TARGETS,
                 ConfigContract.DEFAULT_FAN_MAX_TARGETS), 3, 24);
+        result.gestureExcludedPackages = normalizeGestureExcludedPackages(
+                bundle.getStringArrayList(ConfigContract.KEY_GESTURE_EXCLUDED_PACKAGES));
         result.hideSystemRecentsClear = bundle.getBoolean(
                 ConfigContract.KEY_HIDE_SYSTEM_RECENTS_CLEAR,
                 ConfigContract.DEFAULT_HIDE_SYSTEM_RECENTS_CLEAR);
@@ -751,6 +756,18 @@ final class GestureConfig {
         result.sideTargets = Collections.unmodifiableList(parseTargets(bundle.getString(
                 ConfigContract.KEY_SIDE_COMPONENTS, "[]"), 36));
         return result;
+    }
+
+    static Set<String> normalizeGestureExcludedPackages(List<String> packageNames) {
+        if (packageNames == null || packageNames.isEmpty()) return Collections.emptySet();
+        HashSet<String> normalized = new HashSet<>();
+        for (String packageName : packageNames) {
+            if (packageName != null && !packageName.trim().isEmpty()) {
+                normalized.add(packageName.trim());
+            }
+        }
+        return normalized.isEmpty() ? Collections.emptySet()
+                : Collections.unmodifiableSet(normalized);
     }
 
     boolean ready() {
