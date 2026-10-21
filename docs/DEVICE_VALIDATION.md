@@ -1240,3 +1240,8 @@ build346：383测试通过，0失败/错误/跳过；Lint0错误179警告3提示
 - UI搜索并临时加入系统设置黑名单，随后系统设置内边角滑动命中Gesture excluded package=com.android.settings；无需作用域重启。通过UI移除测试项，黑名单与手动游戏集合恢复原空集合。首次保存将缺省manual_game_packages写为空集合，语义不变。
 - 19:09最终首页显示Miuix图标、导航右箭头及两行说明。私有截图/日志/备份存work/honeycomb170，未提交用户目标名单或界面内容。
 - 未实测真实evdev按压过滤、无障碍模式、手动游戏完整操作、应用切换已有捕获DOWN的竞态、暗色/横屏完整视觉。ADB手势只证明SystemUI入口，不能证明真实按压。
+
+
+## 2026-10-21 171/195 首页布局
+
+build351/352 Lint/Release成功，无单元重跑；候选实机发现TopAppBar省略largeTitle仍默认展开，最终使用SmallTopAppBar。19:15最终APK覆盖安装，首页紧凑标题、短激活卡、中转站前移及按压控件可见，更多页权限/重载/OCR入口保留。Portal24241/195与Root输入/reader ready；SystemUI沿用194，不称195。私有截图work/home171，未提交。此轮未修改名单和其他用户配置；未验暗色、横屏或重复功能矩阵。

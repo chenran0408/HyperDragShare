@@ -92,6 +92,7 @@ import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBarState
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
@@ -381,16 +382,15 @@ private fun MainPage(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            SmallTopAppBar(
                 title = "HyperDragShare",
-                largeTitle = "HyperDragShare",
                 scrollBehavior = scrollBehavior,
             )
         },
     ) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues)) {
             TabRow(
-                tabs = listOf("功能", "菜单", "其他"),
+                tabs = listOf("首页", "拖拽", "更多"),
                 selectedTabIndex = settingsSection,
                 onTabSelected = { selected ->
                     settingsSection = selected
@@ -407,6 +407,91 @@ private fun MainPage(
             contentPadding = PaddingValues(bottom = 12.dp),
         ) {
             if (settingsSection == 2) {
+            item(key = "maintenance") {
+                SmallTitle(text = "运行与权限")
+                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    ScopeRestartPreference(context)
+                    SettingsNavigationPreference(
+                        title = "悬浮窗权限",
+                        summary = "用于原页分词和侧边中转站，允许在其他应用上层操作",
+                        icon = MiuixIcons.Layers,
+                        onClick = {
+                            context.startActivity(Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:${context.packageName}"),
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        },
+                    )
+                    SwitchPreference(
+                        title = "预加载分词库",
+                        summary = "减少首次打开分词的等待",
+                        checked = settings.preloadTextSegmenter,
+                        onCheckedChange = { checked ->
+                            persist(copySettings(settings, preloadTextSegmenter = checked))
+                        },
+                    )
+                }
+            }
+            item(key = "system-integration-title") {
+                SmallTitle(text = "系统集成")
+            }
+            item(key = "system-integration-preferences") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    BasicComponent(
+                        title = "图片暂存",
+                        summary = "分享副本满24小时后在使用时清理，保留中转站原内容",
+                    )
+                    OverlayDropdownPreference(
+                        title = "文字识别引擎",
+                        summary = ocrEngineNames[if (aicrOcrEnabled) 1 else 0] +
+                            "\n图片、整屏和选区共用；失败提示原因，不自动切换引擎",
+                        showValue = false,
+                        items = ocrEngineNames,
+                        selectedIndex = if (aicrOcrEnabled) 1 else 0,
+                        onSelectedIndexChange = { selected ->
+                            aicrOcrEnabled = selected == 1
+                            IntegrationSettings.setAicrOcrEnabled(context, aicrOcrEnabled)
+                        },
+                    )
+                    SwitchPreference(
+                        title = "复制文字分词",
+                        summary = "点击传送门的“编辑所选文本”卡片，在原页面分词；也接入 AICR 文字操作。需启用对应 LSPosed 作用域；默认关闭",
+                        checked = copyDirectEnabled,
+                        onCheckedChange = { enabled ->
+                            IntegrationSettings.setCopyDirectEnabled(context, enabled)
+                            copyDirectEnabled = enabled
+                        },
+                    )
+                    OverlayDropdownPreference(
+                        title = "背部轻敲启动屏幕识字",
+                        summary = "需要 LSPosed 启用 android 进程和 Root。关闭时保留系统原动作",
+                        items = listOf("关闭", "双击", "三击", "双击和三击"),
+                        selectedIndex = backTapMode,
+                        onSelectedIndexChange = { selected ->
+                            val previousMode = backTapMode
+                            val requestedMode = BackTapMode.normalize(selected)
+                            IntegrationSettings.setBackTapMode(context, requestedMode)
+                            backTapMode = requestedMode
+                            coroutineScope.launch {
+                                val applied = withContext(Dispatchers.IO) {
+                                    IntegrationSettings.syncBackTapModeAsRoot(context)
+                                }
+                                if (!applied) {
+                                    IntegrationSettings.setBackTapMode(context, previousMode)
+                                    backTapMode = previousMode
+                                    Toast.makeText(
+                                        context,
+                                        "写入系统设置失败，请确认 Root 已授权",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+
+
             item(key = "app-visibility-title") {
                 SmallTitle(text = "应用显示")
             }
@@ -461,11 +546,50 @@ private fun MainPage(
                         icon = MiuixIcons.GridView,
                         onClick = onOpenGestures,
                     )
-                    ScopeRestartPreference(context)
+                    SettingsNavigationPreference(
+                        title = "打开侧边中转站",
+                        summary = "临时收集图文，拖出使用",
+                        icon = MiuixIcons.Folder,
+                        onClick = { StashOverlayPanel.show(context) },
+                    )
+                }
+            }
+            item(key = "text-panel-title") {
+                SmallTitle(text = "按住取词与避让")
+            }
+            item(key = "thumb-trigger-preferences") {
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    ThumbTriggerPreference(context, settings) { timeout ->
+                        persist(copySettings(settings, accessibilityLongPressTimeoutMillis = timeout))
+                    }
+                    SettingsNavigationPreference(
+                        title = "应用黑名单",
+                        summary = "自动取词和 Hyper 手势共用此名单；桌面、输入法的内置排除只影响取词",
+                        icon = MiuixIcons.Blocklist,
+                        onClick = onOpenBlacklist,
+                    )
+                    SwitchPreference(
+                        title = "游戏内暂停自动触发",
+                        summary = "游戏中暂停自动取词和 Hyper 手势；手动点取、主动识屏仍可用",
+                        checked = settings.pauseAutomaticInGames,
+                        onCheckedChange = { enabled ->
+                            persist(copySettings(settings, pauseAutomaticInGames = enabled))
+                        },
+                    )
+                    SettingsNavigationPreference(
+                        title = "手动添加游戏",
+                        summary = if (settings.manualGamePackages.isEmpty()) {
+                            "手动选择应用，自动取词和 Hyper 手势均会避让"
+                        } else {
+                            "已选 ${settings.manualGamePackages.size} 个；自动取词和 Hyper 手势均会避让"
+                        },
+                        icon = MiuixIcons.Play,
+                        onClick = onOpenGames,
+                    )
                 }
             }
             item(key = "content-title") {
-                SmallTitle(text = "分享内容")
+                SmallTitle(text = "拖拽内容")
             }
             item(key = "content-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
@@ -491,12 +615,6 @@ private fun MainPage(
                                 showAccessibilityDialog = true
                             }
                         },
-                    )
-                    SettingsNavigationPreference(
-                        title = "应用黑名单",
-                        summary = "自动取词和 Hyper 手势共用此名单；桌面、输入法的内置排除只影响取词",
-                        icon = MiuixIcons.Blocklist,
-                        onClick = onOpenBlacklist,
                     )
                     if (settings.isAccessibilityCaptureMode) {
                         SwitchPreference(
@@ -545,14 +663,6 @@ private fun MainPage(
                         },
                     )
                     SwitchPreference(
-                        title = "预加载分词库",
-                        summary = "启动时在后台加载词典，缩短首次打开文本分词的等待",
-                        checked = settings.preloadTextSegmenter,
-                        onCheckedChange = { checked ->
-                            persist(copySettings(settings, preloadTextSegmenter = checked))
-                        },
-                    )
-                    SwitchPreference(
                         title = "启用图片分享",
                         summary = "长按图片时显示分享菜单",
                         checked = settings.imageSharingEnabled,
@@ -563,112 +673,9 @@ private fun MainPage(
                 }
             }
 
-            item(key = "system-integration-title") {
-                SmallTitle(text = "系统集成")
-            }
-            item(key = "system-integration-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    BasicComponent(
-                        title = "图片暂存",
-                        summary = "满24小时后清理，不清除中转站收藏。系统限制后台运行时，下次使用再清理。",
-                    )
-                    OverlayDropdownPreference(
-                        title = "文字识别引擎",
-                        summary = ocrEngineNames[if (aicrOcrEnabled) 1 else 0] +
-                            "\n图片、整屏和选区共用；失败提示原因，不自动切换引擎",
-                        showValue = false,
-                        items = ocrEngineNames,
-                        selectedIndex = if (aicrOcrEnabled) 1 else 0,
-                        onSelectedIndexChange = { selected ->
-                            aicrOcrEnabled = selected == 1
-                            IntegrationSettings.setAicrOcrEnabled(context, aicrOcrEnabled)
-                        },
-                    )
-                    SwitchPreference(
-                        title = "复制文字分词",
-                        summary = "点击传送门的“编辑所选文本”卡片，在原页面分词；也接入 AICR 文字操作。需启用对应 LSPosed 作用域；默认关闭",
-                        checked = copyDirectEnabled,
-                        onCheckedChange = { enabled ->
-                            IntegrationSettings.setCopyDirectEnabled(context, enabled)
-                            copyDirectEnabled = enabled
-                        },
-                    )
-                    OverlayDropdownPreference(
-                        title = "背部轻敲启动屏幕识字",
-                        summary = "需要 LSPosed 启用 android 进程和 Root。关闭时保留系统原动作",
-                        items = listOf("关闭", "双击", "三击", "双击和三击"),
-                        selectedIndex = backTapMode,
-                        onSelectedIndexChange = { selected ->
-                            val previousMode = backTapMode
-                            val requestedMode = BackTapMode.normalize(selected)
-                            IntegrationSettings.setBackTapMode(context, requestedMode)
-                            backTapMode = requestedMode
-                            coroutineScope.launch {
-                                val applied = withContext(Dispatchers.IO) {
-                                    IntegrationSettings.syncBackTapModeAsRoot(context)
-                                }
-                                if (!applied) {
-                                    IntegrationSettings.setBackTapMode(context, previousMode)
-                                    backTapMode = previousMode
-                                    Toast.makeText(
-                                        context,
-                                        "写入系统设置失败，请确认 Root 已授权",
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
-                            }
-                        },
-                    )
-                }
-            }
-
-            item(key = "text-panel-title") {
-                SmallTitle(text = "文本面板")
-            }
-            item(key = "thumb-trigger-preferences") {
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ThumbTriggerPreference(context, onOpenBlacklist, settings) { timeout ->
-                        persist(copySettings(settings, accessibilityLongPressTimeoutMillis = timeout))
-                    }
-                    SwitchPreference(
-                        title = "游戏内暂停自动触发",
-                        summary = "游戏中暂停自动取词和 Hyper 手势；手动点取、主动识屏仍可用",
-                        checked = settings.pauseAutomaticInGames,
-                        onCheckedChange = { enabled ->
-                            persist(copySettings(settings, pauseAutomaticInGames = enabled))
-                        },
-                    )
-                    SettingsNavigationPreference(
-                        title = "手动添加游戏",
-                        summary = if (settings.manualGamePackages.isEmpty()) {
-                            "手动选择应用，自动取词和 Hyper 手势均会避让"
-                        } else {
-                            "已选 ${settings.manualGamePackages.size} 个；自动取词和 Hyper 手势均会避让"
-                        },
-                        icon = MiuixIcons.Play,
-                        onClick = onOpenGames,
-                    )
-                }
-            }
+            item(key = "text-panel-options-title") { SmallTitle(text = "分词操作") }
             item(key = "text-panel-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SettingsNavigationPreference(
-                        title = "悬浮窗权限",
-                        summary = "用于原页分词和侧边中转站，允许在其他应用上层操作",
-                        icon = MiuixIcons.Layers,
-                        onClick = {
-                            context.startActivity(Intent(
-                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                android.net.Uri.parse("package:${context.packageName}"),
-                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        },
-                    )
-                    SettingsNavigationPreference(
-                        title = "打开侧边中转站",
-                        summary = "临时收集并拖出文字或图片；拖动标题贴边，可收起为侧条",
-                        icon = MiuixIcons.Folder,
-                        onClick = { StashOverlayPanel.show(context) },
-                    )
                     SwitchPreference(
                         title = "选词触感反馈",
                         summary = "手指选中或取消词语时轻振一次",
@@ -1303,7 +1310,7 @@ private fun ActivationStatusCard(
                 Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                     color = MiuixTheme.colorScheme.onSurface)
                 Text(summary, fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                Text(activationMethod, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                if (!active) Text(activationMethod, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
         }
     }

@@ -19,12 +19,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Blocklist
 import kotlin.math.roundToInt
 
 @Composable
-internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Unit,
+internal fun ThumbTriggerPreference(context: Context,
     settings: DragShareSettings, onDurationChanged: (Int) -> Unit) {
     val portalMode = settings.isPortalCaptureMode
     var addingTile by remember { mutableStateOf(false) }
@@ -43,42 +41,6 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         portalInjected = ModuleActivation.isCurrentBuildInjected(context)
         portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
     }
-    ArrowPreference(
-        title = "添加“点取内容”磁贴",
-        summary = tileMessage ?: "从控制中心打开后点选文字或图片，不使用普通长按；需要 Root",
-        enabled = !addingTile,
-        onClick = {
-            addingTile = true
-            tileMessage = "正在请求添加…"
-            try {
-                context.getSystemService(StatusBarManager::class.java).requestAddTileService(
-                    ComponentName(context, PointCaptureTileService::class.java),
-                    context.getString(R.string.point_capture_tile_label),
-                    Icon.createWithResource(context, R.drawable.ic_point_capture_tile),
-                    context.mainExecutor,
-                ) { result ->
-                    addingTile = false
-                    tileMessage = when (result) {
-                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> "已添加，可从控制中心点取当前页面"
-                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> "已在控制中心，可直接使用"
-                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> "未添加，可再次申请或在控制中心编辑磁贴"
-                        else -> {
-                            DragShareLog.w("DragShare/PointCapture", "tile add request failed code=$result")
-                            "系统未能添加（$result），可在控制中心编辑磁贴"
-                        }
-                    }
-                }
-            } catch (error: SecurityException) {
-                addingTile = false
-                tileMessage = "系统拒绝添加磁贴：${error.message}"
-                DragShareLog.w("DragShare/PointCapture", "tile add request denied", error)
-            } catch (error: IllegalArgumentException) {
-                addingTile = false
-                tileMessage = "磁贴配置不可用：${error.message}"
-                DragShareLog.w("DragShare/PointCapture", "tile component unavailable", error)
-            }
-        },
-    )
     SwitchPreference(
         title = "按住取词与识字",
         summary = when {
@@ -117,10 +79,42 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         onValueChange = { duration = it },
         onValueChangeFinished = { onDurationChanged(duration.roundToInt()) },
     )
-    SettingsNavigationPreference(
-        title = "按压触发应用黑名单",
-        summary = "用户名单避让自动取词和 Hyper 手势；桌面、输入法的内置排除只影响取词",
-        icon = MiuixIcons.Blocklist,
-        onClick = onOpenBlacklist,
+
+    ArrowPreference(
+        title = "添加“点取内容”磁贴",
+        summary = tileMessage ?: "从控制中心打开后点选文字或图片，不使用普通长按；需要 Root",
+        enabled = !addingTile,
+        onClick = {
+            addingTile = true
+            tileMessage = "正在请求添加…"
+            try {
+                context.getSystemService(StatusBarManager::class.java).requestAddTileService(
+                    ComponentName(context, PointCaptureTileService::class.java),
+                    context.getString(R.string.point_capture_tile_label),
+                    Icon.createWithResource(context, R.drawable.ic_point_capture_tile),
+                    context.mainExecutor,
+                ) { result ->
+                    addingTile = false
+                    tileMessage = when (result) {
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> "已添加，可从控制中心点取当前页面"
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> "已在控制中心，可直接使用"
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> "未添加，可再次申请或在控制中心编辑磁贴"
+                        else -> {
+                            DragShareLog.w("DragShare/PointCapture", "tile add request failed code=$result")
+                            "系统未能添加（$result），可在控制中心编辑磁贴"
+                        }
+                    }
+                }
+            } catch (error: SecurityException) {
+                addingTile = false
+                tileMessage = "系统拒绝添加磁贴：${error.message}"
+                DragShareLog.w("DragShare/PointCapture", "tile add request denied", error)
+            } catch (error: IllegalArgumentException) {
+                addingTile = false
+                tileMessage = "磁贴配置不可用：${error.message}"
+                DragShareLog.w("DragShare/PointCapture", "tile component unavailable", error)
+            }
+        },
     )
+
 }
