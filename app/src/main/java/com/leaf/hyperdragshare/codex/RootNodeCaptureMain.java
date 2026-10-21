@@ -200,12 +200,19 @@ public final class RootNodeCaptureMain {
                     result = new JSONObject().put("found", false).put("reason", "excluded_input_method");
                 }
                 String rejection = result.optString("reason");
-                if (press && request.optBoolean("allow_text", true)
-                        && ("root_window_missing".equals(rejection) || "root_not_visible".equals(rejection))) {
+                boolean canUseWeChatWindowCapture = press && request.optBoolean("allow_text", true)
+                        && "com.tencent.mm".equals(string(root.getPackageName()))
+                        && !"excluded_input_method".equals(rejection)
+                        && !"excluded_app".equals(rejection)
+                        && !"excluded_hold_control".equals(rejection)
+                        && !"content_type_disabled".equals(rejection)
+                        && !"window_changed".equals(rejection);
+                if (!result.optBoolean("found") && canUseWeChatWindowCapture) {
                     JSONObject windowCapture = captureUnexposedConversation(request);
                     if (windowCapture.optBoolean("found")
                             || !"no_supported_visible_wechat_window".equals(windowCapture.optString("reason"))) {
                         return windowCapture.put("root_ms", rootAt - started)
+                                .put("fallback_reason", rejection.isEmpty() ? "no_content_candidate" : rejection)
                                 .put("capture_ms", capturedAt - rootAt)
                                 .put("verify_ms", SystemClock.uptimeMillis() - capturedAt);
                     }

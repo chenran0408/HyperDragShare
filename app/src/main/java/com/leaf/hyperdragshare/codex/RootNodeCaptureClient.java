@@ -124,6 +124,10 @@ final class RootNodeCaptureClient {
                 process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
                 process.getOutputStream().flush();
                 JSONObject result = awaitResponse();
+                String fallbackReason = result.optString("fallback_reason");
+                if (!fallbackReason.isEmpty()) {
+                    DragShareLog.i(TAG, "WeChat window OCR fallback reason=" + fallbackReason);
+                }
                 boolean notified = "candidate".equals(result.optString("stage"));
                 boolean accepted = notified && handler.onCandidate(result.getString("package"));
                 if (notified) result = awaitResponse();
@@ -159,6 +163,9 @@ final class RootNodeCaptureClient {
                 if (!"text".equals(kind) && !"image".equals(kind)
                         && !(pressLookup && "ocr_region".equals(kind))) throw new JSONException("Unknown node kind");
                 image = !"text".equals(kind);
+                if (pressLookup && "ocr_region".equals(kind)) {
+                    DragShareLog.i(TAG, "press capture source=" + source + " kind=ocr_region");
+                }
                 text = image ? null : result.getString("text");
                 before = result.optString("before", null);
                 after = result.optString("after", null);

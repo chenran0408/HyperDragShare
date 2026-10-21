@@ -168,7 +168,11 @@ final class PressWindowSnapshot {
         Rect region = new Rect(left, top, left + regionWidth, top + regionHeight);
         for (Rect obstacle : occlusions) {
             if (!Rect.intersects(region, obstacle)) continue;
-            if (obstacle.contains(Math.round(x), Math.round(y))) return null;
+            if (obstacle.contains(Math.round(x), Math.round(y))) {
+                Rect nearby = nearestVisibleRegion(usable, obstacle, x, y, regionWidth, regionHeight);
+                if (nearby != null) return nearby;
+                return null;
+            }
             if (x < obstacle.left) region.right = Math.min(region.right, obstacle.left);
             else if (x >= obstacle.right) region.left = Math.max(region.left, obstacle.right);
             else if (y < obstacle.top) region.bottom = Math.min(region.bottom, obstacle.top);
@@ -176,6 +180,44 @@ final class PressWindowSnapshot {
             if (region.isEmpty()) return null;
         }
         return permits(region) ? region : null;
+    }
+
+    private Rect nearestVisibleRegion(Rect usable, Rect obstacle, float x, float y,
+            int width, int height) {
+        List<Rect> candidates = new ArrayList<>(4);
+        int top = Math.max(usable.top, Math.min(Math.round(y - height / 2f), usable.bottom - height));
+        int left = Math.max(usable.left, Math.min(Math.round(x - width / 2f), usable.right - width));
+        if (obstacle.left > usable.left) {
+            candidates.add(new Rect(Math.max(usable.left, obstacle.left - width), top,
+                    obstacle.left, Math.min(usable.bottom, top + height)));
+        }
+        if (obstacle.right < usable.right) {
+            candidates.add(new Rect(obstacle.right, top,
+                    Math.min(usable.right, obstacle.right + width), Math.min(usable.bottom, top + height)));
+        }
+        if (obstacle.top > usable.top) {
+            candidates.add(new Rect(left, Math.max(usable.top, obstacle.top - height),
+                    Math.min(usable.right, left + width), obstacle.top));
+        }
+        if (obstacle.bottom < usable.bottom) {
+            candidates.add(new Rect(left, obstacle.bottom,
+                    Math.min(usable.right, left + width), Math.min(usable.bottom, obstacle.bottom + height)));
+        }
+        Rect nearest = null;
+        long nearestDistance = Long.MAX_VALUE;
+        int pointX = Math.round(x), pointY = Math.round(y);
+        for (Rect candidate : candidates) {
+            if (!permits(candidate)) continue;
+            long dx = Math.max(Math.max(candidate.left - pointX, 0), pointX - candidate.right);
+            long dy = Math.max(Math.max(candidate.top - pointY, 0), pointY - candidate.bottom);
+            long distance = dx * dx + dy * dy;
+            if (distance < nearestDistance || (distance == nearestDistance
+                    && nearest != null && candidate.width() * candidate.height() > nearest.width() * nearest.height())) {
+                nearest = candidate;
+                nearestDistance = distance;
+            }
+        }
+        return nearest;
     }
 
     boolean permits(Rect region) {

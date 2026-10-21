@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config;
 @Config(manifest = Config.NONE)
 public final class PressWindowSnapshotTest {
     @Test
-    public void clipsRegionAroundOccludingWindowAndRejectsTouchInsideIt() {
+    public void clipsRegionAroundOccludingWindowAndFindsNearbyTextWhenTouchIsCovered() {
         PressWindowSnapshot snapshot = PressWindowSnapshot.parse(dump(
                 window("overlay", "com.example/com.example.Overlay", "APPLICATION_OVERLAY",
                         "[400,700][600,900]", true, ""),
@@ -27,7 +27,9 @@ public final class PressWindowSnapshotTest {
         Rect region = snapshot.regionAt(250, 800, 1000, 2000, 1f);
         assertEquals(new Rect(0, 480, 400, 1120), region);
         assertTrue(snapshot.permits(region));
-        assertNull(snapshot.regionAt(500, 800, 1000, 2000, 1f));
+        Rect nearby = snapshot.regionAt(500, 800, 1000, 2000, 1f);
+        assertEquals(new Rect(200, 60, 800, 700), nearby);
+        assertTrue(snapshot.permits(nearby));
         assertFalse(snapshot.permits(new Rect(350, 750, 450, 850)));
     }
 

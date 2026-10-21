@@ -2,6 +2,16 @@
 
 最新发布：**v1.7.179 正式版 / Latest**，源码tag指向 `87fd4957eff3d093f856a83d74bf7ed62288367b`。已上传arm64 R8 APK及SHA256文件，服务端APK大小7,429,983bytes、digest `88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb` 与本地一致。发布地址：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.179 。下文“Latest仍176”是发布前历史状态，不再代表最新正式版；发布没有增加新的功能实测结论。
 
+## 181 微信按住取词日志定位与修正（已安装，重载后待实测）
+
+用户反馈HyperOS 4微信不能使用普通无障碍。适配不依赖微信无障碍服务：Portal内Root evdev监听按压时长/位移，Root `UiAutomation`读取可访问窗口内容；微信不向其公开文字时，使用WMS窗口核验、Root截图安全区域和AICR OCR。不要将系统无障碍作为微信功能前提。
+
+日志确认：设备端按压确认约250ms，Root语义查询47–61ms；失败查询明确返回 `press_region_obscured`。微信长按出现原生选区浮层后，按压点被其遮挡，旧安全区域选择器拒绝整片OCR区域，故弹出“当前位置没有可读取的文字或安全识字区域”。此外，若WeChat Root树存在但不暴露候选文字，旧逻辑只对 `root_window_missing/root_not_visible` 转WMS OCR，遗漏“窗口树有但没有文字候选”。
+
+181改动：对WeChat无候选文字也调用WMS安全窗口路径；按压点落在可见遮挡窗时，从同一WeChat窗口选择最近的无遮挡邻区，仍通过原窗口核验、截图裁切与AICR识别，不放宽secure/密码/输入法/黑名单限制。为日志增加OCR分流原因和 `ocr_region` 来源标记。`PressWindowSnapshotTest`定向用例通过，Lint及R8 `assembleRelease`通过。APK已签名、覆盖安装，系统显示versionCode 205 / versionName 1.7.181，路径`outputs/HyperDragShare-1.7.181-arm64-v8a.apk`，大小7,429,983 bytes，SHA256 `177B8618641FD8F78091C5BAD79180855D06A5016ABC157619A1A92C6D212D2F`。
+
+安装时前台为微信会话。为避免打断页面，没有重载Portal/SystemUI，因此设备上新APK已安装，但旧Portal Hook和Root helper尚未确认加载181；本次真实微信按压未复测，不能称修复通过。待Portal作用域重载后，在不发送消息的前提下实测按住已有文本，并从 `DragShare/Press` 与 `DragShare/RootNodes` 日志确认 `WeChat window OCR fallback`、`kind=ocr_region` 与分词浮窗结果。181不是正式Release，不替代179。
+
 ## 180 微信长按与原生侧栏首帧优化（设备验收待进行）
 
 设备仅热重载后真实长按日志显示PressReader已ready，识别请求进入Root并在约54–59ms完成语义查询；失败原因重复为 `window_visible_occlusion_bounds_missing`。只读WMS解析发现安全中心窗口的WindowState名为`com.miui.securitycenter/.FloatingWindow`，同一窗口令牌在visible handles里显示`DockAssistantView`并含真实矩形。原来token和名字都要求相等，错过遮挡范围并让整次微信识别保守拒绝。
