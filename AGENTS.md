@@ -95,6 +95,7 @@
 - `DragShareAccessibilityService.java`、`AccessibilityContentCaptureSource.java`：无障碍生命周期、长按协调和来源隔离。
 - `OcrFallbackRegion.java`：无障碍无候选节点时的有限区域截取几何与密码节点重叠检查。
 - `LongPressGestureDetector.java`、`AccessibilityNodeClassifier.java`、`AccessibilityCandidateSelector.java`：可单测的长按、节点分类和命中优先级。
+- `SharedRootNodeCapture.java`、`IRootNodeLease.aidl`、`IRootNodeCandidate.aidl`：模块进程唯一持有Root取词helper，Provider授权引导、每租约校验所属UID。手动租约暂停自动捕获，IO忙直接报告，不排队错过长按截止；候选同步回调不得等待主线程。最后租约/客户端死亡释放，不抢断其他UiAutomation。图片元数据跨Binder，截图裁剪留在调用方，仍核验窗口。
 - `PointCaptureOverlay.kt`、`PointCaptureActivity.kt`、`PointCaptureTileService.java`：控制中心主动点取，透明桥结束后在原页选点，再复用 Root 语义取词/所选图片 OCR。与面积触发分开验收，不能把点取通过写成面积或普通长按修复。范围见 `docs/POINT_CAPTURE.md`。
 - `AccessibilityScreenshotter.java`、`RootScreenshotter.java`、`ScreenshotRectMapper.java`：安全的一次性区域截图与 API 28/29 回退。
 - `ShareTargetRepository.java`：查询可处理对应 MIME 的导出 Activity，并克隆/着色内置目标的旧矢量图标。

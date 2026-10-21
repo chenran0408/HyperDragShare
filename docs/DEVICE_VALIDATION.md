@@ -694,3 +694,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 再次经真实设置UI关闭新开关；前后XML按键比较只有新增pause_automatic_in_games=false，其余值不变。hds125-after-settings.xml、restoring.xml。中转站未增删/读写，schema2未变，沿用既有备份回退约束。Root助手退出、无取词会话残留；终态原bilipai任务2183置前。
 - 仅重载传送门（启动其已有设置Activity和原服务），等待实际报告injected_version=149、portal_root_version=149、portal_root_granted=true，hds125-activation.xml。未重启android/AICR/整机；未新增作用域或尝试绕过此前受限的额外APK安装。持续设备授权继续有效，无需重复询问。
 - 未验：真实游戏内自动暂停/切出恢复、游戏里手动点取、Portal UID分类失败提示、无障碍模式实机动作。当前手机未发现声明类别的游戏；无该类别的应用仍不暂停。真实拇指尺寸、bilipai评论普通长按、完整四样式四边真实手势、115旧ANR与复制浮层共存仍未解决。
+
+## 2026-10-21：1.7.126 面积预热与点取共用Root连接
+
+- 新增SharedRootNodeCapture与两个窄AIDL，复用受限ShareImageProvider授权引导；模块进程唯一持有RootNodeCaptureClient.Session，Portal面积/Point分别借自动/手动租约。手动存在时自动请求不读取节点、不回调候选；关闭一方不影响另一方。同步候选来源决策、完整结果、密码/黑名单/锁屏检查仍保留，未启用面积或伪造校准。
+- 初始253使用非公开ServiceSpecificException无法编译，改用自有Binder支持的IllegalStateException及调用方IOException，不加隐藏API存根。审查修复Root失败后broker仍缓存关闭Session的问题：按对应Session失效租约，无自动重试，下一次主动请求才能重建。最终257 testDebugUnitTest/lintDebug/assembleDebug通过，189项单测0失败，Lint0 errors/139 warnings/2 hints。StaticFieldLeak提示对应应用级连接，明确applicationContext与最后租约释放后作定点说明抑制。
+- 原位安装150，包名/签名未变，debug证书b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0；交付outputs/HyperDragShare-1.7.126-debug.apk SHA256 D60AF42665645AC2494C9ACBEFB95A44E4C90988D70082AA677B295214D2D10C，与安装base.apk严格一致。只重载传送门，实际握手150/Root150/granted=true，hds126-activation.xml；未重启android/AICR/整机。
+- debug-only SharedRootNodeProbe绑定非导出:root_probe服务，实际两个独立进程31552与31655各持一租约；8秒状态窗口中只有一个Root app_process31767（31761是其sh包装），hds126-shared-processes.json、shared-probe.txt。手动期间自动请求found=false、candidateCallbacks=0；手动读取Bili休息提醒标题8字、来源匹配；关闭手动后远端自动租约仍读取8字，semantic12/6ms。该自动请求只验证读取，不尝试接管系统手势，不是实际面积通过。
+- 受控只杀远端测试服务31655，自身Binder死亡被观察。之后5秒状态窗口模块31552仍存活、Root helper已不存在；SharedNodes日志clients从2→1→0，hds126-shared.log。不是Instrumentation结束导致宿主退出后才清理；测试服务可因BIND_AUTO_CREATE重建空进程，最终解绑/stop清理。未新增外部诊断APK、未绕过此前受限安装。
+- 先直接shell启动非导出PointCaptureActivity被Android拒绝；未改导出权限或换Root绕过。随后经正常控制中心磁贴临时添加/点击，实际显示原页底部点取条，点标题→原页8字分词，hds126-point-ready-final.png、point-result.png/xml，Root12ms。连接释放后才运行uiautomator dump，未与活跃Root争用注册位。返回后提醒保持，没有点击关闭提醒或播放。
+- 连接故障实测：再次磁贴点取已准备，仅停止本模块自己的RootNodeCaptureMain6188后选标题；页面显示“点取失败，请重新选择/读取当前页面失败：Stream closed”，保留重选/关闭，hds126-point-interrupted.png/xml、interrupted-helper.txt/log。没有自动新建；主动点击重选后新helper7613建立，同点再次8字原页分词成功，hds126-point-retried.png/xml。只核验单入口主动恢复，未覆盖自动租约同时存在时的失效。
+- 返回关闭、Root helper/远端probe无残留；临时磁贴完整列表与hds126-tiles-before/after.txt严格相同，drag_share_settings前后按键值完全一致。中转站未增删、schema2未改，保留原7条/4图和123升级前备份回退约束。原bilipai任务2183置前、提醒保留，临时device XML已删；截图只留本机，不提交私人画面。
+- 未验：实际Portal UID共享租约/面积手势、新共享图片裁剪到OCR、外部自动化占用新入口、并发忙、宿主进程死亡、旋转/息屏中断及完整深色。真实面积仍没有有效数据，bilipai评论普通长按与最新四样式16方向仍未完成，115旧ANR/复制浮层共存仍待根因。

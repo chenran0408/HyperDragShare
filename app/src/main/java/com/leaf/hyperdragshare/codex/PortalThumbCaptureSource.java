@@ -36,7 +36,7 @@ final class PortalThumbCaptureSource {
     private float x;
     private float y;
     private volatile boolean stopped;
-    private volatile RootNodeCaptureClient.Session nodeSession;
+    private volatile SharedRootNodeCapture.Connection nodeSession;
     private boolean busy;
     private volatile boolean pointerDown;
     private long captureDeadline;
@@ -52,7 +52,7 @@ final class PortalThumbCaptureSource {
                 context.getResources().getDisplayMetrics().density * 16f, 180L);
         worker.execute(() -> {
             try {
-                RootNodeCaptureClient.Session ready = RootNodeCaptureClient.open(context);
+                SharedRootNodeCapture.Connection ready = SharedRootNodeCapture.open(context, false);
                 main.post(() -> {
                     if (stopped) ready.close();
                     else {
@@ -65,8 +65,6 @@ final class PortalThumbCaptureSource {
                 main.post(() -> {
                     if (!stopped) showFailure("面积取词服务连接失败，请重载传送门后重试");
                 });
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
             }
         });
     }
@@ -126,7 +124,7 @@ final class PortalThumbCaptureSource {
 
     private void capture() {
         if (busy) return;
-        RootNodeCaptureClient.Session session = nodeSession;
+        SharedRootNodeCapture.Connection session = nodeSession;
         if (session == null) {
             showFailure("面积取词服务尚未就绪，请稍后重试");
             return;
@@ -258,7 +256,7 @@ final class PortalThumbCaptureSource {
             generation++;
             main.removeCallbacks(confirm);
             blocker.stop();
-            RootNodeCaptureClient.Session session = nodeSession;
+            SharedRootNodeCapture.Connection session = nodeSession;
             nodeSession = null;
             if (session != null) session.close();
             worker.shutdownNow();

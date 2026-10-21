@@ -82,7 +82,7 @@ object PointCaptureOverlay {
             .maximumWindowMetrics.bounds
         private val settings = DragShareSettings.readLocal(app)
         private var window: InteractiveOverlayWindow? = null
-        private var nodeSession: RootNodeCaptureClient.Session? = null
+        private var nodeSession: SharedRootNodeCapture.Connection? = null
         @Volatile private var closed = false
         private var prepared by mutableStateOf(false)
         private var failure by mutableStateOf<String?>(null)
@@ -118,7 +118,7 @@ object PointCaptureOverlay {
         private fun prepareRoot() {
             worker.execute {
                 try {
-                    val ready = RootNodeCaptureClient.open(app)
+                    val ready = SharedRootNodeCapture.open(app, true)
                     main.post {
                         if (closed) ready.close()
                         else {
@@ -130,9 +130,6 @@ object PointCaptureOverlay {
                     fail("点取服务未能准备完成", error)
                 } catch (error: SecurityException) {
                     fail("系统拒绝连接点取服务", error)
-                } catch (error: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    fail("点取准备已中断", error)
                 }
             }
         }

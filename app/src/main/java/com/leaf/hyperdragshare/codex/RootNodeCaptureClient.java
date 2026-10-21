@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Rect;
 import android.graphics.Bitmap;
+import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.view.WindowManager;
 
@@ -30,6 +31,10 @@ final class RootNodeCaptureClient {
 
     interface CandidateHandler {
         boolean onCandidate(String sourcePackage) throws IOException;
+    }
+
+    interface WindowVerifier {
+        boolean isCurrentWindow(String source, int windowId) throws IOException, InterruptedException;
     }
 
     static Session open(Context context) throws IOException, InterruptedException {
@@ -79,6 +84,13 @@ final class RootNodeCaptureClient {
                                              boolean allowText, boolean allowImages,
                                              CandidateHandler handler)
                 throws IOException, InterruptedException {
+            return contentFromNode(context, captureNode(x, y, blockedPackages, allowText, allowImages, handler),
+                    this::isCurrentWindow);
+        }
+
+        synchronized Bundle captureNode(float x, float y, Set<String> blockedPackages,
+                                        boolean allowText, boolean allowImages, CandidateHandler handler)
+                throws IOException, InterruptedException {
             if (closed) throw new IOException("Root node process has stopped; reload the Portal scope");
             KeyguardManager keyguard = context.getSystemService(KeyguardManager.class);
             if (keyguard.isKeyguardLocked()) return null;
@@ -127,34 +139,20 @@ final class RootNodeCaptureClient {
                 close();
                 throw error;
             }
-            return image ? captureImage(source, windowId, bounds, expectedWidth, expectedHeight)
-                    : CapturedContent.text(text, source, bounds, before, after);
+            Bundle node = new Bundle();
+            node.putString("package", source);
+            node.putString("text", text);
+            node.putString("before", before);
+            node.putString("after", after);
+            node.putParcelable("bounds", bounds);
+            node.putInt("window_id", windowId);
+            node.putInt("width", expectedWidth);
+            node.putInt("height", expectedHeight);
+            node.putBoolean("image", image);
+            return node;
         }
 
-        private CapturedContent captureImage(String source, int windowId, Rect bounds,
-                                             int expectedWidth, int expectedHeight)
-                throws IOException, InterruptedException {
-            Bitmap screen = new RootScreenshotter().capture();
-            try {
-                if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()
-                        || !isCurrentWindow(source, windowId)) return null;
-                if (screen.getWidth() != expectedWidth || screen.getHeight() != expectedHeight) {
-                    throw new IOException("画面尺寸已变化，请重新按压（" + expectedWidth + "×" + expectedHeight
-                            + "→" + screen.getWidth() + "×" + screen.getHeight() + "）");
-                }
-                Rect crop = new Rect(bounds);
-                if (!crop.intersect(0, 0, screen.getWidth(), screen.getHeight())) {
-                    throw new IOException("图片区域已移出屏幕");
-                }
-                Bitmap image = Bitmap.createBitmap(screen, crop.left, crop.top, crop.width(), crop.height());
-                if (image == screen) screen = null;
-                return CapturedContent.image(image, source, crop, true);
-            } finally {
-                if (screen != null) screen.recycle();
-            }
-        }
-
-        private boolean isCurrentWindow(String source, int windowId) throws IOException, InterruptedException {
+        synchronized boolean isCurrentWindow(String source, int windowId) throws IOException, InterruptedException {
             try {
                 JSONObject request = new JSONObject().put("operation", "verify_window")
                         .put("package", source).put("window_id", windowId);
@@ -218,6 +216,36 @@ final class RootNodeCaptureClient {
                 DragShareLog.w(TAG, "cannot close Root node request pipe", error);
             }
             process.destroy();
+        }
+    }
+
+    static CapturedContent contentFromNode(Context context, Bundle node, WindowVerifier verifier)
+            throws IOException, InterruptedException {
+        if (node == null || context.getSystemService(KeyguardManager.class).isKeyguardLocked()) return null;
+        String source = node.getString("package");
+        Rect bounds = node.getParcelable("bounds", Rect.class);
+        if (!node.getBoolean("image")) {
+            return CapturedContent.text(node.getString("text"), source, bounds,
+                    node.getString("before"), node.getString("after"));
+        }
+        Bitmap screen = new RootScreenshotter().capture();
+        try {
+            if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()
+                    || !verifier.isCurrentWindow(source, node.getInt("window_id"))) return null;
+            int width = node.getInt("width"), height = node.getInt("height");
+            if (screen.getWidth() != width || screen.getHeight() != height) {
+                throw new IOException("画面尺寸已变化，请重新按压（" + width + "×" + height
+                        + "→" + screen.getWidth() + "×" + screen.getHeight() + "）");
+            }
+            Rect crop = new Rect(bounds);
+            if (!crop.intersect(0, 0, screen.getWidth(), screen.getHeight())) {
+                throw new IOException("图片区域已移出屏幕");
+            }
+            Bitmap image = Bitmap.createBitmap(screen, crop.left, crop.top, crop.width(), crop.height());
+            if (image == screen) screen = null;
+            return CapturedContent.image(image, source, crop, true);
+        } finally {
+            if (screen != null) screen.recycle();
         }
     }
 

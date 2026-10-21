@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <service
+            android:name=".RemoteRootLeaseProbeService"
+            android:exported="false"
+            android:process=":root_probe" />
+    </application>
+    <instrumentation
+        android:name=".SharedRootNodeProbe"
+        android:targetPackage="com.leaf.hyperdragshare.codex"
+        android:label="Shared Root lease ownership check" />
     <instrumentation
         android:name=".GameCaptureProbe"
         android:targetPackage="com.leaf.hyperdragshare.codex"

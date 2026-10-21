@@ -947,3 +947,13 @@ StashBatchCard和stashBatches由侧窗/系统小窗/管理共用，选择输出�
 仅明确PackageManager不存在/权限失败边界记录原因并提示“本次保留原操作”，本次跳过模块，保留系统原动作；不改权限、不猜游戏名单、不设置多级回退。普通分类或未声明分类按非游戏处理，因此不承诺识别全部游戏。默认关闭避免升级改变原手势。目标传送门5.1.5和模块均声明QUERY_ALL_PACKAGES；仍需真实游戏及权限失败验证。
 
 最终构建252：189项单测0失败，Lint0 errors/139 warnings/2 hints，assembleDebug通过；真机设置开/关、重启后保存和Root来源包名回传通过。设备当前声明CATEGORY_GAME的应用为0，不能据元数据实验宣称真实游戏手势已验证。面积输入为0、bilipai评论普通长按仍未修复。详见设备记录。
+
+## 2026-10-21：1.7.126 单一Root取词所有者
+
+SharedRootNodeCapture通过现有ShareImageProvider受限入口返回IRootNodeLease；仅模块/传送门UID可取得。每个capture/verify/close再检查所属UID，candidate回调只接受模块UID并恢复调用方自身Binder身份后做同步决策。ContentProviderClient保持至租约关闭，使远程使用者持有稳定Provider引用。模块使用applicationContext持有Root连接，最后租约清理；不是持有Activity的静态缓存。
+
+PortalThumbCaptureSource借自动租约，PointCaptureOverlay借手动租约；手动存在时自动请求返回空且不调用候选/接管。Root一次请求的candidate/final仍串行完整消费，verify_window使用相同IO锁；并发忙立即明确报告，不排队错过原生长按截止。租约锁不跨Root读取/候选回调，close不等待读取锁。Node结果仅传文字、相邻段落、包名、窗口ID、边界和显示尺寸；不跨Binder传Bitmap，也不增加图片压缩。截图/裁剪在调用方，锁屏、来源窗口和尺寸核验保留。
+
+Root IO失败会关闭其对应Session并明确失效相关租约；不能继续缓存已关闭对象，也不清掉后建的Session。当前请求显示失败，只有后续用户主动重选才新建连接，不自动重试。Portal旧自动租约需用户重载；没有后台自动修复或抢断其他UiAutomation。Binder死亡释放所属租约，保留其他使用者。
+
+构建257的189项测试、Lint0 errors/139 warnings/2 hints与assembleDebug通过。两独立进程的真实租约/手动优先/关闭后继续取词/Binder死亡释放及控制中心点取、受控连接中断后主动重选通过。新共享图片分支、实际Portal UID面积手势、并发忙和模块宿主死亡未实测。细节与证据见DEVICE_VALIDATION。

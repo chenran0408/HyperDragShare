@@ -42,6 +42,15 @@ public final class ShareImageProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (SharedRootNodeCapture.METHOD_OPEN.equals(method)) {
+            enforcePortalCaller();
+            int uid = Binder.getCallingUid();
+            long identity = Binder.clearCallingIdentity();
+            try {
+                return SharedRootNodeCapture.acquire(contextOrThrow(), extras.getBinder("owner"), uid,
+                        extras.getBoolean("manual"));
+            } finally { Binder.restoreCallingIdentity(identity); }
+        }
         if (ImageOcrOverlay.METHOD_RECOGNIZE.equals(method)) {
             enforcePortalCaller();
             Uri uri = extras == null ? null : extras.getParcelable("image", Uri.class);
