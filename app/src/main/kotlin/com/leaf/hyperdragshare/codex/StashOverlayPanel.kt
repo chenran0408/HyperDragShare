@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Deselect
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.runtime.Composable
@@ -134,6 +135,7 @@ object StashOverlayPanel {
         private var dragStartRawY = 0f
         private var dragStartLeft = 0
         private var dragStartCenterY = 0f
+        private var dragStartAnchorY = 0f
         private var moving = false
         private val displayManager = app.getSystemService(DisplayManager::class.java)
         private val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
@@ -144,6 +146,7 @@ object StashOverlayPanel {
         private var entries by mutableStateOf<List<StashStore.Entry>>(emptyList())
         private val listState = LazyListState()
         private var loading by mutableStateOf(false)
+        private var reloadRequested = false
         private var message by mutableStateOf<String?>(null)
         private var expanded by mutableStateOf(true)
         private var selectionMode by mutableStateOf(false)
@@ -191,10 +194,18 @@ object StashOverlayPanel {
         }
 
         fun collapse() {
-            preview = null
             confirmDelete = false
             expanded = false
             resize()
+        }
+
+        private fun back() {
+            when {
+                confirmDelete -> confirmDelete = false
+                preview != null -> preview = null
+                openedBatchId != null -> { openedBatchId = null; listState.requestScrollToItem(0) }
+                else -> collapse()
+            }
         }
 
         private fun resize() {
@@ -235,6 +246,7 @@ object StashOverlayPanel {
                     dragStartRawY = event.rawY
                     dragStartLeft = overlay.window.attributes.x
                     dragStartCenterY = overlay.window.attributes.y + overlay.window.attributes.height / 2f
+                    dragStartAnchorY = centerY
                     moving = false
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -253,7 +265,9 @@ object StashOverlayPanel {
                     moving = false
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    if (moving) finishMove()
+                    dragLeft = null
+                    centerY = dragStartAnchorY
+                    resize()
                     moving = false
                 }
             }
@@ -298,7 +312,10 @@ object StashOverlayPanel {
         }
 
         private fun reload() {
-            if (loading) return
+            if (loading) {
+                reloadRequested = true
+                return
+            }
             scope.launch {
                 loading = true
                 message = null
@@ -307,11 +324,8 @@ object StashOverlayPanel {
                     val newestChanged = updated.firstOrNull()?.id != entries.firstOrNull()?.id
                     entries = updated
                     if (openedBatchId != null && entries.none { it.batchId == openedBatchId }) openedBatchId = null
-                    if (newestChanged) {
-                        preview = null
-                        openedBatchId = null
-                        confirmDelete = false
-                        cancelSelection()
+                    preview = preview?.let { image -> entries.firstOrNull { it.id == image.id } }
+                    if (newestChanged && !expanded && !selectionMode && preview == null && openedBatchId == null) {
                         // Apply with the new item provider, rather than keeping the old first key.
                         listState.requestScrollToItem(0)
                     }
@@ -320,12 +334,18 @@ object StashOverlayPanel {
                     report("读取中转站失败", error)
                 } catch (error: SecurityException) {
                     report("系统拒绝读取中转站", error)
-                } finally { loading = false }
+                } finally {
+                    loading = false
+                    if (reloadRequested) {
+                        reloadRequested = false
+                        reload()
+                    }
+                }
             }
         }
 
         private fun deleteSelected() {
-            val targets = entries.filter { it.id in selectedIds }
+            val targets = selectedEntries()
             confirmDelete = false
             updating = true
             scope.launch {
@@ -379,6 +399,8 @@ object StashOverlayPanel {
             selectedIds = emptySet()
             selectionMode = false
         }
+
+        private fun selectedEntries() = stashBatches(entries).flatten().filter { it.id in selectedIds }
 
         private fun openText(entry: StashStore.Entry) {
             if (BigBangOverlayLauncher.showText(app, entry.text.orEmpty(), -1, -1, null)) collapse()
@@ -451,20 +473,12 @@ object StashOverlayPanel {
             }.let { if (openedBatchId != null) it.sortedBy { entry -> entry.batchOrder } else it }
             val visibleBatches = if (openedBatchId != null) visibleEntries.map { listOf(it) }
                 else stashBatches(visibleEntries)
-            val selected = visibleBatches.flatten().filter { it.id in selectedIds }
+            val selected = selectedEntries()
             LaunchedEffect(openedBatchId) { listState.requestScrollToItem(0) }
             MiuixTheme(controller = remember(dark) {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
-                BackHandler(enabled = expanded) {
-                    when {
-                        confirmDelete -> confirmDelete = false
-                        preview != null -> preview = null
-                        selectionMode -> cancelSelection()
-                        openedBatchId != null -> { openedBatchId = null; listState.requestScrollToItem(0) }
-                        else -> collapse()
-                    }
-                }
+                BackHandler(enabled = expanded, onBack = ::back)
                 if (!expanded) {
                     CollapsedHandle()
                 } else {
@@ -480,11 +494,7 @@ object StashOverlayPanel {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     OverlayIconAction(Icons.Outlined.ArrowBack,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        onClick = {
-                                            openedBatchId = null
-                                            cancelSelection()
-                                            listState.requestScrollToItem(0)
-                                        }, contentDescription = "返回全部内容")
+                                        onClick = ::back, contentDescription = "返回全部内容")
                                     Text(stashBatchLabel(visibleEntries), fontSize = 12.sp,
                                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
@@ -508,14 +518,15 @@ object StashOverlayPanel {
                                     }
                                 }
                                 image != null -> Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                                    StashDraggableContent(listOf(image), Modifier.fillMaxWidth().weight(1f),
+                                    StashDraggableContent(if (selectionMode && image.id in selectedIds) selected else listOf(image),
+                                        Modifier.fillMaxWidth().weight(1f),
                                         enabled = !updating, onStarted = ::collapse, onClick = {}) {
                                         StashImage(image, 1200, Modifier.fillMaxSize(), ContentScale.Fit)
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                         OverlayIconAction(Icons.Outlined.ArrowBack,
                                             MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                            onClick = { preview = null }, contentDescription = "返回内容列表")
+                                            onClick = ::back, contentDescription = "返回内容列表")
                                         OverlayIconAction(Icons.Outlined.DocumentScanner,
                                             MiuixTheme.colorScheme.onSurfaceVariantActions,
                                             onClick = {
@@ -554,21 +565,20 @@ object StashOverlayPanel {
                             if (updating) {
                                 Text("正在处理…", Modifier.padding(6.dp), fontSize = 12.sp,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                            } else if (selectionMode && !confirmDelete) {
+                            } else if (selectionMode && !confirmDelete && preview == null) {
                                 StashGroupingActions(selected, true,
                                     canUngroup = selected.any { it.id in stashGroupedEntryIds(entries) },
                                     onGroup = { regroup(selected, false) },
                                     onUngroup = { regroup(selected, true) })
                             }
-                            if (!confirmDelete) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                OverlayIconAction(if (selectionMode) Icons.Outlined.ArrowBack else Icons.Outlined.CheckBoxOutlineBlank,
+                            if (!confirmDelete && preview == null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                OverlayIconAction(if (selectionMode) Icons.Outlined.Deselect else Icons.Outlined.CheckBoxOutlineBlank,
                                     if (selectionMode) MiuixTheme.colorScheme.primary
                                     else MiuixTheme.colorScheme.onSurfaceVariantActions,
                                     enabled = !updating && (selectionMode || visibleEntries.isNotEmpty()),
                                     onClick = {
-                                        preview = null
                                         if (selectionMode) cancelSelection() else selectionMode = true
-                                    }, contentDescription = if (selectionMode) "取消多选" else "多选拖出")
+                                    }, contentDescription = if (selectionMode) "清空选择" else "多选拖出")
                                 if (selectionMode) {
                                     val allSelected = visibleEntries.isNotEmpty() &&
                                         visibleEntries.all { it.id in selectedIds }
@@ -576,9 +586,10 @@ object StashOverlayPanel {
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         enabled = !updating && visibleEntries.isNotEmpty(),
                                         onClick = {
-                                            selectedIds = if (allSelected) emptySet()
-                                                else visibleEntries.map { it.id }.toSet()
-                                        }, contentDescription = if (allSelected) "取消全选" else "全选内容")
+                                            val visibleIds = visibleEntries.map { it.id }.toSet()
+                                            selectedIds = if (allSelected) selectedIds - visibleIds
+                                                else selectedIds + visibleIds
+                                        }, contentDescription = if (allSelected) "取消当前列表全选" else "全选当前列表")
                                     OverlayIconAction(Icons.Outlined.Delete,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
                                         enabled = !updating && selectedIds.isNotEmpty(),

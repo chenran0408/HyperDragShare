@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.145 / versionCode 169。沿用debug签名，原位升级成功；本批新Portal PID18079，注入/Root版本169、Root授权true。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.146 / versionCode170。同包名/debug签名原位升级成功；Portal PID21532，注入/Root版本170、Root授权true。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前已安装1.7.145 / 169；208项单测0失败/0错误，Lint 0错误/151警告/2提示，assembleDebug通过。最新批次见文末；以下历史记录仅代表当时状态。
+- 当前已安装1.7.146 / 170；211项单测0失败/0错误，Lint0错误/151警告/2提示，assembleDebug通过。最新批次见文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -954,3 +954,13 @@ APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null�
 - 安装：只覆盖安装一次。包名不变、version169/1.7.145，debug证书SHA256 b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0一致。APK位于任务outputs/HyperDragShare-1.7.145-debug.apk；SHA256 6832D25724A6B4C352774070BD1C890614F7FCDED3FC5D1E04D81507A0CBAA02。
 - 后台加载：操作前无输入约145秒；仅结束旧Portal22301、Root空query唤醒，新PID18079。模块activation.xml显示process_id18079、injected_version169、portal_root_version169、portal_root_granted=true。重载前后前台均微信LauncherUI/task2387，未启动Activity、截图、注入触摸、改剪贴板/中转站、停AICR或重启系统。日志筛选未取到本批ready行，故本批不另宣称输入/取词ready；144旧证据保留。
 - 未实测：真实手指面积、普通长按冲突实际手感、应用接收拖拽、中转站新手势、复杂返回层级。未把源码/回归通过称为真机完整验收。android仍未重载，本批不涉及框架代码变化。
+
+## 2026-10-21：1.7.146 中转站连续取用
+
+- 源码：收起保留预览/选区，统一子层返回；Back不清多选，清空选择按钮才清；全局有序选区用于拖出/分组/删除，范围全选用加减。预览隐藏列表操作。刷新保留状态并合并忙时通知；移动CANCEL恢复原坐标且不写贴边位置。无新页面或数据库修改，细节见STASH/IMPLEMENTATION。
+- 本地：最终build303执行testDebugUnitTest lintDebug assembleDebug成功，211项测试0失败/错误，Lint0错误/151警告/2提示。3项新增回归直接调用Shelf真实处理，覆盖子层返回/收起保留、组内浏览仍拖全局有序选区、移动取消。build301是新测试误用泛型getApplication编译失败；302移动测试因Robolectric未附着WindowContext的maxBounds为空失败，给测试配置明确屏幕后303通过；未用生产兜底或删除断言掩盖。
+- 部署：模块只覆盖安装一次，同包名/debug证书与145一致。1.7.146/170；APK任务outputs/HyperDragShare-1.7.146-debug.apk，SHA256 5F02F63015B0550D462CD71675D20BD993D8B860E1CEE315087B41282E4AD434。只结束Portal18079并空query，PID21532/注入170/Root170=true确认，前台仍微信2387；没有重启AICR或Android，也不凭此宣称Root输入ready。
+- 设备闲置近2分钟后，临时安装现有独立接收器com.leaf.dragdrop.probe（不改本项目构建模块），启动其空接收页。通过真实分享接收桥分别存入本次HDS146-A/B，只出现侧条，主动打开才展开；总数11，其他条目未被选中。先核对两条可见生成文字及勾选，总数2，再按住第一条拖向接收区域。
+- 13:27:14.408接收器PID27309/UID10228记录DROP OK、items=2、顺序HDS146-B/HDS146-A；源模块UID10270。实际系统DRAG_STARTED/DROP/接收完成后托盘收灰条。点灰条展开，两个生成条目仍勾选；一次系统Back收起且焦点回接收器，重新展开仍选2条。日志只含生成文字，位于任务work/hds146-drop-result.log。
+- 清理：明确选择仍是A/B两条，删除确认显示2项后，仅删除这两条，界面11→9；未对原条目执行修改。明确关闭模块窗后核对接收器前台，再卸载临时包；pm path无包，窗口无模块残留，前台回原微信LauncherUI/task2387。未发送额外Back或强制恢复旧任务，未操作Bili/剪贴板/系统权限。8张可能含用户中转内容的本机截图按确切路径全部删除，未提交图片或私人内容。
+- 范围：证明当前浮窗内容直接多选拖出到另一UID、收起/返回后重开保留选择；不是所有接收应用、图片/混合/组卡或物理手指面积验收。移动CANCEL、刷新竞态与预览层级本批仅源码回归，尚无物理手指/新图实测。未重跑OCR样本、截图矩阵或无数据校准。
