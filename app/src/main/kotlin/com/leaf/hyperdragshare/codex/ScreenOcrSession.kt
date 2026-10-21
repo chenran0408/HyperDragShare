@@ -94,6 +94,8 @@ internal class ScreenOcrSession(
     private var resultText by mutableStateOf<List<String>>(emptyList())
     private var selectedLines by mutableStateOf<Set<Int>>(emptySet())
     private var nearbySelection by mutableStateOf(false)
+    private var insertionSource: android.graphics.Rect? = null
+    private var resultBounds: List<android.graphics.Rect?> = emptyList()
     private var statusMessage by mutableIntStateOf(R.string.screen_ocr_capturing)
     private var isRecognizing by mutableStateOf(true)
     private var screenshotForRegion: Bitmap? = null
@@ -158,7 +160,11 @@ internal class ScreenOcrSession(
 
     private fun recognizeScreenshot(bitmap: Bitmap, nearbySource: android.graphics.Rect? = null) {
         readingBitmap = bitmap
+        resultText = emptyList()
+        selectedLines = emptySet()
         nearbySelection = nearbySource != null
+        insertionSource = nearbySource
+        resultBounds = emptyList()
         failureDetail = null
         if (IntegrationSettings.isAicrOcrEnabled(context)) {
             aicrRequest = AicrOcrClient.recognizeWithLines(context, bitmap) { result, error ->
@@ -178,7 +184,7 @@ internal class ScreenOcrSession(
                                     reportFailure(R.string.screen_ocr_region_unavailable,
                                         IllegalStateException("AICR 未返回可定位的文字行，请返回后手动框选"))
                                 } else {
-                                    recognitionCompleted(lines.map { it.text.trim() }, nearbyOcrLines(bounds, nearbySource))
+                                    recognitionCompleted(lines.map { it.text.trim() }, nearbyOcrLines(bounds, nearbySource), bounds)
                                 }
                             } catch (error: IllegalArgumentException) {
                                 reportFailure(R.string.screen_ocr_region_unavailable, error)
@@ -207,7 +213,8 @@ internal class ScreenOcrSession(
                         val suggested = nearbySource?.let { source ->
                             nearbyOcrLines(recognizedLines.map { it.boundingBox }, source)
                         }
-                        recognitionCompleted(recognizedLines.map { it.text.trim() }, suggested)
+                        recognitionCompleted(recognizedLines.map { it.text.trim() }, suggested,
+                            recognizedLines.map { it.boundingBox })
                     } else {
                         reportFailure(R.string.screen_ocr_failed,
                             task.exception ?: IllegalStateException("ML Kit recognition failed"))
@@ -236,12 +243,14 @@ internal class ScreenOcrSession(
         }
     }
 
-    private fun recognitionCompleted(lines: List<String>, suggested: Set<Int>? = null) {
+    private fun recognitionCompleted(lines: List<String>, suggested: Set<Int>? = null,
+        bounds: List<android.graphics.Rect?> = emptyList()) {
         if (lines.isEmpty()) {
             showFailure(R.string.screen_ocr_no_text)
             return
         }
         resultText = lines
+        resultBounds = bounds
         selectedLines = suggested ?: lines.indices.toSet()
         isRecognizing = false
         if (resultReceiver == null && selectRegion &&
@@ -373,7 +382,15 @@ internal class ScreenOcrSession(
         if (text.isBlank()) return
         if (resultReceiver != null) {
             resultSent = true
-            resultReceiver.send(Activity.RESULT_OK, Bundle().apply { putString("text", text) })
+            val source = insertionSource
+            val result = Bundle()
+            if (source == null) result.putString("text", text)
+            else {
+                val (before, after) = splitNearbyOcrSelection(resultText, resultBounds, selectedLines, source)
+                result.putString("prepend_text", before)
+                result.putString("text", after)
+            }
+            resultReceiver.send(Activity.RESULT_OK, result)
             close()
         } else if (BigBangOverlayLauncher.showText(context, text, -1, -1, null)) close()
     }
@@ -535,7 +552,7 @@ internal class ScreenOcrSession(
                         Column(modifier = Modifier.padding(12.dp)) {
                             if (nearbySelection) {
                                 Text(
-                                    text = "已按原文位置预选上下最近行；页面可能已变化，请核对后追加。没有合适内容可取消。",
+                                    text = "已预选原文附近的行。上方文字放在原文前，其余接在末尾；页面可能已变化，请核对，也可取消。",
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     fontSize = 13.sp,
                                 )
@@ -554,7 +571,7 @@ internal class ScreenOcrSession(
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TextButton(
-                                    text = if (resultReceiver != null) "追加已选"
+                                    text = if (resultReceiver != null) { if (nearbySelection) "插入已选" else "追加已选" }
                                         else stringResource(R.string.screen_ocr_segment_all),
                                     onClick = { onSegment(if (resultReceiver != null) selectedText else allText) },
                                     enabled = resultReceiver == null || selectedLines.isNotEmpty(),

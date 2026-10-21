@@ -12,6 +12,21 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class OcrNearbyLinesTest {
+    @Test fun selectedRowsArePartitionedInOcrOrderRatherThanSelectionOrder() {
+        val texts = listOf("上方第一行", "上方第二行", "未选择", "下方第一行", "下方第二行")
+        val bounds = listOf(Rect(100, 80, 300, 110), Rect(100, 150, 300, 180),
+            Rect(100, 210, 300, 250), Rect(100, 300, 300, 330), Rect(100, 350, 300, 380))
+        assertEquals("上方第一行\n上方第二行" to "下方第一行\n下方第二行",
+            splitNearbyOcrSelection(texts, bounds, linkedSetOf(4, 1, 3, 0), Rect(100, 200, 300, 280)))
+    }
+
+    @Test fun overlappingAndUnlocatedRowsAreNotGuessedToPrecedeTheSource() {
+        assertEquals("恰好位于上方" to "重叠行\n无坐标行\n下方行", splitNearbyOcrSelection(
+            listOf("重叠行", "无坐标行", "下方行", "恰好位于上方"),
+            listOf(Rect(100, 180, 300, 220), null, Rect(100, 300, 300, 340), Rect(100, 170, 300, 200)),
+            linkedSetOf(3, 2, 1, 0), Rect(100, 200, 300, 280)))
+    }
+
     @Test fun aWideTextViewDoesNotPullInDistantStatusBarText() {
         assertEquals(setOf(1), nearbyOcrLines(listOf(
             Rect(80, 20, 220, 80), Rect(480, 960, 960, 1010)), Rect(100, 820, 1340, 920)))

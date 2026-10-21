@@ -718,3 +718,14 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 最终APK outputs/HyperDragShare-1.7.127-debug.apk SHA256 A2C99D19B4EB83D6D04C3FB2977FBF00DC17C828AC8A0C0D69F8F2742C9AEB79，与安装base.apk严格一致；包名与debug证书未变。仅重载传送门，injected_version=151/portal_root_version=151/granted=true，hds127-activation.xml；未重启android/AICR/整机。
 - 临时点取磁贴完整列表hds127-tiles-before/after严格相同；drag_share_settings和drag_share_integrations前后键值相同，AICR仍true。Root helper/取词/分词/识屏窗口最终释放，原Bili提醒置前。中转站无写入/增删，schema2原7条/4图保留，旧123前schema1备份约束不变。临时device XML删除，截图与设备日志只留本机。
 - 未验：ML Kit新距离约束、无坐标/格式变化的设备错误态、复杂多列/旋转/长图、取消与识别并发。确认的上方行仍追加末尾，未实现自动前插；不声称完整无限“炸了又炸”。真实面积仍无有效样本，bilipai评论普通长按、最新四样式16方向及115旧ANR/复制浮层问题仍未解决。
+
+## 2026-10-21：1.7.128 附近文字前后顺序
+
+- 新增同图行坐标分组，附近确认以prepend_text/text提交，上方行放原文前，其余接在末尾，OCR原行序保持。普通手工框选仍追加。确认页说明顺序，“追加已选”在附近模式改“插入已选”；没有新增重复按钮。新识别清空旧结果/选择/行边界，避免失败后旧结果与新锚点混用；该失败态设备操作未验证。
+- BigBang接收器修正仅有前文时被旧after非空检查误当取消的逻辑。Panel只分词新两段，拼接既有分词数组，UTF-16 prefix偏移复制选区，不原地修改原数组；保留用户合并/拆分。最终263 testDebugUnitTest/lintDebug/assembleDebug一次通过，195项单测0失败（新增2项行分组/无位置不猜前置），Lint0 errors/139 warnings/2 hints。
+- debug-only TextInsertionProbe真机调用生产insertIntoSavedState和实际native，以甲😀合并词块/乙独立词块及选区构造保存态。bothSides/prependOnly/appendOnly=true，合成UTF16长度17/11/10；原merged区间、选择偏移及输入数组未变。hds128-native-insertion.txt。没有读节点/截图/Root或改偏好，不用此探针替代完整界面入口。
+- 实际磁贴点取Bili提醒中间行（720,880），原文共12字符（含空格），选连续/观看后合并，hds128-selected.xml、merged.xml确认连续观看selected=true、已选4/12。更多→追加屏幕文字→AICR查找附近，hds128-nearby.png/xml预选2/8，分别为上方标题和下方正文首行；原文与状态栏未选。只代表最近可见行，不包含正文下一行“秒。”，不宣称自动整段扩展。
+- 点击插入已选后，hds128-inserted.png/xml显示标题词在前、原中间行保留、下方正文行在后；已选4/45，连续观看仍为单一selected=true词块。原selected4字未被新段选中覆盖。topResumedActivity仍com.android.purebilibili任务2183，没有进入设置、关闭提醒或恢复视频。XML早期动画帧里首行bounds短于最终布局，实际稳定截图文字完整，不据中间帧改布局掩盖。
+- 最终原位安装152，APK outputs/HyperDragShare-1.7.128-debug.apk SHA256 605D7C631327113D63AD7A9C8E5A6027301B6AA1732C05F9EF0C9E82BBDDB928，与设备base.apk相同；包名和debug签名保持。仅重载传送门，实际握手152/Root152/granted=true，hds128-activation.xml。未重启android/AICR/整机。
+- 返回先清选择，读取焦点仍模块窗口后再返回关闭；临时点取磁贴全表严格恢复，settings/integrations前后键值相同，AICR保持true。Root取词连接释放后才dump；终态无helper/probe/分词或识屏窗口，Bili2183提醒保持。中转站未写入，原7条/4图schema2与旧备份约束保持；device XML清理，截图只留本机。
+- 未验：独立仅前插/仅后接产品UI（native路径已验）、ML Kit实际顺序、普通框选回归、识别失败旧状态清理、取消/锁屏/旋转/深色、多列或新ROM。真实拇指面积、Bili评论普通长按、最新四样式16方向、115旧ANR与复制浮层共存仍未解决。

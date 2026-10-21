@@ -130,13 +130,14 @@ object BigBangOverlayLauncher {
                         return
                     }
                     val extra = resultData?.getString("text")
-                    if (resultCode != android.app.Activity.RESULT_OK || extra.isNullOrBlank()) {
+                    val before = resultData?.getString("prepend_text")
+                    if (resultCode != android.app.Activity.RESULT_OK || (extra.isNullOrBlank() && before.isNullOrBlank())) {
                         open(app, text, x, y, sourceImage, state, sourceArea = sourceArea)
                         return
                     }
                     Thread({
                         try {
-                            BigBangPanelSession.appendToSavedState(app, state, extra)
+                            BigBangPanelSession.insertIntoSavedState(app, state, before.orEmpty(), extra.orEmpty())
                         } catch (error: IllegalStateException) {
                             main.post { report(app, error) }
                         } catch (error: UnsatisfiedLinkError) {

@@ -419,15 +419,25 @@ internal class BigBangPanelSession(private val context: Context, private val act
         }
     }
     companion object {
-        /** Called off the UI thread; append without re-segmenting the user's existing chips. */
-        fun appendToSavedState(context: Context, state: Bundle, extraText: String) {
+        /** Called off the UI thread; only the inserted parts are segmented. */
+        fun insertIntoSavedState(context: Context, state: Bundle, before: String, after: String) {
             val original = requireNotNull(state.getString(SAVED_TEXT))
             val originalSegments = requireNotNull(state.getIntArray(SAVED_SEGMENT))
-            val newSegments = TextSegmenter.get(context).segment(extraText)
-            val combinedSegments = BoomWordsLayout.concatenateSegments(
-                originalSegments, newSegments, original.length + 1)
-            state.putString(SAVED_TEXT, "$original\n$extraText")
+            val segmenter = TextSegmenter.get(context)
+            val prefix = if (before.isNotBlank()) "$before\n" else ""
+            var combined = prefix + original
+            var combinedSegments = if (prefix.isEmpty()) originalSegments else BoomWordsLayout.concatenateSegments(
+                segmenter.segment(before), originalSegments, prefix.length)
+            if (after.isNotBlank()) {
+                combinedSegments = BoomWordsLayout.concatenateSegments(
+                    combinedSegments, segmenter.segment(after), combined.length + 1)
+                combined += "\n$after"
+            }
+            val selection = state.getSerializable(SELECTED_STATE, Array<IntArray>::class.java)
+            val shifted = selection?.map { intArrayOf(it[0] + prefix.length, it[1] + prefix.length) }?.toTypedArray()
+            state.putString(SAVED_TEXT, combined)
             state.putIntArray(SAVED_SEGMENT, combinedSegments)
+            if (shifted != null) state.putSerializable(SELECTED_STATE, shifted)
         }
         private const val UNDO_EDIT = "undo_edit"
         private const val TAG = "DragShare/BigBang"

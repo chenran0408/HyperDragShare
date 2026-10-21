@@ -28,3 +28,12 @@ internal fun nearbyOcrLines(bounds: List<Rect?>, source: Rect): Set<Int> {
         .minByOrNull { bounds[it]!!.top - source.bottom }
     return listOfNotNull(before, after).toSet()
 }
+
+/** Preserve OCR reading order; only rows clearly above the source belong before the original text. */
+internal fun splitNearbyOcrSelection(texts: List<String>, bounds: List<Rect?>,
+    selected: Set<Int>, source: Rect): Pair<String, String> {
+    val (before, after) = texts.indices.filter { it in selected }.partition { index ->
+        bounds[index]?.let { it.bottom <= source.top } == true
+    }
+    return before.joinToString("\n") { texts[it] } to after.joinToString("\n") { texts[it] }
+}
