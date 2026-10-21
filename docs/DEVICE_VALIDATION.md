@@ -706,3 +706,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 连接故障实测：再次磁贴点取已准备，仅停止本模块自己的RootNodeCaptureMain6188后选标题；页面显示“点取失败，请重新选择/读取当前页面失败：Stream closed”，保留重选/关闭，hds126-point-interrupted.png/xml、interrupted-helper.txt/log。没有自动新建；主动点击重选后新helper7613建立，同点再次8字原页分词成功，hds126-point-retried.png/xml。只核验单入口主动恢复，未覆盖自动租约同时存在时的失效。
 - 返回关闭、Root helper/远端probe无残留；临时磁贴完整列表与hds126-tiles-before/after.txt严格相同，drag_share_settings前后按键值完全一致。中转站未增删、schema2未改，保留原7条/4图和123升级前备份回退约束。原bilipai任务2183置前、提醒保留，临时device XML已删；截图只留本机，不提交私人画面。
 - 未验：实际Portal UID共享租约/面积手势、新共享图片裁剪到OCR、外部自动化占用新入口、并发忙、宿主进程死亡、旋转/息屏中断及完整深色。真实面积仍没有有效数据，bilipai评论普通长按与最新四样式16方向仍未完成，115旧ANR/复制浮层共存仍待根因。
+
+## 2026-10-21：1.7.127 AICR附近文字与远距误选修正
+
+- 新增结构化AicrOcrResult与recognizeWithLines，原String识别入口保留；reader保存行text/poly/box，仍完整消费字符/entity并校验协议。先做生成图片实测，确认几何后才启用产品附近按钮。没有接小爱私有进程链，没有把能力Provider当OCR。
+- 初始258因新增测试与已有testDebug同名失败；改名并移除重复覆盖，最终仅新增1项raw行协议/消费测试。260几何接线测试通过后实机发现远距状态栏误选，新增距离回归；261中旧测试原先期待远距行仍被选，与新定义冲突，明确改为拒绝远距结果。最终262 testDebugUnitTest/lintDebug/assembleDebug通过，193项测试0失败，Lint0 errors/139 warnings/2 hints。新增合计4项：raw结构、目标机box外包/异列远距、缺失/非8值不猜LTRB、宽TextView状态栏误选。
+- 259/151实验版普通模块UID调用AICR，对1200×720生成图片LEFT 123/RIGHT 456/原文附近文字成功，已知Paint边界与三行box分别对应，hds127-aicr-geometry.txt。box实际8值四个(x,y)顶点，poly为可变长轮廓，不是4值LTRB/XYWH；产品只解释已验证box，不依赖poly长度或点序。未截图、未切引擎，此实验仅坐标格式证据。
+- 产品260实机：用户已选AICR=true，不改偏好。控制中心主动点取Bili休息提醒标题→选择“眼睛”2字→更多/追加屏幕文字→参考框选区→AICR查找附近。截图里原面板已移除，蓝框对应标题；hds127-region.png/xml。旧无距离限制的同列算法预选2/9，包含远处状态栏；保留hds127-nearby-before-gap-fix.png/xml为失败证据，不计通过。
+- 修正共用nearbyOcrLines的垂直空隙约束，不超过原区域/候选高度较大者两倍，保留同列/不重叠/最近上下行。没有按应用名/控件ID/时间字符串硬过滤；ML Kit也用相同约束。最后262重装151，用同一实际入口复测，预选仅1/9“已连续观看135分钟”，状态栏与原文均未选；hds127-final-nearby.png/xml。这是1440×3200实际截图到行坐标的产品证据，不仅小图协议测试。
+- 确认追加后返回原页分词，显示已选2/19；“眼睛”仍selected=true，新段已/连续/观看/135/分钟可见，hds127-final-appended.png/xml。topResumedActivity仍com.android.purebilibili任务2183，无设置页跳转，没有关闭休息提醒或播放。返回先清选择，再返回关闭，未将其误判为关闭失效。
+- 最终APK outputs/HyperDragShare-1.7.127-debug.apk SHA256 A2C99D19B4EB83D6D04C3FB2977FBF00DC17C828AC8A0C0D69F8F2742C9AEB79，与安装base.apk严格一致；包名与debug证书未变。仅重载传送门，injected_version=151/portal_root_version=151/granted=true，hds127-activation.xml；未重启android/AICR/整机。
+- 临时点取磁贴完整列表hds127-tiles-before/after严格相同；drag_share_settings和drag_share_integrations前后键值相同，AICR仍true。Root helper/取词/分词/识屏窗口最终释放，原Bili提醒置前。中转站无写入/增删，schema2原7条/4图保留，旧123前schema1备份约束不变。临时device XML删除，截图与设备日志只留本机。
+- 未验：ML Kit新距离约束、无坐标/格式变化的设备错误态、复杂多列/旋转/长图、取消与识别并发。确认的上方行仍追加末尾，未实现自动前插；不声称完整无限“炸了又炸”。真实面积仍无有效样本，bilipai评论普通长按、最新四样式16方向及115旧ANR/复制浮层问题仍未解决。

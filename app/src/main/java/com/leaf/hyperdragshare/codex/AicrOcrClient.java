@@ -37,11 +37,21 @@ public final class AicrOcrClient {
         void onComplete(String text, Exception error);
     }
 
+    public interface ResultCallback {
+        /** Main thread, exactly once after cleanup; retains line locations from this image. */
+        void onComplete(AicrOcrResult result, Exception error);
+    }
+
     /**
      * May be called from any thread. Caller owns the bitmap and must keep it alive until onComplete,
      * including after cancel(). This client never recycles it and never falls back to another engine.
      */
     public static Request recognize(Context context, Bitmap bitmap, Callback callback) {
+        return recognizeWithLines(context, bitmap, (result, error) ->
+                callback.onComplete(result == null ? null : result.text, error));
+    }
+
+    public static Request recognizeWithLines(Context context, Bitmap bitmap, ResultCallback callback) {
         Request request = new Request(context.getApplicationContext(), bitmap, callback);
         boolean accepted = ACTIVE.compareAndSet(false, true);
         MAIN.post(() -> {
@@ -54,7 +64,7 @@ public final class AicrOcrClient {
     public static final class Request {
         private final Context context;
         private final Bitmap bitmap;
-        private final Callback callback;
+        private final ResultCallback callback;
         private final String address;
         private final AtomicBoolean cancelled = new AtomicBoolean();
         private final CountDownLatch connected = new CountDownLatch(1);
@@ -82,7 +92,7 @@ public final class AicrOcrClient {
             }
         };
 
-        private Request(Context context, Bitmap bitmap, Callback callback) {
+        private Request(Context context, Bitmap bitmap, ResultCallback callback) {
             this.context = context;
             this.bitmap = bitmap;
             this.callback = callback;
@@ -124,7 +134,7 @@ public final class AicrOcrClient {
         private void recognize() {
             IBinder service = null;
             boolean requestedPlugin = false;
-            String text = null;
+            AicrOcrResult recognized = null;
             Exception failure = null;
             try {
                 if (!connected.await(15, TimeUnit.SECONDS)) {
@@ -155,10 +165,10 @@ public final class AicrOcrClient {
                 detect(vision, session);
                 checkCancelled();
                 stage = "识别文字";
-                text = recognizeText(vision, session);
+                recognized = recognizeResult(vision, session);
                 checkCancelled();
-                if (text == null) throw new IOException("AICR 图片会话已失效，请重试");
-                if (text.trim().isEmpty()) throw new IOException("这张图片没有识别到文字");
+                if (recognized == null || recognized.text == null) throw new IOException("AICR 图片会话已失效，请重试");
+                if (recognized.text.trim().isEmpty()) throw new IOException("这张图片没有识别到文字");
             } catch (CancellationException error) {
                 failure = error;
             } catch (InterruptedException error) {
@@ -179,7 +189,7 @@ public final class AicrOcrClient {
                         else failure.addSuppressed(error);
                     }
                 }
-                String result = text;
+                AicrOcrResult result = recognized;
                 Exception error = failure;
                 MAIN.post(() -> deliver(result, error, true));
             }
@@ -190,7 +200,7 @@ public final class AicrOcrClient {
         }
 
         /** Only invoked on main; worker has finished using the image before reaching this point. */
-        private void deliver(String text, Exception failure, boolean ownsSlot) {
+        private void deliver(AicrOcrResult result, Exception failure, boolean ownsSlot) {
             if (bound) {
                 try {
                     context.unbindService(connection);
@@ -205,7 +215,7 @@ public final class AicrOcrClient {
             if (cancelled.get()) {
                 callback.onComplete(null, new CancellationException("AICR 识别已取消"));
             } else {
-                callback.onComplete(failure == null ? text : null, failure);
+                callback.onComplete(failure == null ? result : null, failure);
             }
         }
     }
@@ -296,13 +306,13 @@ public final class AicrOcrClient {
         } finally { reply.recycle(); data.recycle(); }
     }
 
-    private static String recognizeText(IBinder vision, int session) throws RemoteException {
+    private static AicrOcrResult recognizeResult(IBinder vision, int session) throws RemoteException {
         Parcel data = Parcel.obtain(), reply = Parcel.obtain();
         try {
             data.writeInterfaceToken(VISION);
             data.writeInt(session);
             transact(vision, 4, data, reply);
-            return AicrV2ResultReader.readText(reply);
+            return AicrV2ResultReader.readResult(reply);
         } finally { reply.recycle(); data.recycle(); }
     }
 

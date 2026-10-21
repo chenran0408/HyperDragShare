@@ -95,3 +95,11 @@ debug-only实验现直接调用生产客户端，生成960×420的三行中文/�
 实际ImageOcrOverlay选择AICR识别同一生成图片，进入38字符BigBang独立浮窗；Activity前景仍bilipai。实验退出恢复原引擎设置。浮窗深浅色动态切换也已通过。172项测试、Lint、assembleDebug完成，安装135。
 
 这关闭了合成中文及图片产品入口的证据缺口；复杂版面、屏幕/区域、外部系统客户端并发覆盖、长时间Binder阻塞仍未验，不将少量耗时当性能基准。结果读取器当前只向产品提供全文，不提供可选行几何框。
+
+## 1.7.127：AICR行位置已核验并用于附近识字
+
+AicrV2ResultReader.readResult返回AicrOcrResult(total_text及有序Line text/poly/box)，字符/entity仍完整消费，未知Parcelable/错误presence继续报错。AicrOcrClient.recognizeWithLines复用原请求、取消、忙碌与释放语义；旧recognize(String callback)只从同一结构结果取text，图片及普通全文接口没有换引擎。
+
+普通应用UID以1200×720生成中英文图片的三个已知位置实验通过：Paint文字bounds为76,84–318,131 / 624,334–917,381 / 83,568–437,625；对应AICR四顶点box外包63,71–323,142 / 610.83,319.37–925.26,394.04 / 76,560–443,632，有检测留白但覆盖相应文字。poly是长度可变轮廓，box也不是LTRB/XYWH。原始证据work/hds127-aicr-geometry.txt。产品aicrLineBounds只解释本机已验证的8值box四顶点，不依赖poly点序、不加版本猜测或另一几何回退。
+
+ScreenOcrSession在显式附近请求中使用行位置，其余AICR全文仍沿用total_text。缺失全部位置明确提示可手动框选，非法格式报错；不静默切ML Kit。实际整屏1440×3200附近预选及确认追加通过，见DEVICE_VALIDATION；不代表小爱私有链已接入、Provider能力查询可OCR或真实面积已工作。

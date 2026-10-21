@@ -161,14 +161,29 @@ internal class ScreenOcrSession(
         nearbySelection = nearbySource != null
         failureDetail = null
         if (IntegrationSettings.isAicrOcrEnabled(context)) {
-            aicrRequest = AicrOcrClient.recognize(context, bitmap) { text, error ->
+            aicrRequest = AicrOcrClient.recognizeWithLines(context, bitmap) { result, error ->
                 aicrRequest = null
                 finishReading(bitmap)
                 if (!closed && error !is java.util.concurrent.CancellationException) {
                     if (error != null) {
                         reportFailure(R.string.screen_ocr_failed, error)
                     } else {
-                        recognitionCompleted(text.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() })
+                        if (nearbySource == null) {
+                            recognitionCompleted(result.text.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() })
+                        } else {
+                            val lines = result.lines.filter { !it.text.isNullOrBlank() }
+                            try {
+                                val bounds = lines.map { aicrLineBounds(it) }
+                                if (bounds.none { it != null }) {
+                                    reportFailure(R.string.screen_ocr_region_unavailable,
+                                        IllegalStateException("AICR 未返回可定位的文字行，请返回后手动框选"))
+                                } else {
+                                    recognitionCompleted(lines.map { it.text.trim() }, nearbyOcrLines(bounds, nearbySource))
+                                }
+                            } catch (error: IllegalArgumentException) {
+                                reportFailure(R.string.screen_ocr_region_unavailable, error)
+                            }
+                        }
                     }
                 }
             }
@@ -797,8 +812,7 @@ internal class ScreenOcrSession(
                     ),
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                        if (sourceBounds != null && resultReceiver != null &&
-                            !IntegrationSettings.isAicrOcrEnabled(context)) {
+                        if (sourceBounds != null && resultReceiver != null) {
                             TextButton(
                                 text = "查找原文附近文字",
                                 onClick = {

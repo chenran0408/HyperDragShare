@@ -1,8 +1,8 @@
 # 附近扩展取词：接线证据与实施方案
 
-状态：2026-10-21，源码1.7.89。本文是源码核验后的实施方案，尚未实现或真机验证。没有操作设备，没有读取新的屏幕内容。不能用已有下拉动画宣称已经支持“炸了又炸”。
+当前状态：1.7.127已实现原页显式截图追加、ML Kit与AICR附近行预选，以及节点快照上下扩展。AICR行坐标和一次原页附近确认追加已真机通过；不是无限滚动取文，确认的屏幕文字仍追加到末尾。下方1.7.89分析保留为历史判断，不代表当前缺口；最新证据见末尾与DEVICE_VALIDATION。
 
-## 当前缺口
+## 1.7.89时的缺口（历史）
 
 - `TextSessionCoordinator.java` 的 `peekAdjacentText()` 永远返回 null，且没有会话数据来源。
 - `BoomChipPage.java` 已有上下边缘拉动、提示与 `OnAdjacentRequestListener`，但 `BigBangPanelSession` 没有注册监听。`replaceWords(segment, text, targetWordIndex, charOffset)` 已能在插入前文时平移原选择区间。
@@ -75,3 +75,11 @@
 这一步不是完整自动邻段：不证明原区域在当前画面仍准确，不扩展完整段落，上方候选确认后仍按当前追加流程放到原文末尾，自动前插尚缺。真机未验收。
 
 AICR只读审计：work/reverse/Location.java为poly float[]、box float[]；OCRLine.java为location、line_text、line_id、Character[]、line_confidence；OCRParagraph为lines后paragraph_text；OCRResult为paragraphs、total_text、entities。VisionPlugIn.scaleOCRResult将所有坐标乘mSampleSize，setImage(Bitmap)为1，但无法证明box是LTRB还是XYWH或poly点序。当前测试数组和英文探测只有协议/文本证据，不是几何证据。后续可保留原始结构，先用已知位置合成中文真机验证，不能猜Rect或强制切换引擎。
+
+## 1.7.127：AICR附近行与距离约束
+
+从V2识别结果保留逐行text、原始poly/box。目标机4.12.26以1200×720生成图片核验：box为四个(x,y)顶点，共8个浮点数，poly为点数可变的轮廓，均为图像像素坐标；不能当作LTRB/XYWH。产品只把已验证box取外包Rect，缺失位置不猜；格式不符明确报错，不切引擎。普通全文OCR沿用原total_text分行，避免为附近功能改变旧结果。
+
+AICR选区页现在可主动“查找原文附近文字”，只使用已截的同一张图；预选同列最近上/下行并让用户核对。实机首次发现横跨屏幕的原TextView会匹配远处状态栏时间；共用nearbyOcrLines改为间隔不超过原区域/候选高度较大者两倍，拒绝远处内容，不硬编码包名/状态栏文字。ML Kit共用此规则，最新设备证据仅AICR。
+
+真机最终在Bili提醒上预选邻近1/9行“已连续观看135分钟”，没有状态栏；确认后原面板2/19，“眼睛”2字仍选中，前台Bili任务2183。蓝色参考框对应原文，截图无分词面板。193项测试/构建/Lint通过；不能据一次样本宣称任意页面或全部OCR质量通过。缺口：上方结果仍加在末尾、复杂多列/长图/旋转/空几何错误态/取消未验；真正面积与普通长按仍缺。

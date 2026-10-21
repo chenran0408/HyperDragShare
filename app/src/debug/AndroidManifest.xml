@@ -7,6 +7,10 @@
             android:process=":root_probe" />
     </application>
     <instrumentation
+        android:name=".AicrGeometryProbe"
+        android:targetPackage="com.leaf.hyperdragshare.codex"
+        android:label="Generated AICR line coordinate inspection" />
+    <instrumentation
         android:name=".SharedRootNodeProbe"
         android:targetPackage="com.leaf.hyperdragshare.codex"
         android:label="Shared Root lease ownership check" />

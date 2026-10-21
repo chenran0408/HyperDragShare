@@ -957,3 +957,11 @@ PortalThumbCaptureSource借自动租约，PointCaptureOverlay借手动租约；�
 Root IO失败会关闭其对应Session并明确失效相关租约；不能继续缓存已关闭对象，也不清掉后建的Session。当前请求显示失败，只有后续用户主动重选才新建连接，不自动重试。Portal旧自动租约需用户重载；没有后台自动修复或抢断其他UiAutomation。Binder死亡释放所属租约，保留其他使用者。
 
 构建257的189项测试、Lint0 errors/139 warnings/2 hints与assembleDebug通过。两独立进程的真实租约/手动优先/关闭后继续取词/Binder死亡释放及控制中心点取、受控连接中断后主动重选通过。新共享图片分支、实际Portal UID面积手势、并发忙和模块宿主死亡未实测。细节与证据见DEVICE_VALIDATION。
+
+## 2026-10-21：1.7.127 AICR附近文字
+
+AICR V2保留原始行坐标，recognizeWithLines共用原生命周期/取消/清理，旧String接口保持。先以已知像素位置生成图片核验box为四顶点八值，再接aicrLineBounds与同一nearbyOcrLines；没有按未验证LTRB或poly轮廓长度猜测。只有显式附近请求使用行结果，普通全文仍按total_text原样分行。
+
+新增AICR附近入口沿用原Miuix选区与确认列表。首次真机在横跨屏幕的原节点上误选远处状态栏，修正共用几何规则：除同列、原区域外和最近上下行外，垂直空隙不超过两块高度较大值两倍。不硬编码app/控件/时间字符串。缺失定位或未知格式显示明确原因，原面板可返回，未自动切换OCR。
+
+193项测试、Lint及最终262构建通过；AICR实机附近预选1/9→确认→原页2/19，旧选词保持。ML Kit新间距约束、复杂多列/长图、空几何错误态及取消未全部设备验收。确认结果仍追加末尾，不宣称已做按上下方自动前插。

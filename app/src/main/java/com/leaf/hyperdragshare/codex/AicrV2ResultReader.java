@@ -3,6 +3,9 @@ package com.leaf.hyperdragshare.codex;
 import android.os.BadParcelableException;
 import android.os.Parcel;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Wire reader for the V2 result verified with AICR 4.12.26.
  * Not an OCR engine: no service is bound and no vendor classes are loaded.
@@ -14,11 +17,20 @@ final class AicrV2ResultReader {
 
     /** Reads the typed result after the Binder exception header, including its presence marker. */
     static String readText(Parcel reply) {
+        AicrOcrResult result = readResult(reply);
+        return result == null ? null : result.text;
+    }
+
+    static AicrOcrResult readResult(Parcel reply) {
         if (!present(reply)) return null;
+        List<AicrOcrResult.Line> lines = new ArrayList<>();
         array(reply, () -> {
             array(reply, () -> {
-                location(reply);
-                reply.readString(); // line text
+                Location coordinates = location(reply);
+                String text = reply.readString();
+                lines.add(new AicrOcrResult.Line(text,
+                        coordinates == null ? null : coordinates.polygon,
+                        coordinates == null ? null : coordinates.box));
                 reply.readInt(); // line id
                 array(reply, () -> {
                     location(reply);
@@ -38,7 +50,7 @@ final class AicrV2ResultReader {
             reply.readInt(); // start
             reply.readInt(); // end
         });
-        return text;
+        return new AicrOcrResult(text, lines);
     }
 
     private static boolean present(Parcel parcel) {
@@ -60,13 +72,22 @@ final class AicrV2ResultReader {
         }
     }
 
-    private static void location(Parcel parcel) {
+    private static Location location(Parcel parcel) {
         String name = parcel.readString();
-        if (name == null) return;
+        if (name == null) return null;
         if (!LOCATION.equals(name)) {
             throw new BadParcelableException("AICR V2: unexpected location type " + name);
         }
-        parcel.createFloatArray(); // polygon
-        parcel.createFloatArray(); // box
+        return new Location(parcel.createFloatArray(), parcel.createFloatArray());
+    }
+
+    private static final class Location {
+        final float[] polygon;
+        final float[] box;
+
+        Location(float[] polygon, float[] box) {
+            this.polygon = polygon;
+            this.box = box;
+        }
     }
 }
