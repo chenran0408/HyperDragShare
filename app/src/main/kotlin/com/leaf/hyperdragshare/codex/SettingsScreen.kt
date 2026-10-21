@@ -615,7 +615,7 @@ private fun MainPage(
                     )
                     ArrowPreference(
                         title = "打开侧边中转站",
-                        summary = "在小窗内取用、搜索和整理内容，可收起、复制或拖出",
+                        summary = "临时收集并拖出文字或图片；拖动标题贴边，可收起为侧条",
                         onClick = { StashOverlayPanel.show(context) },
                     )
                     SwitchPreference(
