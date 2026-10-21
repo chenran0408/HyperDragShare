@@ -35,6 +35,8 @@ public final class RootNodeCaptureMain {
     private static final int WINDOW_MANAGER_CAPTURE = -2;
     private static PressWindowSnapshot pressWindow;
     private static Rect pressRegion;
+    private static float pressX, pressY, pressDensity;
+    private static int pressWidth, pressHeight;
 
     // Runs as Root app_process, not as the targetSdk-restricted application process.
     // These exact ROM signatures were exercised by diagnostics/root-node.
@@ -128,21 +130,27 @@ public final class RootNodeCaptureMain {
         try {
             if ("verify_window".equals(request.optString("operation"))) {
                 if (request.getInt("window_id") == WINDOW_MANAGER_CAPTURE) {
-                    return new JSONObject().put("same_window", verifyPressWindow(request.getString("package")));
+                    Rect region = verifyPressRegion(request.getString("package"));
+                    return windowResult(region);
                 }
                 automation.clearCache();
                 AccessibilityNodeInfo current = automation.getRootInActiveWindow();
                 try {
-                    return new JSONObject().put("same_window", current != null
+                    boolean same = current != null
                             && current.getWindowId() == request.getInt("window_id")
-                            && request.getString("package").equals(string(current.getPackageName())));
+                            && request.getString("package").equals(string(current.getPackageName()));
+                    return same ? new JSONObject().put("same_window", true)
+                            .put("left", request.getInt("left")).put("top", request.getInt("top"))
+                            .put("right", request.getInt("right")).put("bottom", request.getInt("bottom"))
+                            : new JSONObject().put("same_window", false);
                 } finally {
                     if (current != null) current.recycle();
                 }
             }
             if ("verify_source".equals(request.optString("operation"))) {
                 if (pressWindow != null) {
-                    return new JSONObject().put("same_source", verifyPressWindow(request.getString("package")));
+                    return new JSONObject().put("same_source",
+                            verifyPressRegion(request.getString("package")) != null);
                 }
                 automation.clearCache();
                 AccessibilityNodeInfo current = automation.getRootInActiveWindow();
@@ -274,30 +282,53 @@ public final class RootNodeCaptureMain {
         }
         pressWindow = window;
         pressRegion = region;
+        pressX = (float) request.getDouble("x");
+        pressY = (float) request.getDouble("y");
+        pressDensity = (float) request.getDouble("density");
+        pressWidth = request.getInt("width");
+        pressHeight = request.getInt("height");
         return new JSONObject().put("found", true).put("package", window.packageName)
                 .put("kind", "ocr_region").put("window_id", WINDOW_MANAGER_CAPTURE)
                 .put("left", region.left).put("top", region.top)
                 .put("right", region.right).put("bottom", region.bottom);
     }
 
-    private static boolean verifyPressWindow(String source) throws Exception {
+    private static JSONObject windowResult(Rect region) throws Exception {
+        if (region == null) return new JSONObject().put("same_window", false);
+        return new JSONObject().put("same_window", true).put("left", region.left).put("top", region.top)
+                .put("right", region.right).put("bottom", region.bottom);
+    }
+
+    private static Rect verifyPressRegion(String source) throws Exception {
         if (pressWindow == null || pressRegion == null || !source.equals(pressWindow.packageName)
                 || !PressWindowSnapshot.isSupportedWeChatWindow(source, pressWindow.windowName)
-                || keyguardLocked()) return false;
+                || keyguardLocked()) {
+            System.err.println("Press window verification rejected reason=source_changed_or_locked");
+            return null;
+        }
         try {
             PressWindowSnapshot.ParseResult parsed = readPressWindow();
             if (parsed.snapshot == null) {
                 System.err.println("Press window verification rejected reason=" + parsed.reason);
-                return false;
+                return null;
             }
             PressWindowSnapshot current = parsed.snapshot;
-            boolean valid = PressWindowSnapshot.isSupportedWeChatWindow(current.packageName, current.windowName)
-                    && pressWindow.sameWindow(current) && current.permits(pressRegion);
-            if (!valid) System.err.println("Press window verification rejected reason=window_changed_or_region_invalid");
-            return valid;
+            if (!PressWindowSnapshot.isSupportedWeChatWindow(current.packageName, current.windowName)
+                    || !pressWindow.sameWindow(current)) {
+                System.err.println("Press window verification rejected reason=window_identity_changed");
+                return null;
+            }
+            Rect region = current.regionAt(pressX, pressY, pressWidth, pressHeight, pressDensity);
+            if (region == null) {
+                System.err.println("Press window verification rejected reason=no_visible_region_near_touch");
+                return null;
+            }
+            pressWindow = current;
+            pressRegion = region;
+            return region;
         } catch (IOException error) {
             System.err.println("Press window verification failed: " + error.getMessage());
-            return false;
+            return null;
         }
     }
 

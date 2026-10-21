@@ -8,7 +8,7 @@ interface IRootNodeLease {
                    boolean earlyCapture,
                    IRootNodeCandidate callback);
     Bundle insertTextAt(float x, float y, String text);
-    boolean verifyWindow(String sourcePackage, int windowId);
+    Bundle verifyWindow(String sourcePackage, int windowId, in Bundle requestedBounds);
     boolean verifySource(String sourcePackage);
     boolean isOpen();
     void close();

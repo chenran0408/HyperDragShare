@@ -12,6 +12,14 @@
 
 安装时前台为微信会话。为避免打断页面，没有重载Portal/SystemUI，因此设备上新APK已安装，但旧Portal Hook和Root helper尚未确认加载181；本次真实微信按压未复测，不能称修复通过。待Portal作用域重载后，在不发送消息的前提下实测按住已有文本，并从 `DragShare/Press` 与 `DragShare/RootNodes` 日志确认 `WeChat window OCR fallback`、`kind=ocr_region` 与分词浮窗结果。181不是正式Release，不替代179。
 
+## 182 微信按压截图复核误拒绝（源码与构建完成，设备待安装）
+
+用户提供的 `HyperDragShare-20261021-230137.log(1).txt` 只到10月21日23:01，不包含截图所示10月22日00:23的操作。随后从设备只读日志确认10月22日00:25一次真实事件：`semantic lookup elapsedMs=40`、`press capture source=com.tencent.mm kind=ocr_region`，并在Portal记录 `press confirmed ... elapsedMs=250`。这证明触发与微信窗口区域候选已命中，但没有AICR识别或分词窗显示记录，不能称识别成功。子代理只读检查确认微信不在内置黑名单，源码仅按安全窗口、锁屏、窗口身份及遮挡做限制。
+
+根因落在捕获交接后的WMS复核：代码把之前计算的矩形当成不可变区域；原生选区菜单/手柄改变遮挡后，Root helper会返回false，调用方把它静默转成null，最后只显示通用提示。182改为复核当前微信窗口身份后，按最新WMS布局重新选触点附近的可见区域，并用新矩形裁图；仍保留锁屏、系统`FLAG_SECURE`、黑名单和前台微信窗口身份约束。增加模块日志 `image capture rejected ... reason=window_or_region_changed`，避免再无声地把区域拒绝伪装成“没有文字”。
+
+`PressWindowSnapshotTest` 7项、`RootLeaseFailureTest` 2项通过；`lintDebug`与Release R8/资源压缩构建成功。签名候选包 `outputs/HyperDragShare-1.7.182-arm64-v8a.apk`，7,429,983 bytes，SHA256 `61199F073076C9FA9D95D832D9C79A7672A2F5A43AE195054237F25C6BC62B7E`。未安装：设备前台仍是微信会话，避免中断。正式Latest仍为v1.7.179；本次区域重定位尚未真机验证，微信按住取词仍未通过。
+
 ## 180 微信长按与原生侧栏首帧优化（设备验收待进行）
 
 设备仅热重载后真实长按日志显示PressReader已ready，识别请求进入Root并在约54–59ms完成语义查询；失败原因重复为 `window_visible_occlusion_bounds_missing`。只读WMS解析发现安全中心窗口的WindowState名为`com.miui.securitycenter/.FloatingWindow`，同一窗口令牌在visible handles里显示`DockAssistantView`并含真实矩形。原来token和名字都要求相等，错过遮挡范围并让整次微信识别保守拒绝。

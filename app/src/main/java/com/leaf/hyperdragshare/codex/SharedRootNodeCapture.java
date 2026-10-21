@@ -3,6 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import android.app.KeyguardManager;
 import android.content.ContentProviderClient;
 import android.content.Context;
+import android.graphics.Rect;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -142,11 +143,18 @@ final class SharedRootNodeCapture {
             } finally { Binder.restoreCallingIdentity(identity); io.unlock(); }
         }
 
-        @Override public boolean verifyWindow(String source, int windowId) {
+        @Override public Bundle verifyWindow(String source, int windowId, Bundle requestedBounds) {
             enforceOwner();
             if (!io.tryLock()) throw new IllegalStateException("取词服务正忙，本次图片读取已取消");
             long identity = Binder.clearCallingIdentity();
-            try { return root.isCurrentWindow(source, windowId); }
+            try {
+                Rect bounds = requestedBounds.getParcelable("bounds", Rect.class);
+                Rect current = root.currentBounds(source, windowId, bounds);
+                if (current == null) return null;
+                Bundle result = new Bundle();
+                result.putParcelable("bounds", current);
+                return result;
+            }
             catch (IOException | InterruptedException error) {
                 if (error instanceof InterruptedException) Thread.currentThread().interrupt();
                 invalidate(root);
@@ -261,8 +269,14 @@ final class SharedRootNodeCapture {
                 }
                 String rejectionReason = pressLookup && node != null
                         ? node.getString(RootNodeCaptureClient.KEY_CAPTURE_REASON) : null;
-                CapturedContent content = RootNodeCaptureClient.contentFromNode(context, node, (source, windowId) -> {
-                    try { return !closed && lease.verifyWindow(source, windowId); }
+                CapturedContent content = RootNodeCaptureClient.contentFromNode(context, node, (source, windowId, bounds) -> {
+                    try {
+                        if (closed) return null;
+                        Bundle requestBounds = new Bundle();
+                        requestBounds.putParcelable("bounds", bounds);
+                        Bundle result = lease.verifyWindow(source, windowId, requestBounds);
+                        return result == null ? null : result.getParcelable("bounds", Rect.class);
+                    }
                     catch (RemoteException | IllegalStateException error) {
                         throw requestFailure("核验来源窗口失败", error);
                     }

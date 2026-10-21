@@ -46,4 +46,4 @@ base manifest 的包名为 `com.tencent.mm`。这些 manifest Activity 都以该
 
 当前ROM的WindowState不提供frame；解析器按同一dump中visible handle的token和完整窗口名关联范围。SurfaceFlinger实际记录确认GestureStubLeft/Right是裁剪的透明手势输入层，故仅对已核验的桌面owner/type/flags组合排除假遮挡；其他覆盖窗不因此放行。导航栏无handle时使用该窗实际navigationBars Insets和默认显示逻辑尺寸扣底边，不推测小窗大小。
 
-WMS捕获与来源复核共用窗口身份，保留`window_id=-2`，不会重新要求微信出现在无障碍窗口树。拒绝原因从Root回复传至模块日志，不记录识别文字。未给微信增加LSPosed注入、不修改其APK或账号状态。404项既有与必要回归在build375通过；最终包、安装与各页面真实操作状态以CURRENT_STATUS为准。
+WMS捕获与来源复核共用窗口身份，保留`window_id=-2`，不会重新要求微信出现在无障碍窗口树。181曾因复核阶段仍要求旧截图矩形无遮挡而丢弃捕获结果；182改为确认同一微信窗口后按当前WMS遮挡重新选择安全区域，并在模块日志记录捕获阶段拒绝。Root helper自己的细分WMS拒绝原因仅写到Root进程stderr。未给微信增加LSPosed注入、不修改其APK或账号状态。182是否能在原生选区覆盖层出现时实际显示分词浮窗仍待真机验证，以CURRENT_STATUS为准。

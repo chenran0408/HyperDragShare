@@ -27,7 +27,7 @@ public final class RootLeaseFailureTest {
                 result.putBoolean(RootNodeCaptureClient.KEY_POLICY_EXCLUDED, true);
                 return result;
             }
-            @Override public boolean verifyWindow(String source, int windowId) {
+            @Override public Bundle verifyWindow(String source, int windowId, Bundle requestedBounds) {
                 throw new AssertionError("Excluded content must not be converted or verified");
             }
             @Override public boolean verifySource(String source) { return true; }
@@ -52,7 +52,9 @@ public final class RootLeaseFailureTest {
         IRootNodeLease lease = new IRootNodeLease.Stub() {
             @Override public Bundle capture(float x, float y, String[] blocked, boolean text, boolean images,
                                             boolean press, boolean early, IRootNodeCandidate callback) { throw failure; }
-            @Override public boolean verifyWindow(String source, int windowId) { return true; }
+            @Override public Bundle verifyWindow(String source, int windowId, Bundle requestedBounds) {
+                return requestedBounds;
+            }
             @Override public boolean verifySource(String source) { return true; }
             @Override public Bundle insertTextAt(float x, float y, String text) { throw failure; }
             @Override public boolean isOpen() { return !fatal; }

@@ -36,7 +36,7 @@ final class RootNodeCaptureClient {
     }
 
     interface WindowVerifier {
-        boolean isCurrentWindow(String source, int windowId) throws IOException, InterruptedException;
+        Rect currentBounds(String source, int windowId, Rect requestedBounds) throws IOException, InterruptedException;
     }
 
     static Session open(Context context) throws IOException, InterruptedException {
@@ -90,7 +90,7 @@ final class RootNodeCaptureClient {
                                              CandidateHandler handler)
                 throws IOException, InterruptedException {
             return contentFromNode(context, captureNode(x, y, blockedPackages, allowText, allowImages, handler),
-                    this::isCurrentWindow);
+                    this::currentBounds);
         }
 
         synchronized Bundle captureNode(float x, float y, Set<String> blockedPackages,
@@ -217,13 +217,18 @@ final class RootNodeCaptureClient {
             }
         }
 
-        synchronized boolean isCurrentWindow(String source, int windowId) throws IOException, InterruptedException {
+        synchronized Rect currentBounds(String source, int windowId, Rect requestedBounds) throws IOException, InterruptedException {
             try {
                 JSONObject request = new JSONObject().put("operation", "verify_window")
-                        .put("package", source).put("window_id", windowId);
+                        .put("package", source).put("window_id", windowId)
+                        .put("left", requestedBounds.left).put("top", requestedBounds.top)
+                        .put("right", requestedBounds.right).put("bottom", requestedBounds.bottom);
                 process.getOutputStream().write((request + "\n").getBytes(StandardCharsets.UTF_8));
                 process.getOutputStream().flush();
-                return awaitResponse().getBoolean("same_window");
+                JSONObject result = awaitResponse();
+                if (!result.getBoolean("same_window")) return null;
+                return new Rect(result.getInt("left"), result.getInt("top"),
+                        result.getInt("right"), result.getInt("bottom"));
             } catch (JSONException error) {
                 close();
                 throw new IOException("Invalid Root window response", error);
@@ -309,16 +314,23 @@ final class RootNodeCaptureClient {
             return CapturedContent.text(node.getString("text"), source, bounds,
                     node.getString("before"), node.getString("after"));
         }
+        Rect verifiedBounds = verifier.currentBounds(source, node.getInt("window_id"), bounds);
+        if (verifiedBounds == null) {
+            DragShareLog.i(TAG, "image capture rejected source=" + source + " reason=window_or_region_changed");
+            return null;
+        }
         Bitmap screen = new RootScreenshotter().capture();
         try {
-            if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()
-                    || !verifier.isCurrentWindow(source, node.getInt("window_id"))) return null;
+            if (context.getSystemService(KeyguardManager.class).isKeyguardLocked()) {
+                DragShareLog.i(TAG, "image capture rejected source=" + source + " reason=screen_locked");
+                return null;
+            }
             int width = node.getInt("width"), height = node.getInt("height");
             if (screen.getWidth() != width || screen.getHeight() != height) {
                 throw new IOException("画面尺寸已变化，请重新按压（" + width + "×" + height
                         + "→" + screen.getWidth() + "×" + screen.getHeight() + "）");
             }
-            Rect crop = new Rect(bounds);
+            Rect crop = new Rect(verifiedBounds);
             if (!crop.intersect(0, 0, screen.getWidth(), screen.getHeight())) {
                 throw new IOException("图片区域已移出屏幕");
             }
