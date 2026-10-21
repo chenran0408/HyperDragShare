@@ -8,6 +8,10 @@
 
 如果文档内部分内容与实际工程不符，需实时修订文档。
 
+## 当前合并任务
+
+用户要求完整合并自己的FanFreeform，并迁移已安装Hyper手势数据。来源应使用用户提供的157性能版源码档案，而不是GitHub main131；准确来源、校验和与进度见docs/FANFREEFORM_INTEGRATION.md。核心已经导入com.leaf.hyperdragshare.gestures，但尚未挂运行入口；用户明确授权后续整合SystemUI与com.miui.home所需Hook，原有四作用域约束不应被误读为禁止本次完整功能合并。实际scope在集成完成前仍保持四项。迁移前保留完整备份，原包保留；配置与截图不得提交。不能在旧模块与合并模块同时启用手势接管的情况下验收。
+
 ## 工程基线
 
 - 工程类型：Android LSPosed 模块，Java/Kotlin 17，minSdk 33，targetSdk 34，compileSdk 37。
