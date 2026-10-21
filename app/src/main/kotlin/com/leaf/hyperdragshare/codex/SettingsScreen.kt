@@ -549,7 +549,7 @@ private fun MainPage(
                     )
                     SwitchPreference(
                         title = "AICR 文本直取",
-                        summary = "在 LSPosed 启用 com.xiaomi.aicr 后，将 AICR 的复制操作接入本模块分词页；默认关闭",
+                        summary = "在 LSPosed 启用 com.xiaomi.aicr 后，将文字复制接入原页面分词窗口；不处理图片、敏感内容和模块内复制，默认关闭",
                         checked = copyDirectEnabled,
                         onCheckedChange = { enabled ->
                             IntegrationSettings.setCopyDirectEnabled(context, enabled)

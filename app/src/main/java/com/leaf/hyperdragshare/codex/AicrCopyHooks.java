@@ -1,15 +1,16 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.ClipData;
-import android.content.ClipDescription;
 import android.content.ClipboardManager;
-import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.Context;
-import android.content.Intent;
+import android.net.Uri;
+import android.os.Binder;
 import android.os.Bundle;
-import android.os.PersistableBundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
+import android.widget.Toast;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -20,14 +21,13 @@ final class AicrCopyHooks {
     private static final String TAG = "DragShare/Aicr";
     private static final String PROVIDER_CLASS = "com.xiaomi.aicr.copydirect.TextDirectProvider";
     private static final String METHOD_PROCESS_TEXT = "processText";
-    private static final String MODULE_PACKAGE = "com.leaf.hyperdragshare.codex";
-    private static final String SEGMENTATION_ACTIVITY =
-            "com.leaf.hyperdragshare.codex.TextSegmentationActivity";
-    private static final String PROVIDER_URI =
-            "content://com.leaf.hyperdragshare.codex.share/settings";
+    private static final Uri PROVIDER_URI =
+            Uri.parse("content://com.leaf.hyperdragshare.codex.share/settings");
     private static final long DUPLICATE_WINDOW_MILLIS = 500L;
 
-    private static volatile long lastLaunchAt;
+    private static long lastLaunchAt;
+    private static long lastClipTimestamp;
+    private static String lastText;
 
     private AicrCopyHooks() {}
 
@@ -48,19 +48,21 @@ final class AicrCopyHooks {
             XposedBridge.hookAllMethods(providerClass, "call", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    Object[] args = param.args;
-                    if (args == null || args.length < 3
-                            || !METHOD_PROCESS_TEXT.equals(args[0])) {
-                        return;
-                    }
+                    if (param.args.length < 3 || !METHOD_PROCESS_TEXT.equals(param.args[0])) return;
+                    ContentProvider provider = (ContentProvider) param.thisObject;
+                    // Clipboard and module RPCs belong to AICR, not the incoming caller.
+                    long identity = Binder.clearCallingIdentity();
                     try {
-                        Bundle result = openClipboardText(param.thisObject);
-                        if (result != null) {
-                            param.setResult(result);
-                        }
+                        Bundle result = openClipboardText(provider.getContext());
+                        if (result != null) param.setResult(result);
                     } catch (RuntimeException error) {
-                        log("copy handling failed; leaving the provider result unchanged: "
+                        log("copy handling failed; keeping the original copy flow: "
                                 + error.getClass().getSimpleName() + ": " + error.getMessage());
+                        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(provider.getContext(),
+                                "无法打开分词窗口，已保留系统复制操作；请查看模块诊断日志",
+                                Toast.LENGTH_LONG).show());
+                    } finally {
+                        Binder.restoreCallingIdentity(identity);
                     }
                 }
             });
@@ -71,75 +73,38 @@ final class AicrCopyHooks {
         }
     }
 
-    private static Bundle openClipboardText(Object provider) {
-        if (!(provider instanceof ContentProvider)) {
+    private static synchronized Bundle openClipboardText(Context context) {
+        Bundle settings = context.getContentResolver().call(PROVIDER_URI,
+                IntegrationSettings.METHOD_GET_AICR_SETTINGS, null, null);
+        if (settings == null
+                || !settings.getBoolean(IntegrationSettings.EXTRA_COPY_DIRECT_ENABLED, false)) {
             return null;
         }
-        Context context = ((ContentProvider) provider).getContext();
-        if (context == null || !copyDirectEnabled(context)) {
-            return null;
-        }
-        Context applicationContext = context.getApplicationContext();
-        if (applicationContext != null) {
-            context = applicationContext;
-        }
-        ClipboardManager clipboard = (ClipboardManager) context.getSystemService(
-                Context.CLIPBOARD_SERVICE);
-        if (clipboard == null) {
-            return null;
-        }
+        ClipboardManager clipboard = context.getSystemService(ClipboardManager.class);
         ClipData clip = clipboard.getPrimaryClip();
-        if (clip == null || clip.getItemCount() == 0 || clip.getDescription() == null) {
-            return null;
-        }
-        ClipDescription description = clip.getDescription();
-        CharSequence label = description.getLabel();
-        if (label != null && "drag-share-text".contentEquals(label)) {
-            return null;
-        }
-        PersistableBundle clipExtras = description.getExtras();
-        if (clipExtras != null
-                && clipExtras.getBoolean("android.content.extra.IS_SENSITIVE", false)) {
-            return null;
-        }
-        CharSequence value = clip.getItemAt(0).coerceToText(context);
-        String text = value == null ? "" : value.toString().trim();
-        if (text.isEmpty()) {
-            return null;
-        }
+        String text = AicrClipboardText.read(clip);
+        if (text == null) return null;
 
         long now = SystemClock.elapsedRealtime();
-        if (now - lastLaunchAt < DUPLICATE_WINDOW_MILLIS) {
-            return null;
+        long timestamp = clip.getDescription().getTimestamp();
+        if (text.equals(lastText) && timestamp == lastClipTimestamp
+                && now - lastLaunchAt < DUPLICATE_WINDOW_MILLIS) {
+            Bundle result = new Bundle();
+            result.putBoolean("success", true);
+            return result;
         }
-        Intent intent = new Intent(Intent.ACTION_SEND)
-                .setComponent(new ComponentName(MODULE_PACKAGE, SEGMENTATION_ACTIVITY))
-                .setType("text/plain")
-                .putExtra(Intent.EXTRA_TEXT, text)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        context.startActivity(intent);
+        Bundle input = new Bundle();
+        input.putString(IntegrationSettings.EXTRA_TEXT, text);
+        Bundle accepted = context.getContentResolver().call(PROVIDER_URI,
+                IntegrationSettings.METHOD_OPEN_AICR_TEXT, null, input);
+        if (accepted == null || !accepted.getBoolean("accepted", false)) return null;
         lastLaunchAt = now;
-
+        lastClipTimestamp = timestamp;
+        lastText = text;
         Bundle result = new Bundle();
         result.putBoolean("success", true);
-        log("opened text segmentation from AICR copy");
+        log("opened original-page text window from AICR copy");
         return result;
-    }
-
-    private static boolean copyDirectEnabled(Context context) {
-        try {
-            Bundle result = context.getContentResolver().call(
-                    android.net.Uri.parse(PROVIDER_URI),
-                    IntegrationSettings.METHOD_GET_AICR_SETTINGS,
-                    null,
-                    null);
-            return result != null
-                    && result.getBoolean(IntegrationSettings.EXTRA_COPY_DIRECT_ENABLED, false);
-        } catch (RuntimeException error) {
-            log("settings provider unavailable; AICR copy remains unchanged: "
-                    + error.getClass().getSimpleName() + ": " + error.getMessage());
-            return false;
-        }
     }
 
     private static void log(String message) {

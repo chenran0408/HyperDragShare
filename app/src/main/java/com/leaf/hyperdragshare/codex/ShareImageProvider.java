@@ -95,6 +95,24 @@ public final class ShareImageProvider extends ContentProvider {
                     IntegrationSettings.isCopyDirectEnabled(contextOrThrow()));
             return result;
         }
+        if (IntegrationSettings.METHOD_OPEN_AICR_TEXT.equals(method)) {
+            enforceAicrCallerOrModule();
+            String text = extras == null ? null : extras.getString(IntegrationSettings.EXTRA_TEXT);
+            if (text == null || text.isBlank()) throw new IllegalArgumentException("缺少可分词的文字");
+            if (!IntegrationSettings.isCopyDirectEnabled(contextOrThrow())) {
+                Bundle result = new Bundle();
+                result.putBoolean("accepted", false);
+                return result;
+            }
+            Bundle input = new Bundle();
+            input.putString(IntegrationSettings.EXTRA_TEXT, text);
+            long identity = Binder.clearCallingIdentity();
+            try {
+                return BigBangOverlayLauncher.request(contextOrThrow(), input);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
         if (ImageStagingClient.METHOD_GRANT.equals(method)) {
             enforcePortalCaller();
             return grantImage(extras);

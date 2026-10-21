@@ -9,7 +9,9 @@ import java.util.concurrent.TimeUnit;
 /** Settings for optional MIUI process integrations that are separate from drag behavior. */
 public final class IntegrationSettings {
     public static final String METHOD_GET_AICR_SETTINGS = "get_aicr_settings";
+    public static final String METHOD_OPEN_AICR_TEXT = "open_aicr_text";
     public static final String EXTRA_COPY_DIRECT_ENABLED = "copy_direct_enabled";
+    public static final String EXTRA_TEXT = "text";
 
     private static final String PREFS_NAME = "drag_share_integrations";
     private static final String KEY_COPY_DIRECT_ENABLED = "copy_direct_enabled";

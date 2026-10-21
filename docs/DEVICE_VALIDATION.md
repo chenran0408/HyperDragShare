@@ -795,3 +795,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 277 testDebugUnitTest/lintDebug/assembleDebug通过，199项0失败，Lint0 errors/139 warnings/2 hints。可逆排版不新增单测。原位安装158，包名和debug证书不变；outputs/HyperDragShare-1.7.134-debug.apk与base.apk SHA256一致：B2B0669EAD5A42ABD13E1C92959708ABBBCF9E277DBD69059011D2D9382C0617，hds134-installed-hash.txt。
 - 仅重载Portal并等待Root异步回报158/158/granted=true（hds134-activation.xml），没有android/AICR/整机重启。本轮不存入、编辑或删除收藏，也不重复做数据哈希试验；133现有备份和旧UI/schema回退限制保留。无取词helper/远端probe，临时device XML/PNG已删，原Bili2183置前未点击休息提醒/播放；截图只留本机不提交。
 - 仍缺真实拇指面积、Bili评论普通长按、四样式四边真实分享、115旧侧条ANR与复制编辑浮层共存。未验大字号/横屏的新引擎行和自身隔离实际输入，不用本批少量UI通过替代完整UI验收。
+
+## 2026-10-21：1.7.135 AICR原页文字接入
+
+- 对照设备AICR 4.12.26与缓存APK SHA256一致（6E960DB290329CD96D567CB62BE340656243412B39EC20A0CA5B630E26F696E5）。精确目标TextDirectProvider在cognitionService，authority=com.xiaomi.aicr.provider.TEXT_DIRECT_PROVIDER、exported=false，processText读取剪贴板并以success返回；不是OCR或小爱能力查询接口。只读定点反编译不复制实现；mu5.d存在反编译错误，未据此推断细节分支。
+- 旧134受控Root content call普通生成文字返回success=true，LSPosed文件日志真实opened，不能把未清Binder身份认定为旧故障根因。第二次用实际模块标签HyperDragShare，旧版同样弹出38字分词窗口，hds135-own-before.xml/png与before-own-hook.txt复现自复制过滤失效；此前只检查过期drag-share-text标签。
+- 135过滤真实双标签、敏感标记、非单项和非明确文本，只getText不coerce URI、不trim。移除Activity启动，新增AICR/模块UID受限open_aicr_text RPC，只传text并在模块重检开关后复用原页窗口；普通Portal图片/窗口RPC权限不放宽。外来Binder身份清除后在finally恢复；真实失败日志/提示并保留系统原方法。同文本和剪贴板时间戳500ms内重复成功只确认，不让重复跌回原流程或误拦不同文字。
+- 278 testDebugUnitTest/lintDebug/assembleDebug通过，203项0失败，Lint0 errors/139 warnings/2 hints。新增4项Robolectric覆盖原文空白、真实标签/敏感、图片/URI、多项过滤。包名及debug证书未变，原位安装159。outputs/HyperDragShare-1.7.135-debug.apk与设备base.apk SHA256一致：EACC284F39E93225B4629FEBAE642657239E741A31902E36A014341FE221E21E（hds135-installed-hash.txt）。
+- 仅重启AICR后真实cognitionService PID22226记录opened original-page text window；Root命令调用返回success=true，hds135-after.xml/png显示生成38字原页窗口，topResumedActivity仍Bili2183，Back关闭。新代码直接Provider入口无Activity调用；ActivityTaskManager保留的TextSegmentationActivity记录来自此前旧版两次基线，不能混为新版行为。hds135-after-call.txt/after-hook.txt是调用与LSPosed证据。
+- 再用相同实际模块标签写生成文字，真实Provider仍返回success=true（原方法），hds135-own-after.xml/png无分词窗口，只有原Bili休息提醒和系统复制编辑浮层；日志没有新增模块opened。普通shell调用open_aicr_text得到SecurityException（hds135-shell-rejection.txt），无权限修改。第一次shell验证extra参数顺序错误只有usage，第二次按平台text:s:值格式正确调用才可作为拒绝证据。
+- 测试前UID1000只读剪贴板为空；写入前重复确认空、写后严格读回生成值，结束仅在仍匹配本次样本时清除，最终present=false/readable=false。第一次元数据helper使用了不存在的android-37路径，编译失败非设备无能力；改为实际android-37.0后成功。没有输出/保存用户剪贴板内容，不恢复旧数据掩盖结果。
+- 传送门也重载到159/Root159/granted=true；无android/整机重启。前后settings/integrations XML相同，未写收藏/改权限/启用无障碍；UI回原Bili2183，未点击休息提醒或播放。无Root取词helper，device诊断DEX/XML/PNG已清理，截图与日志只留本机。
+- 未验：真实应用自然复制入口、关闭开关/敏感文本/500ms重复的实机分支、Binder失败提示、深色/横屏。可见系统“编辑所选文本”浮层共存问题仍在，不当本批已修复。真实面积、Bili评论普通长按、四样式四边真实分享、115侧条旧ANR仍未完成。
