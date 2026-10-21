@@ -2,6 +2,16 @@
 
 最新发布：**v1.7.179 正式版 / Latest**，源码tag指向 `87fd4957eff3d093f856a83d74bf7ed62288367b`。已上传arm64 R8 APK及SHA256文件，服务端APK大小7,429,983bytes、digest `88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb` 与本地一致。发布地址：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.179 。下文“Latest仍176”是发布前历史状态，不再代表最新正式版；发布没有增加新的功能实测结论。
 
+## 180 微信长按与原生侧栏首帧优化（设备验收待进行）
+
+设备仅热重载后真实长按日志显示PressReader已ready，识别请求进入Root并在约54–59ms完成语义查询；失败原因重复为 `window_visible_occlusion_bounds_missing`。只读WMS解析发现安全中心窗口的WindowState名为`com.miui.securitycenter/.FloatingWindow`，同一窗口令牌在visible handles里显示`DockAssistantView`并含真实矩形。原来token和名字都要求相等，错过遮挡范围并让整次微信识别保守拒绝。
+
+修复按窗口令牌关联当前显示的visible handle矩形，保留实际遮挡裁剪与未知可见窗拒绝；针对同令牌异名的安全中心侧栏回归用例7项全通过。热重载不需要整机重启：移除旧版保留 Root lease 的行为，Portal退出后旧app_process会随lease释放，新Portal从当前APK启动Root读取helper。原生侧栏在容器已attach时直接完成扩展挂接，未attach才post，避免额外等一帧；增加一次性挂接耗时日志供设备确认。
+
+源码1.7.180/204，`testDebugUnitTest --tests PressWindowSnapshotTest`、`lintDebug`、R8 `assembleRelease`通过。输出包仅arm64-v8a，7,429,983 bytes；已用项目相同debug签名校验，SHA256 `B26345E18CCA3FA5CE3751D945A585E842ACFC5202905438E3352FDBBA70530E`，路径`outputs/HyperDragShare-1.7.180-arm64-v8a.apk`。本轮APK尚未安装，当前运行Hook仍为此前版本203；微信真实长按修复和侧栏首开速度改善均待新包安装后实测。正式Latest仍v1.7.179。
+
+Flyme小窗对照的后续清单见子代理只读审计：优先实测同屏双小窗触摸目标与窗外操作，确保关闭/最小化后不会误作用于另一个窗口；底部拖条上滑mini由HyperOS原生处理，不另复制ColorOS Hook。侧栏首次展开应用列表的冷启动耗时也待设备验收。
+
 事实来源为当前源码、具体构建报告、安装元数据与对应运行日志；构建通过、已安装、Hook加载和实际操作分别记账。旧逐版记录的“当前”仅代表当时。
 
 ## 179 设置重整、单引擎精简、更新检查与微信修复

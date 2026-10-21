@@ -113,8 +113,10 @@ final class NativeSidebarHooks {
                     }
                     Object owner = param.thisObject;
                     View view = (View) XposedHelpers.callMethod(owner, "C");
-                    // Join the original opening transaction before its first measured frame.
-                    view.post(() -> attach(owner));
+                    // The open callback is already on the sidebar UI thread. Attach before its next
+                    // frame when the native container is ready; only queue when it is not attached yet.
+                    if (view.isAttachedToWindow()) attach(owner);
+                    else view.post(() -> attach(owner));
                 }
             });
             XposedHelpers.findAndHookMethod(turbo, "e0", new XC_MethodHook() {
@@ -168,6 +170,7 @@ final class NativeSidebarHooks {
 
     private static void attach(Object owner) {
         if (extensionFailed || panels.containsKey(owner) || !(boolean) XposedHelpers.callMethod(owner, "H")) return;
+        long started = SystemClock.elapsedRealtime();
         RelativeLayout turbo = (RelativeLayout) XposedHelpers.callMethod(owner, "C");
         try {
             long version = turbo.getContext().getPackageManager().getPackageInfo("com.miui.securitycenter", 0).getLongVersionCode();
@@ -178,6 +181,8 @@ final class NativeSidebarHooks {
             Panel panel = new Panel(owner, turbo);
             panels.put(owner, panel);
             panel.attach();
+            DragShareLog.i(TAG, "native sidebar attached scene=" + panel.scene
+                    + " elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
         } catch (PackageManager.NameNotFoundException | RuntimeException error) {
             extensionFailed = true;
             Panel panel = panels.remove(owner);

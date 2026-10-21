@@ -60,7 +60,7 @@ public final class PressWindowSnapshotTest {
                 "com.example/.Overlay"));
         assertEquals(new Rect(424, 488, 1288, 1512),
                 parsed.snapshot.regionAt(856, 1000, 1440, 3200, 3f));
-        assertEquals(new Rect(0, 488, 864, 1512),
+        assertEquals(new Rect(0, 488, 864, 1025),
                 parsed.snapshot.regionAt(50, 1000, 1440, 3200, 3f));
         assertEquals(new Rect(288, 2176, 1152, 3125),
                 parsed.snapshot.regionAt(720, 3100, 1440, 3200, 3f));
@@ -146,6 +146,13 @@ public final class PressWindowSnapshotTest {
                 + romNavigationBarWindow()
                 + romWindow(5, "face003", "MitsuhaCameraRingWindow", "SYSTEM_OVERLAY", true, true)
                 + romWindow(6, "face004", "StatusBar", "STATUS_BAR", true, true)
+                + "  Window #8 Window{a1cee6a u0 com.miui.securitycenter/.FloatingWindow}:\n"
+                + "    mDisplayId=0 taskId=-1\n"
+                + "    mOwnerUid=10138 showForAllUsers=true package=com.miui.securitycenter appop=NONE\n"
+                + "    mAttrs={(0,0)(fillxfill) ty=SYSTEM_ALERT fl=NOT_FOCUSABLE}\n"
+                + "    mHasSurface=true isReadyForDisplay=true\n"
+                + "    Surface: shown=true isOnScreen=true\n"
+                + "    isVisible=true\n"
                 + romWindow(7, "c0ffee", "com.tencent.mm/com.tencent.mm.ui.chatting.variants.ChattingMainUI",
                         "BASE_APPLICATION", true, true)
                 + "  6 visible windows: [face001 GestureStubRight, frame=[Rect(1362, 0 - 1440, 3200)], "
@@ -155,6 +162,8 @@ public final class PressWindowSnapshotTest {
                 + "face003 MitsuhaCameraRingWindow, frame=[Rect(0, 0 - 1440, 401)], "
                 + "windowToken=android.os.BinderProxy@3, displayId=0, face004 StatusBar, "
                 + "frame=[Rect(0, 0 - 1440, 169)], windowToken=android.os.BinderProxy@4, displayId=0, "
+                + "a1cee6a DockAssistantView, frame=[Rect(0, 1025 - 117, 2892)], "
+                + "windowToken=android.os.BinderProxy@6, displayId=0, "
                 + "c0ffee com.tencent.mm/com.tencent.mm.ui.chatting.variants.ChattingMainUI, "
                 + "frame=[Rect(0, 0 - 1440, 3200)], windowToken=android.os.BinderProxy@5, displayId=0]\n"
                 + "    1 display info(s):\n"

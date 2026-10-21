@@ -13,8 +13,8 @@ android {
         applicationId 'com.leaf.hyperdragshare.codex'
         minSdk 33
         targetSdk 34
-        versionCode 203
-        versionName '1.7.179'
+        versionCode 204
+        versionName '1.7.180'
         ndk {
             abiFilters 'arm64-v8a'
         }

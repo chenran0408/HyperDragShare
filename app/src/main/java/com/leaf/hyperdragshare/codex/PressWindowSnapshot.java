@@ -130,7 +130,7 @@ final class PressWindowSnapshot {
             if (Integer.parseInt(matcher.group(7)) != 0) continue;
             Rect bounds = new Rect(Integer.parseInt(matcher.group(3)), Integer.parseInt(matcher.group(4)),
                     Integer.parseInt(matcher.group(5)), Integer.parseInt(matcher.group(6)));
-            handles.put(matcher.group(1), new WindowHandle(matcher.group(2).trim(), bounds));
+            handles.put(matcher.group(1), new WindowHandle(bounds));
         }
         return handles;
     }
@@ -208,7 +208,7 @@ final class PressWindowSnapshot {
                 Integer.parseInt(frameMatcher.group(3)), Integer.parseInt(frameMatcher.group(4))) : null;
         if (frame == null) {
             WindowHandle handle = handles.get(header.group(1));
-            if (handle != null && handle.name.equals(header.group(3).trim())) frame = new Rect(handle.bounds);
+            if (handle != null) frame = new Rect(handle.bounds);
         }
         boolean surface = block.contains("mHasSurface=true");
         boolean visible = block.contains("isOnScreen=true") && block.contains("isVisible=true")
@@ -276,11 +276,9 @@ final class PressWindowSnapshot {
     }
 
     private static final class WindowHandle {
-        final String name;
         final Rect bounds;
 
-        WindowHandle(String name, Rect bounds) {
-            this.name = name;
+        WindowHandle(Rect bounds) {
             this.bounds = bounds;
         }
     }
