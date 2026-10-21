@@ -39,6 +39,7 @@ public final class StashImageProvider extends ContentProvider {
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
+        DragShareLog.i("DragShare/Stash", "image open callerUid=" + Binder.getCallingUid());
         if (!"r".equals(mode)) throw new FileNotFoundException("Stash images are read-only");
         try {
             return ParcelFileDescriptor.open(store.openImage(id(uri)), ParcelFileDescriptor.MODE_READ_ONLY);
@@ -52,12 +53,14 @@ public final class StashImageProvider extends ContentProvider {
 
     @Override
     public String getType(Uri uri) {
+        DragShareLog.i("DragShare/Stash", "image type callerUid=" + Binder.getCallingUid());
         StashStore.Entry entry = entry(uri);
         return entry == null ? null : entry.mime;
     }
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) {
+        DragShareLog.i("DragShare/Stash", "image query callerUid=" + Binder.getCallingUid());
         // This receiver queries _data instead of opening the granted content URI.
         boolean legacyDrop = "com.tencent.mm".equals(getCallingPackage());
         String[] columns = projection == null

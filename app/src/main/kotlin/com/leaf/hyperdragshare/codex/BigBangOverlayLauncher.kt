@@ -33,7 +33,9 @@ object BigBangOverlayLauncher {
         val sourceImage = input.getParcelable("source_image", Uri::class.java)
         val before = input.getString("before_text")
         val after = input.getString("after_text")
-        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after) }
+        val pressConfirmedAt = input.getLong("press_confirmed_at")
+        main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after,
+            pressConfirmedAt = pressConfirmedAt) }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
@@ -53,7 +55,7 @@ object BigBangOverlayLauncher {
     }
 
     private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null,
-        before: String? = null, after: String? = null) {
+        before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
@@ -156,7 +158,7 @@ object BigBangOverlayLauncher {
         ) { session.Content() }
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
-        if (overlay.show()) session.open(text, x, y, sourceImage, savedState, before, after)
+        if (overlay.show(pressConfirmedAt)) session.open(text, x, y, sourceImage, savedState, before, after)
     }
 
     private fun report(context: Context, error: Exception) {

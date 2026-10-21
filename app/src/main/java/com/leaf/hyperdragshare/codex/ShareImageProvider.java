@@ -58,7 +58,7 @@ public final class ShareImageProvider extends ContentProvider {
             long identity = Binder.clearCallingIdentity();
             try {
                 Bundle result = new Bundle();
-                result.putBoolean("accepted", ImageOcrOverlay.start(contextOrThrow(), uri));
+                result.putBoolean("accepted", ImageOcrOverlay.startFromPress(contextOrThrow(), uri, extras.getLong("press_confirmed_at")));
                 return result;
             } finally {
                 Binder.restoreCallingIdentity(identity);

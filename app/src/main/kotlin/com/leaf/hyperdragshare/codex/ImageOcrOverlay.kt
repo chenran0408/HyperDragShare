@@ -53,6 +53,9 @@ object ImageOcrOverlay {
 
     @JvmStatic fun start(context: Context, uri: Uri): Boolean = open(context, uri, false, null)
 
+    @JvmStatic fun startFromPress(context: Context, uri: Uri, confirmedAt: Long): Boolean =
+        open(context, uri, false, null, pressConfirmedAt = confirmedAt)
+
     @JvmStatic fun startWithResult(context: Context, uri: Uri, onResult: (String?) -> Unit): Boolean =
         open(context, uri, false, null, onResult)
 
@@ -60,7 +63,7 @@ object ImageOcrOverlay {
         open(context, uri, true, owner)
 
     private fun open(context: Context, uri: Uri, qr: Boolean, owner: android.view.View?,
-        onResult: ((String?) -> Unit)? = null): Boolean {
+        onResult: ((String?) -> Unit)? = null, pressConfirmedAt: Long = 0L): Boolean {
         if (!Settings.canDrawOverlays(context)) {
             main.post {
                 android.widget.Toast.makeText(context.applicationContext, "请先在模块设置中允许悬浮窗权限",
@@ -81,7 +84,7 @@ object ImageOcrOverlay {
             }
             val job = Job(app, uri, qr, owner, onResult)
             active = job
-            if (job.window.show()) job.decode()
+            if (job.window.show(pressConfirmedAt)) job.decode()
         }
         return true
     }

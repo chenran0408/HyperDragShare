@@ -1,6 +1,6 @@
 # HyperDragShare Agent Guide
 
-最新版本、功能差距和验证层级先读 `docs/CURRENT_STATUS.md`，再读各文档末条。用户最新明确恢复小米触摸面积的联网研究及可行实验；产品仍沿用Root evdev时长/位移，不强制校准、不把原始帧可读或普通长按称为面积触发。当前研究和安全边界见 `docs/NATIVE_PRESS_INPUT.md` 157末条。
+最新版本、功能差距和验证层级先读 `docs/CURRENT_STATUS.md`，再读各文档末条。用户最新明确停止真实触摸面积研究；产品沿用Root evdev时长/位移，不强制校准、不把按住称为面积触发。历史只读实验保留记录，不继续解码、实验或消耗时间。优先修复取词、拖放与Miuix交互。
 
 本文是后续自动化代理在本工程内工作的约束。当前源码和
 `docs/IMPLEMENTATION.md` 是实现事实来源；`E:\workspace\TaplusContentPreview`

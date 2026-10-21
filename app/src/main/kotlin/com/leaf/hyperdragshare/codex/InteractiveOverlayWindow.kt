@@ -56,10 +56,30 @@ internal class InteractiveOverlayWindow(
         dialog.setOnDismissListener { dispose() }
     }
 
-    fun show(): Boolean {
+    fun show(pressConfirmedAt: Long = 0L): Boolean {
         check(!disposed) { "Create a new interactive window after dismissal" }
         return try {
             dialog.show()
+            if (pressConfirmedAt > 0L) {
+                val view = window.decorView
+                val observer = view.viewTreeObserver
+                observer.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+                    private var delivered = false
+                    override fun onDraw() {
+                        if (delivered) return
+                        delivered = true
+                        // Queue after drawing; never announce success before a window exists.
+                        view.post {
+                            if (observer.isAlive) observer.removeOnDrawListener(this)
+                            if (!disposed && view.isShown) {
+                                view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                                DragShareLog.i("DragShare/Press", "window first draw confirmedToFrameMs=" +
+                                    (android.os.SystemClock.uptimeMillis() - pressConfirmedAt))
+                            }
+                        }
+                    }
+                })
+            }
             true
         } catch (error: WindowManager.BadTokenException) {
             failedToShow(error)

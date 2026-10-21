@@ -46,8 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -358,7 +358,7 @@ object StashOverlayPanel {
             ) {
                 Box(
                     Modifier.width(5.dp).height(64.dp)
-                        .background(Color(0xFF8E8E93),
+                        .background(MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .85f),
                             RoundedCornerShape(3.dp))
                 )
             }

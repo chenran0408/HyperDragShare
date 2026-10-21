@@ -113,7 +113,8 @@ internal object StashTextDropWindow {
             if (!attached) return
             attached = false
             target.setOnDragListener(null)
-            manager.removeView(target)
+            // Finish detaching our input surface before querying the destination window.
+            manager.removeViewImmediate(target)
         }
     }
 }

@@ -8,8 +8,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
 import android.view.MotionEvent;
 import android.widget.Toast;
 
@@ -41,6 +39,7 @@ final class PressCaptureSource {
     private volatile long downTime = -1L;
     private boolean lookupRunning;
     private boolean displayQueued;
+    private long confirmedAt;
     private CapturedContent cached;
     private float downX;
     private float downY;
@@ -139,6 +138,7 @@ final class PressCaptureSource {
         }
         long now = SystemClock.uptimeMillis();
         if (!detector.fire(now)) return;
+        confirmedAt = now;
         DragShareLog.i(TAG, "press confirmed by duration/movement elapsedMs=" + (now - detector.downTime()));
         if (cached != null) display();
         else if (!lookupRunning) lookup();
@@ -228,12 +228,6 @@ final class PressCaptureSource {
                         blocker.stop();
                         return;
                     }
-                    try {
-                        context.getSystemService(Vibrator.class).vibrate(
-                                VibrationEffect.createOneShot(25L, VibrationEffect.DEFAULT_AMPLITUDE));
-                    } catch (SecurityException error) {
-                        DragShareLog.w(TAG, "press haptic denied", error);
-                    }
                     if (content.isImage()) openImage(request, content);
                     else openText(content);
                 });
@@ -259,6 +253,7 @@ final class PressCaptureSource {
     private void openText(CapturedContent content) {
         Bundle text = new Bundle();
         text.putString("text", content.text);
+        text.putLong("press_confirmed_at", confirmedAt);
         text.putString("before_text", content.beforeText);
         text.putString("after_text", content.afterText);
         text.putInt("x", Math.round(downX));
@@ -282,6 +277,7 @@ final class PressCaptureSource {
                     if (request != generation || !allowed()) return;
                     Bundle image = new Bundle();
                     image.putParcelable("image", uri);
+                    image.putLong("press_confirmed_at", confirmedAt);
                     try {
                         Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
                                 ImageOcrOverlay.METHOD_RECOGNIZE, null, image);
