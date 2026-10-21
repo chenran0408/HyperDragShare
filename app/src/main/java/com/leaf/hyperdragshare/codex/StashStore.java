@@ -162,6 +162,58 @@ public final class StashStore implements AutoCloseable {
         }
     }
 
+    /** Groups existing entries in the caller's visible order without copying their content. */
+    public String groupEntries(List<String> orderedIds) throws IOException {
+        if (orderedIds.size() < 2) throw new IllegalArgumentException("分组至少需要两项内容");
+        String batchId = UUID.randomUUID().toString();
+        try {
+            SQLiteDatabase db = database.getWritableDatabase();
+            db.beginTransaction();
+            try {
+                for (int index = 0; index < orderedIds.size(); index++) {
+                    String id = orderedIds.get(index);
+                    requireUuid(id);
+                    ContentValues values = new ContentValues();
+                    values.put("batch_id", batchId);
+                    values.put("batch_order", index);
+                    if (db.update(TABLE, values, "id = ?", new String[]{id}) != 1) {
+                        throw new IOException("中转站内容已不存在，请刷新后重试");
+                    }
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+            return batchId;
+        } catch (SQLiteException error) {
+            throw databaseFailure("group stash entries", error);
+        }
+    }
+
+    /** Returns the selected entries to independent cards, preserving their original content. */
+    public void ungroupEntries(List<String> ids) throws IOException {
+        try {
+            SQLiteDatabase db = database.getWritableDatabase();
+            db.beginTransaction();
+            try {
+                for (String id : ids) {
+                    requireUuid(id);
+                    ContentValues values = new ContentValues();
+                    values.put("batch_id", id);
+                    values.put("batch_order", 0);
+                    if (db.update(TABLE, values, "id = ?", new String[]{id}) != 1) {
+                        throw new IOException("中转站内容已不存在，请刷新后重试");
+                    }
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+        } catch (SQLiteException error) {
+            throw databaseFailure("ungroup stash entries", error);
+        }
+    }
+
     public Entry getEntry(String id) throws IOException {
         requireUuid(id);
         try (Cursor cursor = database.getReadableDatabase().query(

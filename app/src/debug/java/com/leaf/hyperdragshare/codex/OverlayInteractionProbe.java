@@ -21,7 +21,8 @@ public final class OverlayInteractionProbe extends Instrumentation {
     }
 
     @Override public void onStart() {
-        if (arguments != null && "stash_batch".equals(arguments.getString("mode"))) {
+        if (arguments != null && ("stash_batch".equals(arguments.getString("mode"))
+                || "stash_manual".equals(arguments.getString("mode")))) {
             Bundle report = new Bundle();
             boolean accepted = createStashBatch(report);
             finishAfterInspection(accepted, report);
@@ -52,8 +53,9 @@ public final class OverlayInteractionProbe extends Instrumentation {
     private boolean createStashBatch(Bundle report) {
         java.util.List<java.io.File> files = new java.util.ArrayList<>();
         try {
+            boolean manual = "stash_manual".equals(arguments.getString("mode"));
             java.util.List<Uri> uris = new java.util.ArrayList<>();
-            for (int index = 0; index < 2; index++) {
+            for (int index = 0; index < (manual ? 1 : 2); index++) {
                 java.io.File file = new java.io.File(getTargetContext().getCacheDir(), "batch123-" + index + ".png");
                 files.add(file);
                 android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
@@ -74,6 +76,11 @@ public final class OverlayInteractionProbe extends Instrumentation {
             try (StashStore store = new StashStore(getTargetContext())) {
                 report.putInt("saved", store.addImages(getTargetContext().getContentResolver(), uris));
                 report.putString("batchId", store.listEntries().get(0).batchId);
+                if (manual) {
+                    report.putString("textA", store.addText("HDS129 文字 A · 与图片一起取用").id);
+                    report.putString("textB", store.addText("HDS129 文字 B · 保留原来顺序").id);
+                    report.putInt("saved", 3);
+                }
             }
             StashOverlayPanel.show(getTargetContext());
             return true;

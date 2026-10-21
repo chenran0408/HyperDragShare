@@ -729,3 +729,15 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 最终原位安装152，APK outputs/HyperDragShare-1.7.128-debug.apk SHA256 605D7C631327113D63AD7A9C8E5A6027301B6AA1732C05F9EF0C9E82BBDDB928，与设备base.apk相同；包名和debug签名保持。仅重载传送门，实际握手152/Root152/granted=true，hds128-activation.xml。未重启android/AICR/整机。
 - 返回先清选择，读取焦点仍模块窗口后再返回关闭；临时点取磁贴全表严格恢复，settings/integrations前后键值相同，AICR保持true。Root取词连接释放后才dump；终态无helper/probe/分词或识屏窗口，Bili2183提醒保持。中转站未写入，原7条/4图schema2与旧备份约束保持；device XML清理，截图只留本机。
 - 未验：独立仅前插/仅后接产品UI（native路径已验）、ML Kit实际顺序、普通框选回归、识别失败旧状态清理、取消/锁屏/旋转/深色、多列或新ROM。真实拇指面积、Bili评论普通长按、最新四样式16方向、115旧ANR与复制浮层共存仍未解决。
+
+## 2026-10-21：1.7.129 中转站手动分组
+
+- 新增文字/图片混合手动分组与拆开；仅更新批次字段，schema2及原内容/文件不变。侧窗和系统小窗/管理页复用同一组卡与次要管理按钮。两项新测试包含混合顺序/重开/拆开、原内容与图片字节、group/ungroup中途missing ID整体回滚。264及最终265 testDebugUnitTest/lintDebug/assembleDebug通过，197项单测0失败，Lint0 errors/139 warnings/2 hints。
+- 最终原位安装153，包名和debug证书不变。交付outputs/HyperDragShare-1.7.129-debug.apk SHA256 1F0010529773CF1883D93048B0EF43C751C119CCADCFD235BA768801CFAC5BE8，与设备base.apk严格一致；hds129-installed-hash.txt。只重载传送门，实际injected_version=153/portal_root_version=153/granted=true，hds129-activation.xml；未重启android/AICR/整机。
+- debug已有OverlayInteractionProbe新增stash_manual生成两段HDS129文字和一张BATCH123 A图片，hds129-create-manual.txt accepted=true/saved=3；不安装额外APK。before备份hds129-before-stash.tar与snapshot为原7条/4图。264实际侧窗选3项合组成功，但长标签两按钮换行；单图批次ID非条目ID导致无效拆开。最终265改短按钮，按全量实际组成员数判断可拆，避免以数据库ID形态推断UI。
+- 265正常中转站磁贴重开已有混合组卡，图片/首段文字/3项标记可见；选组→拆开→只选单张图片时没有分组/拆开按钮（hds129-final-single-image-selected.xml）；再选两段文字，只有分组按钮。hds129-final-group-action.xml、final-regrouped.xml证明3项合组后次序B/A/图片。窗口[0,1313][576,2513]，1440×3200屏幕面积15%，未放大默认侧窗。
+- 侧窗产品放大按钮带入同一3项内容组，真实freeform任务2356；hds129-native-opened.png/xml。原生小窗多选→全选3项→拆开返回全部；再仅选生成的B/A两段→分组→返回父列表，卡片显示2段文字和正文；hds129-native-selected3.xml、native-split.xml、native-selected2.xml、native-grouped2.xml、native-text-card.png/xml。点击依据实际截图缩放位置，未向产品加入测试坐标适配。
+- 按住真实文字组卡触发GLOBAL拖拽，09:29:21 MiuiDragAndDropController action=ACTION_DRAG_STARTED/itemCount=2/mimeTypes=text/plain，原生小窗退后、Bili2183置前，hds129-native-group-drag.log。未投递到具体接收者，不能计为新组跨UID接收成功。task focus未恢复隐藏freeform，随后的页面dump仍Bili，之后经正常中转站磁贴继续；不以任务聚焦命令成功当作窗口显示证据。
+- 侧窗只选生成文字组2项和生成图片1项，删除确认明确3项，hds129-delete-confirm.xml；确认后剩7条，hds129-cleaned.xml。停止模块保存hds129-after-stash.tar/snapshot，原id/正文/类型/时间/MIME指纹及4图SHA与before完全一致，未恢复旧库。图片组字段也均保留独立状态。旧123前schema1备份保持不动；此次无新schema迁移，但回退128等旧UI前需拆开文字/混合组。
+- 临时中转站磁贴全表、drag_share_settings、stash_window_position前后完全一致；无Root取词helper/远端probe，测试窗关闭、临时device XML已删。原Bili休息提醒仍在，没有关闭提醒或恢复播放。截图、DB备份不提交仓库。
+- 未验：新组跨UID实际接收、只抽出组内部分成员、横屏/深色/管理页宽布局、IO错误设备分支。真实拇指面积、Bili评论普通长按、四种四边完整矩阵、115旧ANR与复制编辑浮层共存仍未解决。本轮只读传送门审计不支持盲加放行Hook；Compose上游遗漏仍只是候选根因。

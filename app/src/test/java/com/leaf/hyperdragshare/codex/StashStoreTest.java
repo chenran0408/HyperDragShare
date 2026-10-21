@@ -290,6 +290,71 @@ public final class StashStoreTest {
     }
 
     @Test
+    public void mixedManualGroupKeepsContentAndOrderAcrossReopenAndUngroup() throws IOException {
+        StashStore.Entry firstText = store.addText("generated first text");
+        byte[] imageBytes = {4, 7, 12, 19};
+        StashStore.Entry image = store.addImage(new ByteArrayInputStream(imageBytes), "image/png");
+        StashStore.Entry secondText = store.addText("generated second text");
+        StashStore.Entry separate = store.addText("leave this independent");
+        List<String> orderedIds = List.of(image.id, firstText.id, secondText.id);
+
+        String batchId = store.groupEntries(orderedIds);
+        store.close();
+        store = new StashStore(context);
+
+        List<StashStore.Entry> batch = StashBatchCardKt.stashBatches(store.listEntries()).stream()
+                .filter(group -> batchId.equals(group.get(0).batchId)).findFirst().orElseThrow();
+        assertEquals(orderedIds, batch.stream().map(entry -> entry.id).toList());
+        for (int index = 0; index < batch.size(); index++) assertEquals(index, batch.get(index).batchOrder);
+        assertEquals(firstText.text, store.getEntry(firstText.id).text);
+        assertEquals(secondText.text, store.getEntry(secondText.id).text);
+        assertEquals(firstText.createdAt, store.getEntry(firstText.id).createdAt);
+        assertEquals(image.createdAt, store.getEntry(image.id).createdAt);
+        assertEquals(secondText.createdAt, store.getEntry(secondText.id).createdAt);
+        assertEquals(image.imageFileName, store.getEntry(image.id).imageFileName);
+        assertEquals(image.mime, store.getEntry(image.id).mime);
+        assertArrayEquals(imageBytes, readFile(store.openImage(image.id)));
+        assertEquals(separate.id, store.getEntry(separate.id).batchId);
+
+        store.ungroupEntries(orderedIds);
+        store.close();
+        store = new StashStore(context);
+
+        assertEquals(4, StashBatchCardKt.stashBatches(store.listEntries()).size());
+        for (String id : orderedIds) {
+            assertEquals(id, store.getEntry(id).batchId);
+            assertEquals(0, store.getEntry(id).batchOrder);
+        }
+        assertEquals(firstText.text, store.getEntry(firstText.id).text);
+        assertEquals(firstText.createdAt, store.getEntry(firstText.id).createdAt);
+        assertEquals(image.createdAt, store.getEntry(image.id).createdAt);
+        assertArrayEquals(imageBytes, readFile(store.openImage(image.id)));
+    }
+
+    @Test
+    public void missingEntryRollsBackTheWholeGroupOrUngroup() throws IOException {
+        StashStore.Entry first = store.addText("generated A");
+        StashStore.Entry second = store.addText("generated B");
+        String missing = java.util.UUID.randomUUID().toString();
+
+        IOException grouping = assertThrows(IOException.class,
+                () -> store.groupEntries(List.of(first.id, missing, second.id)));
+        assertEquals("中转站内容已不存在，请刷新后重试", grouping.getMessage());
+        assertEquals(first.id, store.getEntry(first.id).batchId);
+        assertEquals(second.id, store.getEntry(second.id).batchId);
+
+        String batchId = store.groupEntries(List.of(second.id, first.id));
+        IOException ungrouping = assertThrows(IOException.class,
+                () -> store.ungroupEntries(List.of(second.id, missing, first.id)));
+        assertEquals("中转站内容已不存在，请刷新后重试", ungrouping.getMessage());
+        assertEquals(batchId, store.getEntry(first.id).batchId);
+        assertEquals(batchId, store.getEntry(second.id).batchId);
+        assertEquals(0, store.getEntry(second.id).batchOrder);
+        assertEquals(1, store.getEntry(first.id).batchOrder);
+        assertEquals(2, store.listEntries().size());
+    }
+
+    @Test
     public void versionOneUpgradePreservesOldEntriesAsIndependentBatches() throws IOException {
         store.close();
         String textId = "11111111-1111-4111-8111-111111111111";

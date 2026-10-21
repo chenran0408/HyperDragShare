@@ -95,6 +95,7 @@ class StashActivity : ComponentActivity() {
     private var loading by mutableStateOf(true)
     private var message by mutableStateOf<String?>(null)
     private var copying by mutableStateOf(false)
+    private var grouping by mutableStateOf(false)
     private var copyMessage by mutableStateOf<String?>(null)
     private var pendingDelete by mutableStateOf<StashStore.Entry?>(null)
     private var confirmBatchDelete by mutableStateOf(false)
@@ -132,12 +133,14 @@ class StashActivity : ComponentActivity() {
             ) {
                 val scope = rememberCoroutineScope()
                 BackHandler(enabled = (isInMultiWindowMode || openedBatchId != null) && !selectionMode &&
-                    previewEntry == null && pendingDelete == null && !confirmBatchDelete) {
+                    previewEntry == null && pendingDelete == null && !confirmBatchDelete && !grouping) {
                     returnFromContents()
                 }
                 BackHandler(enabled = selectionMode) {
-                    selectionMode = false
-                    selectedIds = emptySet()
+                    if (!grouping) {
+                        selectionMode = false
+                        selectedIds = emptySet()
+                    }
                 }
                 val visibleEntries = entries.filter {
                     (openedBatchId == null || it.batchId == openedBatchId) &&
@@ -152,14 +155,16 @@ class StashActivity : ComponentActivity() {
                     onKindChange = { kindFilter = it; openedBatchId = null },
                     loading = loading,
                     copying = copying,
+                    grouping = grouping,
                     copyMessage = copyMessage,
                     message = message,
                     pendingDelete = pendingDelete,
                     previewEntry = previewEntry,
                     selectionMode = selectionMode,
                     selectedIds = selectedIds,
+                    groupedIds = stashGroupedEntryIds(entries),
                     confirmBatchDelete = confirmBatchDelete,
-                    onBack = ::returnFromContents,
+                    onBack = { if (!grouping) returnFromContents() },
                     openedBatchId = openedBatchId,
                     onOpenBatch = { openedBatchId = it },
                     onToggleBatchSelection = { batch ->
@@ -168,8 +173,10 @@ class StashActivity : ComponentActivity() {
                     },
                     onDragStarted = ::hideForDrag,
                     onToggleSelectionMode = {
-                        selectionMode = !selectionMode
-                        selectedIds = emptySet()
+                        if (!grouping) {
+                            selectionMode = !selectionMode
+                            selectedIds = emptySet()
+                        }
                     },
                     onToggleEntrySelection = { id ->
                         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
@@ -179,6 +186,8 @@ class StashActivity : ComponentActivity() {
                             else visibleEntries.map { it.id }.toSet()
                     },
                     onBatchShare = ::shareEntries,
+                    onGroup = { selected -> scope.launch { updateGrouping(selected, split = false) } },
+                    onUngroup = { selected -> scope.launch { updateGrouping(selected, split = true) } },
                     onBatchDeleteRequest = { confirmBatchDelete = true },
                     onBatchDeleteDismiss = { confirmBatchDelete = false },
                     onBatchDeleteConfirm = { scope.launch { deleteSelectedEntries() } },
@@ -418,6 +427,39 @@ class StashActivity : ComponentActivity() {
         }
     }
 
+    private suspend fun updateGrouping(selected: List<StashStore.Entry>, split: Boolean) {
+        if (grouping) return
+        grouping = true
+        message = null
+        try {
+            val (batchId, refreshed) = withContext(Dispatchers.IO) {
+                StashStore(this@StashActivity).use { store ->
+                    val ids = selected.map { it.id }
+                    val batch = if (split) {
+                        store.ungroupEntries(ids)
+                        null
+                    } else store.groupEntries(ids)
+                    batch to store.listEntries()
+                }
+            }
+            entries = refreshed
+            openedBatchId = batchId
+            searchQuery = ""
+            kindFilter = "all"
+            selectionMode = false
+            selectedIds = emptySet()
+            Toast.makeText(this, if (split) "已拆开所选内容" else "已合为一组", Toast.LENGTH_SHORT).show()
+        } catch (error: IOException) {
+            DragShareLog.w("DragShare/Stash", "unable to update stash grouping", error)
+            message = "无法更新分组：${error.message ?: "中转站存储失败"}"
+        } catch (error: SecurityException) {
+            DragShareLog.w("DragShare/Stash", "permission denied while updating stash grouping", error)
+            message = "系统拒绝修改中转站分组。"
+        } finally {
+            grouping = false
+        }
+    }
+
     private suspend fun deleteSelectedEntries() {
         confirmBatchDelete = false
         val ids = selectedIds.toList()
@@ -471,12 +513,14 @@ private fun StashScreen(
     onKindChange: (String) -> Unit,
     loading: Boolean,
     copying: Boolean,
+    grouping: Boolean,
     copyMessage: String?,
     message: String?,
     pendingDelete: StashStore.Entry?,
     previewEntry: StashStore.Entry?,
     selectionMode: Boolean,
     selectedIds: Set<String>,
+    groupedIds: Set<String>,
     confirmBatchDelete: Boolean,
     onBack: () -> Unit,
     openedBatchId: String?,
@@ -487,6 +531,8 @@ private fun StashScreen(
     onToggleEntrySelection: (String) -> Unit,
     onToggleSelectAll: () -> Unit,
     onBatchShare: (List<StashStore.Entry>) -> Unit,
+    onGroup: (List<StashStore.Entry>) -> Unit,
+    onUngroup: (List<StashStore.Entry>) -> Unit,
     onBatchDeleteRequest: () -> Unit,
     onBatchDeleteDismiss: () -> Unit,
     onBatchDeleteConfirm: () -> Unit,
@@ -506,7 +552,7 @@ private fun StashScreen(
     LaunchedEffect(openedBatchId, searchQuery, kindFilter) { listState.requestScrollToItem(0) }
     val batches = if (openedBatchId == null) stashBatches(entries) else entries.map { listOf(it) }
     val selectedEntries = batches.flatten().filter { it.id in selectedIds }
-    val title = if (selectionMode) "已选 ${selectedIds.size}" else if (openedBatchId != null) "图片组 · ${entries.size} 张" else "中转站"
+    val title = if (selectionMode) "已选 ${selectedIds.size}" else if (openedBatchId != null) "内容组 · ${stashBatchLabel(entries)}" else "中转站"
     val compact = LocalConfiguration.current.screenWidthDp < 300
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -520,15 +566,16 @@ private fun StashScreen(
         Unit
     }
     BackHandler(enabled = compact && compactSearch && !selectionMode && previewEntry == null &&
-        pendingDelete == null && !confirmBatchDelete, onBack = closeCompactSearch)
+        pendingDelete == null && !confirmBatchDelete && !grouping, onBack = closeCompactSearch)
     Scaffold(topBar = {
         Column(Modifier.background(MiuixTheme.colorScheme.background)) {
             if (compact) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     BackNavigationIcon(onClick = if (selectionMode) onToggleSelectionMode else onBack)
-                    Text(if (openedBatchId != null && !selectionMode) "${entries.size} 张图片" else title,
+                    Text(if (openedBatchId != null && !selectionMode) stashBatchLabel(entries) else title,
                         modifier = Modifier.weight(1f), fontSize = 14.sp, maxLines = 1)
-                    TextButton(text = if (selectionMode) "完成" else "多选", onClick = onToggleSelectionMode)
+                    TextButton(text = if (selectionMode) "完成" else "多选", onClick = onToggleSelectionMode,
+                        enabled = !grouping && (selectionMode || entries.isNotEmpty()))
                     if (!selectionMode) OverlayIconAction(
                         if (compactSearch) Icons.Outlined.Close else Icons.Outlined.Search,
                         MiuixTheme.colorScheme.onSurfaceVariantActions,
@@ -549,7 +596,7 @@ private fun StashScreen(
                     TextButton(
                         text = if (selectionMode) "完成" else "多选",
                         onClick = onToggleSelectionMode,
-                        enabled = selectionMode || entries.isNotEmpty(),
+                        enabled = !grouping && (selectionMode || entries.isNotEmpty()),
                     )
                 },
             )
@@ -559,9 +606,13 @@ private fun StashScreen(
                 StashKindFilters(kindFilter, entries.size, onKindChange)
             }
             if (selectionMode) {
-                StashDragHandle(selectedEntries, onDragStarted)
+                if (grouping) Text("正在整理…", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 13.sp)
+                else StashDragHandle(selectedEntries, onDragStarted)
                 StashSelectionActions(selectedIds.size, selectedIds.size == entries.size,
-                    onToggleSelectAll, { onBatchShare(selectedEntries) }, onBatchDeleteRequest, compact)
+                    onToggleSelectAll, { onBatchShare(selectedEntries) }, onBatchDeleteRequest, compact, !grouping)
+                StashGroupingActions(selectedEntries, !grouping,
+                    canUngroup = selectedEntries.any { it.id in groupedIds },
+                    onGroup = { onGroup(selectedEntries) }, onUngroup = { onUngroup(selectedEntries) })
             }
             copyMessage?.let {
                 Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -701,15 +752,16 @@ private fun StashSelectionActions(
     onShare: () -> Unit,
     onDelete: () -> Unit,
     compact: Boolean,
+    enabled: Boolean,
 ) {
     if (compact) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             OverlayIconAction(Icons.Outlined.SelectAll, MiuixTheme.colorScheme.primary,
-                onClick = onToggleSelectAll, contentDescription = if (allSelected) "取消全选" else "全选")
+                enabled = enabled, onClick = onToggleSelectAll, contentDescription = if (allSelected) "取消全选" else "全选")
             OverlayIconAction(Icons.Outlined.Share, MiuixTheme.colorScheme.onSurfaceVariantActions,
-                enabled = selectedCount > 0, onClick = onShare, contentDescription = "分享已选内容")
+                enabled = enabled && selectedCount > 0, onClick = onShare, contentDescription = "分享已选内容")
             OverlayIconAction(Icons.Outlined.Delete, MiuixTheme.colorScheme.onSurfaceVariantActions,
-                enabled = selectedCount > 0, onClick = onDelete, contentDescription = "删除已选内容")
+                enabled = enabled && selectedCount > 0, onClick = onDelete, contentDescription = "删除已选内容")
         }
         return
     }
@@ -728,20 +780,21 @@ private fun StashSelectionActions(
                 TextButton(
                     text = if (allSelected) "取消全选" else "全选",
                     onClick = onToggleSelectAll,
+                    enabled = enabled,
                 )
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
                     text = "分享",
                     onClick = onShare,
-                    enabled = selectedCount > 0,
+                    enabled = enabled && selectedCount > 0,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.textButtonColorsPrimary(),
                 )
                 TextButton(
                     text = "删除",
                     onClick = onDelete,
-                    enabled = selectedCount > 0,
+                    enabled = enabled && selectedCount > 0,
                     modifier = Modifier.weight(1f),
                 )
             }

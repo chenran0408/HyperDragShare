@@ -133,7 +133,7 @@ object StashOverlayPanel {
         private var searching by mutableStateOf(false)
         private var query by mutableStateOf("")
         private var confirmDelete by mutableStateOf(false)
-        private var deleting by mutableStateOf(false)
+        private var updating by mutableStateOf(false)
         private var copying by mutableStateOf(false)
         private var preview by mutableStateOf<StashStore.Entry?>(null)
         private var openedBatchId by mutableStateOf<String?>(null)
@@ -346,7 +346,7 @@ object StashOverlayPanel {
         private fun deleteSelected() {
             val targets = entries.filter { it.id in selectedIds }
             confirmDelete = false
-            deleting = true
+            updating = true
             scope.launch {
                 try {
                     for (entry in targets) {
@@ -361,7 +361,37 @@ object StashOverlayPanel {
                 } catch (error: SecurityException) {
                     report("系统拒绝删除，剩余内容已保留", error)
                 } finally {
-                    deleting = false
+                    updating = false
+                }
+            }
+        }
+
+        private fun regroup(selected: List<StashStore.Entry>, split: Boolean) {
+            if (updating) return
+            updating = true
+            message = null
+            scope.launch {
+                try {
+                    val (batchId, refreshed) = withContext(Dispatchers.IO) {
+                        StashStore(app).use { store ->
+                            val ids = selected.map { it.id }
+                            val batch = if (split) { store.ungroupEntries(ids); null }
+                                else store.groupEntries(ids)
+                            batch to store.listEntries()
+                        }
+                    }
+                    entries = refreshed
+                    openedBatchId = batchId
+                    query = ""
+                    searching = false
+                    cancelSelection()
+                    listState.requestScrollToItem(0)
+                } catch (error: IOException) {
+                    report(if (split) "无法拆开分组" else "无法合并分组", error)
+                } catch (error: SecurityException) {
+                    report("系统拒绝修改分组", error)
+                } finally {
+                    updating = false
                 }
             }
         }
@@ -393,7 +423,7 @@ object StashOverlayPanel {
                 Column(Modifier.padding(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StashDraggableContent(listOf(entry), Modifier.weight(1f),
-                            enabled = !deleting, draggable = !selectionMode,
+                            enabled = !updating, draggable = !selectionMode,
                             onStarted = ::collapse, onClick = open) {
                             if (entry.kind == StashStore.KIND_IMAGE) {
                                 StashImage(entry, 480, Modifier.fillMaxWidth().height(64.dp), ContentScale.Fit)
@@ -408,7 +438,7 @@ object StashOverlayPanel {
                                 if (selected) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank
                             } else Icons.Outlined.ContentCopy,
                             tint = MiuixTheme.colorScheme.primary,
-                            enabled = !deleting && !copying,
+                            enabled = !updating && !copying,
                             onClick = { if (selectionMode) open() else copy(entry) },
                             contentDescription = if (selectionMode) {
                                 if (selected) "取消选择这条内容" else "选择这条内容"
@@ -427,7 +457,7 @@ object StashOverlayPanel {
             val ids = batch.map { it.id }.toSet()
             val selectedCount = ids.count { it in selectedIds }
             StashBatchCard(batch, Modifier.padding(horizontal = 4.dp), imageHeight = 56.dp,
-                enabled = !deleting, selectionMode = selectionMode, selectedCount = selectedCount,
+                enabled = !updating, selectionMode = selectionMode, selectedCount = selectedCount,
                 onDragStarted = ::collapse, onClick = {
                     if (selectionMode) {
                         selectedIds = if (selectedCount == batch.size) selectedIds - ids else selectedIds + ids
@@ -495,11 +525,11 @@ object StashOverlayPanel {
                                             preview = null
                                         },
                                         modifier = Modifier.weight(1f),
-                                        enabled = !deleting && !confirmDelete,
+                                        enabled = !updating && !confirmDelete,
                                     )
                                     OverlayIconAction(Icons.Outlined.Close,
                                         MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        enabled = query.isNotEmpty() && !deleting && !confirmDelete,
+                                        enabled = query.isNotEmpty() && !updating && !confirmDelete,
                                         onClick = { query = ""; cancelSelection() },
                                         contentDescription = "清空搜索文字")
                                 }
@@ -524,7 +554,7 @@ object StashOverlayPanel {
                                             cancelSelection()
                                             listState.requestScrollToItem(0)
                                         }, contentDescription = "返回全部内容")
-                                    Text("图片组 · ${visibleEntries.size} 张", fontSize = 12.sp,
+                                    Text(stashBatchLabel(visibleEntries), fontSize = 12.sp,
                                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
                             }
@@ -574,24 +604,29 @@ object StashOverlayPanel {
                                     }) { ShelfBatch(it) }
                                 }
                             }
-                            if (deleting) {
-                                Text("正在删除…", Modifier.padding(6.dp), fontSize = 12.sp,
+                            if (updating) {
+                                Text("正在处理…", Modifier.padding(6.dp), fontSize = 12.sp,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             } else if (selectionMode && !confirmDelete) {
-                                StashDragHandle(visibleBatches.flatten().filter { it.id in selectedIds }, ::collapse)
+                                val selected = visibleBatches.flatten().filter { it.id in selectedIds }
+                                StashGroupingActions(selected, true,
+                                    canUngroup = selected.any { it.id in stashGroupedEntryIds(entries) },
+                                    onGroup = { regroup(selected, false) },
+                                    onUngroup = { regroup(selected, true) })
+                                StashDragHandle(selected, ::collapse)
                             }
                             if (!confirmDelete) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                                 OverlayIconAction(Icons.Outlined.SelectAll,
                                     if (selectionMode) MiuixTheme.colorScheme.primary
                                     else MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                    enabled = !deleting && (selectionMode || visibleEntries.isNotEmpty()),
+                                    enabled = !updating && (selectionMode || visibleEntries.isNotEmpty()),
                                     onClick = {
                                         preview = null
                                         if (selectionMode) cancelSelection() else selectionMode = true
                                     }, contentDescription = if (selectionMode) "取消多选" else "多选拖出")
                                 OverlayIconAction(if (selectionMode) Icons.Outlined.Delete else Icons.Outlined.SwapHoriz,
                                     MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                    enabled = !deleting && (!selectionMode || selectedIds.isNotEmpty()),
+                                    enabled = !updating && (!selectionMode || selectedIds.isNotEmpty()),
                                     onClick = {
                                         if (selectionMode) {
                                             focusManager.clearFocus()
@@ -603,7 +638,7 @@ object StashOverlayPanel {
                                         else if (onLeft) "移到右侧" else "移到左侧")
                                 OverlayIconAction(Icons.Outlined.Search,
                                     MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                    enabled = !deleting,
+                                    enabled = !updating,
                                     onClick = {
                                         preview = null
                                         if (searching) closeSearch() else {
