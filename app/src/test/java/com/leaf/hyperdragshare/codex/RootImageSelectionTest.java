@@ -22,6 +22,35 @@ import org.robolectric.shadows.ShadowAccessibilityWindowInfo;
 public final class RootImageSelectionTest {
     private final AccessibilityNodeClassifier classifier = new AccessibilityNodeClassifier(1f, 1080, 2400);
 
+    @Test public void singleRecordingLabelOnControlBlocksAutomaticPress() {
+        AccessibilityNodeSnapshot voice = node("android.widget.Button", "reader")
+                .text("按住 说话").clickable(true).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(voice), 30, 30, "reader"));
+    }
+
+    @Test public void recordingDescriptionAndClickableParentAreBothRecognized() {
+        AccessibilityNodeSnapshot control = node("android.view.ViewGroup", "reader")
+                .clickable(true).leaf(false).build();
+        AccessibilityNodeSnapshot label = node("android.widget.TextView", "reader")
+                .bounds(new Rect(20, 20, 200, 100)).contentDescription("Hold to talk").build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(control, label), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(control, label), 250, 150, "reader"));
+    }
+
+    @Test public void ordinaryTextAndUnrelatedRecordingControlsRemainReadable() {
+        AccessibilityNodeSnapshot paragraph = node("android.widget.TextView", "reader")
+                .text("按住说话，上滑取消是语音按钮的操作说明。").clickable(true).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(paragraph), 30, 30, "reader"));
+        AccessibilityNodeSnapshot quote = node("android.widget.TextView", "reader").text("按住说话").build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(quote), 30, 30, "reader"));
+        AccessibilityNodeSnapshot foreign = node("android.widget.Button", "other")
+                .text("按住说话").clickable(true).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(foreign), 30, 30, "reader"));
+        AccessibilityNodeSnapshot hidden = node("android.widget.Button", "reader")
+                .text("按住说话").clickable(true).visible(false).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(hidden), 30, 30, "reader"));
+    }
+
     @Test public void imageRequiresEnabledTypeAndExplicitImageNode() {
         AccessibilityNodeSnapshot image = node("android.widget.ImageView", "reader").build();
         assertTrue(select(image, List.of(), true, true).isImage());

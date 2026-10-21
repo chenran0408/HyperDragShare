@@ -270,11 +270,16 @@ public final class RootNodeCaptureMain {
         float density = (float) request.getDouble("density");
         AccessibilityNodeClassifier classifier = new AccessibilityNodeClassifier(
                 density, request.getInt("width"), request.getInt("height"));
-        if ((pressLookup || request.optBoolean("early_candidate", false)) && allowText) {
+        if (pressLookup || (request.optBoolean("early_candidate", false) && allowText)) {
             long started = SystemClock.uptimeMillis();
             List<AccessibilityNodeSnapshot> pointNodes = new ArrayList<>();
             List<Rect> pointPasswords = new ArrayList<>();
             traverse(root, 0, false, pointNodes, pointPasswords, started, true, x, y);
+            // Exclude before either text selection or the empty-region OCR path. A label
+            // alone may describe ordinary text; the node or its parent must be a control.
+            if (pressLookup && holdControlAtPoint(pointNodes, x, y, source)) {
+                return absent.put("reason", "excluded_hold_control");
+            }
             AccessibilityCandidateSelector.Selection point = selectContent(
                     classifier, pointNodes, pointPasswords, x, y, source, true, false);
             // Rich TextViews can have clickable-span children. Their whole subtree is checked
@@ -309,6 +314,31 @@ public final class RootNodeCaptureMain {
         }
         if (selection.isImage() ? !allowImages : !allowText) return absent.put("reason", "content_type_disabled");
         return contentResult(selection, source, snapshots.size());
+    }
+
+    static boolean holdControlAtPoint(List<AccessibilityNodeSnapshot> nodes, float x, float y, String source) {
+        for (AccessibilityNodeSnapshot label : nodes) {
+            if (!label.visible || !source.equals(label.packageName)
+                    || !label.bounds.contains((int) x, (int) y)
+                    || (!holdLabel(label.text) && !holdLabel(label.contentDescription))) continue;
+            for (AccessibilityNodeSnapshot control : nodes) {
+                if (control.visible && source.equals(control.packageName)
+                        && (control.clickable || control.longClickable)
+                        && control.bounds.contains(label.bounds)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean holdLabel(String text) {
+        if (text == null) return false;
+        return switch (text.replaceAll("\\s+", "").toLowerCase(java.util.Locale.ROOT)) {
+            case "按住说话", "按住录音", "按住发送", "松开发送", "松开结束录音", "松开取消",
+                    "上滑取消", "手指上滑取消发送", "松开转文字", "holdtotalk",
+                    "presstotalk", "holdtorecord", "releasetosend", "releasetocancel",
+                    "releasetostoprecording", "slideuptocancel" -> true;
+            default -> false;
+        };
     }
 
     private static JSONObject contentResult(AccessibilityCandidateSelector.Selection selection,

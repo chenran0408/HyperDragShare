@@ -1105,3 +1105,7 @@ PressCaptureSource共用一次Root读取、缓存、确认、接管和原页文�
 传送门5.1.5仅Hook私有scheduleStopSelfJob：按压开启时取消旧空闲计时器并阻止新计时，关闭或换来源恢复原生安排；系统onDestroy、用户禁用及进程终止仍清理。未Hook通用stopSelf/killProcess，未增加SystemUI作用域、周期拉起或猜测ROM分支。用户Hyper手势源码只读核对的是已有inputMonitor确认后pilfer的接管方式，没有面积通道；本实现仍由Root evdev独立决定手势结束。
 
 普通700ms路径仍可能晚于原App原生长按，接管不能撤回已经发生的菜单；缓存解决取错原文的问题，不承诺所有页面都无冲突。零面积可走普通路径，不能写成物理面积数据已恢复。完整手指触发、录音界面、原生菜单共存、空闲超过60秒及新托盘贴边手感尚未实测。
+
+## 1.7.148：按住入口补充
+
+RootNodeCaptureMain在按压点遍历后、文字与图片选择前排除明确的录音长按控件，含文字关闭但图片开启的路径；PressCaptureSource旧文本子串过滤与四秒冷却已删。每次DOWN确认一次仍由PressTriggerDetector保证。RootTouchSource不再因缺失尺寸轴记录触发失败。211项检查、Lint和构建通过；172已安装，Portal尚未重载，新完整手势未实测，详见设备记录。

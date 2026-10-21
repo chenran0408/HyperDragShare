@@ -17,7 +17,6 @@ import android.widget.Toast;
 
 import java.io.IOException;
 import java.util.LinkedHashSet;
-import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,7 +47,6 @@ final class PressCaptureSource {
     private float downX;
     private float downY;
     private Rect sourceDisplay;
-    private long lastTrigger;
 
     PressCaptureSource(Context context, RootTouchSource input, DragShareController controller,
                        DragShareSettings settings, BooleanSupplier hostAllowed) {
@@ -143,11 +141,6 @@ final class PressCaptureSource {
         }
         long now = SystemClock.uptimeMillis();
         if (!detector.fire(now)) return;
-        if (lastTrigger > 0L && now - lastTrigger < 4000L) {
-            cancelGesture();
-            return;
-        }
-        lastTrigger = now;
         DragShareLog.i(TAG, "press confirmed by duration/movement elapsedMs=" + (now - detector.downTime()));
         if (cached != null) display();
         else if (!lookupRunning) lookup();
@@ -182,10 +175,6 @@ final class PressCaptureSource {
                     lookupRunning = false;
                     if (content == null) {
                         if (detector.isFired()) showFailure("当前位置没有可读取的文字或安全识字区域");
-                        cancelGesture();
-                        return;
-                    }
-                    if (!content.isImage() && isHoldControlText(content.text)) {
                         cancelGesture();
                         return;
                     }
@@ -325,16 +314,6 @@ final class PressCaptureSource {
             DragShareLog.w(TAG, "press window request was not accepted");
             blocker.stop();
         }
-    }
-
-    private static boolean isHoldControlText(String text) {
-        String value = text.toLowerCase(Locale.ROOT);
-        int matches = 0;
-        for (String label : new String[]{"转文字", "松开", "上滑", "按住说话", "语音输入", "取消发送",
-                "录音中", "正在录音", "slide up", "release to", "recording"}) {
-            if (value.contains(label)) matches++;
-        }
-        return matches >= 2;
     }
 
     private static void recycle(CapturedContent content) {

@@ -29,21 +29,12 @@ final class RootTouchSource {
             "ABS_MT_POSITION_X\\s*:.*?max\\s+(\\d+)");
     private static final Pattern MAX_Y = Pattern.compile(
             "ABS_MT_POSITION_Y\\s*:.*?max\\s+(\\d+)");
-    private static final Pattern MAX_TOUCH_MAJOR = Pattern.compile(
-            "ABS_MT_TOUCH_MAJOR\\s*:.*?max\\s+(\\d+)");
-    private static final Pattern MAX_TOUCH_MINOR = Pattern.compile(
-            "ABS_MT_TOUCH_MINOR\\s*:.*?max\\s+(\\d+)");
-
-    private static final Pattern MAX_WIDTH_MAJOR = Pattern.compile(
-            "ABS_MT_WIDTH_MAJOR\\s*:.*?max\\s+(\\d+)");
-
     private final Context context;
     private final Listener listener;
     private final EvdevTouchParser parser;
 
     private volatile boolean running;
     private volatile boolean ready;
-    private volatile boolean hasContactSize;
     private volatile String failureReason;
     private volatile java.lang.Process process;
     private volatile InputStream inputStream;
@@ -51,8 +42,6 @@ final class RootTouchSource {
 
     private int rawMaxX;
     private int rawMaxY;
-    private int rawMaxTouchMajor;
-    private int rawMaxWidthMajor;
     private boolean firstEventLogged;
     private String discoveredDevices = "";
     private int rawEventsInFrame;
@@ -69,7 +58,6 @@ final class RootTouchSource {
             return;
         }
         ready = false;
-        hasContactSize = false;
         failureReason = null;
         running = true;
         firstEventLogged = false;
@@ -85,7 +73,6 @@ final class RootTouchSource {
     synchronized void stop() {
         running = false;
         ready = false;
-        hasContactSize = false;
         parser.cancel();
         closeQuietly(inputStream);
         inputStream = null;
@@ -103,10 +90,6 @@ final class RootTouchSource {
 
     boolean isReady() {
         return ready;
-    }
-
-    boolean hasContactSize() {
-        return hasContactSize;
     }
 
     String failureReason() {
@@ -140,13 +123,6 @@ final class RootTouchSource {
                         null);
                 return;
             }
-            rawMaxTouchMajor = ranges[2];
-            rawMaxWidthMajor = ranges[4];
-            hasContactSize = rawMaxTouchMajor > 0 || rawMaxWidthMajor > 0;
-            if (!hasContactSize) {
-                failureReason = "触摸设备未声明尺寸轴，按压使用普通触发时机。";
-            }
-
             InputStream stream = openDevice(devicePath);
             inputStream = stream;
             ready = true;
@@ -273,9 +249,6 @@ final class RootTouchSource {
         return new int[]{
                 parseMaximum(MAX_X, output),
                 parseMaximum(MAX_Y, output),
-                parseMaximum(MAX_TOUCH_MAJOR, output),
-                parseMaximum(MAX_TOUCH_MINOR, output),
-                parseMaximum(MAX_WIDTH_MAJOR, output),
         };
     }
 

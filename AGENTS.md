@@ -60,7 +60,7 @@
     仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
     `AicrCopyHooks` 和 `BackTapFrameworkHooks`；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
-14. 节点树只在一次明确请求后读取：无障碍长按超时、用户已启用按压入口且单指静止按住120ms后的分类、有效面积确认或用户主动点取。
+14. 节点树只在一次明确请求后读取：无障碍长按超时、用户已启用按压入口且单指静止按住120ms后的分类、按住时长确认或用户主动点取。
     按压分类按MI行为仅缓存本次内容，到确认时才接管并打开窗口；松手、移位或多指取消，不在空闲时读取。
     准备点取时只连接 Root，不提前遍历；不得在 `onAccessibilityEvent()` 中持续遍历、
     截图或记录文字。密码节点、锁屏、黑名单和无障碍覆盖层必须忽略，图片只截取所选节点区域。

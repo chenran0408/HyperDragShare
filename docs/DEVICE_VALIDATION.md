@@ -979,3 +979,13 @@ APK单类/DEX确认SwitchControlProvider根URI的query/getType直接返回null�
 公开发布已完成：仓库 https://github.com/chenran0408/HyperDragShare 为PUBLIC fork，parent为Leaf-lsgtky/HyperDragShare，默认分支hyperos4-adaptation。源码7427e6bfef2a8d2f1ab8cbc28fa111e3cca9bffb已由GitHub API核对与本地一致。开发预览v1.7.147-dev指向该提交，Release API确认prerelease=true、APK uploaded/126716392字节；服务器digest与本地777F66FC16DDFE7D1E83D1467C3FE610D343E046A892B09763D6169D9F6DFC80一致。下载见https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.147-dev 。
 
 最终公开树的219个文本文件token/appkey/device/path扫描无命中；可达历史1444个blob的凭据/私钥/生成文件规则无命中。扫描不涵盖被忽略的本机签名等目录，这些未上传。当前分支移除工作流，OAuth未增加权限，未声称云端CI通过；原工作流仍在本地/公开历史供后续维护参考。origin改为本账号fork，upstream保留原仓库；未向上游推送、创建PR或改其他仓库。
+
+## 2026-10-21：1.7.148 按住控件共存与连续取词
+
+取词前检查触点节点及可操作父级。明确的“按住说话”等短标签使本次自动按压退出，既不取按钮文字，也不落入无文字OCR；文字和图片开关均不绕开该检查。普通说明段落、不可操作的同名文字、异包或不可见节点不据标签排除。删除旧的“两项录音提示子串”判断，避免单个语音按钮漏过、普通说明文字误伤。取消四秒冷却，仍由检测器保证一次DOWN只确认一次，不新增操作或设置。
+
+移除已不参与触发的尺寸能力状态和“尺寸轴缺失”错误；保留原始事件解析，不把它当面积识别。Root reader生命周期只读审查发现stop流关闭及旧线程finally归属风险，尚未修改或验证。此前孤立cat已经自行消失，不能只凭进程名认定归属或宣称泄漏已解决。
+
+build305失败为运行约五小时的Gradle JVM native malloc失败，不是已建立的产品断言失败。改用新单次daemon、max-workers=2、CICompilerCount=2后build306完整testDebugUnitTest/lintDebug/assembleDebug成功；211项测试0失败/0错误，Lint0错误/151警告/2提示。新增三项回归覆盖单个语音按钮、描述/父级、普通正文及触点/来源/可见性限制。
+
+APK 1.7.148/172 SHA256 A0285A500FBA44133E228D7EE2755AC9D441B5E94D3460CC836C90CE206CBA2F；证书与已装开发版相同。单次adb install -r成功，PackageManager读回172/1.7.148。安装前Portal仍21130，未重载；不能据安装声称新Hook生效。用户正在使用手机，本轮没有点击、截图或制造样本；安装前后前台从文件管理器转为系统启动确认，未操作该确认页，不将前台变化归因于测试通过。实际evdev触发、录音按钮共存与连续取词仍未实测。
