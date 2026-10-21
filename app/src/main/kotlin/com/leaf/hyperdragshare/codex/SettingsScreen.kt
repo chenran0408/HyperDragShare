@@ -142,7 +142,6 @@ private sealed interface SettingsRoute : NavKey {
     data object BottomTargets : SettingsRoute
     data object HoneycombLayout : SettingsRoute
     data object HoneycombTargets : SettingsRoute
-    data object SideTargets : SettingsRoute
     data object Licenses : SettingsRoute
 }
 
@@ -174,7 +173,6 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
             backStack.add(when (group) {
                 "bottom" -> SettingsRoute.BottomTargets
                 "honeycomb" -> SettingsRoute.HoneycombTargets
-                "side" -> SettingsRoute.SideTargets
                 else -> error("Unknown gesture target group: $group")
             })
         }
@@ -224,11 +222,6 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                         com.leaf.hyperdragshare.gestures.config.ConfigStore(context)
                     }
                     GestureHoneycombLayout(store, onBack = {
-                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                    })
-                }
-                entry(SettingsRoute.SideTargets) {
-                    GestureTargetsContent(context, "side", onBack = {
                         if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
                     })
                 }
@@ -2149,6 +2142,7 @@ private fun querySettingsTargets(context: Context): List<ShareTarget> {
         ShareTarget.saveToLocal(ShareTargetRepository.loadSaveIcon(context)),
         ShareTarget.textSegmentation(ShareTargetRepository.loadTextSegmentationIcon(context)),
         ShareTarget.imageOcr(ShareTargetRepository.loadTextSegmentationIcon(context)),
+        ShareTarget.qrScan(ShareTargetRepository.loadQrScanIcon(context)),
     )
 }
 
@@ -2217,6 +2211,7 @@ private fun targetSummary(target: ShareTarget): String {
         target.isSaveToLocal() -> "仅在图片分享菜单中显示"
         target.isTextSegmentation() -> "仅在文字分享菜单中显示"
         target.isImageOcr() -> "识别图片文字后进入分词，仅在图片菜单中显示"
+        target.isQrScan() -> "直接从图片解出二维码内容，仅在图片菜单中显示"
         else -> {
         target.component?.let { component ->
             component.className
@@ -2237,6 +2232,7 @@ private fun TargetIcon(
         || target.isSaveToLocal()
         || target.isTextSegmentation()
         || target.isImageOcr()
+        || target.isQrScan()
     val targetSizePx = with(LocalDensity.current) {
         size.roundToPx().coerceAtLeast(1)
     }

@@ -29,7 +29,6 @@ public final class ConfigStore {
             "honeycomb_background_v3_migrated";
     private static final String[] DEFAULT_BOTTOM_PACKAGES = {"com.ss.android.article.news", "tv.danmaku.bili", "com.twitter.android", "nu.gpu.nagram", "com.tencent.mm", "com.ss.android.yumme.video", "com.xingin.xhs", "com.xunmeng.pinduoduo", "com.miui.calculator", "com.android.purebilibili", "com.zhiliaoapp.musically", "com.tencent.mobileqq", "com.tencent.tmgp.sgame"};
     private static final String[] DEFAULT_HONEYCOMB_PACKAGES = {"com.trim.app", "com.ss.android.ugc.aweme", "com.taobao.idlefish", "tv.danmaku.bili", "com.autonavi.minimap", "com.ss.android.yumme.video", "com.ss.android.article.news", "com.jingdong.app.mall", "com.coolapk.market", "com.xunmeng.pinduoduo", "com.taobao.taobao", "com.tencent.tmgp.sgame", "com.tencent.mm", "com.miui.calculator", "com.miui.gallery", "com.xingin.xhs", "com.eg.android.AlipayGphone", "com.android.purebilibili", "com.openai.chatgpt", "com.android.chrome", "com.anthropic.claude", "com.deepseek.chat", "ai.x.grok", "nu.gpu.nagram", "com.tencent.mobileqq", "com.tencent.androidqqmail", "com.android.vending", "com.zhiliaoapp.musically", "com.twitter.android"};
-    private static final String[] DEFAULT_SIDE_PACKAGES = {"com.didjdk.adbhelper", "com.lemon.lv", "com.ccb.longjiLife", "com.xhey.xcamera", "com.ss.android.article.news", "com.jingdong.app.mall", "com.coolapk.market", "com.quark.clouddrive", "com.android.contacts"};
     private final Context context;
     private final SharedPreferences preferences;
     private final Handler uiHandler;
@@ -191,40 +190,6 @@ public final class ConfigStore {
             preferences.edit().putString(ConfigContract.KEY_HONEYCOMB_POSITIONS, positions.serialize()).apply();
         }
         notifyChanged();
-    }
-
-    public List<AppTarget> getSideTargets() {
-        ArrayList<AppTarget> result = new ArrayList<>();
-        try {
-            JSONArray array = new JSONArray(preferences.getString(
-                    ConfigContract.KEY_SIDE_COMPONENTS, "[]"));
-            for (int i = 0; i < Math.min(ConfigContract.MAX_SIDE_MAX_TARGETS,
-                    array.length()); i++) {
-                AppTarget target = AppTarget.fromJson(array.optJSONObject(i));
-                if (target != null && (target.isShortcut() || target.componentName() != null)
-                        && !result.contains(target)) {
-                    result.add(target);
-                }
-            }
-        } catch (Exception ignored) { }
-        return result;
-    }
-
-    public void setSideTargets(List<AppTarget> targets) {
-        JSONArray array = new JSONArray();
-        for (AppTarget target : targets) {
-            if (array.length() >= ConfigContract.MAX_SIDE_MAX_TARGETS) break;
-            if (target != null && (target.isShortcut() || target.componentName() != null)) {
-                array.put(target.toJson());
-            }
-        }
-        preferences.edit().putString(ConfigContract.KEY_SIDE_COMPONENTS,
-                array.toString()).apply();
-        notifyChanged();
-    }
-
-    public void copyHoneycombTargetsToSide() {
-        setSideTargets(getHoneycombTargets());
     }
 
     public void resetHoneycombTuning() {
@@ -759,10 +724,6 @@ public final class ConfigStore {
         resetTargets(ConfigContract.KEY_COMPONENTS, DEFAULT_BOTTOM_PACKAGES, true);
     }
 
-    public void resetSideTargets() {
-        resetTargets(ConfigContract.KEY_SIDE_COMPONENTS, DEFAULT_SIDE_PACKAGES, false);
-    }
-
     public void resetHoneycombTargets() {
         resetTargets(ConfigContract.KEY_HONEYCOMB_COMPONENTS,
                 DEFAULT_HONEYCOMB_PACKAGES, false);
@@ -1171,17 +1132,14 @@ public final class ConfigStore {
     static void seedDefaultsIfNeeded(Context context, SharedPreferences preferences) {
         boolean needBottom = !preferences.contains(ConfigContract.KEY_COMPONENTS);
         boolean needHoneycomb = !preferences.contains(ConfigContract.KEY_HONEYCOMB_COMPONENTS);
-        boolean needSide = !preferences.contains(ConfigContract.KEY_SIDE_COMPONENTS);
         boolean needBottomCorners = !preferences.contains(ConfigContract.KEY_BOTTOM_LEFT_ENABLED)
                 || !preferences.contains(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED);
-        if (!needBottom && !needHoneycomb && !needSide && !needBottomCorners) return;
+        if (!needBottom && !needHoneycomb && !needBottomCorners) return;
         MissingPreferenceEditor editor = MissingPreferenceEditor.edit(preferences);
         if (needBottom) editor.putString(ConfigContract.KEY_COMPONENTS,
                 randomInstalledTargets(context, ConfigContract.DEFAULT_FAN_MAX_TARGETS).toString());
         if (needHoneycomb) editor.putString(ConfigContract.KEY_HONEYCOMB_COMPONENTS,
                 randomInstalledTargets(context, ConfigContract.DEFAULT_HONEYCOMB_MAX_TARGETS).toString());
-        if (needSide) editor.putString(ConfigContract.KEY_SIDE_COMPONENTS,
-                randomInstalledTargets(context, ConfigContract.DEFAULT_SIDE_MAX_TARGETS).toString());
         editor.putBoolean(ConfigContract.KEY_BOTTOM_LEFT_ENABLED,
                         ConfigContract.DEFAULT_BOTTOM_LEFT_ENABLED)
                 .putBoolean(ConfigContract.KEY_BOTTOM_RIGHT_ENABLED,

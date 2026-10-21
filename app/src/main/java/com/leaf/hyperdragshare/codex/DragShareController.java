@@ -1526,6 +1526,19 @@ final class DragShareController {
             shareSession.cancelled = true;
             return;
         }
+        if (target.isQrScan()) {
+            try {
+                android.os.Bundle input = new android.os.Bundle();
+                input.putParcelable("image", shareSession.stagedUri);
+                context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                        ImageOcrOverlay.METHOD_QR_SCAN, null, input);
+            } catch (RuntimeException error) {
+                log("image QR window failed", error);
+                showToast("无法扫描图片二维码：" + error.getMessage());
+            }
+            shareSession.cancelled = true;
+            return;
+        }
         if (target.isStash()) {
             stashContent(shareSession.payload, shareSession.stagedUri);
             shareSession.cancelled = true;

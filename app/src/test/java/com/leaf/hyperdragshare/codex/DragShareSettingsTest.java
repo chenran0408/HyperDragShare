@@ -454,11 +454,12 @@ public final class DragShareSettingsTest {
         assertTrue(textTargets.get(0).isStash());
         assertTrue(textTargets.get(1).isCopyTextToClipboard());
         assertTrue(textTargets.get(2).isTextSegmentation());
-        assertEquals(4, imageTargets.size());
+        assertEquals(5, imageTargets.size());
         assertTrue(imageTargets.get(0).isStash());
         assertTrue(imageTargets.get(1).isCopyImageToClipboard());
         assertTrue(imageTargets.get(2).isSaveToLocal());
-        assertTrue(imageTargets.get(3).isImageOcr());
+        assertTrue(imageTargets.get(3).isQrScan());
+        assertTrue(imageTargets.get(4).isImageOcr());
     }
 
     @Test
@@ -474,10 +475,11 @@ public final class DragShareSettingsTest {
         List<ShareTarget> targets = ShareTargetRepository.applySettings(
                 null, java.util.Collections.emptyList(),
                 DragShareSettings.fromBundle(settings.toBundle()), true);
-        assertEquals(3, targets.size());
+        assertEquals(4, targets.size());
         assertTrue(targets.get(0).isStash());
         assertTrue(targets.get(1).isCopyImageToClipboard());
         assertTrue(targets.get(2).isSaveToLocal());
+        assertTrue(targets.get(3).isQrScan());
     }
 
     @Test
@@ -569,11 +571,12 @@ public final class DragShareSettingsTest {
         assertEquals(2, textTargets.size());
         assertTrue(textTargets.get(0).isStash());
         assertTrue(textTargets.get(1).isTextSegmentation());
-        assertEquals(4, imageTargets.size());
+        assertEquals(5, imageTargets.size());
         assertTrue(imageTargets.get(0).isStash());
         assertTrue(imageTargets.get(1).isCopyImageToClipboard());
         assertTrue(imageTargets.get(2).isSaveToLocal());
-        assertTrue(imageTargets.get(3).isImageOcr());
+        assertTrue(imageTargets.get(3).isQrScan());
+        assertTrue(imageTargets.get(4).isImageOcr());
         assertFalse(DragShareSettings.fromBundle(settings.toBundle()).preloadTextSegmenter);
         assertFalse(DragShareSettings.fromBundle(settings.toBundle())
                 .isTargetVisible(DragShareSettings.TARGET_COPY_TEXT));

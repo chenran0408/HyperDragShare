@@ -45,6 +45,7 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 /** Image decoding and recognition stay in the module; no Activity is started. */
 object ImageOcrOverlay {
     const val METHOD_RECOGNIZE = "recognize_image_window"
+    const val METHOD_QR_SCAN = "qr_scan_image_window"
     private val main = Handler(Looper.getMainLooper())
     private var active: Job? = null
 

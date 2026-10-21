@@ -85,7 +85,7 @@ internal fun SettingsHomePage(
                             SettingsNavigationPreference(module.title,
                                 when (module) {
                                     SettingModule.PORTAL -> "取词识字、分词、拖拽分享与中转站"
-                                    SettingModule.GESTURES -> "底角、侧滑、蜂巢与任务切换"
+                                    SettingModule.GESTURES -> "底角、蜂巢与小窗启动方式"
                                     SettingModule.FREEFORM -> "启动、窗体尺寸、位置与窗外操作"
                                     SettingModule.COPY_DIRECT -> "复制卡片、识别动作与目标应用"
                                     else -> error("Unexpected home module")

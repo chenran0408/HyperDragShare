@@ -129,6 +129,10 @@ final class ShareTargetRepository {
             visible.put(DragShareSettings.TARGET_IMAGE_OCR,
                     ShareTarget.imageOcr(loadTextSegmentationIcon(context)));
         }
+        if (imagePayload && effective.isTargetVisible(DragShareSettings.TARGET_QR_SCAN)) {
+            visible.put(DragShareSettings.TARGET_QR_SCAN,
+                    ShareTarget.qrScan(loadQrScanIcon(context)));
+        }
         if (queried != null) {
             for (ShareTarget target : queried) {
                 if (target == null || target.key() == null
@@ -150,6 +154,10 @@ final class ShareTargetRepository {
             ShareTarget save = visible.remove(DragShareSettings.TARGET_SAVE_LOCAL);
             if (save != null) {
                 result.add(save);
+            }
+            ShareTarget qrScan = visible.remove(DragShareSettings.TARGET_QR_SCAN);
+            if (qrScan != null) {
+                result.add(qrScan);
             }
         } else {
             ShareTarget textSegmentation = visible.remove(
@@ -208,6 +216,10 @@ final class ShareTargetRepository {
         return loadBuiltInIcon(context, R.drawable.ic_text_segment);
     }
 
+    static Drawable loadQrScanIcon(Context context) {
+        return loadBuiltInIcon(context, R.drawable.ic_qr_scan);
+    }
+
     /** Returns a visually consistent icon for every menu and settings surface. */
     static Drawable iconForDisplay(ShareTarget target) {
         if (target == null) {
@@ -219,7 +231,7 @@ final class ShareTargetRepository {
         if (target.isSaveToLocal()) {
             return new SaveTargetIconDrawable(target.icon, BUILT_IN_ACTION_TILE_COLOR);
         }
-        if (target.isTextSegmentation() || target.isImageOcr()) {
+        if (target.isTextSegmentation() || target.isImageOcr() || target.isQrScan()) {
             return new TextSegmentationTargetIconDrawable(
                     target.icon,
                     BUILT_IN_ACTION_TILE_COLOR);

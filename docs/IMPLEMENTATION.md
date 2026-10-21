@@ -1266,3 +1266,11 @@ Stash标题压成单行；统一44dp点击区/22dp图形，正常态不放底部
 二维码从文字面板移除。`TextSegmentationActivity`不再接收或转存OCR来源图片，`BigBangOverlayLauncher`与`BigBangPanelSession`也不再有文字二维码接口。图片识字预览的`ImageOcrOverlay.startQr`继续使用当前原图，按钮说明为“扫描此图二维码”；实现没有新增扫码页面、相机、Provider或Hook作用域。该路径要求来源窗口仍在，关闭图片预览会同步关闭扫码窗。
 
 本轮构建和真机最小界面的证据见`DEVICE_VALIDATION.md`。真机验证了显式合成文字的主栏、按需URL直达图标和页面启动；未点击外部链接，真实图片二维码和物理手指操作未重测。
+
+## 189 图片按压进入拖拽预览
+
+微信无节点页面继续使用专用路径：Root helper 从已核验的 `ocr_region` 产生 Bitmap，Portal 直接把 Bitmap 交给 AICR V2，并把结果回填已经打开的分词浮窗。这条路径不暂存图片，也不先显示图片识字窗口。
+
+其他应用的图片按压结果不再固定调用 `ImageOcrOverlay.METHOD_RECOGNIZE`。`PressCaptureSource.openImage()` 在通过窗口、应用名单和游戏避让检查后，把同一 `CapturedContent` 交给 `DragShareController.show()`；当前 Root DOWN 继续驱动预览和边缘菜单，松手由既有分享逻辑完成。图片识字和扫码是图片菜单动作，因此长按截图、系统页面生成的二维码等没有原始 `ACTION_DRAG` 接口的内容也能先取得图片再拖出。
+
+该改动没有新增 Activity、窗口或设置入口，也没有改变微信直达路径、中转站数据格式或 AICR 协议。系统窗口仍先经过 WMS 身份、可见区域、遮挡和安全标志检查；检查失败保持原应用行为。

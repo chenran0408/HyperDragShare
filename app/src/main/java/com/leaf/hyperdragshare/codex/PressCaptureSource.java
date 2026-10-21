@@ -2,7 +2,6 @@ package com.leaf.hyperdragshare.codex;
 
 import android.app.KeyguardManager;
 import android.content.Context;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -270,36 +269,8 @@ final class PressCaptureSource {
             openWeChatOcrDirect(request, content);
             return;
         }
-        ImageStagingClient.stage(context, content.bitmap, new ImageStagingClient.Callback() {
-            @Override public void onStaged(Uri uri) {
-                recycle(content);
-                main.post(() -> {
-                    if (request != generation || !allowed()) return;
-                    Bundle image = new Bundle();
-                    image.putParcelable("image", uri);
-                    image.putLong("press_confirmed_at", confirmedAt);
-                    try {
-                        Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
-                                ImageOcrOverlay.METHOD_RECOGNIZE, null, image);
-                        completeHandoff(result, request);
-                    } catch (SecurityException | IllegalStateException error) {
-                        DragShareLog.w(TAG, "cannot open press image window", error);
-                        showFailure("无法打开图片识字：" + error.getMessage());
-                        blocker.stopAsync();
-                    }
-                });
-            }
-            @Override public void onFailure(Throwable error) {
-                recycle(content);
-                DragShareLog.w(TAG, "cannot stage press image", error);
-                main.post(() -> {
-                    if (request == generation && !stopped) {
-                        showFailure("无法暂存识字图片：" + error.getMessage());
-                        blocker.stopAsync();
-                    }
-                });
-            }
-        });
+        DragShareLog.i(TAG, "image press handed to drag menu source=" + content.sourcePackage);
+        controller.show(content, downX, downY, settings);
     }
 
     private void openWeChatOcrDirect(long request, CapturedContent content) {

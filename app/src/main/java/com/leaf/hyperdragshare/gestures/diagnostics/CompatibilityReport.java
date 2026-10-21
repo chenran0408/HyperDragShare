@@ -100,7 +100,6 @@ public final class CompatibilityReport {
                     + ": " + error.getMessage());
         }
         line(out, "bottom_target_count=" + store.getTargets().size());
-        line(out, "side_target_count=" + store.getSideTargets().size());
         line(out, "honeycomb_target_count=" + store.getHoneycombTargets().size());
         return out.toString();
     }

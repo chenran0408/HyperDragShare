@@ -66,8 +66,6 @@ internal fun gestureSettingEntries(
         val result = mutableListOf<String>()
         if (currentModule == SettingModule.GESTURES) result += C.KEY_ENABLED
         when {
-            key.startsWith("side_task_") -> result += C.KEY_SIDE_GESTURE_ENABLED
-            key.startsWith("side_") && key != C.KEY_SIDE_GESTURE_ENABLED -> result += C.KEY_SIDE_GESTURE_ENABLED
             key.startsWith("honeycomb_") && key != C.KEY_HONEYCOMB_ENABLED -> result += C.KEY_HONEYCOMB_ENABLED
             key == C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED -> {
                 result += C.KEY_BOTTOM_PORTRAIT_ENABLED
@@ -115,8 +113,6 @@ internal fun gestureSettingEntries(
                     result += C.KEY_FAN_ANIMATIONS_ENABLED
                 key.startsWith("fan_") && key != C.KEY_FAN_ANIMATIONS_ENABLED && key != C.KEY_FAN_SHADOW ->
                     result += C.KEY_FAN_ANIMATIONS_ENABLED
-                key.startsWith("side_") && key != C.KEY_SIDE_ANIMATIONS_ENABLED ->
-                    result += C.KEY_SIDE_ANIMATIONS_ENABLED
             }
         }
         return result.distinct()
@@ -124,7 +120,6 @@ internal fun gestureSettingEntries(
 
     fun dependencyDefault(key: String): Boolean = when (key) {
         C.KEY_ENABLED -> C.DEFAULT_ENABLED
-        C.KEY_SIDE_GESTURE_ENABLED -> C.DEFAULT_SIDE_GESTURE_ENABLED
         C.KEY_HONEYCOMB_ENABLED -> C.DEFAULT_HONEYCOMB_ENABLED
         C.KEY_BOTTOM_PORTRAIT_ENABLED -> C.DEFAULT_BOTTOM_PORTRAIT_ENABLED
         C.KEY_BOTTOM_LANDSCAPE_ENABLED -> C.DEFAULT_BOTTOM_LANDSCAPE_ENABLED
@@ -135,7 +130,6 @@ internal fun gestureSettingEntries(
         C.KEY_CUSTOM_WINDOW_LANDSCAPE_ENABLED -> C.DEFAULT_CUSTOM_WINDOW_LANDSCAPE_ENABLED
         C.KEY_OUTSIDE_ENABLED -> C.DEFAULT_OUTSIDE_ENABLED
         C.KEY_FAN_ANIMATIONS_ENABLED -> C.DEFAULT_FAN_ANIMATIONS_ENABLED
-        C.KEY_SIDE_ANIMATIONS_ENABLED -> C.DEFAULT_SIDE_ANIMATIONS_ENABLED
         else -> false
     }
 
@@ -143,7 +137,6 @@ internal fun gestureSettingEntries(
         ?.joinToString("、") { key ->
             when (key) {
                 C.KEY_ENABLED -> "启用手势总开关"
-                C.KEY_SIDE_GESTURE_ENABLED -> "启用侧滑手势"
                 C.KEY_HONEYCOMB_ENABLED -> "启用蜂巢"
                 C.KEY_BOTTOM_PORTRAIT_ENABLED -> "竖屏底角手势"
                 C.KEY_BOTTOM_LANDSCAPE_ENABLED -> "横屏底角手势"
@@ -154,7 +147,6 @@ internal fun gestureSettingEntries(
                 C.KEY_CUSTOM_WINDOW_LANDSCAPE_ENABLED -> "启用横屏自定义尺寸"
                 C.KEY_OUTSIDE_ENABLED -> "启用窗外点击"
                 C.KEY_FAN_ANIMATIONS_ENABLED -> "启用扇形动效"
-                C.KEY_SIDE_ANIMATIONS_ENABLED -> "启用侧滑动效"
                 else -> key
             }
         }?.let { "需先启用：$it" }
@@ -165,9 +157,7 @@ internal fun gestureSettingEntries(
             group.contains("底角") || group.contains("扇形") || group == "高级设置" ||
                 title.contains("扇形") || summary.contains("扇形") || title.contains("底角") -> append(" 扇形 底角 上滑 角落")
             group.contains("蜂巢") || title.contains("蜂巢") || summary.contains("蜂巢") -> append(" 蜂巢 蜂窝 网格")
-            group.contains("侧滑") -> append(" 侧滑 边缘 侧边")
             group.contains("小窗") || group.contains("窗体") -> append(" 悬浮窗 小窗 窗口")
-            group.contains("任务") -> append(" 最近任务 任务中心 切换")
         }
     }
 
@@ -298,30 +288,8 @@ internal fun gestureSettingEntries(
     slider("内排数量", C.KEY_FAN_CUSTOM_INNER_COUNT, C.MIN_FAN_CUSTOM_ROW_COUNT, C.MAX_FAN_CUSTOM_INNER_COUNT, " 个")
     slider("中排数量", C.KEY_FAN_CUSTOM_MIDDLE_COUNT, C.MIN_FAN_CUSTOM_ROW_COUNT, C.MAX_FAN_CUSTOM_MIDDLE_COUNT, " 个")
     slider("外排数量", C.KEY_FAN_CUSTOM_OUTER_COUNT, C.MIN_FAN_CUSTOM_ROW_COUNT, C.MAX_FAN_CUSTOM_OUTER_COUNT, " 个")
-    currentGroup = "侧滑触发"
-    bool("启用侧滑手势", "侧边向内长滑打开目标", C.KEY_SIDE_GESTURE_ENABLED, C.DEFAULT_SIDE_GESTURE_ENABLED)
-    bool("竖屏侧滑", "启用竖屏侧滑", C.KEY_SIDE_PORTRAIT_ENABLED, C.DEFAULT_SIDE_PORTRAIT_ENABLED)
-    bool("横屏侧滑", "启用横屏侧滑", C.KEY_SIDE_LANDSCAPE_ENABLED, C.DEFAULT_SIDE_LANDSCAPE_ENABLED)
-    bool("横向向内", "允许水平长滑", C.KEY_SIDE_DIRECTION_HORIZONTAL, C.DEFAULT_SIDE_DIRECTION_HORIZONTAL)
-    bool("斜向上", "允许向内斜上长滑", C.KEY_SIDE_DIRECTION_UP, C.DEFAULT_SIDE_DIRECTION_UP)
-    bool("斜向下", "允许向内斜下长滑", C.KEY_SIDE_DIRECTION_DOWN, C.DEFAULT_SIDE_DIRECTION_DOWN)
-    slider("顶部安全距离", C.KEY_SIDE_TOP_SAFE_MARGIN_PERCENT, 8, 35, "%")
-    slider("侧滑距离", C.KEY_SIDE_TRIGGER_PERCENT, C.MIN_SIDE_TRIGGER_PERCENT, C.MAX_SIDE_TRIGGER_PERCENT, "%")
-    slider("反向取消距离", C.KEY_SIDE_REVERSE_CANCEL_PERCENT, C.MIN_SIDE_REVERSE_CANCEL_PERCENT, C.MAX_SIDE_REVERSE_CANCEL_PERCENT, "%")
-    bool("侧滑停留触发", "达到距离后停住才打开列表", C.KEY_SIDE_HOLD_ENABLED, C.DEFAULT_SIDE_HOLD_ENABLED)
-    slider("侧滑停留时间", C.KEY_SIDE_HOLD_DELAY_MS, C.MIN_SIDE_HOLD_DELAY_MS, C.MAX_SIDE_HOLD_DELAY_MS, " ms")
-    bool("跟随手指", "列表位置随手指移动", C.KEY_SIDE_FOLLOW_FINGER, C.DEFAULT_SIDE_FOLLOW_FINGER)
-    bool("侧滑打开蜂巢布局", "侧滑目标使用蜂巢排列", C.KEY_SIDE_FOLLOW_HONEYCOMB, C.DEFAULT_SIDE_FOLLOW_HONEYCOMB)
-    slider("侧滑应用上限", C.KEY_SIDE_MAX_TARGETS, C.MIN_SIDE_MAX_TARGETS, C.MAX_SIDE_MAX_TARGETS, " 个")
-    slider("侧滑图标大小", C.KEY_SIDE_ICON_SIZE_DP, 34, 64, " dp")
-    slider("侧滑环形大小", C.KEY_SIDE_RING_SIZE_PERCENT, C.MIN_SIDE_RING_SIZE_PERCENT, C.MAX_SIDE_RING_SIZE_PERCENT, "%")
-    currentGroup = "动作与目标"
-    chooser("竖屏侧滑启动方式", listOf("小窗", "全屏"), C.KEY_SIDE_PORTRAIT_FULLSCREEN, 0, booleanValue = true)
-    chooser("横屏侧滑启动方式", listOf("小窗", "全屏"), C.KEY_SIDE_LANDSCAPE_FULLSCREEN, 0, booleanValue = true)
-    chooser("竖屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂巢", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_PORTRAIT_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
-    chooser("横屏侧滑布局", listOf("纵向列表", "环形", "扇形", "蜂巢", "Hyper任务中心", "HyperOS 系统任务中心"), C.KEY_SIDE_LANDSCAPE_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
     currentGroup = "蜂巢布局"
-    bool("启用蜂巢", "底角第二段或侧滑布局使用", C.KEY_HONEYCOMB_ENABLED, C.DEFAULT_HONEYCOMB_ENABLED)
+    bool("启用蜂巢", "底角第二段使用", C.KEY_HONEYCOMB_ENABLED, C.DEFAULT_HONEYCOMB_ENABLED)
     bool("横屏蜂巢", "允许横屏打开蜂巢", C.KEY_HONEYCOMB_LANDSCAPE_ENABLED, C.DEFAULT_HONEYCOMB_LANDSCAPE_ENABLED)
     chooser("操作方式", listOf("浏览模式", "按住滑选"), C.KEY_HONEYCOMB_MODE, C.DEFAULT_HONEYCOMB_MODE)
     bool("空白处点击关闭", "点击蜂巢空白区域时收起", C.KEY_HONEYCOMB_EMPTY_TAP_CLOSE, C.DEFAULT_HONEYCOMB_EMPTY_TAP_CLOSE)
@@ -346,22 +314,6 @@ internal fun gestureSettingEntries(
     slider("边缘缩小", C.KEY_HONEYCOMB_EDGE_SCALE, C.MIN_HONEYCOMB_EDGE_SCALE, C.MAX_HONEYCOMB_EDGE_SCALE, "%")
     slider("选中放大", C.KEY_HONEYCOMB_SELECTION_SCALE, C.MIN_HONEYCOMB_SELECTION_SCALE, C.MAX_HONEYCOMB_SELECTION_SCALE, "%")
     bool("中心展开系统动画", "展开时从屏幕中心缩放", C.KEY_HONEYCOMB_CENTERED_SYSTEM_ANIMATION, C.DEFAULT_HONEYCOMB_CENTERED_SYSTEM_ANIMATION)
-    currentGroup = "任务切换"
-    chooser("任务布局", listOf("横向卡片", "横向图标"), C.KEY_SIDE_TASK_LAYOUT_MODE, C.DEFAULT_SIDE_TASK_LAYOUT_MODE)
-    slider("任务数量上限", C.KEY_SIDE_TASK_MAX_COUNT, C.MIN_SIDE_TASK_MAX_COUNT, C.MAX_SIDE_TASK_MAX_COUNT, " 个")
-    slider("卡片宽度", C.KEY_SIDE_TASK_CARD_WIDTH_DP, C.MIN_SIDE_TASK_CARD_WIDTH_DP, C.MAX_SIDE_TASK_CARD_WIDTH_DP, " dp")
-    slider("卡片高度", C.KEY_SIDE_TASK_CARD_HEIGHT_DP, C.MIN_SIDE_TASK_CARD_HEIGHT_DP, C.MAX_SIDE_TASK_CARD_HEIGHT_DP, " dp")
-    slider("卡片圆角", C.KEY_SIDE_TASK_CARD_CORNER_DP, C.MIN_SIDE_TASK_CARD_CORNER_DP, C.MAX_SIDE_TASK_CARD_CORNER_DP, " dp")
-    slider("任务图标大小", C.KEY_SIDE_TASK_ICON_SIZE_DP, C.MIN_SIDE_TASK_ICON_SIZE_DP, C.MAX_SIDE_TASK_ICON_SIZE_DP, " dp")
-    slider("图标间距", C.KEY_SIDE_TASK_ICON_GAP_DP, C.MIN_SIDE_TASK_ICON_GAP_DP, C.MAX_SIDE_TASK_ICON_GAP_DP, " dp")
-    slider("手指偏移", C.KEY_SIDE_TASK_FINGER_OFFSET_DP, C.MIN_SIDE_TASK_FINGER_OFFSET_DP, C.MAX_SIDE_TASK_FINGER_OFFSET_DP, " dp")
-    bool("反向排列最近任务", "只反转图标顺序", C.KEY_SIDE_TASK_REVERSE_ORDER, C.DEFAULT_SIDE_TASK_REVERSE_ORDER)
-    bool("显示任务名称", "在任务预览中显示名称", C.KEY_SIDE_TASK_SHOW_NAME, C.DEFAULT_SIDE_TASK_SHOW_NAME)
-    bool("扩大下移容错", "放宽向下拖动命中范围", C.KEY_SIDE_TASK_EXTENDED_DOWNWARD_TOLERANCE, C.DEFAULT_SIDE_TASK_EXTENDED_DOWNWARD_TOLERANCE)
-    chooser("任务切换动效", listOf("苹果流畅 · 轻吸附、近似 1:1 跟手", "磁吸轨道 · 吸入、上浮与短回弹", "弹珠磁场 · 明显吸附与连带波动"), C.KEY_SIDE_TASK_MOTION_MODE, C.DEFAULT_SIDE_TASK_MOTION_MODE)
-    slider("任务拖动速度", C.KEY_SIDE_TASK_SWIPE_SPEED_PERCENT, C.MIN_SIDE_TASK_SWIPE_SPEED_PERCENT, C.MAX_SIDE_TASK_SWIPE_SPEED_PERCENT, "", speedMultiplier = true)
-    chooser("整体动画速度", listOf("很快", "较快", "标准", "柔和", "慢速"), C.KEY_SIDE_TASK_ANIMATION_SPEED, C.DEFAULT_SIDE_TASK_ANIMATION_SPEED)
-    bool("隐藏系统任务中心清除键", "竖屏任务中心遮住清除键；横屏不生效", C.KEY_HIDE_SYSTEM_RECENTS_CLEAR, C.DEFAULT_HIDE_SYSTEM_RECENTS_CLEAR)
     currentGroup = "布局动效"
     bool("底角扇形动效", "图标呼出、选择放大并回弹", C.KEY_FAN_ANIMATIONS_ENABLED, C.DEFAULT_FAN_ANIMATIONS_ENABLED)
     bool("扇形背景阴影", "呼出时显示扇形区域的渐变暗影", C.KEY_FAN_SHADOW, C.DEFAULT_FAN_SHADOW)
@@ -371,12 +323,6 @@ internal fun gestureSettingEntries(
     slider("扇形图标旋转幅度", C.KEY_FAN_ROTATION_DEGREES, C.MIN_FAN_ROTATION_DEGREES, C.MAX_FAN_ROTATION_DEGREES, "°")
     slider("扇形应用选择放大", C.KEY_FAN_SELECTION_SCALE_PERCENT, C.MIN_FAN_SELECTION_SCALE_PERCENT, C.MAX_FAN_SELECTION_SCALE_PERCENT, "%")
     bool("扇形应用选择蓝色圈", "显示选中应用的圆圈反馈", C.KEY_FAN_SELECTION_RING, C.DEFAULT_FAN_SELECTION_RING)
-    bool("侧滑动效", "侧滑图标呼出并在选择时回弹", C.KEY_SIDE_ANIMATIONS_ENABLED, C.DEFAULT_SIDE_ANIMATIONS_ENABLED)
-    slider("侧滑动画速度", C.KEY_SIDE_ANIMATION_SPEED, C.MIN_FAN_ANIMATION_SPEED, C.MAX_FAN_ANIMATION_SPEED, "%")
-    slider("侧滑图标呼出幅度", C.KEY_SIDE_REVEAL_AMOUNT, C.MIN_FAN_REVEAL_AMOUNT, C.MAX_FAN_REVEAL_AMOUNT, "%")
-    slider("侧滑图标旋转幅度", C.KEY_SIDE_ROTATION_DEGREES, C.MIN_FAN_ROTATION_DEGREES, C.MAX_FAN_ROTATION_DEGREES, "°")
-    slider("侧滑应用选择放大", C.KEY_SIDE_SELECTION_SCALE_PERCENT, C.MIN_FAN_SELECTION_SCALE_PERCENT, C.MAX_FAN_SELECTION_SCALE_PERCENT, "%")
-    bool("侧滑应用选择蓝色圈", "显示选中应用的圆圈反馈", C.KEY_SIDE_SELECTION_RING, C.DEFAULT_SIDE_SELECTION_RING)
     currentModule = SettingModule.FREEFORM
     currentGroup = "启动行为"
     bool("启用自定义窗体尺寸", "控制竖屏与横屏小窗", C.KEY_CUSTOM_WINDOW_BOUNDS_ENABLED, C.DEFAULT_CUSTOM_WINDOW_BOUNDS_ENABLED)
@@ -406,7 +352,6 @@ internal fun gestureSettingEntries(
     currentModule = SettingModule.GESTURES
     currentGroup = "动作与目标"
     targetAction("bottom_targets", "底角应用与快捷方式", "选择底角扇形可打开的应用和快捷方式", "bottom")
-    targetAction("side_targets", "侧滑应用与快捷方式", "选择侧滑可打开的应用和快捷方式", "side")
     targetAction("honeycomb_targets", "蜂巢应用与快捷方式", "选择蜂巢可打开的应用和快捷方式", "honeycomb")
     addUtilityEntries()
     return entries

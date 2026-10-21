@@ -1335,3 +1335,11 @@ build375共404项单测0失败/错误/跳过；修复Lint缩进后build376的lin
 - R8回归：首次加入动态直达状态后，显式分词页在选词摘要首帧崩溃。R8 stack映射到`BigBangPanelSession.updateSelectionSummary()`；根因是在分词结果尚未生成时，Java正文返回空值并赋给Kotlin非空状态。改为显式`.orEmpty()`后重新构建、签名和安装，合成URL面板正常显示，最近日志无本模块FATAL EXCEPTION。没有添加重试或吞异常。
 - 二维码：文字分词不再携带OCR来源图片，也不展示二维码入口；图片识字预览仍保留原图二维码扫描。本轮未重跑真实二维码图片，不能称为实机扫码通过。
 - Hook边界：安装没有重载Portal/SystemUI/AICR或系统框架；显式分词Activity由新安装包加载，但运行中的旧Hook不能据安装本身认定更新。测试未读取、搜索或发送私人页面内容，未修改中转站条目。
+
+## 189 图片按压到拖拽预览 / 2026-10-22
+
+- 用户当前停在 `com.android.settings/.wifi.WifiShareFloatingActivity`。188 日志已确认 Root 取词从该页面返回 `kind=image`，但旧路径直接打开图片识字；这不是安全窗口拒绝，也不能再描述为“无法取得图片”。
+- 189 将非微信图片按压结果交给 `DragShareController.show()`，复用既有预览、四边菜单、中转站、复制、保存、图片识字和扫码动作。微信 `com.tencent.mm` 的 `ocr_region` 直达 OCR 分支保持不变。
+- `testDebugUnitTest lintDebug assembleRelease` 成功：406 tests、0 failed/error/skipped；Lint 0 errors/188 warnings/2 hints；R8、资源压缩及 arm64-only 均确认。
+- 安装 `1.7.189/213`，设备 `base.apk` SHA256 与交付 APK 同为 `1DA13F528CB29188E75661988D04BDB9D7C557F730AB73C80B9AFD64461C9C29`。Portal PID 9040 已加载，Root input ready 218ms，press reader ready 531ms。
+- 未使用 ADB 注入代替真实按压。当前页面的真实物理拖拽和落点到目标应用尚未验收；测试没有保留含 WLAN 密码的截图，也未提交用户页面内容。

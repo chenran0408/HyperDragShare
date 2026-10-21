@@ -87,6 +87,16 @@ final class ShareTarget {
                 true);
     }
 
+    static ShareTarget qrScan(Drawable icon) {
+        return new ShareTarget(
+                null,
+                "扫码",
+                icon,
+                DragShareSettings.TARGET_QR_SCAN,
+                "builtin",
+                true);
+    }
+
     static ShareTarget stash(Drawable icon) {
         return new ShareTarget(null, "中转站", icon, DragShareSettings.TARGET_STASH, "builtin", true);
     }
@@ -129,5 +139,9 @@ final class ShareTarget {
 
     boolean isImageOcr() {
         return builtIn && DragShareSettings.TARGET_IMAGE_OCR.equals(key);
+    }
+
+    boolean isQrScan() {
+        return builtIn && DragShareSettings.TARGET_QR_SCAN.equals(key);
     }
 }

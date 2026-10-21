@@ -944,17 +944,8 @@ final class FanRuntime {
                     x, y, width, height, hotWidth, hotHeight);
             GestureGeometry.Corner downCorner = config.bottomEnabledFor(landscape)
                     && config.bottomCornerEnabled(cornerAtDown) ? cornerAtDown : null;
-            float sideSafeTop = sideSafeTop(height);
-            float sideSafeBottom = sideSafeBottom(height, hotHeight);
             GestureGeometry.Corner systemEdgeSide = downCorner == null
                     ? GestureGeometry.sideAt(x, width, systemSides.left, systemSides.right) : null;
-            int sideLayoutMode = config.sideLayoutModeFor(landscape);
-            boolean sideSourceAvailable = sideLayoutMode == ConfigContract.SIDE_LAYOUT_TASKS || sideLayoutMode == ConfigContract.SIDE_LAYOUT_SYSTEM_RECENTS || (sideLayoutMode == ConfigContract.SIDE_LAYOUT_HONEYCOMB ? config.honeycombEnabledFor(landscape) && !honeycombTargets.isEmpty() : !sideTargets.isEmpty());
-            GestureGeometry.Corner listSide = config.sideEnabledFor(landscape)
-                    && sideSourceAvailable && downCorner == null
-                    ? GestureGeometry.sideAt(x, y, width, systemSides.left, systemSides.right,
-                            sideSafeTop, sideSafeBottom, 96 * density) : null;
-            GestureGeometry.Corner downSide = listSide;
             if (!inputSources.usesNativeInput() && !triggerCapture.isCapturing() && canStartBottom()) {
                 triggerCapture.update(true, config.bottomLeftEnabled, config.bottomRightEnabled,
                         config.hotWidthPercent, config.hotHeightPercent, 0, 0);
@@ -975,38 +966,10 @@ final class FanRuntime {
             }
             boolean outsideTracked = tracked != null && !insideTrackedOrIme(x, y, tracked, ime);
             boolean imeActive = imeVisible || ime != null;
-            if (imeActive || freeformActive)
-                downSide = null;
             if (outsideEnabled && outsideTracked && imeActive) {
                 imeDismissTap = true;
                 if (systemEdgeSide == null)
                     pilfer(inputMonitor);
-            }
-            if (outsideEnabled && outsideTracked && systemEdgeSide != null && canStartSide()) {
-                Insets reserves = sideGestureReserves();
-                outsideGestures.onDown(x, y, tracked, width, reserves.left, reserves.right, event.getEventTime());
-                sideTapIsOutsideWindow = true;
-                sideSequenceCaptured = false;
-                sideListAllowed = !imeActive && !freeformActive && listSide != null;
-                armSide(systemEdgeSide, x, y, event.getDownTime(), event.getEventTime());
-                Log.i("Captured outside side sequence side=" + systemEdgeSide + " list=" + sideListAllowed);
-                return;
-            }
-            if (downSide != null && canStartSide()) {
-                if (outsideTracked) {
-                    Insets reserves = sideGestureReserves();
-                    outsideGestures.onDown(x, y, tracked, width, reserves.left, reserves.right, event.getEventTime());
-                    sideTapIsOutsideWindow = true;
-                } else {
-                    outsideGestures.onCancel();
-                }
-                // This path is used on the normal desktop/app surface where no
-                // freeform window is being tracked. The side source was already
-                // validated when downSide was calculated, so the list is allowed.
-                sideListAllowed = listSide != null;
-                armSide(downSide, x, y, event.getDownTime(), event.getEventTime());
-                Log.i("Side-distance gesture armed side=" + downSide + " threshold=" + config.sideTriggerPercent + "% range=" + Math.round(sideSafeTop) + ".." + Math.round(sideSafeBottom));
-                return;
             }
             if (tracked != null) {
                 if (!outsideTracked)
@@ -1880,16 +1843,6 @@ final class FanRuntime {
                 && (config.bottomLeftEnabled || config.bottomRightEnabled);
     }
 
-    private boolean canStartSide() {
-        if (!runtimeReady() || !config.sideEnabledFor(isLandscape()))
-            return false;
-        int sideLayoutMode = currentSideLayoutMode();
-        if (sideLayoutMode == ConfigContract.SIDE_LAYOUT_TASKS || sideLayoutMode == ConfigContract.SIDE_LAYOUT_SYSTEM_RECENTS) {
-            return true;
-        }
-        return sideLayoutMode == ConfigContract.SIDE_LAYOUT_HONEYCOMB ? config.honeycombEnabledFor(isLandscape()) && !honeycombTargets.isEmpty() : !sideTargets.isEmpty();
-    }
-
     private int currentSideLayoutMode() {
         return config.sideLayoutModeFor(isLandscape());
     }
@@ -2354,7 +2307,6 @@ final class FanRuntime {
             GestureConfig next = GestureConfig.from(bundle);
             ArrayList<RuntimeTarget> resolved = new ArrayList<>();
             ArrayList<RuntimeTarget> resolvedHoneycomb = new ArrayList<>();
-            ArrayList<RuntimeTarget> resolvedSide = new ArrayList<>();
             PackageManager packageManager = context.getPackageManager();
             Map<String, RuntimeTarget> targetCache = new HashMap<>();
             for (GestureConfig.TargetSpec target : next.targets) {
@@ -2375,27 +2327,14 @@ final class FanRuntime {
                     Log.e("Configured honeycomb target is unavailable", error);
                 }
             }
-            for (GestureConfig.TargetSpec target : next.sideTargets) {
-                try {
-                    RuntimeTarget runtimeTarget = resolveTarget(packageManager, target, targetCache);
-                    if (runtimeTarget != null)
-                        resolvedSide.add(runtimeTarget);
-                } catch (Throwable error) {
-                    Log.e("Configured side target is unavailable", error);
-                }
-            }
             if (resolved.size() > next.fanMaxTargets) {
                 resolved.subList(next.fanMaxTargets, resolved.size()).clear();
             }
             if (resolvedHoneycomb.size() > next.honeycombMaxTargets) {
                 resolvedHoneycomb.subList(next.honeycombMaxTargets, resolvedHoneycomb.size()).clear();
             }
-            if (resolvedSide.size() > next.sideMaxTargets) {
-                resolvedSide.subList(next.sideMaxTargets, resolvedSide.size()).clear();
-            }
             List<RuntimeTarget> nextTargets = Collections.unmodifiableList(resolved);
             List<RuntimeTarget> nextHoneycombTargets = Collections.unmodifiableList(resolvedHoneycomb);
-            List<RuntimeTarget> nextSideTargets = Collections.unmodifiableList(resolvedSide);
             configRetryCount = 0;
             configRetryScheduled = false;
             mainHandler.post(() -> {
@@ -2410,7 +2349,6 @@ final class FanRuntime {
                 outsideGestures.setDoubleTapTimeout(next.outsideTapWindowMs);
                 targets = nextTargets;
                 honeycombTargets = nextHoneycombTargets;
-                sideTargets = nextSideTargets;
                 if (activeTargets.isEmpty())
                     activeTargets = nextTargets;
                 freeform.updateConfig(next);
@@ -2421,7 +2359,7 @@ final class FanRuntime {
                     resetFan();
                 refreshTriggerCapture();
                 refreshOutsideCapture();
-                Log.i("Configuration loaded targets=" + nextTargets.size() + " trigger=" + next.triggerPercent + "% selection=" + next.selectionRadiusPercent + "% hot=" + next.hotWidthPercent + "x" + next.hotHeightPercent + "% icon=" + next.iconSizeDp + "dp side=" + next.sideGestureEnabled + "@" + next.sideTriggerPercent + "% sideHold=" + next.sideHoldEnabled + "@" + next.sideHoldDelayMs + "ms" + " sideIcon=" + next.sideIconSizeDp + "dp safeTop=" + next.sideTopSafeMarginPercent + "% names=" + next.showSelectedAppName + " follow=" + next.sideFollowFinger + " layout=" + next.sidePortraitLayoutMode + "/" + next.sideLandscapeLayoutMode + " ringSize=" + next.sideRingSizePercent + "%" + " wheel=" + next.sideWheelMode + " reverseCancel=" + next.sideReverseCancelPercent + "% animation=" + next.fanAnimationsEnabled + "@" + next.fanAnimationSpeed + "% reveal=" + next.fanRevealAmount + "% rotation=" + next.fanRotationDegrees + "deg ring=" + next.fanSelectionRing + " circularIcons=" + next.forceCircularIcons + " honeycomb=" + next.honeycombEnabled + "/" + nextHoneycombTargets.size() + " mode=" + next.honeycombMode + " bottomFullscreen=" + next.bottomPortraitFullscreen + "/" + next.bottomLandscapeFullscreen + " sideFullscreen=" + next.sidePortraitFullscreen + "/" + next.sideLandscapeFullscreen + " bottomFreeform=" + next.bottomPortraitHoneycombFreeform + "/" + next.bottomLandscapeHoneycombFreeform + " blankSettle=" + next.bottomHoneycombSettleMs + "ms returnToFan=" + next.triggerPercent + "% outsideTap=" + next.outsideTapWindowMs + "ms outside=" + next.outsidePortraitEnabled + "/" + next.outsideLandscapeEnabled + " honeycombFollow=" + next.honeycombFollowFinger);
+                Log.i("Configuration loaded targets=" + nextTargets.size() + " trigger=" + next.triggerPercent + "% selection=" + next.selectionRadiusPercent + "% hot=" + next.hotWidthPercent + "x" + next.hotHeightPercent + "% icon=" + next.iconSizeDp + "dp animation=" + next.fanAnimationsEnabled + "@" + next.fanAnimationSpeed + "% reveal=" + next.fanRevealAmount + "% rotation=" + next.fanRotationDegrees + "deg ring=" + next.fanSelectionRing + " circularIcons=" + next.forceCircularIcons + " honeycomb=" + next.honeycombEnabled + "/" + nextHoneycombTargets.size() + " mode=" + next.honeycombMode + " bottomFullscreen=" + next.bottomPortraitFullscreen + "/" + next.bottomLandscapeFullscreen + " bottomFreeform=" + next.bottomPortraitHoneycombFreeform + "/" + next.bottomLandscapeHoneycombFreeform + " blankSettle=" + next.bottomHoneycombSettleMs + "ms returnToFan=" + next.triggerPercent + "% outsideTap=" + next.outsideTapWindowMs + "ms outside=" + next.outsidePortraitEnabled + "/" + next.outsideLandscapeEnabled + " honeycombFollow=" + next.honeycombFollowFinger);
             });
         } catch (Throwable error) {
             Log.e("Cannot read module configuration", error);

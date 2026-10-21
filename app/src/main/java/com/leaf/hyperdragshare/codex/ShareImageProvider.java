@@ -87,6 +87,20 @@ public final class ShareImageProvider extends ContentProvider {
                 Binder.restoreCallingIdentity(identity);
             }
         }
+        if (ImageOcrOverlay.METHOD_QR_SCAN.equals(method)) {
+            enforcePortalCaller();
+            Uri uri = extras == null ? null : extras.getParcelable("image", Uri.class);
+            if (uri == null) throw new IllegalArgumentException("缺少扫码图片");
+            resolveFile(uri);
+            long identity = Binder.clearCallingIdentity();
+            try {
+                Bundle result = new Bundle();
+                result.putBoolean("accepted", ImageOcrOverlay.startQr(contextOrThrow(), uri, null));
+                return result;
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
         if (BigBangOverlayLauncher.METHOD_OPEN.equals(method)) {
             enforcePortalCaller();
             long identity = Binder.clearCallingIdentity();

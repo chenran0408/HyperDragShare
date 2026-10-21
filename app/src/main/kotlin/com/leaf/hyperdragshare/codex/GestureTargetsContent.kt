@@ -126,11 +126,10 @@ fun GestureTargetsContent(
     var showPicker by remember(group) { mutableStateOf(false) }
     var showResetDialog by remember(group) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val validGroup = remember(group) { group in setOf("bottom", "honeycomb", "side") }
+    val validGroup = remember(group) { group in setOf("bottom", "honeycomb") }
     val pageTitle = when (group) {
         "bottom" -> "底部扇形"
         "honeycomb" -> "蜂巢目标"
-        "side" -> "侧滑目标"
         else -> "手势目标"
     }
     val moreEntry = remember {
@@ -321,7 +320,7 @@ fun GestureTargetsContent(
                 summary = "这会用当前设备可用的预设应用替换${when (group) {
                     "bottom" -> "底部扇形"
                     "honeycomb" -> "蜂巢"
-                    else -> "侧滑"
+                    else -> "当前手势"
                 }}清单，当前排序和快捷方式会被覆盖。",
                 onDismissRequest = { showResetDialog = false },
             ) {
@@ -341,7 +340,6 @@ fun GestureTargetsContent(
                                     val configStore = store ?: return@withContext null
                                     when (group) {
                                         "honeycomb" -> configStore.resetHoneycombTargets()
-                                        "side" -> configStore.resetSideTargets()
                                         else -> configStore.resetBottomTargets()
                                     }
                                     val newTargets = readTargets(configStore, group)
@@ -736,7 +734,6 @@ private fun isSystemApp(info: ApplicationInfo?): Boolean = info != null &&
 
 private fun readTargets(store: ConfigStore, group: String): List<AppTarget> = when (group) {
     "honeycomb" -> store.honeycombTargets
-    "side" -> store.sideTargets
     else -> store.targets
 }
 
@@ -745,8 +742,6 @@ private fun maximumFor(store: ConfigStore, group: String): Int {
     return when (group) {
         "honeycomb" -> prefs.getInt(ConfigContract.KEY_HONEYCOMB_MAX_TARGETS,
             ConfigContract.DEFAULT_HONEYCOMB_MAX_TARGETS)
-        "side" -> prefs.getInt(ConfigContract.KEY_SIDE_MAX_TARGETS,
-            ConfigContract.DEFAULT_SIDE_MAX_TARGETS)
         else -> prefs.getInt(ConfigContract.KEY_FAN_MAX_TARGETS,
             ConfigContract.DEFAULT_FAN_MAX_TARGETS)
     }
@@ -762,7 +757,6 @@ private fun saveTargets(
     val configStore = store ?: return
     when (group) {
         "honeycomb" -> configStore.setHoneycombTargets(targets)
-        "side" -> configStore.setSideTargets(targets)
         else -> configStore.setTargets(targets)
     }
     onDataChanged(pageData?.copy(rows = mergeRows(pageData.rows, targets)))
