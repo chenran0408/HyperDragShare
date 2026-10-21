@@ -1,5 +1,9 @@
 # 目标设备验证记录
 
+## 2026-10-22：1.7.183 微信按住识字直达分词面板（候选包）
+
+`testDebugUnitTest lintDebug assembleDebug assembleRelease` 均通过。Release采用R8与arm64-v8a，签名及apksigner校验通过，候选APK为`outputs/HyperDragShare-1.7.183-arm64-v8a.apk`（7,446,367 bytes）。本次尚未安装，亦未操作微信页面；Portal运行中的Hook仍不是183，因此微信长按、识别与窗口延迟未实测。预期日志为 `WeChat OCR direct start`、`WeChat OCR finished elapsedMs=... characters=...` 和 `WeChat OCR result delivered to existing panel`，日志不含识别文本。安装/热重载后由用户实际长按验收，再依据日志确认AICR是否直达和时间变化。
+
 继续工作前先阅读本文件与 MIBIGBANG_MIGRATION_PLAN.md。代码与设备现状优先于历史计划；未执行的行为不得标成通过。
 
 ## 当前设备与安装

@@ -96,6 +96,24 @@ public final class ShareImageProvider extends ContentProvider {
                 Binder.restoreCallingIdentity(identity);
             }
         }
+        if (BigBangOverlayLauncher.METHOD_COMPLETE_OCR.equals(method)) {
+            enforcePortalCaller();
+            long identity = Binder.clearCallingIdentity();
+            try {
+                return BigBangOverlayLauncher.completeOcr(extras);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
+        if (BigBangOverlayLauncher.METHOD_ABORT_OCR.equals(method)) {
+            enforcePortalCaller();
+            long identity = Binder.clearCallingIdentity();
+            try {
+                return BigBangOverlayLauncher.abortOcr(extras);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
         if (StashClient.METHOD_PUT.equals(method)) {
             enforcePortalCaller();
             return putInStash(extras);

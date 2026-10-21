@@ -113,6 +113,7 @@ final class RootNodeCaptureClient {
             Rect bounds;
             int windowId;
             boolean image;
+            boolean pressOcrRegion;
             try {
                 JSONObject request = new JSONObject().put("x", x).put("y", y)
                         .put("density", metrics.density).put("width", expectedWidth)
@@ -162,6 +163,7 @@ final class RootNodeCaptureClient {
                 String kind = result.getString("kind");
                 if (!"text".equals(kind) && !"image".equals(kind)
                         && !(pressLookup && "ocr_region".equals(kind))) throw new JSONException("Unknown node kind");
+                pressOcrRegion = pressLookup && "ocr_region".equals(kind);
                 image = !"text".equals(kind);
                 if (pressLookup && "ocr_region".equals(kind)) {
                     DragShareLog.i(TAG, "press capture source=" + source + " kind=ocr_region");
@@ -189,6 +191,7 @@ final class RootNodeCaptureClient {
             node.putInt("width", expectedWidth);
             node.putInt("height", expectedHeight);
             node.putBoolean("image", image);
+            node.putBoolean("press_ocr_region", pressOcrRegion);
             return node;
         }
 
@@ -336,6 +339,9 @@ final class RootNodeCaptureClient {
             }
             Bitmap image = Bitmap.createBitmap(screen, crop.left, crop.top, crop.width(), crop.height());
             if (image == screen) screen = null;
+            if (node.getBoolean("press_ocr_region")) {
+                return CapturedContent.pressOcrRegion(image, source, crop);
+            }
             return CapturedContent.image(image, source, crop, true);
         } finally {
             if (screen != null) screen.recycle();

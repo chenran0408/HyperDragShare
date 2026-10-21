@@ -1,5 +1,11 @@
 # 当前功能与验证状态
 
+## 183 微信按住识字直达分词浮窗（构建完成，设备待加载与实测）
+
+用户反馈微信长按比其他应用慢，且先打开独立“图片识字”窗口。根路径是微信安全窗口的 `ocr_region` 捕获结果被当成普通图片，先暂存图片，再经 Provider 打开图片识字浮窗；识别后又关闭该窗并新建分词浮窗。本版仅为 Root press 返回的 `ocr_region` 增加来源标记，直接把同一截图交给现有 AICR V2，并立即显示分词浮窗内的识别进度；识别文本填回同一个浮窗。普通图片识字路径不变，不按包名把所有图片改道。取消仍遵守 AICR 的 bitmap 生命周期：调用取消后等 Binder 识别回调再回收图片。
+
+Release R8/arm64构建及 `testDebugUnitTest lintDebug assembleDebug assembleRelease` 已通过，签名候选包已生成并由 apksigner 校验：`outputs/HyperDragShare-1.7.183-arm64-v8a.apk`，7,446,367 bytes。源码、构建均已完成；尚未安装，Portal Hook尚未加载本版，微信真实长按与延迟改善待用户设备验收。AICR阶段记录识别耗时与字符数，不记录聊天文本。此前日志中的语义查询约45–54ms、按住确认约250ms及首帧711/1211ms是历史观测；这些数字不能证明本次优化后的首帧或整条链路耗时。
+
 最新发布：**v1.7.179 正式版 / Latest**，源码tag指向 `87fd4957eff3d093f856a83d74bf7ed62288367b`。已上传arm64 R8 APK及SHA256文件，服务端APK大小7,429,983bytes、digest `88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb` 与本地一致。发布地址：https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.179 。下文“Latest仍176”是发布前历史状态，不再代表最新正式版；发布没有增加新的功能实测结论。
 
 ## 181 微信按住取词日志定位与修正（已安装，重载后待实测）

@@ -68,6 +68,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Search
@@ -126,6 +127,7 @@ internal fun BigBangOverlayContent(
     hasTextSelection: Boolean,
     allTextSelected: Boolean,
     isSegmenting: Boolean,
+    isRecognizing: Boolean,
     copyFeedback: String?,
     onClearSelection: () -> Unit,
     onMoreAction: (BigBangMoreAction) -> Unit,
@@ -152,6 +154,7 @@ internal fun BigBangOverlayContent(
     }
     // 52dp header + two 44dp action rows, their gap/padding, and the native body's 8dp.
     val naturalPanelHeight = (bodyHeightPx / density).dp + 168.dp +
+        (if (isRecognizing) 88.dp else 0.dp) +
         (if (copyFeedback == null) 0.dp else 24.dp) +
         (if (directVisible) 120.dp else 0.dp)
     val panelMetrics = if (maximumMetrics.fullScreen) maximumMetrics else maximumMetrics.copy(
@@ -302,7 +305,8 @@ internal fun BigBangOverlayContent(
                         center = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = if (isSegmenting) "正在分词…"
+                                    text = if (isRecognizing) "正在识别…"
+                                        else if (isSegmenting) "正在分词…"
                                         else if (hasTextSelection) "已选 $selectedCharacterCount / $totalCharacterCount"
                                         else "共 $totalCharacterCount 字符",
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -377,13 +381,26 @@ internal fun BigBangOverlayContent(
                             fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                     }
                     directContent()
-                    AndroidView(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .padding(bottom = 4.dp),
-                        factory = { contentView },
-                    )
+                    if (isRecognizing) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("正在识别微信文字…", color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 13.sp)
+                        }
+                    } else {
+                        AndroidView(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(bottom = 4.dp),
+                            factory = { contentView },
+                        )
+                    }
                 }
             }
         }

@@ -20,23 +20,58 @@ import android.widget.Toast
 /** Requests enter through the provider's module/portal UID check; UI stays in the module process. */
 object BigBangOverlayLauncher {
     const val METHOD_OPEN = "open_bigbang_window"
+    const val METHOD_COMPLETE_OCR = "complete_wechat_ocr"
+    const val METHOD_ABORT_OCR = "abort_wechat_ocr"
     private val main = Handler(Looper.getMainLooper())
     private var active: InteractiveOverlayWindow? = null
+    private var activeSession: BigBangPanelSession? = null
+    private var activePressId = -1L
+    private var activeTouchX = -1
+    private var activeTouchY = -1
     private var generation = 0L
 
     @JvmStatic fun request(context: Context, input: Bundle?): Bundle {
-        val text = input?.getString("text")
-        require(!text.isNullOrBlank()) { "没有可分词的文字" }
+        val args = requireNotNull(input) { "缺少分词窗口请求" }
+        val text = args.getString("text").orEmpty()
+        val ocrPending = args.getBoolean("ocr_pending")
+        require(ocrPending || text.isNotBlank()) { "没有可分词的文字" }
         check(Settings.canDrawOverlays(context)) { "请先在模块设置中允许悬浮窗权限" }
-        val x = input.getInt("x", -1)
-        val y = input.getInt("y", -1)
-        val sourceImage = input.getParcelable("source_image", Uri::class.java)
-        val before = input.getString("before_text")
-        val after = input.getString("after_text")
-        val pressConfirmedAt = input.getLong("press_confirmed_at")
-        val copyDirect = input.getBoolean("copy_direct_source")
+        val x = args.getInt("x", -1)
+        val y = args.getInt("y", -1)
+        val sourceImage = args.getParcelable("source_image", Uri::class.java)
+        val before = args.getString("before_text")
+        val after = args.getString("after_text")
+        val pressConfirmedAt = args.getLong("press_confirmed_at")
+        val copyDirect = args.getBoolean("copy_direct_source")
+        val pressId = args.getLong("press_id", -1L)
         main.post { open(context.applicationContext, text, x, y, sourceImage, before = before, after = after,
-            pressConfirmedAt = pressConfirmedAt, copyDirect = copyDirect) }
+            pressConfirmedAt = pressConfirmedAt, copyDirect = copyDirect, ocrPending = ocrPending,
+            pressId = pressId) }
+        return Bundle().apply { putBoolean("accepted", true) }
+    }
+
+    @JvmStatic fun completeOcr(input: Bundle?): Bundle {
+        val pressId = input?.getLong("press_id", -1L) ?: -1L
+        val text = input?.getString("text").orEmpty()
+        require(pressId >= 0L && text.isNotBlank()) { "微信识别结果无效" }
+        main.post {
+            val session = activeSession
+            if (activePressId != pressId || session == null) return@post
+            activePressId = -1L
+            DragShareLog.i("DragShare/Press", "WeChat OCR result delivered to existing panel characters=${text.length}")
+            session.open(text, activeTouchX, activeTouchY, null)
+        }
+        return Bundle().apply { putBoolean("accepted", true) }
+    }
+
+    @JvmStatic fun abortOcr(input: Bundle?): Bundle {
+        val pressId = input?.getLong("press_id", -1L) ?: -1L
+        main.post {
+            if (pressId >= 0L && activePressId == pressId) {
+                activePressId = -1L
+                active?.dismiss()
+            }
+        }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
@@ -56,7 +91,8 @@ object BigBangOverlayLauncher {
     }
 
     private fun open(app: Context, text: String, x: Int, y: Int, sourceImage: Uri?, savedState: Bundle? = null,
-        before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L, copyDirect: Boolean = false) {
+        before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L, copyDirect: Boolean = false,
+        ocrPending: Boolean = false, pressId: Long = -1L) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             return
@@ -144,15 +180,26 @@ object BigBangOverlayLauncher {
             onDismissed = {
                 session.close()
                 app.unregisterReceiver(screenOff)
-                if (active === overlay) active = null
+                if (active === overlay) {
+                    active = null
+                    activeSession = null
+                    activePressId = -1L
+                }
             },
             onFailure = { report(app, it) },
         ) { session.Content() }
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
+        activeSession = session
+        activePressId = if (ocrPending) pressId else -1L
+        activeTouchX = x
+        activeTouchY = y
         if (overlay.show(pressConfirmedAt)) {
-            session.open(text, x, y, sourceImage, savedState, before, after)
-            if (copyDirect) session.showDirectActions(text)
+            if (ocrPending) session.showOcrProgress(x, y)
+            else {
+                session.open(text, x, y, sourceImage, savedState, before, after)
+                if (copyDirect) session.showDirectActions(text)
+            }
         }
     }
 

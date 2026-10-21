@@ -18,6 +18,7 @@ final class CapturedContent {
     final String sourcePackage;
     final Rect sourceBounds;
     final boolean bitmapOwnedByDragShare;
+    final boolean pressOcrRegion;
 
     private CapturedContent(
             Kind kind,
@@ -26,6 +27,7 @@ final class CapturedContent {
             String sourcePackage,
             Rect sourceBounds,
             boolean bitmapOwnedByDragShare,
+            boolean pressOcrRegion,
             String beforeText,
             String afterText) {
         this.kind = kind;
@@ -36,6 +38,7 @@ final class CapturedContent {
         this.sourcePackage = sourcePackage;
         this.sourceBounds = sourceBounds == null ? null : new Rect(sourceBounds);
         this.bitmapOwnedByDragShare = bitmapOwnedByDragShare;
+        this.pressOcrRegion = pressOcrRegion;
     }
 
     static CapturedContent text(String value, String sourcePackage, Rect sourceBounds) {
@@ -47,7 +50,8 @@ final class CapturedContent {
         if (value == null || value.trim().isEmpty()) {
             return null;
         }
-        return new CapturedContent(Kind.TEXT, value, null, sourcePackage, sourceBounds, false, beforeText, afterText);
+        return new CapturedContent(Kind.TEXT, value, null, sourcePackage, sourceBounds,
+                false, false, beforeText, afterText);
     }
 
     static CapturedContent image(
@@ -65,8 +69,15 @@ final class CapturedContent {
                 sourcePackage,
                 sourceBounds,
                 bitmapOwnedByDragShare,
+                false,
                 null,
                 null);
+    }
+
+    static CapturedContent pressOcrRegion(Bitmap value, String sourcePackage, Rect sourceBounds) {
+        if (value == null || value.isRecycled()) return null;
+        return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
+                true, true, null, null);
     }
 
     boolean isImage() {

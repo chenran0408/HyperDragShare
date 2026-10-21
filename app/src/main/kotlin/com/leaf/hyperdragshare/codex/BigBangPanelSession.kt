@@ -69,6 +69,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
     private var isSegmenting by mutableStateOf(true)
+    private var isRecognizing by mutableStateOf(false)
     private var copying by mutableStateOf(false)
     private var copyFeedback by mutableStateOf<String?>(null)
     private var undoEditState by mutableStateOf<Bundle?>(null)
@@ -172,6 +173,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     hasTextSelection = hasTextSelection,
                     allTextSelected = boomChipPage?.mBoomActionHandler?.isAllSelected() == true,
                     isSegmenting = isSegmenting,
+                    isRecognizing = isRecognizing,
                     copyFeedback = copyFeedback,
                     onClearSelection = { boomChipPage?.handleClick() },
                     onMoreAction = ::handleMoreAction,
@@ -193,6 +195,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     fun open(text: String, touchX: Int, touchY: Int, sourceImage: Uri?, savedState: Bundle? = null,
         before: String? = null, after: String? = null) {
         check(!closed) { "Create a new panel session after close" }
+        isRecognizing = false
         directText = null
         requests.invalidate()
         undoEditState = savedState?.getBundle(UNDO_EDIT)
@@ -208,6 +211,14 @@ internal class BigBangPanelSession(private val context: Context, private val act
         if (savedText != null && savedSegments != null) handleSegmentResult(savedText, savedSegments)
         else segmentLocally(text)
         boomChipPage?.finishAdjacentPull()
+    }
+
+    fun showOcrProgress(touchX: Int, touchY: Int) {
+        check(!closed) { "Create a new panel session after close" }
+        isRecognizing = true
+        isSegmenting = true
+        launchTouchX = touchX
+        launchTouchY = touchY
     }
 
     private fun expandAdjacent(direction: String) {
@@ -332,6 +343,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         text: String,
         result: IntArray?,
     ) {
+        isRecognizing = false
         isSegmenting = false
         if (result == null || result.isEmpty()) {
             Toast.makeText(context, R.string.a_msg_no_words, Toast.LENGTH_SHORT).show()

@@ -34,6 +34,7 @@ final class PressCaptureSource {
     private final Runnable classify = this::classifyPress;
     private final Runnable fire = this::firePress;
     private volatile SharedRootNodeCapture.Connection nodeSession;
+    private AicrOcrClient.Request activeOcrRequest;
     private volatile long generation;
     private volatile boolean stopped;
     private volatile boolean pointerDown;
@@ -300,6 +301,10 @@ final class PressCaptureSource {
     }
 
     private void openImage(long request, CapturedContent content) {
+        if (content.pressOcrRegion && "com.tencent.mm".equals(content.sourcePackage)) {
+            openWeChatOcrDirect(request, content);
+            return;
+        }
         ImageStagingClient.stage(context, content.bitmap, new ImageStagingClient.Callback() {
             @Override public void onStaged(Uri uri) {
                 recycle(content);
@@ -332,6 +337,103 @@ final class PressCaptureSource {
         });
     }
 
+    private void openWeChatOcrDirect(long request, CapturedContent content) {
+        long pressId = SystemClock.elapsedRealtimeNanos();
+        Bundle pending = new Bundle();
+        pending.putBoolean("ocr_pending", true);
+        pending.putLong("press_id", pressId);
+        pending.putLong("press_confirmed_at", confirmedAt);
+        pending.putInt("x", Math.round(downX));
+        pending.putInt("y", Math.round(downY));
+        try {
+            Bundle result = context.getContentResolver().call(
+                    ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN, null, pending);
+            if (result == null || !result.getBoolean("accepted")) {
+                recycle(content);
+                blocker.stop();
+                showFailure("无法打开微信识字窗口");
+                return;
+            }
+            controller.handoffToPress(downTime);
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException error) {
+            recycle(content);
+            blocker.stop();
+            DragShareLog.w(TAG, "cannot open WeChat OCR panel", error);
+            showFailure("无法打开微信识字窗口：" + error.getMessage());
+            return;
+        }
+
+        long started = SystemClock.elapsedRealtime();
+        DragShareLog.i(TAG, "WeChat OCR direct start; image staging and intermediate window skipped");
+        activeOcrRequest = AicrOcrClient.recognize(context, content.bitmap, (text, error) -> {
+            if (!content.bitmap.isRecycled()) content.bitmap.recycle();
+            activeOcrRequest = null;
+            if (request != generation || stopped) {
+                abortWeChatOcrPanel(pressId);
+                return;
+            }
+            if (error != null) {
+                DragShareLog.w(TAG, "WeChat OCR direct failed", error);
+                abortWeChatOcrPanel(pressId);
+                showFailure("微信文字识别失败：" + error.getMessage());
+                blocker.stop();
+                return;
+            }
+            SharedRootNodeCapture.Connection session = nodeSession;
+            worker.execute(() -> {
+                try {
+                    boolean current = session != null && session.isCurrentSource(content.sourcePackage);
+                    main.post(() -> {
+                        if (request != generation || stopped || !current) {
+                            abortWeChatOcrPanel(pressId);
+                            blocker.stop();
+                            return;
+                        }
+                        Bundle recognized = new Bundle();
+                        recognized.putLong("press_id", pressId);
+                        recognized.putString("text", text);
+                        DragShareLog.i(TAG, "WeChat OCR finished elapsedMs="
+                                + (SystemClock.elapsedRealtime() - started)
+                                + " characters=" + text.length());
+                        try {
+                            Bundle update = context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                                    BigBangOverlayLauncher.METHOD_COMPLETE_OCR, null, recognized);
+                            if (update == null || !update.getBoolean("accepted")) {
+                                abortWeChatOcrPanel(pressId);
+                                showFailure("微信识别结果窗口已关闭");
+                            }
+                        } catch (SecurityException | IllegalStateException | IllegalArgumentException failure) {
+                            DragShareLog.w(TAG, "cannot update WeChat OCR panel", failure);
+                            abortWeChatOcrPanel(pressId);
+                            showFailure("无法显示微信识别结果：" + failure.getMessage());
+                        }
+                    });
+                } catch (IOException | InterruptedException failure) {
+                    if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+                    main.post(() -> {
+                        abortWeChatOcrPanel(pressId);
+                        if (request == generation && !stopped) {
+                            DragShareLog.w(TAG, "WeChat source changed before OCR result", failure);
+                            showFailure("微信页面已变化，请重新按压");
+                        }
+                        blocker.stop();
+                    });
+                }
+            });
+        });
+    }
+
+    private void abortWeChatOcrPanel(long pressId) {
+        Bundle request = new Bundle();
+        request.putLong("press_id", pressId);
+        try {
+            context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                    BigBangOverlayLauncher.METHOD_ABORT_OCR, null, request);
+        } catch (SecurityException | IllegalStateException error) {
+            DragShareLog.w(TAG, "cannot close WeChat OCR panel", error);
+        }
+    }
+
     private void completeHandoff(Bundle result) {
         if (result != null && result.getBoolean("accepted")) {
             controller.handoffToPress(downTime);
@@ -348,6 +450,10 @@ final class PressCaptureSource {
     void cancelGesture() {
         generation++;
         pointerDown = false;
+        if (activeOcrRequest != null) {
+            activeOcrRequest.cancel();
+            activeOcrRequest = null;
+        }
         main.removeCallbacks(classify);
         main.removeCallbacks(fire);
         detector.cancel();
