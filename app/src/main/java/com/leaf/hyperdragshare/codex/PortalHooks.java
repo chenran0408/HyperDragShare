@@ -44,6 +44,7 @@ final class PortalHooks {
     private static volatile RootTouchSource rootTouchSource;
     private static volatile PortalThumbCaptureSource thumbCaptureSource;
     private static float thumbThreshold;
+    private static float thumbWidthThreshold;
     private static volatile boolean rootAuthorityLogged;
     private static volatile boolean hostCancelIgnoredLogged;
     private static volatile boolean controlIgnoredLogged;
@@ -499,18 +500,22 @@ final class PortalHooks {
     private static void configureThumbCapture(Context context, DragShareSettings settings) {
         try {
             ThumbTriggerSettings thumb = ThumbTriggerSettings.readFromProvider(context);
-            if (thumbCaptureSource != null && thumb.enabled && thumb.calibrated
-                    && Float.compare(thumbThreshold, thumb.threshold) == 0) return;
+            if (thumbCaptureSource != null && thumb.enabled
+                    && Float.compare(thumbThreshold, thumb.threshold) == 0
+                    && Float.compare(thumbWidthThreshold, thumb.widthThreshold) == 0) return;
             PortalThumbCaptureSource previous = thumbCaptureSource;
             thumbCaptureSource = null;
             if (previous != null) previous.stop();
-            if (thumb.enabled && thumb.calibrated) {
+            if (thumb.enabled) {
                 thumbThreshold = thumb.threshold;
+                thumbWidthThreshold = thumb.widthThreshold;
                 thumbCaptureSource = new PortalThumbCaptureSource(
-                        context, rootTouchSource, controller, settings, thumb.threshold);
+                        context, rootTouchSource, controller, settings, thumb);
+                log("area trigger enabled touch=" + thumb.threshold
+                        + " width=" + thumb.widthThreshold + " custom=" + thumb.calibrated);
             }
         } catch (SecurityException | IllegalStateException error) {
-            log("cannot load calibrated area trigger settings", error);
+            log("cannot load area trigger settings", error);
         }
     }
 

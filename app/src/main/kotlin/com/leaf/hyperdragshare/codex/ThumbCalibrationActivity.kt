@@ -48,7 +48,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
     private var sourceHasContactSize by mutableStateOf(false)
     private var sourceFailure by mutableStateOf<String?>(null)
     private var sourceStartedAtMillis = 0L
-    private var sampleMessage by mutableStateOf("点“开始校准”，按提示采集指尖和拇指。")
+    private var sampleMessage by mutableStateOf("可先查看触摸数据，需要自定义门槛时再开始校准。")
     private var liveSize by mutableStateOf("—")
     private var validSizeSeen by mutableStateOf(false)
     private var frameworkSize by mutableStateOf("尚未触摸")
@@ -91,9 +91,6 @@ class ThumbCalibrationActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = !isDarkTheme
         }
         window.decorView.getLocationOnScreen(screenOrigin)
-        if (ThumbTriggerSettings.read(this).requiresRecalibration) {
-            sampleMessage = "接触尺寸采集方式已更新，旧阈值已停用，请重新校准指尖与拇指。"
-        }
         touchSource = RootTouchSource(this) { action, x, y, _, major, minor, widthMajor ->
             runOnUiThread { onRawContact(action, x, y, major, minor, widthMajor) }
         }
@@ -166,7 +163,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
     private fun startCalibration() {
         resetCalibration()
         if (!sourceHasContactSize) {
-            sampleMessage = sourceFailure ?: "当前触摸设备未提供接触面积数据，无法校准。"
+            sampleMessage = sourceFailure ?: "当前未提供接触尺寸，无需反复采集；默认触发也需要真实尺寸数据。"
             return
         }
         sampleMessage = "请在下方区域用指尖按压并松开，共 3 次。"
@@ -179,7 +176,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
         thumbSamples.clear()
         isCollectingThumb = false
         samplingEnabled = false
-        sampleMessage = "点“开始校准”，按提示采集指尖和拇指。"
+        sampleMessage = "可选校准：先用指尖在采样区按压并松开，共 3 次。"
         liveSize = "—"
         discardPress()
     }
@@ -225,7 +222,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
 
     private fun commitSample() {
         if (peakSize <= 0.0) {
-            sampleMessage = "本次没有收到有效接触尺寸，未计入样本。请查看下方 Android 触摸数据。"
+            sampleMessage = "未收到有效接触尺寸，无需反复采集。请查看下方触摸数据；没有真实尺寸不会触发。"
             return
         }
         val samples = if (isCollectingThumb) thumbSamples else fingertipSamples
@@ -245,7 +242,7 @@ class ThumbCalibrationActivity : ComponentActivity() {
             }
             ThumbTriggerSettings.saveCalibration(this, result.threshold.toFloat())
             samplingEnabled = false
-            sampleMessage = "校准成功：归一化阈值 %.3f（指尖最大 %.3f，拇指最小 %.3f）。".format(
+            sampleMessage = "自定义门槛已保存：%.3f（指尖最大 %.3f，拇指最小 %.3f），触发开关保持不变。".format(
                 result.threshold, result.fingertipMaximum, result.thumbMinimum,
             )
         } else {
@@ -288,7 +285,7 @@ private fun CalibrationPage(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = "拇指触发校准",
+                title = "触摸数据与校准",
                 navigationIcon = { TextButton(text = "返回", onClick = onBack) },
             )
         },
@@ -298,7 +295,7 @@ private fun CalibrationPage(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("用指尖和拇指分别按压三次，帮助区分日常触摸和大面积按压。完成后可在设置中开启触发。")
+            Text("默认门槛无需校准即可开启。这里可查看触摸输入，或分别采集指尖和拇指各三次来保存自定义门槛。无有效尺寸时无需反复采集；触发始终需要真实尺寸数据。")
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (sourceReady) "触摸读取：已连接" else "触摸读取：等待 Root 授权")

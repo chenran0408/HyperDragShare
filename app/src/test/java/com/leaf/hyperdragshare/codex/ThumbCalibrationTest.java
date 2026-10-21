@@ -41,4 +41,16 @@ public final class ThumbCalibrationTest {
         assertEquals(.8d, ThumbCalibration.contactSize(50, 100, 80, 100), .0001d);
         assertEquals(0d, ThumbCalibration.contactSize(50, 0, 80, -1), 0d);
     }
+
+    @Test public void defaultGatesKeepTouchAndWidthIndependentIncludingExactBoundary() {
+        assertTrue(ThumbCalibration.triggerLevel(30, 100, 0, 1000, .30f, .095f) >= 1d);
+        assertTrue(ThumbCalibration.triggerLevel(0, 100, 95, 1000, .30f, .095f) >= 1d);
+        assertTrue(ThumbCalibration.triggerLevel(29, 100, 94, 1000, .30f, .095f) < 1d);
+    }
+
+    @Test public void missingAxesNeverBecomeContactAndCustomGateKeepsCalibrationUnits() {
+        assertEquals(0d, ThumbCalibration.triggerLevel(0, 255, 0, 255, .30f, .095f), 0d);
+        assertEquals(0d, ThumbCalibration.triggerLevel(50, 0, 20, -1, .30f, .095f), 0d);
+        assertEquals(1d, ThumbCalibration.triggerLevel(0, 255, 40, 100, .4f, .4f), 0d);
+    }
 }

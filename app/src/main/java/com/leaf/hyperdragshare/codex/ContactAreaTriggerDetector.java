@@ -2,7 +2,7 @@ package com.leaf.hyperdragshare.codex;
 
 import android.view.MotionEvent;
 
-/** Detects a stationary contact whose normalized size stays above a calibrated threshold. */
+/** Detects a stationary contact whose normalized size stays above a positive threshold. */
 final class ContactAreaTriggerDetector {
     private final float threshold;
     private final float touchSlop;

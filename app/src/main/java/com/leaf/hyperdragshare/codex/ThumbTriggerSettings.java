@@ -7,6 +7,8 @@ import android.os.Bundle;
 
 /** Settings shared by the app and the injected process for the optional thumb trigger. */
 public final class ThumbTriggerSettings {
+    public static final float DEFAULT_TOUCH_THRESHOLD = .30f;
+    public static final float DEFAULT_WIDTH_THRESHOLD = .095f;
     private static final String PREFS_NAME = "drag_share_settings";
     private static final String KEY_ENABLED = "thumb_trigger_enabled";
     private static final String KEY_THRESHOLD = "thumb_trigger_threshold";
@@ -16,14 +18,14 @@ public final class ThumbTriggerSettings {
     public final boolean enabled;
     public final boolean calibrated;
     public final float threshold;
-    public final boolean requiresRecalibration;
+    public final float widthThreshold;
 
     private ThumbTriggerSettings(boolean enabled, boolean calibrated, float threshold,
-                                 boolean requiresRecalibration) {
+                                 float widthThreshold) {
         this.enabled = enabled;
         this.calibrated = calibrated;
         this.threshold = threshold;
-        this.requiresRecalibration = requiresRecalibration;
+        this.widthThreshold = widthThreshold;
     }
 
     public static ThumbTriggerSettings read(Context context) {
@@ -56,8 +58,9 @@ public final class ThumbTriggerSettings {
         boolean currentMetric = metricVersion == METRIC_VERSION;
         boolean calibrated = currentMetric && threshold > 0f && threshold <= 1f;
         return new ThumbTriggerSettings(
-                enabled && calibrated,
-                calibrated, calibrated ? threshold : 0f, threshold > 0f && !currentMetric);
+                enabled, calibrated,
+                calibrated ? threshold : DEFAULT_TOUCH_THRESHOLD,
+                calibrated ? threshold : DEFAULT_WIDTH_THRESHOLD);
     }
 
     public static void saveCalibration(Context context, float threshold) {
@@ -65,8 +68,7 @@ public final class ThumbTriggerSettings {
             throw new IllegalArgumentException("Calibration threshold must be in (0, 1]");
         }
         preferences(context).edit().putFloat(KEY_THRESHOLD, threshold)
-                .putInt(KEY_METRIC_VERSION, METRIC_VERSION)
-                .putBoolean(KEY_ENABLED, false).apply();
+                .putInt(KEY_METRIC_VERSION, METRIC_VERSION).apply();
         notifySettingsChanged(context);
     }
 

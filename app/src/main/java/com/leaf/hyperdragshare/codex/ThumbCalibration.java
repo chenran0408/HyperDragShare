@@ -24,11 +24,21 @@ public final class ThumbCalibration {
 
     public static double contactSize(int rawTouchMajor, int maxTouchMajor,
                                      int rawWidthMajor, int maxWidthMajor) {
-        double touch = rawTouchMajor > 0 && maxTouchMajor > 0
-                ? Math.min(1d, (double) rawTouchMajor / maxTouchMajor) : 0d;
-        double width = rawWidthMajor > 0 && maxWidthMajor > 0
-                ? Math.min(1d, (double) rawWidthMajor / maxWidthMajor) : 0d;
-        return Math.max(touch, width);
+        return Math.max(normalizedAxis(rawTouchMajor, maxTouchMajor),
+                normalizedAxis(rawWidthMajor, maxWidthMajor));
+    }
+
+    /** A level of one means either axis has reached its own positive area threshold. */
+    public static double triggerLevel(int rawTouchMajor, int maxTouchMajor,
+                                      int rawWidthMajor, int maxWidthMajor,
+                                      float touchThreshold, float widthThreshold) {
+        float touch = (float) normalizedAxis(rawTouchMajor, maxTouchMajor);
+        float width = (float) normalizedAxis(rawWidthMajor, maxWidthMajor);
+        return Math.max(touch / touchThreshold, width / widthThreshold);
+    }
+
+    private static double normalizedAxis(int value, int maximum) {
+        return value > 0 && maximum > 0 ? Math.min(1d, (double) value / maximum) : 0d;
     }
 
     private static boolean areValid(double[] samples) {

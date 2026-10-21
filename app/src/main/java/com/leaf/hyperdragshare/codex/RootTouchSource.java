@@ -357,6 +357,11 @@ final class RootTouchSource {
         return ThumbCalibration.contactSize(major, rawMaxTouchMajor, widthMajor, rawMaxWidthMajor);
     }
 
+    double contactTriggerLevel(int major, int widthMajor, ThumbTriggerSettings settings) {
+        return ThumbCalibration.triggerLevel(major, rawMaxTouchMajor, widthMajor, rawMaxWidthMajor,
+                settings.threshold, settings.widthThreshold);
+    }
+
     private void onRawFrame(int action, float rawX, float rawY, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
         if (rawMaxX <= 0 || rawMaxY <= 0) {
             return;

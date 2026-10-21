@@ -20,18 +20,20 @@ final class ThumbCaptureSource {
     private final ExecutorService worker;
     private final AccessibilityScreenshotter screenshotter;
     private final ContactAreaTriggerDetector detector;
+    private final ThumbTriggerSettings thumb;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final LatestRequest requests = new LatestRequest();
 
     ThumbCaptureSource(DragShareAccessibilityService service, RootTouchSource input,
                        ExecutorService worker, AccessibilityScreenshotter screenshotter,
-                       float threshold) {
+                       ThumbTriggerSettings thumb) {
         this.service = service;
         this.input = input;
         this.worker = worker;
         this.screenshotter = screenshotter;
+        this.thumb = thumb;
         detector = new ContactAreaTriggerDetector(
-                threshold, service.getResources().getDisplayMetrics().density * 16f, 180L);
+                1f, service.getResources().getDisplayMetrics().density * 16f, 180L);
     }
 
     void onPointerEvent(int action, float x, float y, long time, int major, int minor, int widthMajor) {
@@ -43,7 +45,7 @@ final class ThumbCaptureSource {
             return;
         }
         if (detector.onPointerEvent(action, x, y, time,
-                (float) input.normalizedContactSize(major, widthMajor))) {
+                (float) input.contactTriggerLevel(major, widthMajor, thumb))) {
             capture(x, y);
         } else if (action == MotionEvent.ACTION_CANCEL) {
             cancel();

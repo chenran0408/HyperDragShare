@@ -20,13 +20,14 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Optional calibrated area trigger in the Portal process; ordinary long presses are untouched. */
+/** Optional area trigger in the Portal process; ordinary long presses are untouched. */
 final class PortalThumbCaptureSource {
     private static final String TAG = "DragShare/ThumbRoot";
     private final Context context;
     private final RootTouchSource input;
     private final DragShareController controller;
     private final DragShareSettings settings;
+    private final ThumbTriggerSettings thumb;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final BackgroundTouchBlocker blocker;
@@ -42,13 +43,14 @@ final class PortalThumbCaptureSource {
     private long captureDeadline;
 
     PortalThumbCaptureSource(Context context, RootTouchSource input, DragShareController controller,
-                             DragShareSettings settings, float threshold) {
+                             DragShareSettings settings, ThumbTriggerSettings thumb) {
         this.context = context;
         this.input = input;
         this.controller = controller;
         this.settings = settings;
+        this.thumb = thumb;
         blocker = new BackgroundTouchBlocker(context);
-        detector = new ContactAreaTriggerDetector(threshold,
+        detector = new ContactAreaTriggerDetector(1f,
                 context.getResources().getDisplayMetrics().density * 16f, 180L);
         worker.execute(() -> {
             try {
@@ -90,7 +92,7 @@ final class PortalThumbCaptureSource {
             }
             boolean wasConfirmed = detector.isConfirmedContactValid();
             detector.onPointerEvent(action, px, py, time,
-                    (float) input.normalizedContactSize(major, width));
+                    (float) input.contactTriggerLevel(major, width, thumb));
             if (action == MotionEvent.ACTION_MOVE && wasConfirmed && !detector.isConfirmedContactValid()) {
                 // A late Root candidate must not take over a gesture the user has already moved away from.
                 generation++;

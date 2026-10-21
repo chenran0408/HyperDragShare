@@ -96,6 +96,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
     private ThumbCaptureSource thumbCaptureSource;
     private boolean runtimeThumbEnabled;
     private float runtimeThumbThreshold;
+    private float runtimeThumbWidthThreshold;
     private long allowThumbAfter;
 
     @Override
@@ -167,7 +168,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
 
     boolean isThumbCaptureAllowed() {
         ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
-        return thumb.enabled && thumb.calibrated && isNodeCaptureEnabled()
+        return thumb.enabled && isNodeCaptureEnabled()
                 && SystemClock.uptimeMillis() >= allowThumbAfter
                 && foregroundPackage != null
                 && !BuildConfig.APPLICATION_ID.equals(foregroundPackage)
@@ -315,8 +316,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
         runtimeLongPressTimeoutMillis = settings.accessibilityLongPressTimeoutMillis;
         runtimeRecognitionSensitivityPercent = settings.accessibilityRecognitionSensitivityPercent;
         ThumbTriggerSettings thumb = ThumbTriggerSettings.read(this);
-        runtimeThumbEnabled = thumb.enabled && thumb.calibrated;
+        runtimeThumbEnabled = thumb.enabled;
         runtimeThumbThreshold = thumb.threshold;
+        runtimeThumbWidthThreshold = thumb.widthThreshold;
         rootNotReadySince = 0L;
         rootRestartCount = 0;
         lastReportedRootReady = false;
@@ -355,7 +357,7 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                 screenshotter);
         if (runtimeThumbEnabled) {
             thumbCaptureSource = new ThumbCaptureSource(
-                    this, rootTouchSource, classifierExecutor, screenshotter, thumb.threshold);
+                    this, rootTouchSource, classifierExecutor, screenshotter, thumb);
         }
         rootTouchSource.start();
         mainHandler.removeCallbacks(rootReadyReporter);
@@ -586,8 +588,9 @@ public final class DragShareAccessibilityService extends AccessibilityService {
                         != runtimeLongPressTimeoutMillis
                         || settings.accessibilityRecognitionSensitivityPercent
                         != runtimeRecognitionSensitivityPercent
-                        || (thumb.enabled && thumb.calibrated) != runtimeThumbEnabled
-                        || Float.compare(thumb.threshold, runtimeThumbThreshold) != 0)) {
+                        || thumb.enabled != runtimeThumbEnabled
+                        || Float.compare(thumb.threshold, runtimeThumbThreshold) != 0
+                        || Float.compare(thumb.widthThreshold, runtimeThumbWidthThreshold) != 0)) {
                     stopRuntime();
                 }
                 applyMode();

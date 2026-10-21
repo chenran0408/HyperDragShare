@@ -74,20 +74,17 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
     SwitchPreference(
         title = "拇指面积触发",
         summary = when {
-            thumb.requiresRecalibration -> "采集方式已更新，请重新校准指尖与拇指"
-            !thumb.calibrated -> "先校准指尖与拇指的接触大小"
             portalMode && !portalInjected -> "请先重载传送门，让当前版本的设置生效"
             portalMode && !portalRootGranted -> "请先为传送门授予 Root 权限"
-            portalMode -> "由传送门读取 Root 接触尺寸，在当前页面打开分词"
-            !serviceEnabled -> "需要 Root 与无障碍服务；按压确认后松手打开分词或识字"
-            else -> "按压确认后松手打开分词或识字；启用后取代无障碍长按触发"
+            portalMode -> if (thumb.calibrated) "使用自定义面积门槛；真实接触尺寸达标后在当前页面分词或识字"
+                else "无需校准；真实接触尺寸达到默认门槛后，在当前页面分词或识字"
+            !serviceEnabled -> "无需校准即可开启；需要 Root 与无障碍服务，真实接触尺寸达标后触发"
+            else -> if (thumb.calibrated) "使用自定义面积门槛；启用后取代无障碍长按触发"
+                else "无需校准；真实接触尺寸达到默认门槛才触发，启用后取代无障碍长按"
         },
         checked = thumb.enabled,
         onCheckedChange = { enabled ->
-            if (enabled && !thumb.calibrated) {
-                Toast.makeText(context, "请先完成拇指面积校准", Toast.LENGTH_SHORT).show()
-                openCalibration()
-            } else if (enabled && portalMode && (!portalInjected || !portalRootGranted)) {
+            if (enabled && portalMode && (!portalInjected || !portalRootGranted)) {
                 Toast.makeText(context,
                     if (!portalInjected) "请先重载传送门" else "请先为传送门授予 Root 权限",
                     Toast.LENGTH_LONG).show()
@@ -102,8 +99,9 @@ internal fun ThumbTriggerPreference(context: Context, onOpenBlacklist: () -> Uni
         },
     )
     ArrowPreference(
-        title = "校准触发面积",
-        summary = if (thumb.calibrated) "已校准，可重新采集指尖和拇指样本" else "各按压三次，确定此设备的触发门槛",
+        title = "触摸数据与校准（可选）",
+        summary = if (thumb.calibrated) "已保存自定义门槛，可查看输入或重新采集"
+            else "默认门槛可直接使用；无有效尺寸时无需反复采集，也不会触发",
         onClick = openCalibration,
     )
     ArrowPreference(
