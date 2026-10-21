@@ -1005,3 +1005,11 @@ BoomActionHandler两组分享图标新增长按入口，BoomChipPage/BigBangPane
 BigBangOverlayLauncher使用ClipData.newPlainText和DRAG_FLAG_GLOBAL；阴影为Miuix当前色板、最多三行的真实选词预览。先保存完整Panel状态，仅系统startDragAndDrop返回true后关闭大面板并复用返回条；返回恢复合并/选择和原来源区域。系统返回false/拒绝权限明确提示、原面板保留并消费长按，避免松手落到点击分享。不写中转站、不授图片权限、不打开本App Activity。拖出成功启动不等于目标已接收，成功与未接收分别验收。
 
 272构建、197项测试及Lint通过。真机将合并“小米15”拖进系统设置EditText，读回严格一致；原页仍是Settings，返回后合并单块且已选4/41保留。拖到空白未接收后同样恢复；点击分享显示真实Chooser预览“小米”，未发送。详见DEVICE_VALIDATION。其他接收App、多段/超长/emoji、深色/横屏、拒绝权限分支尚未实测。
+
+## 2026-10-21：1.7.133 私有暂存图片系统清理
+
+SharedImageCleanupJob由模块Application启动时安排同一Job ID133，12小时周期、电量不低约束，系统决定实际时机。没有常驻Root/前台服务、精确闹钟、开机权限或新Hook。作业非持久化，重启后下次模块进程启动重新安排；不是12小时准时保证。onStartJob在工作线程清理，onStopJob中断并放弃本次，不立即重试；主线程按工作线程所有权完成回调，避免已停止作业误收尾。
+
+清理只列cache/shared-images和cache/ocr-input第一层文件，沿用24小时mtime期限，目录不递归。成功删除共享图后撤销对应URI授权，不读数据库、files/stash、相册或外部存储。Provider暂存和IncomingImageCache复用该清理，Binder入口清除调用方身份后以本模块身份撤销，finally恢复；导入时非关键清理失败记录原因并保留正常导入。明确IOException/SecurityException持久记录，在Miuix设置日志区域显示；调度失败也记录，不伪装成已安排。正常系统集成区显示暂存期限/收藏不受影响/后台限制时下次使用清理，不增加开关。
+
+276最终构建/199项测试/Lint通过。真实Job首次启动0项、正常启动后删除3个旧生成文件，再强制同一系统Job0项；verify确认新PNG可读、其它目录保留。冷进程强制Job曾被AutoStartManagerService拒绝并取消，未改变权限或换Root代扫，因此只证明进程可启动时的真实系统Job，不声称本机冷后台可靠。细节见DEVICE_VALIDATION。

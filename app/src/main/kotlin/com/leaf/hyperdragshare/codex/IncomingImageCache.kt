@@ -12,8 +12,7 @@ internal object IncomingImageCache {
     fun copy(context: Context, source: Uri): File {
         val directory = File(context.cacheDir, "ocr-input")
         if (!directory.isDirectory && !directory.mkdirs()) throw IOException("无法创建图片暂存目录")
-        directory.listFiles()?.filter { it.isFile && System.currentTimeMillis() - it.lastModified() > 86_400_000L }
-            ?.forEach { if (!it.delete()) DragShareLog.w(TAG, "unable to remove expired image input") }
+        SharedImageCleanupJob.cleanupBeforeImport(context)
         val copy = File(directory, UUID.randomUUID().toString() + ".image")
         try {
             context.contentResolver.openInputStream(source).use { input ->

@@ -168,6 +168,11 @@
         </service>
 
         <service
+            android:name=".SharedImageCleanupJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <service
             android:name=".DragShareAccessibilityService"
             android:exported="true"
             android:label="@string/accessibility_service_label"

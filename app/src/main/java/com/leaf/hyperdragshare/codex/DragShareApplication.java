@@ -10,5 +10,6 @@ public final class DragShareApplication extends Application {
         DragShareLog.configure(DragShareSettings.readLocal(this));
         DragShareDiagnostics.captureRuntimeOnce(this, "module application created", null);
         TextSegmenter.preloadIfEnabled(this);
+        SharedImageCleanupJob.schedule(this);
     }
 }

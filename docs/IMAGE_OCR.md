@@ -40,3 +40,9 @@
 ML Kit：com.google.mlkit:text-recognition-chinese:16.0.1，随包模型。参考Nova Text的引擎思路，入口和生命周期独立实现；不复制反编译厂商实现。
 
 1.7.114的174项单测、Lint、assembleDebug通过并已安装；此前AICR合成中文、绑定前取消后再识别、产品原页分词和动态深浅色已有证据。本次屏幕与区域路径的范围见上文，不扩大到复杂/旋转长图、系统相册分享授权、识别中取消及并发覆盖。外部图片和附带原图的文字接收现共用IncomingImageCache，在透明接收Activity退出前复制临时授权URI。包名com.leaf.hyperdragshare.codex，需使用本fork一致签名升级。
+
+## 1.7.133：图片暂存期限
+
+图片接收暂存与共享副本共用24小时期限，新增系统周期清理，并保留使用时清理。只清理私有cache/shared-images、cache/ocr-input，不清理中转站收藏或用户主动保存到相册的文件。系统可随时回收缓存，期限也不代表副本永久有效。
+
+本机实际Job删除过期生成样本、新图仍可读通过；进程退出后的Job启动被HyperOS自启动管理器拒绝。没有修改权限绕过，因此后台运行受限时靠下次使用清理，不承诺准时自动执行。详细证据见DEVICE_VALIDATION。

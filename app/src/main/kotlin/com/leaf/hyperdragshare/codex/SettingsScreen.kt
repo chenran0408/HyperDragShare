@@ -312,6 +312,15 @@ private fun MainPage(
         mutableFloatStateOf(settings.accessibilityRecognitionSensitivityPercent.toFloat())
     }
     val scrollBehavior = MiuixScrollBehavior(state = topAppBarState)
+    val cleanupPrefs = remember(context) { context.getSharedPreferences(SharedImageCleanupJob.PREFS, Context.MODE_PRIVATE) }
+    var cleanupError by remember(cleanupPrefs) { mutableStateOf(cleanupPrefs.getString(SharedImageCleanupJob.LAST_ERROR, null)) }
+    DisposableEffect(cleanupPrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == SharedImageCleanupJob.LAST_ERROR) cleanupError = prefs.getString(key, null)
+        }
+        cleanupPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { cleanupPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     Scaffold(
         topBar = {
@@ -521,6 +530,10 @@ private fun MainPage(
             }
             item(key = "system-integration-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    BasicComponent(
+                        title = "图片暂存",
+                        summary = "满24小时后清理，不清除中转站收藏。系统限制后台运行时，下次使用再清理。",
+                    )
                     OverlayDropdownPreference(
                         title = "文字识别引擎",
                         summary = "用于图片、整屏和区域识字。AICR 为实验选项，失败会显示原因，不自动切换引擎",
@@ -894,6 +907,9 @@ private fun MainPage(
             }
             item(key = "logging-preferences") {
                 Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    cleanupError?.let { message ->
+                        BasicComponent(title = "上次暂存图片清理未完成", summary = message)
+                    }
                     OverlayDropdownPreference(
                         title = "日志输出等级",
                         summary = when (settings.logLevel) {

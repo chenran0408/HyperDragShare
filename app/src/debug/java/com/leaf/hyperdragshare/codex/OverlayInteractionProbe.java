@@ -4,7 +4,15 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.net.Uri;
 import android.os.Bundle;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -21,6 +29,15 @@ public final class OverlayInteractionProbe extends Instrumentation {
     }
 
     @Override public void onStart() {
+        if (arguments != null && ("cache_cleanup_prepare".equals(arguments.getString("mode"))
+                || "cache_cleanup_verify".equals(arguments.getString("mode")))) {
+            Bundle report = new Bundle();
+            boolean passed = "cache_cleanup_prepare".equals(arguments.getString("mode"))
+                    ? prepareCacheCleanup(report) : verifyCacheCleanup(report);
+            report.putBoolean("passed", passed);
+            finish(passed ? Activity.RESULT_OK : Activity.RESULT_CANCELED, report);
+            return;
+        }
         if (arguments != null && ("stash_batch".equals(arguments.getString("mode"))
                 || "stash_manual".equals(arguments.getString("mode")))) {
             Bundle report = new Bundle();
@@ -48,6 +65,143 @@ public final class OverlayInteractionProbe extends Instrumentation {
         report.putBoolean("longText", longText);
         report.putInt("syntheticLength", sample.length());
         finishAfterInspection(accepted, report);
+    }
+
+    private boolean prepareCacheCleanup(Bundle report) {
+        File cache = getTargetContext().getCacheDir();
+        File metadata = new File(cache, "cleanup133-probe.properties");
+        Properties paths = new Properties();
+        boolean prepared = false;
+        try {
+            if (metadata.exists()) throw new IOException("Verify the previous cache cleanup probe before preparing again");
+            paths.setProperty("old", stageGeneratedPng().getAbsolutePath());
+            paths.setProperty("fresh", stageGeneratedPng().getAbsolutePath());
+            File temporary = new File(cache, "shared-images/" + UUID.randomUUID() + ".tmp");
+            paths.setProperty("temporary", temporary.getAbsolutePath());
+            java.nio.file.Files.write(temporary.toPath(), new byte[]{1, 2, 3});
+            File ocrDirectory = new File(cache, "ocr-input");
+            if (!ocrDirectory.exists() && !ocrDirectory.mkdir()) throw new IOException("Unable to create OCR sample directory");
+            File ocr = new File(ocrDirectory, UUID.randomUUID() + ".image");
+            paths.setProperty("ocr", ocr.getAbsolutePath());
+            java.nio.file.Files.write(ocr.toPath(), new byte[]{4, 5, 6});
+            File keepDirectory = new File(cache, "cleanup133-" + UUID.randomUUID());
+            if (!keepDirectory.mkdir()) throw new IOException("Unable to create non-target sample directory");
+            File keep = new File(keepDirectory, UUID.randomUUID().toString());
+            paths.setProperty("keep", keep.getAbsolutePath());
+            java.nio.file.Files.write(keep.toPath(), new byte[]{7, 8, 9});
+            long expired = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(25);
+            for (String key : new String[]{"old", "temporary", "ocr", "keep"}) {
+                if (!new File(paths.getProperty(key)).setLastModified(expired)) {
+                    throw new IOException("Unable to age the generated " + key + " sample");
+                }
+            }
+            try (FileOutputStream output = new FileOutputStream(metadata)) {
+                paths.store(output, null);
+            }
+            prepared = true;
+            report.putBoolean("prepared", true);
+            report.putInt("expiredTargetFiles", 3);
+            report.putString("metadata", metadata.getAbsolutePath());
+        } catch (IOException | IllegalStateException | SecurityException error) {
+            report.putString("error", error.toString());
+        } finally {
+            if (!prepared && !paths.isEmpty()) cleanCacheProbe(paths, metadata, report);
+        }
+        return prepared;
+    }
+
+    private File stageGeneratedPng() throws IOException {
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(16, 16, android.graphics.Bitmap.Config.ARGB_8888);
+        byte[] bytes;
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            bitmap.eraseColor(android.graphics.Color.WHITE);
+            if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)) {
+                throw new IOException("Generated PNG encode failed");
+            }
+            bytes = output.toByteArray();
+        } finally { bitmap.recycle(); }
+        Bundle extras = new Bundle();
+        extras.putByteArray(ImageStagingClient.EXTRA_BYTES, bytes);
+        Bundle result = getTargetContext().getContentResolver().call(ImageStagingClient.BASE_URI,
+                ImageStagingClient.METHOD_STAGE, null, extras);
+        if (result == null || result.getString(ImageStagingClient.RESULT_URI) == null) {
+            throw new IOException("Provider did not return the generated image URI");
+        }
+        Uri uri = Uri.parse(result.getString(ImageStagingClient.RESULT_URI));
+        return new File(getTargetContext().getCacheDir(), "shared-images/" + uri.getLastPathSegment());
+    }
+
+    private boolean verifyCacheCleanup(Bundle report) {
+        File metadata = new File(getTargetContext().getCacheDir(), "cleanup133-probe.properties");
+        Properties paths = new Properties();
+        boolean passed = false;
+        try {
+            try (FileInputStream input = new FileInputStream(metadata)) { paths.load(input); }
+            boolean oldRemoved = !new File(paths.getProperty("old")).exists();
+            boolean temporaryRemoved = !new File(paths.getProperty("temporary")).exists();
+            boolean ocrRemoved = !new File(paths.getProperty("ocr")).exists();
+            boolean keepPreserved = new File(paths.getProperty("keep")).isFile();
+            report.putBoolean("oldSharedRemoved", oldRemoved);
+            report.putBoolean("temporaryRemoved", temporaryRemoved);
+            report.putBoolean("oldOcrRemoved", ocrRemoved);
+            report.putBoolean("nonTargetPreserved", keepPreserved);
+            File fresh = new File(paths.getProperty("fresh"));
+            Uri freshUri = ImageStagingClient.BASE_URI.buildUpon().appendPath("shared").appendPath(fresh.getName()).build();
+            boolean freshReadable;
+            try (InputStream input = getTargetContext().getContentResolver().openInputStream(freshUri)) {
+                if (input == null) throw new IOException("The fresh staged image could not be opened");
+                byte[] header = new byte[8];
+                new java.io.DataInputStream(input).readFully(header);
+                freshReadable = Arrays.equals(header, new byte[]{(byte) 0x89, 80, 78, 71, 13, 10, 26, 10});
+            }
+            report.putBoolean("freshPngReadable", freshReadable);
+            passed = oldRemoved && temporaryRemoved && ocrRemoved && keepPreserved && freshReadable;
+        } catch (IOException | IllegalStateException | SecurityException error) {
+            report.putString("error", error.toString());
+        } finally {
+            if (!cleanCacheProbe(paths, metadata, report)) passed = false;
+        }
+        return passed;
+    }
+
+    private boolean cleanCacheProbe(Properties paths, File metadata, Bundle report) {
+        java.util.List<File> files = new java.util.ArrayList<>();
+        for (String key : new String[]{"old", "fresh", "temporary", "ocr", "keep"}) {
+            String path = paths.getProperty(key);
+            if (path == null) { // A preparation failure can precede this sample.
+                continue;
+            }
+            files.add(new File(path));
+        }
+        if (paths.getProperty("keep") != null) {
+            files.add(new File(paths.getProperty("keep")).getParentFile());
+        }
+        files.add(metadata);
+        boolean cleaned = true;
+        for (File file : files) {
+            try {
+                java.nio.file.Files.deleteIfExists(file.toPath());
+            } catch (IOException | SecurityException error) {
+                cleaned = false;
+                report.putString("cleanupError", error.toString());
+                android.util.Log.w("DragShare/OverlayProbe", "Generated cache sample cleanup failed", error);
+            }
+        }
+        for (String key : new String[]{"old", "fresh"}) {
+            String path = paths.getProperty(key);
+            if (path == null) continue;
+            try {
+                getTargetContext().revokeUriPermission(ImageStagingClient.BASE_URI.buildUpon()
+                        .appendPath("shared").appendPath(new File(path).getName()).build(),
+                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (SecurityException error) {
+                cleaned = false;
+                report.putString("cleanupError", error.toString());
+                android.util.Log.w("DragShare/OverlayProbe", "Generated image grant cleanup failed", error);
+            }
+        }
+        report.putBoolean("probeFilesCleaned", cleaned);
+        return cleaned;
     }
 
     private boolean createStashBatch(Bundle report) {

@@ -101,6 +101,7 @@
 - `ShareTargetRepository.java`：查询可处理对应 MIME 的导出 Activity，并克隆/着色内置目标的旧矢量图标。
 - `BitmapEncoder.java`、`ImageStagingClient.java`、`ShareImageProvider.java`：图片压缩、
   跨 UID 暂存、能力 URI 和授权。
+- `SharedImageCleanupJob.java`：系统周期清理与导入时清理共用24小时期限，只遍历cache/shared-images及cache/ocr-input；不可清理files/stash、数据库或相册。目标ROM已观察到冷进程Job绑定被自启动管理器拒绝，不能仅凭schedule成功声称后台可用，也不能自动修改自启动权限。
 - `ClipboardWriter.java`、`RootClipboardMain.java`：读取剪贴板AppOps原始模式，受限时文字用Root系统UID、图片用Root Shell UID写入并核对；原文/URI只经stdin，不能把无异常当复制成功，不能修改AppOps来掩盖限制。120已验证侧窗/系统小窗图片跨UID读取及删除源后副本读取。System/Root UID不能作为剪贴板URI授权来源；Shell使用目标ROM实测IClipboard签名与com.android.shell归属，固定主用户/本机剪贴板，其他用户/虚拟设备未支持，不添加猜测兼容。
 - `LocalImageSaver.java`：把图片首项保存到系统 Pictures，按秒生成文件名。
 - `ShareLauncher.java`：构造显式 `ACTION_SEND` 并启动目标 Activity。

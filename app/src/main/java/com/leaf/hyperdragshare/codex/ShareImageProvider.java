@@ -26,7 +26,6 @@ import java.util.UUID;
 
 public final class ShareImageProvider extends ContentProvider {
     private static final String TAG = "DragShareProvider";
-    private static final long MAX_CACHE_AGE_MS = 24L * 60L * 60L * 1000L;
     private static final long MAX_FILE_BYTES = 32L * 1024L * 1024L;
 
     private File shareDirectory;
@@ -153,7 +152,7 @@ public final class ShareImageProvider extends ContentProvider {
             throw new IllegalArgumentException("图片为空或超过32 MiB");
         }
 
-        cleanupExpiredFiles();
+        SharedImageCleanupJob.cleanupBeforeImport(contextOrThrow());
         String token = UUID.randomUUID().toString();
         File temporary = new File(shareDirectory, token + ".tmp");
         long written;
@@ -446,24 +445,6 @@ public final class ShareImageProvider extends ContentProvider {
 
     private File fileForToken(String token, String suffix) {
         return new File(shareDirectory, ShareUriToken.fileName(token, suffix));
-    }
-
-    private void cleanupExpiredFiles() {
-        File[] files = shareDirectory.listFiles();
-        if (files == null) {
-            return;
-        }
-        long cutoff = System.currentTimeMillis() - MAX_CACHE_AGE_MS;
-        for (File file : files) {
-            if (file.lastModified() < cutoff) {
-                String token = ShareUriToken.parse(file.getName());
-                if (token != null) {
-                    String suffix = ShareUriToken.suffix(file.getName());
-                    revokeReadAccessAsOwner(null, uriForToken(token, suffix));
-                }
-                file.delete();
-            }
-        }
     }
 
     private Uri uriForToken(String token, String suffix) {

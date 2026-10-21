@@ -6,9 +6,9 @@
 
 - Xiaomi 15 Pro / 2410DPN6CC，OS4.0.0.17.XOBCNXM，Android 17 / API 37，1440×3200。
 - MI Big Bang 已卸载。Root（KernelSU）已授权；SELinux enforcing。
-- 当前包：`com.leaf.hyperdragshare.codex`，1.7.132 / versionCode 156。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 156。
+- 当前包：`com.leaf.hyperdragshare.codex`，1.7.133 / versionCode 157。沿用本 fork 包名和 debug 签名，原位升级成功；传送门注入与 Root 握手均为 157。
 - 小爱 8.3.30.4420，AICR 4.12.26。能力 Provider 仅返回 `name=screenrecognition, enable=1`，不是 OCR 接口。
-- 当前源码与设备均为 1.7.132 / 156；197 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
+- 当前源码与设备均为 1.7.133 / 157；199 项单测、Lint、assembleDebug 通过。下文旧批次仅代表当时状态，最新批次位于文末。
 
 ## 2026-10-20：1.7.62 作用域软重启
 
@@ -771,3 +771,16 @@ AICR实际客户端仍识别同一生成样本成功，最终直接请求518ms�
 - 首次随后的快速点击分享未取得Chooser证据，恰逢90秒诊断寿命结束，不据此判断产品成功/失败。另一次有充足寿命的真实产品点击，hds132-short-share.xml显示系统com.android.intentresolver Chooser和“小米”预览、目标列表；未点任意分享目标，不发送内容。关闭分享/分词后回原Bili2183，hds132-restored-source.png确认休息提醒仍在、未恢复播放。
 - 实际Portal/Root握手156/156/granted=true，hds132-activation.xml；仅重载传送门，没有android/AICR/整机重启。设置前后XML相同，无Stash写入/迁移、无Root助手或测试菜单遗留；原schema2/旧UI先拆组的回退限制保持。临时截图/XML只留本机，不提交私人画面。
 - 未验：其他接收App、多段/emoji/超长选择、深色/横屏、系统拒绝拖拽与权限撤销。实际拇指面积、Bili评论普通长按、四样式四边完整实手指分享、115旧ANR/复制浮层共存仍未解决。本功能不当作入口触发修复。
+
+## 2026-10-21：1.7.133 暂存清理与系统限制
+
+- 补明确功能缺口：独立系统Job与使用时共用清理私有共享图片/OCR输入，24小时期限、12小时周期、电量不低约束，系统决定时机。不可重入的进程内清理与Job停止中断；不访问收藏、相册或外部目录，不照搬参考APK删除MediaStore临时副本的方式。不新增Root服务或作用域。错误记录并在Miuix日志区域显示，导入清理失败不阻断正常图片导入；实际设备错误提示分支未另造故障，不能写成已验。
+- 改动前保存两个暂存目录work/hds133-before-cache.tar（25,374,720字节，SHA256 CF1612CD75B0614BB0FC46F671CCF0C5AE6B0CDB9673CF28AA431FD6F36A81F4），只留本机。按设备真实秒数1792549178与stat计算原70个文件均未满24小时；Toybox find -mtime +0输出不能当作满24小时证据。未回放备份来掩盖结果，旧schema1回退备份保持不变。
+- debug-only OverlayInteractionProbe cache_cleanup_prepare用生产Provider暂存两个16×16有效PNG，再给旧图、UUID.tmp、OCR输入标25小时前；另一非目标目录keep也标旧，新图保持新。mode立即退出，无UI/Root/节点/截图/收藏读取。hds133-cleanup-prepare.txt prepared=true/expiredTargetFiles=3。
+- 10:23:16原生Job已执行removed=0，证明注册和绑定可以工作；紧接诊断进程退出，10:23:23 cmd jobscheduler run -f返回Running job但AutoStartManagerService记录MIUILOG-Reject service SharedImageCleanupJob，JobServiceContext启动失败，get-job-state变unknown。hds133-job.log/job-run.txt。不能把命令接受当清理成功；未改manifest导出或系统自启动/权限来掩盖。
+- 通过正常MainActivity启动模块，Application重新安排Job，10:24:11系统实际服务清理removed=3；随后进程存活时强制同一真实Job removed=0且重新waiting，hds133-job-live.log/live-run.txt/live-after.txt。cache_cleanup_verify不调用生产cleanup，真实Provider读新PNG头成功，旧三项消失、非目标keep保留、最后仅本批样本删除及URI撤销，hds133-cleanup-verify.txt七项全true。此为系统Job执行证据，不是冷后台启动已修复，也未等待12小时自然周期。
+- 前后原70个私有暂存文件SHA逐条完全一致（hds133-cache-before/after-hash.txt）；原4张收藏图片及stash.db/journal哈希完全一致（hds133-stash-before/after.txt），没有打开收藏改组/增删或恢复旧库。其它库不纳入收藏一致结论。设置前后XML相同；清理成功后image_cleanup.xml空map。
+- 273仅debug探针单行continue注释触发Lint SuspiciousIndentation；改成花括号，没有抑制Lint。最终276 testDebugUnitTest/lintDebug/assembleDebug通过，199项0失败，Lint0 errors/139 warnings/2 hints。新增两项真实文件用例验证旧文件删除、新文件/收藏/其它缓存/子目录保留，及非法目录项清理错误明确记录且不破坏原文件。未添加无意义文案测试。
+- 最终276/157原位安装，debug证书不变；outputs/HyperDragShare-1.7.133-debug.apk与设备base.apk SHA256一致：51EF5AAAF744F9E1B727FF605FC3C7001043BD01DAB253BEE03B49698FB2524B。hds133-installed-hash.txt。真实设置滚动后清晰显示期限与后台限制，hds133-cache-setting.xml/png；Miuix BasicComponent保持原主题，不是新开关。功能Job在同生产代码275上测试，276仅新增此说明，未重复跑删除实验。
+- 仅重载传送门，等待异步Root回报后157/157/granted=true，hds133-activation.xml；未重启android/AICR/整机。无Root助手/远端probe/分词菜单悬窗残留；MainActivity任务留后台属正常。原Bili2183置前，未关闭休息提醒或恢复播放。device临时截图/XML已删，所有画面/备份只留本机不提交。
+- 额外只读参考结论：所谓后台隐藏的具体对象仍未确定；已定位生命周期链只是自身Activity前台时抑制传送门入口，不能据此增加关闭全部浮窗的开关。待办仍含真实面积、Bili评论普通长按、真实四样式四边、115旧侧条ANR/复制浮层。自然周期/进程停止中断/深色错误提示未验。
