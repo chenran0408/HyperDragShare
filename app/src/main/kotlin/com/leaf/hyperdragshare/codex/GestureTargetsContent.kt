@@ -96,7 +96,7 @@ import java.text.Collator
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private data class GestureTargetRow(
+internal data class GestureTargetRow(
     val target: AppTarget,
     val label: String,
     val summary: String,
@@ -371,8 +371,7 @@ private fun TargetPickerDialog(
     var tab by remember { mutableStateOf(TargetPickerTab.Apps) }
     var category by remember { mutableStateOf(AppCategory.User) }
     var query by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var pickerRows by remember { mutableStateOf<List<GestureTargetRow>>(emptyList()) }
+    var loadState by remember { mutableStateOf(TargetPickerLoadState()) }
     val selection = remember(savedTargets) { mutableStateListOf<AppTarget>().also { it.addAll(savedTargets) } }
     val catalogChanges = remember(context, store) { Channel<Unit>(Channel.CONFLATED) }
 
@@ -394,14 +393,21 @@ private fun TargetPickerDialog(
     }
     LaunchedEffect(context, store, catalogChanges) {
         suspend fun reloadCatalog() {
-            loading = true
-            val loadedRows = withContext(Dispatchers.IO) { loadPickerRows(context, store) }
-            pickerRows = loadedRows
-            loading = false
+            loadState = loadState.beginRefresh()
+            try {
+                val loadedRows = withContext(Dispatchers.IO) { loadPickerRows(context, store) }
+                loadState = loadState.loaded(loadedRows)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                DragShareLog.w("Gesture/Targets", "Target catalog refresh failed", error)
+                loadState = loadState.failed()
+            }
         }
         reloadCatalog()
         for (unusedEvent in catalogChanges) reloadCatalog()
     }
+    val pickerRows = loadState.rows
 
     val filteredRows = remember(pickerRows, tab, category, query) {
         val needle = query.trim().lowercase(Locale.ROOT)
@@ -488,53 +494,103 @@ private fun TargetPickerDialog(
                     } else null,
                 )
                 when {
-                    loading -> Box(
+                    loadState.refreshing && pickerRows.isEmpty() -> Box(
                         Modifier.fillMaxWidth().height(listHeight),
                         contentAlignment = Alignment.Center,
                     ) { CircularProgressIndicator() }
-                    filteredRows.isEmpty() -> Box(
+                    loadState.error != null && pickerRows.isEmpty() -> Column(
                         Modifier.fillMaxWidth().height(listHeight).padding(16.dp),
-                        contentAlignment = Alignment.Center,
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = if (tab == TargetPickerTab.Shortcuts) {
-                                "目录中没有可用快捷方式。请在桌面刷新目录后，再点“刷新目录”。"
-                            } else "没有匹配的应用",
+                            text = "暂时无法读取目标目录。请检查系统状态后重试。",
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
+                        TextButton(
+                            text = "重试",
+                            onClick = { catalogChanges.trySend(Unit) },
+                        )
                     }
-                    else -> LazyColumn(
-                        modifier = Modifier.fillMaxWidth().heightIn(max = listHeight),
-                    ) {
-                        items(filteredRows, key = { targetKey(it.target) }) { row ->
-                            val checked = selection.contains(row.target)
-                            val canSelect = checked || selection.size < maximum
-                            BasicComponent(
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = canSelect,
-                                startAction = { TargetIcon(row, Modifier.padding(end = 8.dp)) },
-                                endActions = {
-                                    Checkbox(
-                                        state = if (checked) androidx.compose.ui.state.ToggleableState.On
-                                            else androidx.compose.ui.state.ToggleableState.Off,
+                    else -> Column(Modifier.fillMaxWidth().height(listHeight)) {
+                        if (loadState.refreshing) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                                Text(
+                                    text = "正在更新目录，当前列表仍可使用",
+                                    modifier = Modifier.padding(start = 8.dp),
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                        loadState.error?.let {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "目录更新失败，仍显示上次读取的内容。",
+                                    modifier = Modifier.weight(1f),
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 12.sp,
+                                )
+                                TextButton(
+                                    text = "重试",
+                                    onClick = { catalogChanges.trySend(Unit) },
+                                )
+                            }
+                        }
+                        if (filteredRows.isEmpty()) {
+                            Box(
+                                Modifier.fillMaxWidth().weight(1f).padding(16.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = if (tab == TargetPickerTab.Shortcuts) {
+                                        "目录中没有可用快捷方式。请在桌面刷新目录后，再点“刷新目录”。"
+                                    } else "没有匹配的应用",
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                            ) {
+                                items(filteredRows, key = { targetKey(it.target) }) { row ->
+                                    val checked = selection.contains(row.target)
+                                    val canSelect = checked || selection.size < maximum
+                                    BasicComponent(
+                                        modifier = Modifier.fillMaxWidth(),
                                         enabled = canSelect,
+                                        startAction = { TargetIcon(row, Modifier.padding(end = 8.dp)) },
+                                        endActions = {
+                                            Checkbox(
+                                                state = if (checked) androidx.compose.ui.state.ToggleableState.On
+                                                    else androidx.compose.ui.state.ToggleableState.Off,
+                                                enabled = canSelect,
+                                                onClick = {
+                                                    if (checked) selection.remove(row.target)
+                                                    else if (selection.size < maximum) selection.add(row.target)
+                                                },
+                                            )
+                                        },
+                                        insideMargin = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                         onClick = {
                                             if (checked) selection.remove(row.target)
                                             else if (selection.size < maximum) selection.add(row.target)
                                         },
-                                    )
-                                },
-                                insideMargin = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                onClick = {
-                                    if (checked) selection.remove(row.target)
-                                    else if (selection.size < maximum) selection.add(row.target)
-                                },
-                            ) {
-                                Text(row.label, color = MiuixTheme.colorScheme.onSurface,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(row.summary, fontSize = 12.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    ) {
+                                        Text(row.label, color = MiuixTheme.colorScheme.onSurface,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(row.summary, fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
                             }
                         }
                     }
