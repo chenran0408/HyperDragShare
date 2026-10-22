@@ -223,7 +223,7 @@ internal fun gestureSettingEntries(
 
     fun addUtilityEntries() {
     currentModule = SettingModule.GENERAL
-    currentGroup = "公共工具"
+    currentGroup = "工具与诊断"
         val reportTitle = "导出兼容性报告"
         val reportSummary = "生成设备与模块运行环境信息，不含已选应用"
         entries += SettingEntry(

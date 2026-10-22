@@ -18,7 +18,7 @@ internal enum class SettingModule(val title: String, val icon: ImageVector, val 
         GESTURES -> listOf("总开关与通用", "底角触发", "动作与目标", "蜂巢布局", "布局动效", "高级设置")
         FREEFORM -> listOf("启动行为", "窗体布局", "窗外操作")
         COPY_DIRECT -> listOf("启用与触发", "目标应用")
-        GENERAL -> listOf("运行与权限", "主题与显示", "公共工具", "日志与诊断", "关于")
+        GENERAL -> listOf("运行与权限", "主题与显示", "工具与诊断", "关于")
     }
 }
 

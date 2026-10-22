@@ -646,7 +646,7 @@ private fun portalSettingEntries(
         )
     }
     cleanupError?.let { message ->
-        row("stash.cleanupError", "上次暂存图片清理未完成", SettingModule.GENERAL, "日志与诊断", summary = message) {
+        row("stash.cleanupError", "上次暂存图片清理未完成", SettingModule.GENERAL, "工具与诊断", summary = message) {
             title, summary, _ -> BasicComponent(title = title, summary = summary)
         }
     }
@@ -1185,7 +1185,7 @@ private fun portalSettingEntries(
         onClick = openOverlaySettings,
     )
 
-    row("log.level", "日志输出等级", SettingModule.GENERAL, "日志与诊断",
+    row("log.level", "日志输出等级", SettingModule.GENERAL, "工具与诊断",
         summary = when (settings.logLevel) {
             DragShareSettings.LOG_LEVEL_DISABLED -> "不输出模块日志"
             DragShareSettings.LOG_LEVEL_DEBUG -> "记录运行环境与输入诊断步骤"
@@ -1220,7 +1220,7 @@ private fun portalSettingEntries(
         )
     }
 
-    row("log.destination", "日志保存位置", SettingModule.GENERAL, "日志与诊断",
+    row("log.destination", "日志保存位置", SettingModule.GENERAL, "工具与诊断",
         summary = if (settings.logDestination == DragShareSettings.LOG_DESTINATION_FILE) {
             "存储到 ${DragShareLog.LOG_DIRECTORY}"
         } else {
@@ -1256,7 +1256,7 @@ private fun portalSettingEntries(
     }
 
     val openLogExport = { exportLogLauncher.launch(DragShareLog.exportFileName()); Unit }
-    navigationRow("log.export", "导出日志", SettingModule.GENERAL, "日志与诊断",
+    navigationRow("log.export", "导出日志", SettingModule.GENERAL, "工具与诊断",
         summary = "将当前日志保存到所选位置",
         keywords = "保存 导出 日志",
         enabled = settings.logDestination == DragShareSettings.LOG_DESTINATION_FILE,
@@ -1269,7 +1269,7 @@ private fun portalSettingEntries(
             "touch.probe",
             "触控报告内测",
             SettingModule.GENERAL,
-            "日志与诊断",
+            "工具与诊断",
             summary = "4 步引导，检查手机能否分辨指尖和拇指指腹按压",
             keywords = "触控 面积 拇指 测试 适配 报告 touch probe",
             onClick = {
