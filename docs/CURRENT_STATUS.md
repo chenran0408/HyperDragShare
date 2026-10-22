@@ -1,5 +1,13 @@
 # 当前功能与验证状态
 
+## 208 取词断连自恢复与桥接目标修正（构建通过，设备未安装）
+
+核对旧分支的 `am_kill ... depends on provider ... in dying proc` 记录后，确认当前分支仍在整个取词租赁期间持有稳定 `ContentProviderClient`。208 改为仅在打开 Root 租赁时短暂使用非稳定 Provider 客户端；后续只保留租赁 Binder。模块进程退出时，传送门监听该 Binder 死亡并立即重连，连接失败按 3–30 秒退避，持续失败才提示，不再要求用户手动重载作用域。原生侧栏的 Provider 握手也使用非稳定客户端，避免同类进程依赖。
+
+207 图片菜单从传送门进程启动 `ImageOcrActivity` 时曾使用传送门 Context 构造显式 Intent，组件包名会落到传送门自身。208 改为明确指向本模块包名；另在锁屏恰好发生于透明 Activity 已启动、分词面板尚未创建时结束宿主，避免留下空白窗口。微信 `ocr_region` 分流、图片快截图和原页拖拽未改。
+
+源码 `1.7.208` / versionCode 232；`testDebugUnitTest lintDebug assembleRelease` 通过，415 项测试 0 失败/错误/跳过，Lint 无阻断错误，Release 执行 R8、资源压缩与 arm64-v8a 打包。签名 APK：`D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.208-arm64-v8a.apk`，7,411,272 bytes，SHA256 `20CD897F3C4B6C63921F8331CA36770351D61942D050B2D1A65FC8B2AD3F7AC2`。预检设备最后安装仍为 206/230，屏幕点亮且前台有系统界面，因此本批没有后台覆盖安装或重载。208 的真实进程断连恢复、Settings 桥可见性和图片菜单识字待设备空闲时验收。
+
 ## 207 按压交接与系统设置窗口桥接（源码和构建通过，未安装）
 
 从 206 接续：Root 按压确认后以同一次 `downTime` 标记取词流水线，直到分词或拖拽交接结束；传送门在此期间不再重复启动宿主卡片。控制器和回调的 MOVE 逐帧日志已收敛，避免冲掉关键时序记录。新增一个针对按压归属与释放的单测。

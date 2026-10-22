@@ -1584,7 +1584,9 @@ final class DragShareController {
     }
 
     private void launchImageOcrHost(Uri image, boolean qr) {
-        android.content.Intent intent = new android.content.Intent(context, ImageOcrActivity.class);
+        android.content.Intent intent = new android.content.Intent();
+        intent.setComponent(new android.content.ComponentName(BuildConfig.APPLICATION_ID,
+                ImageOcrActivity.class.getName()));
         intent.putExtra(ImageOcrActivity.EXTRA_HOSTED_URI, image);
         intent.putExtra(ImageOcrActivity.EXTRA_QR, qr);
         intent.setDataAndType(image, "image/*");

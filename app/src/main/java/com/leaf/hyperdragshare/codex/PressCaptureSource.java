@@ -4,6 +4,7 @@ import android.app.KeyguardManager;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
@@ -20,6 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** One press pipeline for both hosts: classify once, then use the confirmed gesture's result. */
 final class PressCaptureSource {
     private static final String TAG = "DragShare/Press";
+    private static final long READER_RETRY_FIRST_MS = 3000L;
+    private static final long READER_RETRY_MAX_MS = 30000L;
     private final Context context;
     private final RootTouchSource input;
     private final DragShareController controller;
@@ -31,9 +34,18 @@ final class PressCaptureSource {
     private final Runnable classify = this::classifyPress;
     private final Runnable fire = this::firePress;
     private volatile SharedRootNodeCapture.Connection nodeSession;
+    private volatile boolean stopped;
+    private long readerRetryDelayMs;
+    private boolean readerFailureShown;
+    private boolean readerOpening;
+    private IBinder.DeathRecipient leaseDeath;
+    private final Runnable readerRetry = () -> {
+        if (stopped || nodeSession != null) return;
+        DragShareLog.i(TAG, "press reader retry started");
+        openReader();
+    };
     private AicrOcrClient.Request activeOcrRequest;
     private volatile long generation;
-    private volatile boolean stopped;
     private volatile boolean pointerDown;
     private volatile long downTime = -1L;
     private boolean lookupRunning;
@@ -54,6 +66,13 @@ final class PressCaptureSource {
         this.settings = settings;
         blocker = new BackgroundTouchBlocker(context);
         ModuleActivation.reportPressReader(context, false, "");
+        openReader();
+    }
+
+    /** Start a lease attempt on the serial worker; death-triggered attempts start immediately. */
+    private void openReader() {
+        if (stopped || nodeSession != null || readerOpening) return;
+        readerOpening = true;
         worker.execute(() -> {
             long connectionStarted = SystemClock.elapsedRealtime();
             try {
@@ -61,18 +80,37 @@ final class PressCaptureSource {
                 DragShareLog.i(TAG, "connection stage=press_reader_ready elapsed_ms="
                         + (SystemClock.elapsedRealtime() - connectionStarted));
                 main.post(() -> {
-                    if (stopped) ready.close();
-                    else {
-                        nodeSession = ready;
-                        ModuleActivation.reportPressReader(context, true, "");
-                        DragShareLog.i(TAG, "press reader ready; idle without reading nodes");
+                    readerOpening = false;
+                    if (stopped) {
+                        ready.close();
+                        return;
                     }
+                    IBinder.DeathRecipient death = () -> main.post(() -> {
+                        if (stopped || nodeSession != ready) return;
+                        DragShareLog.w(TAG, "press reader lease died; reconnecting to the module process");
+                        readerFailed(ready, "取词服务进程已退出，正在重连。", true);
+                    });
+                    if (!ready.linkToDeath(death)) {
+                        ready.close();
+                        readerFailed(null, "取词连接已失效，正在重连。", false);
+                        return;
+                    }
+                    nodeSession = ready;
+                    leaseDeath = death;
+                    main.removeCallbacks(readerRetry);
+                    readerRetryDelayMs = 0L;
+                    readerFailureShown = false;
+                    ModuleActivation.reportPressReader(context, true, "");
+                    DragShareLog.i(TAG, "press reader ready; idle without reading nodes");
                 });
             } catch (IOException | SecurityException | IllegalStateException error) {
                 DragShareLog.w(TAG, "connection stage=press_reader_failed elapsed_ms="
                         + (SystemClock.elapsedRealtime() - connectionStarted));
                 DragShareLog.w(TAG, "cannot prepare press reader", error);
-                main.post(() -> { if (!stopped) readerFailed(null, "取词连接未建立，请重载作用域。" + error.getMessage()); });
+                main.post(() -> {
+                    readerOpening = false;
+                    if (!stopped) readerFailed(null, "取词连接未建立，正在重连。" + error.getMessage(), false);
+                });
             }
         });
     }
@@ -213,7 +251,7 @@ final class PressCaptureSource {
                 main.post(() -> {
                     if (stopped) return;
                     if (error instanceof SharedRootNodeCapture.ConnectionFailedException || error instanceof SecurityException) {
-                        readerFailed(session, "取词连接已中断，请重载作用域。" + error.getMessage());
+                        readerFailed(session, "取词连接已中断，正在重连。" + error.getMessage(), false);
                     } else if (request == generation) {
                         if (detector.isFired()) showFailure("本次按压未完成：" + error.getMessage());
                         cancelGesture();
@@ -431,23 +469,50 @@ final class PressCaptureSource {
         Toast.makeText(context, reason, Toast.LENGTH_LONG).show();
     }
 
-    private void readerFailed(SharedRootNodeCapture.Connection failed, String reason) {
-        if (nodeSession != failed) return;
+    private void readerFailed(SharedRootNodeCapture.Connection failed, String reason, boolean reconnectNow) {
+        if (nodeSession != failed) {
+            if (failed != null) failed.close();
+            return;
+        }
         nodeSession = null;
         cancelGesture();
-        if (failed != null) failed.close();
+        if (failed != null) {
+            failed.unlinkFromDeath(leaseDeath);
+            failed.close();
+        }
+        leaseDeath = null;
         ModuleActivation.reportPressReader(context, false, reason);
-        showFailure(reason);
+        if (reconnectNow) openReader();
+        else scheduleReaderRetry();
+    }
+
+    private void scheduleReaderRetry() {
+        if (stopped) return;
+        main.removeCallbacks(readerRetry);
+        readerRetryDelayMs = readerRetryDelayMs <= 0L
+                ? READER_RETRY_FIRST_MS
+                : Math.min(readerRetryDelayMs * 2L, READER_RETRY_MAX_MS);
+        DragShareLog.i(TAG, "press reader retry scheduled in_ms=" + readerRetryDelayMs);
+        if (readerRetryDelayMs >= READER_RETRY_MAX_MS && !readerFailureShown) {
+            readerFailureShown = true;
+            showFailure("取词服务持续不可用，正在继续重连。可打开模块设置查看连接状态。");
+        }
+        main.postDelayed(readerRetry, readerRetryDelayMs);
     }
 
     void stop() {
         Runnable stop = () -> {
             stopped = true;
+            main.removeCallbacks(readerRetry);
             cancelGesture();
             SharedRootNodeCapture.Connection session = nodeSession;
             nodeSession = null;
             ModuleActivation.reportPressReader(context, false, "");
-            if (session != null) session.close();
+            if (session != null) {
+                session.unlinkFromDeath(leaseDeath);
+                session.close();
+            }
+            leaseDeath = null;
             blocker.close();
             worker.shutdownNow();
         };

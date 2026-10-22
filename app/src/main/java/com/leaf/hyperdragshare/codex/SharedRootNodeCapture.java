@@ -12,6 +12,7 @@ import android.os.RemoteException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -26,9 +27,10 @@ final class SharedRootNodeCapture {
 
     private SharedRootNodeCapture() {}
 
+    /** Opens the lease through a short-lived unstable Provider handshake. */
     static Connection open(Context context, boolean manual) throws IOException {
         ContentProviderClient provider = context.getContentResolver()
-                .acquireContentProviderClient(ImageStagingClient.BASE_URI);
+                .acquireUnstableContentProviderClient(ImageStagingClient.BASE_URI);
         if (provider == null) throw new IOException("无法连接模块取词服务");
         Binder owner = new Binder();
         try {
@@ -37,17 +39,25 @@ final class SharedRootNodeCapture {
             request.putBoolean("manual", manual);
             int moduleUid = context.getPackageManager().getApplicationInfo(BuildConfig.APPLICATION_ID, 0).uid;
             Bundle response = provider.call(METHOD_OPEN, null, request);
-            return new Connection(context, provider, owner, moduleUid,
-                    IRootNodeLease.Stub.asInterface(response.getBinder("lease")));
+            if (response == null) throw new IOException("取词服务未返回租赁句柄");
+            IBinder leaseBinder = response.getBinder("lease");
+            if (leaseBinder == null) throw new IOException("取词服务未返回租赁句柄");
+            return new Connection(context, owner, moduleUid, IRootNodeLease.Stub.asInterface(leaseBinder));
         } catch (android.content.pm.PackageManager.NameNotFoundException error) {
-            provider.close();
             throw new IOException("模块已不可用", error);
         } catch (RemoteException | IllegalStateException error) {
-            provider.close();
             throw new IOException("连接取词服务失败：" + error.getMessage(), error);
-        } catch (RuntimeException error) {
+        } finally {
+            releaseProvider(provider);
+        }
+    }
+
+    /** Releases the handshake client, logging an unexpected close failure at the boundary. */
+    private static void releaseProvider(ContentProviderClient provider) {
+        try {
             provider.close();
-            throw error;
+        } catch (RuntimeException error) {
+            DragShareLog.w("DragShare/SharedNodes", "Unable to release unstable Provider handshake", error);
         }
     }
 
@@ -245,16 +255,35 @@ final class SharedRootNodeCapture {
         }
 
         private final Context context;
-        private final ContentProviderClient provider;
         // Retain this Binder until close so the server can observe a remote client's death.
         private final IBinder owner;
         private final int moduleUid;
         private final IRootNodeLease lease;
         private volatile boolean closed;
 
-        Connection(Context context, ContentProviderClient provider, IBinder owner, int moduleUid, IRootNodeLease lease) {
-            this.context = context; this.provider = provider; this.owner = owner;
+        Connection(Context context, IBinder owner, int moduleUid, IRootNodeLease lease) {
+            this.context = context; this.owner = owner;
             this.moduleUid = moduleUid; this.lease = lease;
+        }
+
+        /** Reports when the module process hosting this lease disappears. */
+        boolean linkToDeath(IBinder.DeathRecipient recipient) {
+            if (closed) return false;
+            try {
+                lease.asBinder().linkToDeath(recipient, 0);
+                return true;
+            } catch (RemoteException error) {
+                return false;
+            }
+        }
+
+        void unlinkFromDeath(IBinder.DeathRecipient recipient) {
+            try {
+                lease.asBinder().unlinkToDeath(recipient, 0);
+            } catch (NoSuchElementException error) {
+                // The Binder already died or the recipient was never registered.
+                DragShareLog.i("DragShare/SharedNodes", "Death recipient was already unlinked");
+            }
         }
 
         CapturedContent capture(float x, float y, Set<String> blocked, boolean text, boolean images,
@@ -381,7 +410,6 @@ final class SharedRootNodeCapture {
             closed = true;
             try { lease.close(); }
             catch (RemoteException error) { DragShareLog.w("DragShare/SharedNodes", "Capture service disconnected during close", error); }
-            finally { provider.close(); }
         }
     }
 

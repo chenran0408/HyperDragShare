@@ -1,5 +1,11 @@
 # 目标设备验证记录
 
+## 2026-10-22：208 源码与构建完成，未安装
+
+- `repair-from-189` 源码 1.7.208/232；415 项测试、Lint、R8 arm64 Release 通过。APK：`D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.208-arm64-v8a.apk`，7,411,272 bytes，SHA256 `20CD897F3C4B6C63921F8331CA36770351D61942D050B2D1A65FC8B2AD3F7AC2`，证书 SHA256 与 207 一致。
+- 设备只读预检显示最后安装 206/230，屏幕点亮且前台有系统界面。为避免打断正在使用的页面，**未安装 208、未重载 Hook、未做功能验收**。没有读取或修改私人内容。
+- 后续设备空闲时先集中安装，再验取词租赁恢复（模块进程退出时传送门不连带退出）、系统设置页的透明桥实际可见、微信文字分词与非微信图片拖拽。Root evdev 注入与真实手指拖拽要分别记账。
+
 ## 2026-10-22：207 构建完成，设备待验
 
 - 源码 `repair-from-189` 为 1.7.207/231；415 项单测、Lint、R8 arm64 Release 构建通过。签名包 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.207-arm64-v8a.apk`，7,411,272 bytes，SHA256 `017A117500454CBBB02B7CC325EBC49E3D8B0EF581BF29B91F7FF543FE79D236`。

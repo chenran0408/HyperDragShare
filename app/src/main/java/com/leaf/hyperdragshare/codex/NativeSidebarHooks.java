@@ -373,7 +373,7 @@ final class NativeSidebarHooks {
             input.putInt("display_id", target.getDisplay().getDisplayId());
             input.putInt("width", target.getWidth()); input.putInt("height", target.getHeight());
             ipc.execute(() -> {
-                try (ContentProviderClient provider = context.getContentResolver().acquireContentProviderClient(ImageStagingClient.BASE_URI)) {
+                try (ContentProviderClient provider = context.getContentResolver().acquireUnstableContentProviderClient(ImageStagingClient.BASE_URI)) {
                     if (provider == null) throw new IllegalStateException("Module provider is unavailable");
                     Bundle response = provider.call(StashSurfaceHost.METHOD_OPEN, null, input);
                     if (response == null) throw new IllegalStateException("Module returned no sidebar surface");

@@ -42,7 +42,7 @@ public final class RootLeaseFailureTest {
             @Override public void close() {}
         };
         SharedRootNodeCapture.Connection connection = new SharedRootNodeCapture.Connection(
-                RuntimeEnvironment.getApplication(), null, new Binder(), 10000, lease);
+                RuntimeEnvironment.getApplication(), new Binder(), 10000, lease);
         SharedRootNodeCapture.Connection.PressResult result = connection.capturePress(
                 10, 10, Set.of("test.excluded"), true, false, true, source -> true);
         assertTrue(result.policyExcluded);
@@ -73,7 +73,7 @@ public final class RootLeaseFailureTest {
             @Override public void close() {}
         };
         SharedRootNodeCapture.Connection connection = new SharedRootNodeCapture.Connection(
-                RuntimeEnvironment.getApplication(), null, new Binder(), 10000, lease);
+                RuntimeEnvironment.getApplication(), new Binder(), 10000, lease);
         try {
             connection.capturePress(10, 10, Set.of(), true, false, true, source -> true);
             fail("Expected a failed request");

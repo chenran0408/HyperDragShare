@@ -113,6 +113,7 @@ object BigBangOverlayLauncher {
         ocrPending: Boolean = false, pressId: Long = -1L, host: android.app.Activity? = null) {
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
+            host?.finish()
             return
         }
         if (activeHost === host) activeHost = null
