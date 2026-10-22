@@ -1,5 +1,16 @@
 # 当前功能与验证状态
 
+## 219 应用商店安装推荐过滤与 MMGG 图标
+
+源码、R8 Release 和设备安装均为 `1.7.217/241`。Release APK 为 4,220,849 bytes，SHA256 `2833B3544F625234122F339F4205A9C60DE187A4E0642CA02D71840806001DC6`；设备 `base.apk` 回读哈希完全一致。
+
+- AICR 复制直达气泡入口按 `copy_acquire` 类别整类过滤。该类别用于缺失应用安装推荐，因此过滤覆盖“获取小米浏览器应用”等应用商店建议，不再依赖按钮文案或固定应用名。同一列表中的普通复制直达建议会保留。
+- 已核对 AICR `4.12.26` 的 `um0.g(List, ...)` 与 `4.12.18` 的 `bm0.g(List, ...)`，两者都通过 cue 的 `getCategory()` 暴露该类别。未加入 AICR versionCode 门槛或宽泛反射搜索。
+- `testDebugUnitTest lintDebug assembleDebug assembleRelease` 通过：423 项测试、0 失败、0 错误、0 跳过；Lint、R8 和资源压缩成功，整批耗时 1 分 21 秒。
+- 真机重启 AICR 后，`cognitionService` 日志确认 `appStoreBubbleFilter=true build=1.7.217/241`。用程序生成的公开 URL 点击复制，1 秒时正常原生复制卡片仍包含“编辑所选文本”和“打开链接”；约 6 秒时只新增“发送到平板”，没有安装推荐，且日志记录 `suppressed app-store install bubble count=1`。
+- 新自适应图标改为深色底、白/蓝/橙 M 标识，并补充 Android 单色主题图层。分享面板实机已显示新 M 图标；桌面主题的单色图标效果未单独截图验收。
+- 当前 AICR `4.12.26` 有真机过滤证据；`4.12.18` 只有已核验结构映射。其他 AICR 内部混淆版本若改变类或方法，Filter 会报告未找到并保留系统原行为，不模糊匹配其他类别。
+
 ## 218 原生复制直达、MiTrustService 与社区入口
 
 源码、R8 Release和设备安装均为`1.7.216/240`。Release APK为4,220,129 bytes，SHA256 `E935AFE246CC82A0AB65E273BCBC66B797044722C40892C03358F6AB112B87AB`；设备base.apk回读哈希一致。Debug包SHA256为`06DAC8ECFE11993C123CB016E8026C778C4A75D6B410273C03A052BDFD3C93F2`，用于同一源码的Hook定位验证。

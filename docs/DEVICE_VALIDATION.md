@@ -1,5 +1,14 @@
 # 目标设备验证记录
 
+## 2026-10-22：217 应用商店安装推荐过滤
+
+- 设备为 Xiaomi 15 Pro、HyperOS 4.0.0.17、Android 17。同签名覆盖安装 `1.7.217/241`，仅 `arm64-v8a`；本地 Release APK 4,220,849 bytes，SHA256 `2833B3544F625234122F339F4205A9C60DE187A4E0642CA02D71840806001DC6`，设备 `base.apk` 回读哈希相同。
+- 强制重启 AICR 后，`com.xiaomi.aicr:cognitionService`、`:actionprovider` 与主进程均加载 `build=1.7.217/241`，日志明确显示 `appStoreBubbleFilter=true`。覆盖入口为 `copy_acquire` 类别，不按“小米浏览器”等显示文案过滤。
+- 使用程序生成的 `https://example.com/mmgg-store-bubble-filter-217` 在 MMGG 分词面板点击复制。1 秒截图确认原生复制卡片正常显示“编辑所选文本”和“打开链接”；6 秒截图仍无应用商店安装卡，只保留正常直达项以及系统“发送到平板”。
+- 同一设备日志记录 `suppressed app-store install bubble count=1`，证明过滤由已加载的 AICR Hook 执行，而不是测试时关闭了系统推荐或清空候选。
+- 测试后重新启动传送门原生前台服务：`isForeground=true`，Root 输入 226ms ready，PressReader 520ms ready。测试只使用生成 URL；未读取、保存或提交私人页面与聊天正文。
+- `4.12.18` 的 `bm0.g(List, ...)` 已完成静态结构核对，但目标设备当前运行 `4.12.26`，因此 `4.12.18` 不在本轮安装验证范围。其他未核验 AICR 版本不宣称支持。
+
 ## 2026-10-22：216 原生复制卡片、关于页与 MiTrustService Hook
 
 - `testDebugUnitTest assembleDebug`和`lintDebug assembleRelease`通过。R8 Release与Debug使用同一证书；最终设备安装为`1.7.216/240`，Release APK 4,220,129 bytes，SHA256 `E935AFE246CC82A0AB65E273BCBC66B797044722C40892C03358F6AB112B87AB`，Root回读设备base.apk哈希完全一致。

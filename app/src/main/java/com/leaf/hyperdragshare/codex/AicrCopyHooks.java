@@ -16,7 +16,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -30,6 +33,9 @@ final class AicrCopyHooks {
     private static final String[] TEXT_COPY_EVENT_CLASSES = {"ul9", "ji9"};
     private static final String[] PERCEPTION_STATE_CLASSES = {"wo2", "jn2"};
     private static final String[] PERCEPTION_KEY_CLASSES = {"n20", "x10"};
+    private static final String[] BUBBLE_MANAGER_CLASSES = {"um0", "bm0"};
+    private static final String BUBBLE_SHOW_METHOD = "g";
+    private static final String APP_STORE_ACQUIRE_CATEGORY = "copy_acquire";
     private static final String TEXT_COPY_EVENT_METHOD = "j";
     private static final String NATIVE_CHANNEL_ID = "phrase_channel_id";
     private static final int NATIVE_NOTIFICATION_ID = 111;
@@ -95,8 +101,10 @@ final class AicrCopyHooks {
                         }
                     });
             boolean sourceHookInstalled = hookModuleClipboardSource(classLoader);
+            boolean bubbleFilterInstalled = hookAppStoreMissingAppBubbles(classLoader);
             hookNativeNotificationActions();
-            log("native copy-direct card hook installed sourceHook=" + sourceHookInstalled + " build="
+            log("native copy-direct card hook installed sourceHook=" + sourceHookInstalled
+                    + " appStoreBubbleFilter=" + bubbleFilterInstalled + " build="
                     + BuildConfig.VERSION_NAME + "/" + BuildConfig.VERSION_CODE);
         } catch (RuntimeException | LinkageError error) {
             log("native copy-direct card hook unavailable: "
@@ -158,6 +166,59 @@ final class AicrCopyHooks {
             if (value instanceof String && !((String) value).isEmpty()) return (String) value;
         }
         return null;
+    }
+
+    private static boolean hookAppStoreMissingAppBubbles(ClassLoader classLoader) {
+        for (String className : BUBBLE_MANAGER_CLASSES) {
+            Class<?> bubbleManager = XposedHelpers.findClassIfExists(className, classLoader);
+            if (bubbleManager == null) continue;
+            Method showMethod = findBubbleShowMethod(bubbleManager);
+            if (showMethod == null) continue;
+            XposedBridge.hookMethod(showMethod, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    Object cuesArg = param.args[0];
+                    if (!(cuesArg instanceof List<?>)) return;
+                    List<?> cues = (List<?>) cuesArg;
+                    List<Object> retained = new ArrayList<>(cues.size());
+                    int suppressed = 0;
+                    for (Object cue : cues) {
+                        if (cue != null && isAppStoreMissingApp(cue)) {
+                            suppressed++;
+                        } else {
+                            retained.add(cue);
+                        }
+                    }
+                    if (suppressed == 0) return;
+                    log("suppressed app-store install bubble count=" + suppressed);
+                    if (retained.isEmpty()) {
+                        param.setResult(null);
+                    } else {
+                        param.args[0] = retained;
+                    }
+                }
+            });
+            return true;
+        }
+        log("app-store bubble filter variants were not found");
+        return false;
+    }
+
+    private static Method findBubbleShowMethod(Class<?> bubbleManager) {
+        for (Method method : bubbleManager.getDeclaredMethods()) {
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            if (BUBBLE_SHOW_METHOD.equals(method.getName())
+                    && parameterTypes.length == 2
+                    && parameterTypes[0] == List.class) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isAppStoreMissingApp(Object cue) {
+        Object category = XposedHelpers.callMethod(cue, "getCategory");
+        return APP_STORE_ACQUIRE_CATEGORY.equals(category);
     }
 
     private static Class<?> findFirstClass(String[] classNames, ClassLoader classLoader) {
