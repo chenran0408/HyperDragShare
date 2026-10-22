@@ -4,6 +4,7 @@
 
 - 设备为 Xiaomi 15 Pro、HyperOS 4.0.0.17、Android 17；MiTrustService `1.2.260825/12260825`。LSPosed 数据库中模块作用域已包含`com.xiaomi.trustservice`。
 - 当前Release为`1.7.218/242`，4,641,001 bytes，SHA256 `AF3BB9767FCD88F11CF93529CF60300B0EF82D6EF8C1CD73755BCB554510A06E`；设备`base.apk`回读哈希一致。APK只包含`arm64-v8a/libdexkit.so`和既有arm64原生库。
+- 正式Release已上线为[Latest v1.7.218](https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.218)。服务端APK大小、SHA256和下载后文件哈希均与本地/设备一致。
 - 开启“禁用风险检测”后强停并重新启动MiTrustService。LSPosed日志明确记录`risk-detection hook installed; bypassed Y0.h#b`，说明两个字符串特征唯一匹配到无参布尔初始化方法并完成Hook。
 - 旧实现仅处理`ServiceManager.waitForService`；本轮已移除。全量检查423项单测0失败、Lint和R8 Release通过；最终只追加运行日志后再次完成R8 Release构建。
 - 正式发布构建还修复了已删除`CopyDirectNotification`的遗留引用，并统一词块最大宽度、恢复字体留白；最终包与设备回读SHA256相同。

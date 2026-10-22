@@ -4,6 +4,13 @@
 
 源码、R8 Release 和设备安装均为 `1.7.218/242`。Release APK 为 4,641,001 bytes，SHA256 `AF3BB9767FCD88F11CF93529CF60300B0EF82D6EF8C1CD73755BCB554510A06E`；设备 `base.apk` 回读哈希一致，仅打包 `arm64-v8a`。
 
+- 第一代 MMGG 正式版已发布：
+  [v1.7.218](https://github.com/chenran0408/HyperDragShare/releases/tag/v1.7.218)。
+  Release 非 Draft、非 Pre-release，并已标记为 Latest；tag `v1.7.218` 指向发布节点
+  `c03e880`，APK 与 SHA256 文件均已上传。GitHub 服务端 APK 摘要与本地、设备回读一致。
+- 默认分支`hyperos4-adaptation`已快进到正式版节点；根目录新增
+  [MMGG.md](../../MMGG.md)，说明名称来源、产品边界、安装方式和核心功能。
+
 - 提示“当前设备系统被篡改，存在安全隐患，无法进行连接”对应 MiTrustService `1.2.260825` 的 `string/system_tempering`，由 MRM 风险状态 `1` 触发。
 - 已删除全局拦截 `ServiceManager.waitForService` 的实现。该方式范围过大，而且目标提前缓存 MRM Binder 时无法生效。
 - 改为 DexKit `2.2.0` 按方法内容定位：只接受同时使用 `MiTrustService/statusEventHandle` 与 `vendor.xiaomi.hardware.mrm.IMrm/default`，或前一个标记与 `try init mrmd Service`，且无参数、返回`boolean`的唯一方法；匹配失败时保留系统原行为。
