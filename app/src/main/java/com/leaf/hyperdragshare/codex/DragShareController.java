@@ -148,6 +148,14 @@ final class DragShareController {
     private volatile float lastObservedX = -1;
     private volatile float lastObservedY = -1;
     private volatile long lastObservedEventTime;
+    private String gestureTraceSource;
+    private long gestureTraceDownTime = -1L;
+    private float gestureTraceStartX;
+    private float gestureTraceStartY;
+    private float gestureTraceLastX;
+    private float gestureTraceLastY;
+    private float gestureTraceMaxDistance;
+    private int gestureTraceMoves;
 
     private float lastX;
     private float lastY;
@@ -365,6 +373,8 @@ final class DragShareController {
         lastObservedY = y;
         lastObservedEventTime = eventTime;
         mainHandler.post(() -> {
+            boolean traceWasActive = active;
+            recordGestureTrace(action, x, y, eventTime, source);
             if (active && !inputSourceLogged) {
                 inputSourceLogged = true;
                 log("input source=" + source
@@ -374,6 +384,9 @@ final class DragShareController {
             try {
                 handleMotionOnMain(action, x, y, eventTime, source, beforeFinish);
             } finally {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    logGestureTrace(source, eventTime, traceWasActive);
+                }
                 if ("root".equals(source)
                         && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
                     if (rootDownTime == downTime) rootDownTime = -1L;
@@ -382,6 +395,49 @@ final class DragShareController {
                 }
             }
         });
+    }
+
+    private void recordGestureTrace(int action, float x, float y, long eventTime, String source) {
+        if (action == MotionEvent.ACTION_DOWN) {
+            gestureTraceSource = source;
+            gestureTraceDownTime = eventTime;
+            gestureTraceStartX = x;
+            gestureTraceStartY = y;
+            gestureTraceLastX = x;
+            gestureTraceLastY = y;
+            gestureTraceMaxDistance = 0f;
+            gestureTraceMoves = 0;
+            return;
+        }
+        if (gestureTraceDownTime < 0L || !source.equals(gestureTraceSource)) return;
+        gestureTraceLastX = x;
+        gestureTraceLastY = y;
+        if (action != MotionEvent.ACTION_MOVE) return;
+        gestureTraceMoves++;
+        gestureTraceMaxDistance = Math.max(
+                gestureTraceMaxDistance,
+                (float) Math.hypot(x - gestureTraceStartX, y - gestureTraceStartY));
+    }
+
+    private void logGestureTrace(String source, long eventTime, boolean wasActive) {
+        if (gestureTraceDownTime < 0L || !source.equals(gestureTraceSource)) return;
+        long durationMs = Math.max(0L, eventTime - gestureTraceDownTime);
+        boolean worthKeeping = wasActive || menuShown
+                || ("root".equals(source) && durationMs >= 650L);
+        if (worthKeeping) {
+            log("gesture summary source=" + source
+                    + " duration_ms=" + durationMs
+                    + " moves=" + gestureTraceMoves
+                    + " max_distance_px=" + Math.round(gestureTraceMaxDistance)
+                    + " start=" + Math.round(gestureTraceStartX) + "," + Math.round(gestureTraceStartY)
+                    + " end=" + Math.round(gestureTraceLastX) + "," + Math.round(gestureTraceLastY)
+                    + " overlay_active=" + wasActive
+                    + " menu=" + menuShown);
+        }
+        gestureTraceSource = null;
+        gestureTraceDownTime = -1L;
+        gestureTraceMoves = 0;
+        gestureTraceMaxDistance = 0f;
     }
 
     /** Called by a root-backed source after it has created an active drag session. */
