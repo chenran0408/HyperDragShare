@@ -1066,6 +1066,7 @@ private enum class ActivationUiState {
     Checking,
     NoRoot,
     NotInjected,
+    PortalServiceUnavailable,
     PortalRootUnavailable,
     RootInputConnecting,
     RootInputUnavailable,
@@ -1092,6 +1093,7 @@ private fun runtimeActivation(context: Context): ActivationUiState {
 
 private fun portalActivation(context: Context): ActivationUiState = when {
     !ModuleActivation.isCurrentBuildInjected(context) -> ActivationUiState.NotInjected
+    !ModuleActivation.isPortalServiceReady(context) -> ActivationUiState.PortalServiceUnavailable
     !ModuleActivation.isCurrentBuildPortalRootGranted(context) -> ActivationUiState.PortalRootUnavailable
     else -> runtimeActivation(context)
 }
@@ -1107,7 +1109,7 @@ internal fun ActivationStatusCard(
     DisposableEffect(context) {
         val preferences = context.getSharedPreferences(ModuleActivation.PREFS_NAME, Context.MODE_PRIVATE)
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-            // Death/status reports update the card. Only entering settings requests a handshake.
+            // Death/status reports update the card. Only entering settings requests startup.
             if (state != ActivationUiState.Checking && state != ActivationUiState.NoRoot) {
                 state = portalActivation(context)
             }
@@ -1141,14 +1143,16 @@ internal fun ActivationStatusCard(
         }
         var injected = ModuleActivation.isCurrentBuildInjected(context)
         var portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
-        if (!injected || !portalRootGranted) {
+        var serviceReady = ModuleActivation.isPortalServiceReady(context)
+        if (!injected || !portalRootGranted || !serviceReady) {
             withContext(Dispatchers.IO) {
-                ModuleActivation.requestPortalInjectionHandshake()
+                ModuleActivation.requestPortalRuntimeStart()
             }
             repeat(PORTAL_ACTIVATION_CHECK_ATTEMPTS) {
                 injected = ModuleActivation.isCurrentBuildInjected(context)
                 portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
-                if (injected && portalRootGranted) {
+                serviceReady = ModuleActivation.isPortalServiceReady(context)
+                if (injected && portalRootGranted && serviceReady) {
                     state = portalActivation(context)
                     return@LaunchedEffect
                 }
@@ -1163,6 +1167,7 @@ internal fun ActivationStatusCard(
         ActivationUiState.Checking -> "正在检测"
         ActivationUiState.NoRoot -> "未获取 Root 权限"
         ActivationUiState.NotInjected -> "未连接传送门"
+        ActivationUiState.PortalServiceUnavailable -> "传送门服务未就绪"
         ActivationUiState.PortalRootUnavailable -> "传送门 Root 通道不可用"
         ActivationUiState.RootInputConnecting -> "Root 输入正在连接"
         ActivationUiState.RootInputUnavailable -> "Root 输入不可用"
@@ -1174,6 +1179,7 @@ internal fun ActivationStatusCard(
         ActivationUiState.Checking -> "正在检查运行环境"
         ActivationUiState.NoRoot -> "Root 输入通道当前不可用"
         ActivationUiState.NotInjected -> "确认作用域已启用，在通用设置中重载模块"
+        ActivationUiState.PortalServiceUnavailable -> "前台服务尚未启动，请在通用设置中重载模块"
         ActivationUiState.PortalRootUnavailable -> "传送门的 Root 检测未完成或未成功，请检查作用域运行状态"
         ActivationUiState.RootInputConnecting -> "正在连接触摸输入，连接成功后才能按住取词"
         ActivationUiState.RootInputUnavailable -> ModuleActivation.rootInputError(context)
@@ -1185,6 +1191,7 @@ internal fun ActivationStatusCard(
         ActivationUiState.Checking -> "正在检测"
         ActivationUiState.NoRoot -> "ROOT"
         ActivationUiState.NotInjected -> "LSPosed"
+        ActivationUiState.PortalServiceUnavailable -> "传送门服务"
         ActivationUiState.PortalRootUnavailable -> "传送门 ROOT"
         ActivationUiState.RootInputConnecting, ActivationUiState.RootInputUnavailable -> "ROOT · 输入"
         ActivationUiState.PressReaderConnecting, ActivationUiState.PressReaderUnavailable -> "ROOT · 取词"

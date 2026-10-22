@@ -84,7 +84,7 @@ final class PortalHooks {
                             registerSettingsObserver(context);
                             applyPortalRuntime();
                             activationReported = reportPortalActivation(context);
-                            log("application initialized; press input does not require the pick service");
+                            log("application input initialized; foreground service startup reported separately");
                         } catch (RuntimeException | LinkageError error) {
                             stopPortalRuntime(false);
                             log("cannot initialize application press input; keeping host behavior", error);
@@ -212,6 +212,7 @@ final class PortalHooks {
                 unregisterSettingsObserver();
                 portalService = null;
                 stopPortalRuntime(false);
+                ModuleActivation.reportInjected((Context) param.thisObject, false);
                 portalContext = null;
             }
         });
@@ -413,7 +414,7 @@ final class PortalHooks {
     }
 
     private static boolean reportPortalActivation(Context context) {
-        boolean reported = ModuleActivation.reportInjected(context);
+        boolean reported = ModuleActivation.reportInjected(context, portalService != null);
         if (reported) {
             ModuleActivation.probePortalRootAccessAsync(context);
         }

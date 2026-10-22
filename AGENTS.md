@@ -63,7 +63,8 @@
 11. “手指移开时关闭分享菜单”是四种拖拽样式的公共行为。简洁/现代/流光离开菜单与触发带时移除
     线性菜单，环形离开展开面板区域时折叠；同一手势重新进入触发区后都应允许再次展开。
 12. 首页激活状态固定按 Root＋传送门解释：“无 Root → 当前版本未注入传送门 →
-   传送门 Root 通道不可用 → 实际Root输入未就绪/失败 → 已启用按压但取词未就绪/失败 → 已激活”。
+   传送门前台服务未就绪 → 传送门 Root 通道不可用 → 实际Root输入未就绪/失败 → 已启用按压但取词未就绪/失败 → 已激活”。
+   212起设置启动和重载必须启动传送门原有TextContentExtensionService前台服务，不能只查询Provider：已观察到Provider-only进程adj935被umms_pressure回收。服务状态随既有注入RPC上报，不改系统内存策略，不增加定时复活。
    传送门 Hook 必须通过
     `ModuleActivation.reportInjected()` 上报其编译时 `BuildConfig.VERSION_CODE`；不要把普通的
     `get_settings` 调用当作注入证明，否则 APK 更新后仍运行旧代码的传送门进程会被误报为已激活。
@@ -126,9 +127,9 @@
 
 ## 传送门启动与重载
 
-144起精确Hook 5.1.5的App.onCreate，仅主进程初始化；无拾取服务时只在按压已启用且来源为传送门时启动Root运行时。Root可query SwitchControlProvider根URI拉进程，不打开原生Activity；其query/getType无业务调用，getControlStatus可能迁移设置，不用于唤醒。content --user需要数字，Root用am get-current-user取得，不把CLI零退出码当成功。168已真机证实无需拾取服务即可Root输入/取词ready。
+144起精确Hook 5.1.5的App.onCreate，仅主进程初始化；无拾取服务时只在按压已启用且来源为传送门时启动Root运行时。144–211曾通过SwitchControlProvider根query拉进程，168证实可使Root输入/取词ready，但211发现仅此启动会处于缓存进程并被内存压力回收。212改用原生TextContentExtensionService前台服务，不打开Activity，不调用getControlStatus，不把CLI零退出码当就绪证明。
 
-既有重载弹窗的热重载只结束Portal/AICR，空query重启Portal后核对新PID/版本/Root确认；AICR下次绑定加载。android/system_server的代码更新必须软或整机重启，不宣称应用热重载更新全部作用域。未为了验证重启用户手机。
+既有重载弹窗的应用重载结束Portal/AICR，并重启SystemUI及原生侧栏ui进程；212通过原生前台服务重启Portal，核对新PID/版本/服务/Root输入与按压reader。AICR下次绑定加载。android/system_server的代码更新必须软或整机重启，不宣称应用重载更新全部作用域。未为了验证重启用户手机。
 
 145以Root DOWN标记同一次按压和预览；被接受的分词/OCR交接后继续抑制迟到预览/原生浮窗并暂存宿主结束调用，到真实UP/CANCEL后回放再清标记。排队show复核标记，旧查询/失败回调不得接管或释放下一手势。此为源码回归通过，实际手指手感未验；面积仍无有效数据。
 

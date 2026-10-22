@@ -7,6 +7,8 @@
 
 ## 当前系统能力与微信路径（1.7.211）
 
+212 修正重载启动：设置页和 ScopeRestart 共用 `am start-foreground-service --user current -n com.miui.contentextension/.services.TextContentExtensionService` 启动传送门已有前台服务，删除仅唤醒 Provider 的旧命令。传送门5.1.5的onCreate先调用原生startForeground，Hook随后将服务就绪状态随既有注入RPC上报；onDestroy撤销服务状态，Binder死亡清除整个激活记录。重载成功需要当前版本、当前PID、前台服务、Root与输入连接都就绪，按压已启用时还需reader就绪。没有修改系统adj、禁用内存回收或增加轮询复活进程。
+
 分词改为 Android ICU，扫码接到 AICR `IBarcodeService`，不再打包 jieba/JNI/词典及 ZXing。多语言混排、字素边界和条码协议见 [SYSTEM_TEXT_AND_BARCODE.md](SYSTEM_TEXT_AND_BARCODE.md)。OCR/NER 客户端协议不变。
 
 微信同一按压优先接收传送门的真实文字或图片，废弃仍在排队的旧 Root 查询/OCR 结果。没有宿主文字时，Root helper 返回带来源标记的 `ocr_region`，直接调用 AICR，识别完成后只打开一次分词窗；不提前显示等待面板、暂存图片或经过中间识字窗口。211 去掉210的400ms人为等候；识字期间明确移动超过36dp才将区域转入拖拽。截图仍按微信窗口身份与可见区域复核，Bitmap 在实际调用完成后释放。210文字单窗和图片可拖已由用户实测，211新命中率、速度和防误拖尚待实测。
@@ -52,7 +54,7 @@ build304完整testDebugUnitTest/lintDebug/assembleDebug成功：208项测试0失
 
 ## 1.7.144 启动与作用域重载
 
-传送门5.1.5的App.onCreate负责主进程按压初始化，不再必须先创建TextContentExtensionService。无服务时仅传送门模式且按压已启用才创建输入源；设置观察保留，关闭/服务销毁不被通用Hook拦截。Root通过无业务副作用的SwitchControlProvider根query拉进程，既有首页握手也使用此路径，不打开Activity、不调用会迁移设置的getControlStatus。
+传送门5.1.5的App.onCreate负责主进程按压初始化，不再必须先创建TextContentExtensionService。无服务时仅传送门模式且按压已启用才创建输入源；设置观察保留，关闭/服务销毁不被通用Hook拦截。144–211通过SwitchControlProvider根query拉进程是历史方案；212为避免缓存进程回收改用宿主已有前台服务，见本文顶部。无需打开Activity或调用会迁移设置的getControlStatus。
 
 设置沿用同一重载弹窗，提供应用热重载、Android软重启、整机重启；热重载只涉及Portal和AICR，并核对新PID/版本/Root确认。AICR下次绑定加载，android代码更新要后两种方式，不能在热重载中冒称框架已更新。168后台冷启动已真机确认输入/取词ready，三选一UI和全模式重载未验。框架Hook仍待重载；真实面积缺失和普通按住冲突不因启动修复而消失。
 

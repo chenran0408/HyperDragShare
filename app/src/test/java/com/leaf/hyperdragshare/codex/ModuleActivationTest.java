@@ -36,6 +36,7 @@ public final class ModuleActivationTest {
     private Bundle readyReport(int pid, Lifetime lifetime) {
         Bundle report = report(pid, lifetime);
         report.putBoolean(ModuleActivation.EXTRA_PORTAL_ROOT_GRANTED, true);
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_SERVICE_READY, true);
         report.putBoolean(ModuleActivation.EXTRA_ROOT_INPUT_READY, true);
         report.putBoolean(ModuleActivation.EXTRA_PRESS_READER_READY, true);
         return report;
@@ -69,14 +70,32 @@ public final class ModuleActivationTest {
     }
 
     @Test
-    public void handshakeOnlyReadsTheNoopPortalProvider() {
-        String command = ModuleActivation.portalHandshakeCommand();
-        assertTrue(command.startsWith("content query --user "));
-        assertTrue(command.contains("content://com.miui.contentextension.provider.switchcontrolprovider"));
-        assertFalse(command.contains("start"));
-        assertFalse(command.contains("call"));
+    public void runtimeStartupUsesTheExistingForegroundServiceWithoutOpeningAnActivity() {
+        String command = ModuleActivation.portalStartCommand();
+        assertEquals("am start-foreground-service --user current -n "
+                + "com.miui.contentextension/.services.TextContentExtensionService", command);
+        assertFalse(command.contains("content query"));
         assertFalse(command.contains("com.miui.contentcatcher"));
         assertFalse(command.contains("force-stop"));
+    }
+
+    @Test public void providerInjectionCannotClaimServiceReadinessAndServiceStopClearsIt() {
+        Context context = RuntimeEnvironment.getApplication();
+        Lifetime lifetime = new Lifetime();
+        Bundle report = readyReport(10, lifetime);
+        report.remove(ModuleActivation.EXTRA_PORTAL_SERVICE_READY);
+        ModuleActivation.recordInjected(context, report);
+        assertTrue(ModuleActivation.isCurrentBuildInjected(context));
+        assertTrue(ModuleActivation.isRootInputReady(context));
+        assertFalse(ModuleActivation.isPortalServiceReady(context));
+
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_SERVICE_READY, true);
+        ModuleActivation.recordInjected(context, report);
+        assertTrue(ModuleActivation.isPortalServiceReady(context));
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_SERVICE_READY, false);
+        ModuleActivation.recordInjected(context, report);
+        assertFalse(ModuleActivation.isPortalServiceReady(context));
+        assertTrue(ModuleActivation.isCurrentBuildInjected(context));
     }
 
     @Test
@@ -110,13 +129,11 @@ public final class ModuleActivationTest {
     @Test
     public void newHostCannotInheritOldRootOrReaderReadiness() {
         Context context = RuntimeEnvironment.getApplication();
-        Bundle report = report(42, new Lifetime());
-        report.putBoolean(ModuleActivation.EXTRA_PORTAL_ROOT_GRANTED, true);
-        report.putBoolean(ModuleActivation.EXTRA_PRESS_READER_READY, true);
-        report.putBoolean(ModuleActivation.EXTRA_ROOT_INPUT_READY, true);
+        Bundle report = readyReport(42, new Lifetime());
         ModuleActivation.recordInjected(context, report);
         assertTrue(ModuleActivation.isPressReaderReady(context));
         assertTrue(ModuleActivation.isRootInputReady(context));
+        assertTrue(ModuleActivation.isPortalServiceReady(context));
 
         Bundle restarted = report(43, new Lifetime());
         ModuleActivation.recordInjected(context, restarted);
@@ -124,6 +141,7 @@ public final class ModuleActivationTest {
         assertFalse(ModuleActivation.isCurrentBuildPortalRootGranted(context));
         assertFalse(ModuleActivation.isPressReaderReady(context));
         assertFalse(ModuleActivation.isRootInputReady(context));
+        assertFalse(ModuleActivation.isPortalServiceReady(context));
         assertEquals("", ModuleActivation.pressReaderError(context));
     }
 
@@ -165,12 +183,14 @@ public final class ModuleActivationTest {
         ModuleActivation.recordInjected(context, readyReport(70, lifetime));
         assertTrue(ModuleActivation.isCurrentBuildInjected(context));
         assertTrue(ModuleActivation.isCurrentBuildPortalRootGranted(context));
+        assertTrue(ModuleActivation.isPortalServiceReady(context));
         assertTrue(ModuleActivation.isRootInputReady(context));
         assertTrue(ModuleActivation.isPressReaderReady(context));
 
         // Binder can already be dead before the queued death callback reaches the module.
         lifetime.alive = false;
         assertFalse(ModuleActivation.isCurrentBuildInjected(context));
+        assertFalse(ModuleActivation.isPortalServiceReady(context));
         assertFalse(ModuleActivation.isRootInputReady(context));
         lifetime.die();
         assertFalse(ModuleActivation.isCurrentBuildInjected(context));

@@ -1,5 +1,14 @@
 # 目标设备验证记录
 
+## 2026-10-22：212 重载启动与前台服务驻留
+
+- 本批一次完整`testDebugUnitTest lintDebug assembleRelease --offline --max-workers=4 --profile`在1分15秒成功；415项测试零失败/错误，Lint、R8、资源压缩通过。仅arm64-v8a，同证书Release APK为4,205,025 bytes，SHA256 `4D4E14620CE77AD58D5F7993E60350BA2D0B6F9816A56653C92408E741D08C38`。与211同构建/ABI/签名条件差4 bytes。
+- 13:18:52后台覆盖安装212/236成功，未清数据或切换前台页面。只强停Portal，然后执行生产同款`am start-foreground-service --user current -n com.miui.contentextension/.services.TextContentExtensionService`，未操作微信、SystemUI、系统框架或整机。回读安装base.apk哈希与交付包完全一致。
+- 新Portal PID22926：原生服务`isForeground=true`、`startRequested=true`，`oom_score_adj=200`。13:18:59输入229ms就绪、reader515ms就绪（两者为各自连接计时，不是重载总耗时）；激活报告injected/root/input/reader均236，`portal_service_ready=true`，错误为空。
+- 13:20:14再次核对，约82秒后仍为同一PID、同一前台服务、adj200，Root与reader报告继续就绪，读取的事件日志无该PID死亡/崩溃。这只证明本次短时驻留，未模拟内存压力，也未执行一键清理。211的cached adj935/umms_pressure与另一次前台服务进程被OneKeyClean终止是不同原因，不能承诺前台服务永不被清理。
+- 新增服务创建/销毁与旧PID/Binder死亡状态检查已有单测；完整重载弹窗会重启其他作用域，本批未实点；系统框架Hook没有重载。微信速度/误拖由用户集中实测，图片扫码新客户端、ICU混排操作和Settings上层OCR继续保留待验状态，不将通道就绪写成这些交互通过。
+- 交付：`D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.212-arm64-v8a.apk`；Git回退标签`snapshot-2026-10-22-212`。
+
 ## 2026-10-22：211 系统分词/扫码替换合批安装，前台服务状态核对
 
 - 用户确认210微信真实手指“文字单窗，图片可拖”；同时补充文字慢、易误拖。用户确认系统ICU与AICR条码普通UID调用此前已实机通过，本轮不再重复API实验。新211扫码适配器和微信路由不能仅凭旧接口结论称端到端通过。

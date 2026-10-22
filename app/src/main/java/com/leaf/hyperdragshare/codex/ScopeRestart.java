@@ -20,7 +20,7 @@ final class ScopeRestart {
         ModuleActivation.clearPortalReport(context);
         runRoot("am force-stop --user current com.miui.contentextension && "
                 + "am force-stop --user current com.xiaomi.aicr && "
-                + ModuleActivation.portalHandshakeCommand() + " && "
+                + ModuleActivation.portalStartCommand() + " && "
                 + "killall com.android.systemui && "
                 + "{ sidebar_pid=$(pidof com.miui.securitycenter:ui); "
                 + "if [ -n \"$sidebar_pid\" ]; then kill $sidebar_pid; fi; }", "应用作用域重载");
@@ -30,16 +30,17 @@ final class ScopeRestart {
             while (SystemClock.uptimeMillis() < deadline) {
                 int pid = ModuleActivation.injectedProcessId(context);
                 if (pid > 0 && pid != oldPid && ModuleActivation.isCurrentBuildInjected(context)) {
-                    if (ModuleActivation.isCurrentBuildPortalRootGranted(context)
-                            && (!readerRequired || (ModuleActivation.isRootInputReady(context)
-                            && ModuleActivation.isPressReaderReady(context)))) {
-                        DragShareLog.i(TAG, "new portal input/reader confirmed pid=" + pid
+                    if (ModuleActivation.isPortalServiceReady(context)
+                            && ModuleActivation.isCurrentBuildPortalRootGranted(context)
+                            && ModuleActivation.isRootInputReady(context)
+                            && (!readerRequired || ModuleActivation.isPressReaderReady(context))) {
+                        DragShareLog.i(TAG, "new portal foreground service/input/reader confirmed pid=" + pid
                                 + " elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
                         return;
                     }
+                    String failure = ModuleActivation.rootInputError(context);
+                    if (!failure.isEmpty()) throw new IOException("Root 输入未恢复：" + failure);
                     if (readerRequired) {
-                        String failure = ModuleActivation.rootInputError(context);
-                        if (!failure.isEmpty()) throw new IOException("Root 输入未恢复：" + failure);
                         failure = ModuleActivation.pressReaderError(context);
                         if (!failure.isEmpty()) throw new IOException("按压取词未恢复：" + failure);
                     }
@@ -50,7 +51,7 @@ final class ScopeRestart {
             Thread.currentThread().interrupt();
             throw new IOException("作用域重载等待被中断", error);
         }
-        throw new IOException("新作用域的输入或取词连接尚未就绪，请查看首页状态；系统框架更新需软重启生效");
+        throw new IOException("传送门前台服务、Root 输入或取词连接尚未就绪，请查看首页状态；系统框架更新需软重启生效");
     }
 
     static void restartAndroidRuntime() throws IOException {

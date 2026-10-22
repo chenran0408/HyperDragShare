@@ -16,6 +16,7 @@ final class ModuleActivation {
     static final String EXTRA_VERSION_CODE = "version_code";
     static final String EXTRA_PROCESS_ID = "process_id";
     static final String EXTRA_PORTAL_ROOT_GRANTED = "portal_root_granted";
+    static final String EXTRA_PORTAL_SERVICE_READY = "portal_service_ready";
     static final String EXTRA_PRESS_READER_READY = "press_reader_ready";
     static final String EXTRA_PRESS_READER_ERROR = "press_reader_error";
     static final String EXTRA_ROOT_INPUT_READY = "root_input_ready";
@@ -30,8 +31,9 @@ final class ModuleActivation {
     private static final String KEY_PRESS_READER_VERSION = "press_reader_version";
     private static final String KEY_ROOT_INPUT_VERSION = "root_input_version";
     private static final long ROOT_TIMEOUT_SECONDS = 4L;
-    private static final String PORTAL_PROVIDER_URI =
-            "content://com.miui.contentextension.provider.switchcontrolprovider";
+    private static final String PORTAL_START_COMMAND =
+            "am start-foreground-service --user current -n "
+                    + "com.miui.contentextension/.services.TextContentExtensionService";
     private static final String PORTAL_BLACKLIST_ACTIVITY_COMMAND =
             "am start --user current -n com.miui.contentextension/"
                     + "com.miui.contentextension.setting.whitelist.BlacklistSettingActivity";
@@ -44,10 +46,11 @@ final class ModuleActivation {
 
     private ModuleActivation() {}
 
-    static boolean reportInjected(Context portalContext) {
+    static boolean reportInjected(Context portalContext, boolean serviceReady) {
         Bundle extras = new Bundle();
         extras.putLong(EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
         extras.putInt(EXTRA_PROCESS_ID, android.os.Process.myPid());
+        extras.putBoolean(EXTRA_PORTAL_SERVICE_READY, serviceReady);
         return reportPortalStatus(portalContext, extras);
     }
 
@@ -155,6 +158,9 @@ final class ModuleActivation {
         editor
                 .putLong(KEY_INJECTED_VERSION, reportedVersion)
                 .putInt(KEY_PROCESS_ID, pid);
+        if (extras.containsKey(EXTRA_PORTAL_SERVICE_READY)) {
+            editor.putBoolean(EXTRA_PORTAL_SERVICE_READY, extras.getBoolean(EXTRA_PORTAL_SERVICE_READY));
+        }
         if (extras.containsKey(EXTRA_PORTAL_ROOT_GRANTED)) {
             editor.putLong(KEY_PORTAL_ROOT_VERSION, reportedVersion)
                     .putBoolean(
@@ -196,6 +202,12 @@ final class ModuleActivation {
                 && preferences.getBoolean(KEY_PORTAL_ROOT_GRANTED, false);
     }
 
+    static synchronized boolean isPortalServiceReady(Context context) {
+        return isCurrentBuildInjected(context)
+                && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .getBoolean(EXTRA_PORTAL_SERVICE_READY, false);
+    }
+
     static boolean hasRootAccess() {
         return runRootCommand("id -u");
     }
@@ -228,13 +240,13 @@ final class ModuleActivation {
                 ? preferences.getString(EXTRA_ROOT_INPUT_ERROR, "") : "";
     }
 
-    /** Root reads the no-op provider to start the host without opening an Activity. */
-    static boolean requestPortalInjectionHandshake() {
-        return runRootCommand(portalHandshakeCommand());
+    /** Start the host's existing foreground service without opening an Activity. */
+    static boolean requestPortalRuntimeStart() {
+        return runRootCommand(portalStartCommand());
     }
 
-    static String portalHandshakeCommand() {
-        return "content query --user $(am get-current-user) --uri " + PORTAL_PROVIDER_URI;
+    static String portalStartCommand() {
+        return PORTAL_START_COMMAND;
     }
 
     static synchronized int injectedProcessId(Context context) {
@@ -265,7 +277,8 @@ final class ModuleActivation {
                 .remove(KEY_INJECTED_VERSION).remove(KEY_PORTAL_ROOT_VERSION)
                 .remove(KEY_ROOT_INPUT_VERSION).remove(EXTRA_ROOT_INPUT_READY).remove(EXTRA_ROOT_INPUT_ERROR)
                 .remove(KEY_PRESS_READER_VERSION).remove(EXTRA_PRESS_READER_READY).remove(EXTRA_PRESS_READER_ERROR)
-                .remove(KEY_PORTAL_ROOT_GRANTED).remove(KEY_PROCESS_ID).apply();
+                .remove(KEY_PORTAL_ROOT_GRANTED).remove(EXTRA_PORTAL_SERVICE_READY)
+                .remove(KEY_PROCESS_ID).apply();
     }
 
     /** Starts Taplus' non-exported blacklist activity as root for the current Android user. */

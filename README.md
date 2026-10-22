@@ -4,7 +4,7 @@
 
 [下载正式版 APK](https://github.com/chenran0408/HyperDragShare/releases/latest) · 仅 **arm64-v8a**，使用 **R8 压缩**。
 
-当前开发批次为 **1.7.211**，正式版仍以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
+当前开发批次为 **1.7.212**，正式版仍以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
 
 ## 用户使用
 
