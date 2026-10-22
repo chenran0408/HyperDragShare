@@ -1,5 +1,14 @@
 # 目标设备验证记录
 
+## 2026-10-22：216 原生复制卡片、关于页与 MiTrustService Hook
+
+- `testDebugUnitTest assembleDebug`和`lintDebug assembleRelease`通过。R8 Release与Debug使用同一证书；最终设备安装为`1.7.216/240`，Release APK 4,220,129 bytes，SHA256 `E935AFE246CC82A0AB65E273BCBC66B797044722C40892C03358F6AB112B87AB`，Root回读设备base.apk哈希完全一致。
+- AICR `4.12.26`进程日志确认`module clipboard source hook installed class=ul9`和`native copy-direct card hook installed sourceHook=true build=1.7.216/240`。另外静态核对设备产品分区AICR `4.12.18`，其对应结构为`ji9/d86/a86`，已纳入同一能力识别路径。
+- 用程序生成的`https://example.com/mmgg-native-card`打开分词面板并点击复制。LSPosed日志记录`module clipboard event accepted foreground=com.coolapk.market`；随后酷安原页出现系统复制直达卡片，包含编辑所选文本、打开链接和发送到平板。没有读取或修改聊天内容。
+- R8包安装后AICR进程继续报告`native copy-direct card hook installed sourceHook=true build=1.7.216/240`，并再次记录模块事件被接受；后续截图因设备进入来电界面未作为验收证据并已删除。
+- 本机尚未给MMGG勾选`com.xiaomi.trustservice`作用域，所以MiTrustService Hook未加载。全局搜索`MRM`能找到“禁用风险检测”，点击后正确进入通用设置并显示开关；风险检测真实开关行为仍待启用作用域后验收。
+- 关于页实机显示Telegram讨论群卡片；全局搜索`MMGG`可定位关于页。未预先拦截点击Telegram后的外部应用跳转。
+
 ## 2026-10-22：214 / MMGG整批收尾
 
 - 初包417测试/Lint/R8通过并于14:06安装238；实际生成分词面板居中、两侧有余量，两排44dp触区图标完整显示。图文来自本地生成URL，不操作微信。用户追加改名与广告入口要求后，收齐再构建最终包，没有将中间增量包安装。

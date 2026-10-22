@@ -1,5 +1,17 @@
 # 当前功能与验证状态
 
+## 218 原生复制直达、MiTrustService 与社区入口
+
+源码、R8 Release和设备安装均为`1.7.216/240`。Release APK为4,220,129 bytes，SHA256 `E935AFE246CC82A0AB65E273BCBC66B797044722C40892C03358F6AB112B87AB`；设备base.apk回读哈希一致。Debug包SHA256为`06DAC8ECFE11993C123CB016E8026C778C4A75D6B410273C03A052BDFD3C93F2`，用于同一源码的Hook定位验证。
+
+- AICR复制链路不再只按单个固定版本安装。已核对`4.12.18`与`4.12.26`的文本复制事件、复制直达通知和动作数据结构，分别识别`ji9/d86/a86`与`ul9/ka6/ha6`；运行时按类和签名选择，不把AICR versionCode当作启用门槛。后续若内部映射变化，Hook会记录缺失并保留系统原行为，不模糊匹配无关方法。
+- 定位到日志拒绝点`TextCopyEvent`的来源判定：模块自己的`clipSource`与原前台包不同，被当作后台写入跳过。现在只改写来源为模块自身的事件，把它归属到AICR当前感知到的真实前台包；其他后台应用写入仍走原安全检查。
+- 真机以程序生成URL点击分词复制后，LSPosed日志记录`module clipboard event accepted foreground=com.coolapk.market`，原页顶部出现系统原生复制直达卡片，包含“编辑所选文本”“打开链接”和“发送到平板”。没有读写用户聊天或正文。
+- 关于页新增Telegram讨论群入口；全局搜索`MMGG`可定位关于页，实机截图确认“Telegram 讨论群”卡片显示。
+- 通用设置的“运行与权限”新增“禁用风险检测”。MiTrustService实现改为拦截目标进程内对`vendor.xiaomi.hardware.mrm.IMrm/default`的`ServiceManager.waitForService`，不再依赖`Y0.h.b()`这类会随版本变化的混淆类名。开关切换后通过Root重启MiTrustService进程，让Hook状态重新加载；服务缺失时保持系统原行为。
+- 当前设备的LSPosed作用域尚未勾选`com.xiaomi.trustservice`，因此只完成设置项、搜索、构建与Hook源码验证；风险检测Hook未在本轮加载，不能宣称真机功能通过。用户在LSPosed中启用该作用域并打开开关后才生效。
+- `testDebugUnitTest assembleDebug`与`lintDebug assembleRelease`通过；R8及资源压缩后的Release已同签名覆盖安装。安装后AICR仍报告`1.7.216/240`的复制来源Hook已加载，混淆压缩没有移除该入口。
+
 ## 217 分词行距、溢出换行与复制直达回归检查
 
 源码、Debug包与设备安装仍为`1.7.215/239`，本批没有改版本号。
@@ -12,7 +24,7 @@
 - 分词面板的直达浮窗可从视觉上被拆开的完整原始链接中重新识别出`https://example.com/...`，关闭直达后仍保留分词面板；本轮布局改动没有改变直达、复制或选区调用链。
 - APK为`app/build/outputs/apk/debug/app-debug.apk`，75,292,626 bytes，SHA256 `FD9DE1B18B64430760E892A271AA6BA771DC869F3F3A19846878B9EA1270579D`，已Root同签名覆盖安装。
 
-已知独立限制：复制完成后，系统AICR日志仍会因`clipSource=模块`、前台应用为原应用而拒绝生成系统复制直达卡片。该检查发生在剪贴板来源层，与本次分词换行无关；项目内直达浮窗和选区复制均正常。若要让系统原生复制卡片也出现，需要另行处理模块作为后台剪贴板写入者时的来源归属。
+历史限制：217时系统AICR曾因`clipSource=模块`与前台应用不同而拒绝生成卡片；该问题已在218以来源限定的方式修复并真机确认。
 
 ## 216 四边菜单固定中点与现代菜单首帧优化
 

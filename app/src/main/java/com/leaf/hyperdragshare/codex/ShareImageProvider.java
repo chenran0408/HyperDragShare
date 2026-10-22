@@ -144,6 +144,18 @@ public final class ShareImageProvider extends ContentProvider {
                     IntegrationSettings.isCopyDirectEnabled(contextOrThrow()));
             return result;
         }
+        if (IntegrationSettings.METHOD_GET_TRUST_SERVICE_SETTINGS.equals(method)) {
+            int callingUid = Binder.getCallingUid();
+            if (callingUid != Process.myUid()) {
+                enforcePackageCaller(MainHook.TRUST_SERVICE_PACKAGE,
+                        "MiTrustService setting read");
+            }
+            Bundle result = new Bundle();
+            result.putBoolean(
+                    IntegrationSettings.EXTRA_TRUST_SERVICE_RISK_DISABLED,
+                    IntegrationSettings.isTrustServiceRiskDetectionDisabled(contextOrThrow()));
+            return result;
+        }
         if (IntegrationSettings.METHOD_OPEN_AICR_TEXT.equals(method)) {
             enforceAicrCallerOrModule();
             String text = extras == null ? null : extras.getString(IntegrationSettings.EXTRA_TEXT);
@@ -151,11 +163,12 @@ public final class ShareImageProvider extends ContentProvider {
             if (!IntegrationSettings.isCopyDirectEnabled(contextOrThrow())) {
                 Bundle result = new Bundle();
                 result.putBoolean("accepted", false);
+                result.putBoolean("disabled", true);
                 return result;
             }
             long identity = Binder.clearCallingIdentity();
             try {
-                return CopyDirectNotification.request(contextOrThrow(), text);
+                return CopyDirectActions.prepare(contextOrThrow(), text);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }

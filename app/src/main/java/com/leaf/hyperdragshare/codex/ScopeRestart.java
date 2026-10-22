@@ -19,7 +19,7 @@ final class ScopeRestart {
         int oldPid = ModuleActivation.injectedProcessId(context);
         ModuleActivation.clearPortalReport(context);
         RootProcessKeepAlive.Result keepAlive = ModuleActivation.ensurePortalRootKeepAlive(context);
-        boolean notificationReady = ModuleActivation.ensureCopyDirectNotificationPermission(context);
+        boolean notificationReady = ModuleActivation.ensureCopyDirectCardReady(context);
         runRoot("am force-stop --user current com.miui.contentextension && "
                 + "am force-stop --user current com.xiaomi.aicr && "
                 + ModuleActivation.portalStartCommand() + " && "
@@ -41,7 +41,7 @@ final class ScopeRestart {
                                     + keepAlive.detail);
                         }
                         if (!notificationReady) {
-                            throw new IOException("传送门已恢复，但复制直达通知权限未就绪，请查看诊断日志");
+                            throw new IOException("传送门已恢复，但系统复制直达卡片未就绪，请查看诊断日志");
                         }
                         DragShareLog.i(TAG, "new portal foreground service/input/reader confirmed pid=" + pid
                                 + " elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
@@ -71,6 +71,12 @@ final class ScopeRestart {
 
     static void restartDevice() throws IOException {
         runRoot("reboot", "整机重启");
+    }
+
+    static void reloadTrustService() throws IOException {
+        runRoot("trust_pid=$(pidof com.xiaomi.trustservice); "
+                        + "if [ -n \"$trust_pid\" ]; then kill $trust_pid; fi",
+                "重启 MiTrustService");
     }
 
     private static void runRoot(String command, String action) throws IOException {

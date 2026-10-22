@@ -243,26 +243,20 @@ final class ModuleActivation {
     /** Start the host's existing foreground service without opening an Activity. */
     static boolean requestPortalRuntimeStart(Context context) {
         RootProcessKeepAlive.Result keepAlive = RootProcessKeepAlive.ensureLocked(context);
-        boolean notificationReady = ensureCopyDirectNotificationPermission(context);
+        boolean notificationReady = ensureCopyDirectCardReady(context);
         boolean started = runRootCommand(portalStartCommand());
         return keepAlive.ready && notificationReady && started;
     }
 
-    static boolean ensureCopyDirectNotificationPermission(Context context) {
+    static boolean ensureCopyDirectCardReady(Context context) {
         if (!IntegrationSettings.isCopyDirectEnabled(context)) return true;
-        if (context.checkSelfPermission("android.permission.POST_NOTIFICATIONS")
-                != android.content.pm.PackageManager.PERMISSION_GRANTED
-                && !runRootCommand("pm grant --user 0 " + BuildConfig.APPLICATION_ID
-                        + " android.permission.POST_NOTIFICATIONS")) return false;
-        // HyperOS disables floating notifications for new channels independently of importance.
-        // Configure only this feature's channel through the ROM's notification provider.
-        String target = " --extra package:s:" + BuildConfig.APPLICATION_ID
-                + " --extra channel_id:s:copy_direct";
+        // The native copy card belongs to AICR, not to the module's old notification channel.
+        String target = " --extra package:s:com.xiaomi.aicr --extra channel_id:s:phrase_channel_id";
         return runRootCommand("content call --uri content://statusbar.notification --method setFloat"
                 + target + " --extra canShowFloat:b:true && "
                 + "{ content call --uri content://statusbar.notification --method canFloat"
                 + target + " | grep -q 'canShowFloat=true' || "
-                + "{ echo 'MIUI copy_direct floating notification permission was not enabled'; exit 1; }; }");
+                + "{ echo 'MIUI AICR copy card floating permission was not enabled'; exit 1; }; }");
     }
 
     static RootProcessKeepAlive.Result ensurePortalRootKeepAlive(Context context) {

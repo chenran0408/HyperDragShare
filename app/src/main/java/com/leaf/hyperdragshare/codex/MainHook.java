@@ -7,6 +7,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public final class MainHook implements IXposedHookLoadPackage {
     static final String TAPLUS_PACKAGE = "com.miui.contentextension";
     static final String AICR_PACKAGE = "com.xiaomi.aicr";
+    static final String TRUST_SERVICE_PACKAGE = "com.xiaomi.trustservice";
     static final String ANDROID_PACKAGE = "android";
     static final String SYSTEM_UI_PACKAGE = "com.android.systemui";
     static final String SECURITY_CENTER_PACKAGE = "com.miui.securitycenter";
@@ -19,6 +20,8 @@ public final class MainHook implements IXposedHookLoadPackage {
             PortalHooks.install(lpparam.classLoader);
         } else if (AICR_PACKAGE.equals(lpparam.packageName)) {
             AicrCopyHooks.install(lpparam.classLoader);
+        } else if (TRUST_SERVICE_PACKAGE.equals(lpparam.packageName)) {
+            TrustServiceRiskHooks.install(lpparam);
         } else if (SYSTEM_UI_PACKAGE.equals(lpparam.packageName)
                 || "com.miui.home".equals(lpparam.packageName)) {
             new FanFreeformHook().handleLoadPackage(lpparam);

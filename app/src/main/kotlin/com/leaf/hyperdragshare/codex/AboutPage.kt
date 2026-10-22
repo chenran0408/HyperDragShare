@@ -70,6 +70,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
 
 private const val PROJECT_URL = "https://github.com/chenran0408/HyperDragShare"
+private const val COMMUNITY_URL = "https://t.me/+EMRMXl6BKllmMjdl"
 
 @Composable
 fun DragShareAboutPage(
@@ -336,7 +337,16 @@ private fun DragShareAboutContent(
                         ArrowPreference(
                             title = "查看源代码",
                             endActions = { DragShareLinkAction("GitHub") },
-                            onClick = { openProjectUrl(context) },
+                            onClick = {
+                                openUrl(context, PROJECT_URL, "未找到可打开项目地址的应用")
+                            },
+                        )
+                        ArrowPreference(
+                            title = "Telegram 讨论群",
+                            endActions = { DragShareLinkAction("Telegram") },
+                            onClick = {
+                                openUrl(context, COMMUNITY_URL, "未找到可打开 Telegram 链接的应用")
+                            },
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -439,13 +449,13 @@ internal fun Modifier.dragShareGlass(
     )
 }
 
-private fun openProjectUrl(context: Context) {
+private fun openUrl(context: Context, url: String, failureMessage: String) {
     try {
         context.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_URL))
+            Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "未找到可打开项目地址的应用", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
     }
 }

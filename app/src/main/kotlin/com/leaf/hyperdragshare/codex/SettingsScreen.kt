@@ -320,6 +320,9 @@ private fun portalSettingEntries(
     var backTapMode by remember(context) {
         mutableIntStateOf(IntegrationSettings.getBackTapMode(context))
     }
+    var trustServiceRiskDisabled by remember(context) {
+        mutableStateOf(IntegrationSettings.isTrustServiceRiskDetectionDisabled(context))
+    }
     var selectionHapticEnabled by remember(context) {
         mutableStateOf(BigBangSettings.isSelectionHapticEnabled(context))
     }
@@ -436,6 +439,45 @@ private fun portalSettingEntries(
     row("runtime.reload", context.getString(R.string.scope_restart_title), SettingModule.GENERAL, "运行与权限",
         summary = context.getString(R.string.scope_restart_summary), keywords = "热重载 重启 作用域 Root LSPosed",
     ) { title, _, _ -> ScopeRestartPreference(context, title) }
+    row("trustservice.disableRisk", "禁用风险检测", SettingModule.GENERAL, "运行与权限",
+        summary = "实验性系统 Hook，让 MiTrustService 将 MRM 检测视为不可用；需在 LSPosed 中勾选 MiTrustService",
+        keywords = "MiTrustService MRM 风险 root 系统服务 Hook",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = trustServiceRiskDisabled,
+            onCheckedChange = { disabled ->
+                IntegrationSettings.setTrustServiceRiskDetectionDisabled(context, disabled)
+                trustServiceRiskDisabled = disabled
+                coroutineScope.launch {
+                    val failure = withContext(Dispatchers.IO) {
+                        try {
+                            ScopeRestart.reloadTrustService()
+                            null
+                        } catch (error: java.io.IOException) {
+                            DragShareLog.w(
+                                "DragShare/TrustService",
+                                "MiTrustService restart failed",
+                                error,
+                            )
+                            error.message ?: error.javaClass.simpleName
+                        }
+                    }
+                    Toast.makeText(
+                        context,
+                        if (failure == null) {
+                            "设置已保存，MiTrustService 已重启"
+                        } else {
+                            "设置已保存，但 MiTrustService 重启失败：$failure"
+                        },
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
+            enabled = enabled,
+        )
+    }
     cleanupError?.let { message ->
         row("stash.cleanupError", "上次暂存图片清理未完成", SettingModule.GENERAL, "日志与诊断", summary = message) {
             title, summary, _ -> BasicComponent(title = title, summary = summary)
@@ -864,7 +906,7 @@ private fun portalSettingEntries(
     }
 
     row("copy.enabled", "复制直达与分词", SettingModule.COPY_DIRECT, "启用与触发",
-        summary = "复制后用系统浮动通知显示直达动作，点击打开链接；需启用传送门/AICR作用域",
+        summary = "使用系统复制直达卡片，保留分词和指定浏览器，去除应用商店推广；需启用传送门/AICR作用域",
         keywords = "剪贴板 复制卡片 实体 识别 执行动作",
     ) { title, summary, enabled ->
         SwitchPreference(
@@ -876,9 +918,9 @@ private fun portalSettingEntries(
                 copyDirectEnabled = enabled
                 if (enabled) coroutineScope.launch {
                     val ready = withContext(Dispatchers.IO) {
-                        ModuleActivation.ensureCopyDirectNotificationPermission(context)
+                        ModuleActivation.ensureCopyDirectCardReady(context)
                     }
-                    if (!ready) Toast.makeText(context, "复制直达通知授权失败，请查看诊断日志", Toast.LENGTH_LONG).show()
+                    if (!ready) Toast.makeText(context, "系统复制直达卡片准备失败，请查看诊断日志", Toast.LENGTH_LONG).show()
                 }
             },
             enabled = enabled,
