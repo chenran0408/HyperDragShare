@@ -295,22 +295,6 @@ final class DragShareController {
         return lastObservedY;
     }
 
-    void acceptMotionEvent(MotionEvent event) {
-        acceptMotionEvent(event, null);
-    }
-
-    void acceptMotionEvent(MotionEvent event, Runnable beforeFinish) {
-        if (event == null) {
-            return;
-        }
-        final int action = event.getActionMasked();
-        final float x = event.getRawX();
-        final float y = event.getRawY();
-        final long eventTime = event.getEventTime();
-        event.recycle();
-        acceptPointerEvent(action, x, y, eventTime, "miui", beforeFinish);
-    }
-
     void acceptPointerEvent(
             int action,
             float x,

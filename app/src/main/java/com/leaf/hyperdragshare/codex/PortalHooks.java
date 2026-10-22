@@ -40,13 +40,11 @@ final class PortalHooks {
 
     @SuppressLint("StaticFieldLeak")
     private static volatile DragShareController controller;
-    private static volatile MiuiMotionSource motionSource;
     private static volatile RootTouchSource rootTouchSource;
     private static volatile PressCaptureSource thumbCaptureSource;
     @SuppressLint("StaticFieldLeak")
     private static android.app.Service portalService;
     private static String appIdleHookError;
-    private static volatile boolean rootAuthorityLogged;
     private static volatile boolean hostCancelIgnoredLogged;
     private static volatile boolean controlIgnoredLogged;
     private static volatile boolean activationReported;
@@ -380,7 +378,6 @@ final class PortalHooks {
                         + " control=" + String.valueOf(properties.get(CONTROL_KEY)));
             }
             if (motion instanceof MotionEvent) {
-                dispatchMotion(MotionEvent.obtain((MotionEvent) motion));
                 // A motion-only result is not valid Taplus pick content.
                 param.setResult(null);
                 return;
@@ -410,42 +407,17 @@ final class PortalHooks {
         }
     }
 
-    private static void dispatchMotion(MotionEvent event) {
-        if (event.getActionMasked() != MotionEvent.ACTION_MOVE) {
-            DragShareLog.d(TAG, "MIUI motion action="
-                    + MotionEvent.actionToString(event.getActionMasked())
-                    + " point=" + Math.round(event.getRawX()) + "," + Math.round(event.getRawY()));
-        }
-        if (hasReadyRootSource()) {
-            event.recycle();
-            if (!rootAuthorityLogged) {
-                rootAuthorityLogged = true;
-                log("root input is authoritative; ignoring MIUI motion events");
-            }
-            return;
-        }
-        DragShareController current = controller;
-        if (current == null) {
-            event.recycle();
-            return;
-        }
-        int action = event.getActionMasked();
-        current.acceptMotionEvent(
-                event,
-                action == MotionEvent.ACTION_UP ? PortalHooks::replayDeferredHostCalls : null);
-    }
-
-    private static boolean hasReadyRootSource() {
-        RootTouchSource source = rootTouchSource;
-        return source != null && source.isReady();
-    }
-
     private static boolean reportPortalActivation(Context context) {
         boolean reported = ModuleActivation.reportInjected(context);
         if (reported) {
             ModuleActivation.probePortalRootAccessAsync(context);
         }
         return reported;
+    }
+
+    private static boolean hasReadyRootSource() {
+        RootTouchSource source = rootTouchSource;
+        return source != null && source.isReady();
     }
 
     private static synchronized void applyPortalRuntime() {
@@ -467,13 +439,10 @@ final class PortalHooks {
             configureThumbCapture(context, settings);
             return;
         }
-        rootAuthorityLogged = false;
         hostCancelIgnoredLogged = false;
         controlIgnoredLogged = false;
         clearDeferredHostCalls();
         controller = new DragShareController(context, OverlayWindowPolicy.portal());
-        motionSource = new MiuiMotionSource(classLoader, PortalHooks::dispatchMotion);
-        motionSource.start();
         rootTouchSource = new RootTouchSource(context, PortalHooks::dispatchRootPointer,
                 (ready, reason) -> ModuleActivation.reportRootInput(context, ready, reason));
         configureThumbCapture(context, settings);
@@ -488,11 +457,6 @@ final class PortalHooks {
         updateHostIdleTimer(false);
         if (replayDeferredCalls) {
             replayDeferredHostCalls();
-        }
-        MiuiMotionSource source = motionSource;
-        motionSource = null;
-        if (source != null) {
-            source.stop();
         }
         RootTouchSource rootSource = rootTouchSource;
         rootTouchSource = null;

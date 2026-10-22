@@ -1,5 +1,11 @@
 # 目标设备验证记录
 
+## 2026-10-22：210 安装与 Root/Portal 就绪，微信新分流待手指验收
+
+- 209 实际手指反馈：用户确认非微信文字分词、图片拖拽均能用；微信文字仅单窗但慢，图片被送去分词。12:34:56 酷安图片按压后日志显示 `preview shown kind=IMAGE` 与 `menu shown`；微信多次进入 `kind=ocr_region`，AICR 233–601ms，分词窗首帧在确认后 323–718ms。连续快速按压一次被 AICR 单请求门限拒绝。没有读取或保留聊天正文。
+- 210/234 的416项既有测试、Lint、R8 arm64 Release 通过，同开发证书签名包 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.210-arm64-v8a.apk`，7,411,272 bytes，SHA256 `1622258AF9101BC0CCACB6898769B175E30FF68A47D9E9A494DBD97CC2D0CBEA`。第一次编译缺少 Root-ready 查询方法，修正后完整构建54秒；Profile 显示 Lint29.6秒、R8 27.2秒、单测18.8秒，执行有重叠。
+- 安装成功，设备报告 versionCode234/versionName1.7.210；仅重启 `com.miui.contentextension`，未重启 SystemUI/AICR/框架/整机。Portal PID13949、Root输入205ms ready、reader488ms ready；激活记录对应版本均234，ready=true，错误为空；微信仍为前台。**210 静止/滑动分流、拖出的图片内容及系统设置页屏幕 OCR 仍未真机手势验收。**
+
 ## 2026-10-22：209 安装和 Portal 就绪，真实手势待验
 
 - `repair-from-189` 源码与签名安装包为 1.7.209/233；416 项测试、Lint、arm64-v8a R8 Release 通过。包在 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.209-arm64-v8a.apk`，7,411,276 bytes，SHA256 `D2059B809A089D159D2BFB062804FE3488DBEAE12A3C0B7B9606ED5E55C32759`。

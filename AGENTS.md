@@ -25,7 +25,7 @@
 - 当前分支版本见 `app/build.gradle`；使用 AGP 9.1.1 / Gradle 9.3.1。
 - 已验证宿主：传送门 `5.1.5`，包名 `com.miui.contentextension`。
 - LSPosed API：82，入口为 `com.leaf.hyperdragshare.codex.MainHook`。
-- 可靠的同手势跟手依赖 root 读取 Linux evdev；MIUI 输入监听仅作回退。
+- 可靠的同手势跟手依赖 Root 读取 Linux evdev；210 已移除与其重复的 MIUI 输入监听，Portal 私有回调只负责原宿主流程协调。
 - 当前目标为 Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17，设备和测试状态见
   `docs/DEVICE_VALIDATION.md`。历史设备的 1220×2656 参数不适用于当前设备；代码必须动态探测。
 
