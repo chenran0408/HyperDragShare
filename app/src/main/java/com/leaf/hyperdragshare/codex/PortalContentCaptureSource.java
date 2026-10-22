@@ -32,13 +32,30 @@ final class PortalContentCaptureSource {
             String sourcePackage = (String) XposedHelpers.callStaticMethod(serviceClass, "getInjectorPackage");
             if (BuildConfig.APPLICATION_ID.equals(sourcePackage)) return null;
             android.content.Context context = (android.content.Context) taplusService;
-            if (AccessibilityBlacklist.isBlocked(context, settings, sourcePackage)
-                    || GameCapturePolicy.shouldPause(context, settings, sourcePackage)) return null;
+            boolean sourceExcluded = AccessibilityBlacklist.isBlocked(context, settings, sourcePackage)
+                    || GameCapturePolicy.shouldPause(context, settings, sourcePackage);
+            String rejection = PortalCapturePolicy.rejectionReason(
+                    sourcePackage, sourceExcluded, null,
+                    context.getResources().getDisplayMetrics().density);
+            if (rejection != null) {
+                DragShareLog.i("DragShare/PortalCapture",
+                        "portal content ignored source=" + sourcePackage + " reason=" + rejection);
+                return null;
+            }
             Rect sourceBounds = (Rect) XposedHelpers.callMethod(taplusService, "getContentRect");
             Object textMode = XposedHelpers.getStaticObjectField(serviceClass, "sIsTextMode");
             if (Boolean.TRUE.equals(textMode)) {
                 String value = (String) XposedHelpers.getStaticObjectField(serviceClass, "sContent");
                 return CapturedContent.text(value, sourcePackage, sourceBounds);
+            }
+            float density = context.getResources().getDisplayMetrics().density;
+            rejection = PortalCapturePolicy.rejectionReason(
+                    sourcePackage, false, sourceBounds, density);
+            if (rejection != null) {
+                DragShareLog.i("DragShare/PortalCapture",
+                        "portal image ignored source=" + sourcePackage + " reason=" + rejection
+                                + " bounds=" + sourceBounds);
+                return null;
             }
             Bitmap value = (Bitmap) XposedHelpers.callStaticMethod(serviceClass, "getBitmap");
             if (value == null || value.isRecycled()) {
@@ -47,6 +64,8 @@ final class PortalContentCaptureSource {
             // HyperOS 4's cancelTask() recycles the service-owned sBitmap. The
             // module stages images asynchronously, so keep an independent snapshot.
             Bitmap snapshot = value.copy(Bitmap.Config.ARGB_8888, false);
+            DragShareLog.i("DragShare/PortalCapture",
+                    "portal image accepted source=" + sourcePackage + " bounds=" + sourceBounds);
             return CapturedContent.image(snapshot, sourcePackage, sourceBounds, true);
         } catch (NoSuchFieldError | NoSuchMethodError | XposedHelpers.InvocationTargetError | RuntimeException error) {
             DragShareLog.w("DragShare/PortalCapture", "Unable to read portal 5.1.5 content; keeping host behavior", error);

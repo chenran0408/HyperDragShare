@@ -1,8 +1,10 @@
 package com.leaf.hyperdragshare.codex;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import android.graphics.Rect;
 
@@ -85,6 +87,46 @@ public final class AccessibilityNodeClassifierTest {
                 10f);
 
         assertNull(selection);
+    }
+
+    @Test
+    public void smallInlineImageViewIsNotOfferedAsDraggableContent() {
+        AccessibilityNodeSnapshot thumbnail = snapshot(new Rect(0, 0, 40, 40))
+                .className("android.widget.ImageView")
+                .build();
+        AccessibilityNodeClassifier.Buckets buckets = new AccessibilityNodeClassifier(1f, 1080, 2400)
+                .classify(Arrays.asList(thumbnail));
+
+        assertTrue(buckets.nativeNonText.isEmpty());
+    }
+
+    @Test
+    public void labeledLongClickableAppIconIsNotAnImage() {
+        AccessibilityNodeSnapshot icon = snapshot(new Rect(0, 0, 160, 160))
+                .className("android.widget.ImageView")
+                .contentDescription("HyperClipFix")
+                .clickable(true)
+                .longClickable(true)
+                .build();
+        AccessibilityNodeClassifier.Buckets buckets = new AccessibilityNodeClassifier(1f, 1080, 2400)
+                .classify(Arrays.asList(icon));
+
+        assertTrue(buckets.nativeNonText.isEmpty());
+        assertFalse(buckets.nativeText.isEmpty());
+    }
+
+    @Test
+    public void explicitInteractiveImageDescriptionStillAllowsImageDrag() {
+        AccessibilityNodeSnapshot image = snapshot(new Rect(0, 0, 160, 160))
+                .className("android.widget.ImageView")
+                .contentDescription("照片")
+                .clickable(true)
+                .longClickable(true)
+                .build();
+        AccessibilityNodeClassifier.Buckets buckets = new AccessibilityNodeClassifier(1f, 1080, 2400)
+                .classify(Arrays.asList(image));
+
+        assertEquals(1, buckets.nativeNonText.size());
     }
 
     @Test

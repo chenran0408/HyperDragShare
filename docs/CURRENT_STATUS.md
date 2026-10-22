@@ -1,5 +1,41 @@
 # 当前功能与验证状态
 
+## 221 悬浮窗系统提示、图片误捕获与 Beta/正式分流
+
+以 `3520884`（默认分支最新提交）为唯一源码基线。设备通知转储确认截图中的
+`“MMGG”正在其他应用的上层显示` 不是模块自己的通知，而是 `android` 包中
+`com.android.server.wm.AlertWindowNotification` 创建的框架提醒；通知 tag 为
+`com.android.server.wm.AlertWindowNotification - com.leaf.hyperdragshare.codex`。
+
+- 模块仍有多条 `TYPE_APPLICATION_OVERLAY` 交互窗口与侧边中转站，因此
+  `SYSTEM_ALERT_WINDOW` 仍是必需权限，不能为了消除提示而删除。
+- 设备 DEX 已核对目标类包含 `mPackageName`、`post()` 和 `onPostNotification()`。
+  新 Hook 只在包名等于本模块 `applicationId` 时让这两个发布入口返回，其他应用和系统
+  自身的悬浮窗提醒保持原行为。
+- R8 mapping 明确保留 `OverlayNotificationHooks` 与包名过滤调用；Beta APK 的
+  `aapt2` 版本为 `1.7.219-beta.2/244`，只含 `arm64-v8a`，签名与设备现有正式版一致。
+- 发布流程改为 Beta → 用户确认 → 正式版。Beta 构建使用 `assembleBeta`，版本名带
+  `-beta.N`；正式构建仍使用 `assembleRelease`，提升 `versionCode` 后才可发布。
+  Beta 更新页只读取正式线，正式版版本高于 Beta 时允许切回，避免旧正式包反向覆盖。
+- 用户补充日志的 19:03:23 没有 `DragShare/Press` 取词记录，却先出现传送门图片
+  staging、宿主浮窗抑制和 19:03:24 的 `preview shown kind=IMAGE`。因此截图中的
+  应用图标误预览来自传送门 `startPickImageTask` 图片路径，不是 Root 节点分类；
+  结合另一张内联缩略图，按同一类“图片/图标误进入图片拖拽”处理，而不是只修桌面
+  场景。旧日志未记录当时的来源包名，Beta.2 已补充 `source`、`bounds` 和忽略原因日志。
+- 传送门图片现在在读取 Bitmap 前拒绝空白来源、启动器来源和任一边小于 48dp
+  的内联缩略图；Root 节点图片同步采用 48dp 下限，并拒绝带文字的交互图标。
+  这不影响桌面手势或启动器本身，只跳过不应成为拖拽内容的图标和微缩略图。
+- `testDebugUnitTest lintDebug assembleBeta` 通过：435 项测试
+  0 失败/错误/跳过，Lint 0 错误/186 警告/2 提示，R8 与 arm64-only 打包成功；
+  Beta.2 APK 为 4,657,389 bytes，SHA256
+  `5A8731CCEA07412A7F245826387ED4BF7D2BE3A3AC7DDA94F8D0704B552F3EA5`，
+  已于 21:12:13 原位覆盖安装；`firstInstallTime` 保持不变，配置未清空。
+- Beta.1 安装时设备停留在 TIM，Beta.2 覆盖安装时前台是用户页面。两轮都未执行软重启，
+  因此本轮只确认 Beta 安装、版本、签名、构建和
+  Hook 静态接线，不声称 `system_server` 中的新代码已加载，也不声称通知已在真机消失。
+  图片新过滤同样要等传送门进程重载。软重启后的 `DragShare/OverlayNotice` 日志、
+  通知栏复现、应用图标长按和小图复测仍是正式版前置验收项。
+
 ## 220 MiTrustService 风险门禁定向修复
 
 源码、R8 Release 和设备安装均为 `1.7.218/242`。Release APK 为 4,641,001 bytes，SHA256 `AF3BB9767FCD88F11CF93529CF60300B0EF82D6EF8C1CD73755BCB554510A06E`；设备 `base.apk` 回读哈希一致，仅打包 `arm64-v8a`。

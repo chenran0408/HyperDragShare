@@ -658,6 +658,7 @@ final class DragShareController {
                     showMenuOnMain();
                 }
                 log("preview shown kind=" + payload.kind
+                        + " source=" + payload.sourcePackage
                         + " targets=" + shareTargets.size()
                         + " targetQueryMs=" + elapsedMs
                         + " style=" + settings.uiStyle

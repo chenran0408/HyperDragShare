@@ -6,6 +6,8 @@
 
 第一代正式版为 **MMGG 1.7.218**。项目名称来源、设计目标与功能概览见 [MMGG.md](MMGG.md)，版本与安装包以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
 
+后续版本先经过 Beta 验收，再发布正式版。Beta 与正式版使用相同包名和签名，可在保留配置的情况下切换；发布门槛见[版本线与发布门槛](docs/RELEASE_CHANNELS.md)。
+
 ## 用户使用
 
 本项目仅面向已取得 **Root** 并安装 **LSPosed** 的用户，不提供无 Root 使用路径。当前适配目标是 **Xiaomi 15 Pro、HyperOS 4.0.0.17、Android 17**；其他设备和 ROM 未验收。项目最低 Android 版本为 13，但不代表其他系统已验证。
@@ -63,9 +65,12 @@ AicrBarcodeClient.Request scan = AicrBarcodeClient.scan(context, bitmap, (codes,
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleRelease
+.\gradlew.bat assembleBeta
 ```
 
-Release 启用 R8；自行构建需配置自己的签名。构建 APK 位于 `app/build/outputs/apk/release/`；设备验收与发布状态以[当前状态记录](docs/CURRENT_STATUS.md)及 GitHub Releases 为准。
+Beta 与 Release 均启用 R8；自行构建应配置自己的签名。Beta APK 位于
+`app/build/outputs/apk/beta/`，正式 APK 位于 `app/build/outputs/apk/release/`。
+设备验收与发布状态以[当前状态记录](docs/CURRENT_STATUS.md)及 GitHub Releases 为准。
 
 ## 许可与致谢
 

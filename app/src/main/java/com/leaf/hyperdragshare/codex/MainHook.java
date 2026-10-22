@@ -51,6 +51,7 @@ public final class MainHook implements IXposedHookLoadPackage {
         } else if (ANDROID_PACKAGE.equals(lpparam.packageName)) {
             RootProcessFrameworkHooks.install(lpparam.classLoader);
             BackTapFrameworkHooks.install(lpparam);
+            OverlayNotificationHooks.install(lpparam.classLoader);
         }
     }
 }

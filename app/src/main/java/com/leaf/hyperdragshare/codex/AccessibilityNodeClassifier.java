@@ -13,12 +13,14 @@ import java.util.Set;
 /** Classifies snapshots without retaining AccessibilityNodeInfo instances. */
 final class AccessibilityNodeClassifier {
     private static final int MAX_TEXT_LENGTH = 100_000;
+    private static final float MIN_CONTENT_IMAGE_DP = 48f;
     private final int minimumImageDimensionPx;
     private final int screenWidth;
     private final int screenHeight;
 
     AccessibilityNodeClassifier(float density, int screenWidth, int screenHeight) {
-        minimumImageDimensionPx = Math.max(1, Math.round(20f * Math.max(0.1f, density)));
+        minimumImageDimensionPx = Math.max(
+                1, Math.round(MIN_CONTENT_IMAGE_DP * Math.max(0.1f, density)));
         this.screenWidth = Math.max(1, screenWidth);
         this.screenHeight = Math.max(1, screenHeight);
     }
@@ -96,27 +98,51 @@ final class AccessibilityNodeClassifier {
     }
 
     private boolean isStrongImage(AccessibilityNodeSnapshot node) {
+        if (!hasMinimumImageSize(node.bounds)) {
+            return false;
+        }
         String className = lower(node.className);
         if ("android.widget.imageview".equals(className)
                 || "android.widget.image".equals(className)
                 || (className.endsWith("imageview") && preferredText(node) == null && !isContainer(node))) {
-            return true;
+            return !isLabeledInteractiveIcon(node);
         }
-        String description = lower(usableText(node.contentDescription));
         return usableText(node.text) == null
-                && ("图片".equals(description)
-                || "图像".equals(description)
-                || "image".equals(description)
-                || "photo".equals(description));
+                && isExplicitImageDescription(node.contentDescription);
     }
 
     private boolean isLowConfidenceImage(AccessibilityNodeSnapshot node) {
         if (preferredText(node) != null || node.editable || node.password || isContainer(node)
-                || isExplicitControl(node) || !node.leaf || coversMostOfScreen(node.bounds)) {
+                || isExplicitControl(node) || node.clickable || node.longClickable
+                || !node.leaf || coversMostOfScreen(node.bounds)
+                || !hasMinimumImageSize(node.bounds)) {
             return false;
         }
-        return node.bounds.width() > minimumImageDimensionPx
-                || node.bounds.height() > minimumImageDimensionPx;
+        return true;
+    }
+
+    private boolean hasMinimumImageSize(Rect bounds) {
+        return bounds.width() >= minimumImageDimensionPx
+                && bounds.height() >= minimumImageDimensionPx;
+    }
+
+    private static boolean isLabeledInteractiveIcon(AccessibilityNodeSnapshot node) {
+        if (node.insideWebView || (!node.clickable && !node.longClickable)) {
+            return false;
+        }
+        if (isExplicitImageDescription(node.contentDescription)) {
+            return false;
+        }
+        return node.longClickable || usableText(node.text) != null;
+    }
+
+    private static boolean isExplicitImageDescription(String value) {
+        String description = lower(usableText(value));
+        return "图片".equals(description)
+                || "图像".equals(description)
+                || "照片".equals(description)
+                || "image".equals(description)
+                || "photo".equals(description);
     }
 
     private static boolean isContainer(AccessibilityNodeSnapshot node) {
