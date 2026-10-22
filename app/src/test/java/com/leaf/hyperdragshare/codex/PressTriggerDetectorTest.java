@@ -56,6 +56,16 @@ public final class PressTriggerDetectorTest {
         assertTrue(detector.fire(2650L));
     }
 
+    @Test public void movementAfterConfirmationRemainsAvailableForImageDrag() {
+        PressTriggerDetector detector = down(300L);
+        assertTrue(detector.fire(1300L));
+        detector.onPointerEvent(2, 400f, 600f, 1);
+        assertTrue(detector.isActive());
+        assertTrue(detector.isFired());
+        detector.onPointerEvent(1, 400f, 600f, 1);
+        assertFalse(detector.isActive());
+    }
+
     private static PressTriggerDetector down(long duration) {
         PressTriggerDetector detector = new PressTriggerDetector();
         detector.start(10f, 20f, 1000L, duration);

@@ -337,93 +337,56 @@ final class PressCaptureSource {
             openWeChatOcrDirect(request, content);
             return;
         }
+        if (!pointerDown) {
+            DragShareLog.i(TAG, "image press ended before drag preview was ready");
+            recycle(content);
+            controller.endPressPipeline(downTime);
+            return;
+        }
         DragShareLog.i(TAG, "image press handed to drag menu source=" + content.sourcePackage);
-        controller.show(content, downX, downY, settings);
+        controller.show(content, controller.latestPointerX(), controller.latestPointerY(), settings);
     }
 
     private void openWeChatOcrDirect(long request, CapturedContent content) {
-        long panelRequestedAt = SystemClock.elapsedRealtime();
-        long pressId = SystemClock.elapsedRealtimeNanos();
-        Bundle pending = new Bundle();
-        pending.putBoolean("ocr_pending", true);
-        pending.putLong("press_id", pressId);
-        pending.putLong("press_confirmed_at", confirmedAt);
-        pending.putInt("x", Math.round(downX));
-        pending.putInt("y", Math.round(downY));
-        try {
-            Bundle result = context.getContentResolver().call(
-                    ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN, null, pending);
-            if (result == null || !result.getBoolean("accepted")) {
-                recycle(content);
-                controller.endPressPipeline(downTime);
-                blocker.stopAsync();
-                showFailure("无法打开微信识字窗口");
-                return;
-            }
-            startTouchBlocker(request);
-            controller.handoffToPress(downTime);
-        } catch (SecurityException | IllegalStateException | IllegalArgumentException error) {
-            recycle(content);
-            controller.endPressPipeline(downTime);
-            blocker.stopAsync();
-            DragShareLog.w(TAG, "cannot open WeChat OCR panel", error);
-            showFailure("无法打开微信识字窗口：" + error.getMessage());
-            return;
-        }
-
+        startTouchBlocker(request);
+        controller.handoffToPress(downTime);
         long started = SystemClock.elapsedRealtime();
-        DragShareLog.i(TAG, "WeChat OCR direct start elapsedFromConfirmMs="
-                + (SystemClock.uptimeMillis() - confirmedAt) + " panelRequestMs=" + (started - panelRequestedAt)
-                + "; image staging and intermediate window skipped");
+        DragShareLog.i(TAG, "WeChat OCR started elapsedFromConfirmMs="
+                + (SystemClock.uptimeMillis() - confirmedAt) + "; result panel opens once");
         activeOcrRequest = AicrOcrClient.recognize(context, content.bitmap, (text, error) -> {
             if (!content.bitmap.isRecycled()) content.bitmap.recycle();
             activeOcrRequest = null;
-            if (request != generation || stopped) {
-                abortWeChatOcrPanel(pressId);
-                return;
-            }
+            if (request != generation || stopped) return;
             if (error != null) {
                 DragShareLog.w(TAG, "WeChat OCR direct failed", error);
-                abortWeChatOcrPanel(pressId);
                 showFailure("微信文字识别失败：" + error.getMessage());
                 blocker.stopAsync();
                 return;
             }
-            if (request != generation || stopped) {
-                abortWeChatOcrPanel(pressId);
+            if (text == null || text.isBlank()) {
+                showFailure("这次按压没有识别出文字");
                 blocker.stopAsync();
                 return;
             }
             Bundle recognized = new Bundle();
-            recognized.putLong("press_id", pressId);
             recognized.putString("text", text);
+            recognized.putLong("press_confirmed_at", confirmedAt);
+            recognized.putInt("x", Math.round(downX));
+            recognized.putInt("y", Math.round(downY));
             DragShareLog.i(TAG, "WeChat OCR finished elapsedMs="
                     + (SystemClock.elapsedRealtime() - started)
                     + " characters=" + text.length());
             try {
                 Bundle update = context.getContentResolver().call(ImageStagingClient.BASE_URI,
-                        BigBangOverlayLauncher.METHOD_COMPLETE_OCR, null, recognized);
+                        BigBangOverlayLauncher.METHOD_OPEN, null, recognized);
                 if (update == null || !update.getBoolean("accepted")) {
-                    abortWeChatOcrPanel(pressId);
-                    showFailure("微信识别结果窗口已关闭");
+                    showFailure("无法打开微信分词窗口");
                 }
             } catch (SecurityException | IllegalStateException | IllegalArgumentException failure) {
-                DragShareLog.w(TAG, "cannot update WeChat OCR panel", failure);
-                abortWeChatOcrPanel(pressId);
+                DragShareLog.w(TAG, "cannot open WeChat text panel", failure);
                 showFailure("无法显示微信识别结果：" + failure.getMessage());
             }
         });
-    }
-
-    private void abortWeChatOcrPanel(long pressId) {
-        Bundle request = new Bundle();
-        request.putLong("press_id", pressId);
-        try {
-            context.getContentResolver().call(ImageStagingClient.BASE_URI,
-                    BigBangOverlayLauncher.METHOD_ABORT_OCR, null, request);
-        } catch (SecurityException | IllegalStateException error) {
-            DragShareLog.w(TAG, "cannot close WeChat OCR panel", error);
-        }
     }
 
     private void completeHandoff(Bundle result, long request) {

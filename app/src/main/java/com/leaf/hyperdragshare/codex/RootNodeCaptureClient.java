@@ -262,12 +262,15 @@ final class RootNodeCaptureClient {
                 JSONObject result = awaitResponse();
                 if (!result.getBoolean("same_window")) {
                     String reason = result.optString("reason");
-                    if (!reason.isEmpty()) throw new IOException(reason);
+                    if (!reason.isEmpty()) DragShareLog.i(TAG, "press region rejected reason=" + reason);
                     return null;
                 }
                 byte[] encoded = Base64.decode(result.getString("image_base64"), Base64.DEFAULT);
                 Bitmap bitmap = BitmapFactory.decodeByteArray(encoded, 0, encoded.length);
-                if (bitmap == null) throw new IOException("系统截取了无效图片");
+                if (bitmap == null) {
+                    DragShareLog.w(TAG, "press region returned an undecodable image");
+                    return null;
+                }
                 Bundle image = new Bundle();
                 image.putParcelable("bitmap", bitmap);
                 image.putParcelable("bounds", new Rect(result.getInt("left"), result.getInt("top"),
@@ -298,7 +301,10 @@ final class RootNodeCaptureClient {
                 if (!result.getBoolean("same_window")) return null;
                 byte[] encoded = Base64.decode(result.getString("image_base64"), Base64.DEFAULT);
                 Bitmap bitmap = BitmapFactory.decodeByteArray(encoded, 0, encoded.length);
-                if (bitmap == null) throw new IOException("系统截取了无效图片");
+                if (bitmap == null) {
+                    DragShareLog.w(TAG, "image capture returned an undecodable image");
+                    return null;
+                }
                 Bundle image = new Bundle();
                 image.putParcelable("bitmap", bitmap);
                 image.putParcelable("bounds", new Rect(result.getInt("left"), result.getInt("top"),

@@ -74,7 +74,8 @@ import java.util.concurrent.Executors
 internal class ScreenOcrSession(
     private val context: Context,
     private val selectRegion: Boolean,
-    private val onClosed: () -> Unit,
+    val hostActivity: android.app.Activity?,
+    private val onClosed: (Boolean) -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val captureExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -183,9 +184,8 @@ internal class ScreenOcrSession(
         }
         resultText = lines
         isRecognizing = false
-        if (selectRegion &&
-            BigBangOverlayLauncher.showText(context, lines.joinToString("\n"), -1, -1)) {
-            close()
+        if (selectRegion && openTextPanel(lines.joinToString("\n"))) {
+            close(finishHost = false)
         } else renderResults()
     }
 
@@ -219,10 +219,11 @@ internal class ScreenOcrSession(
         if (closed) return false
         if (window != null) return true
         val display = context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
-        val windowContext = context.createDisplayContext(display)
+        val windowContext = hostActivity ?: context.createDisplayContext(display)
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         lateinit var host: InteractiveOverlayWindow
-        host = InteractiveOverlayWindow(windowContext, OverlayWindowPolicy.application(),
+        host = InteractiveOverlayWindow(windowContext,
+            if (hostActivity != null) OverlayWindowPolicy.hosted() else OverlayWindowPolicy.application(),
             onDismissed = {
                 if (window === host) {
                     window = null
@@ -327,7 +328,13 @@ internal class ScreenOcrSession(
 
     private fun openSegmentation(text: String) {
         if (text.isBlank()) return
-        if (BigBangOverlayLauncher.showText(context, text, -1, -1)) close()
+        if (openTextPanel(text)) close(finishHost = false)
+    }
+
+    private fun openTextPanel(text: String): Boolean {
+        val host = hostActivity
+        return if (host == null) BigBangOverlayLauncher.showText(context, text, -1, -1)
+        else BigBangOverlayLauncher.requestHosted(host, android.os.Bundle().apply { putString("text", text) })
     }
 
     private fun copyText(text: String) {
@@ -360,7 +367,7 @@ internal class ScreenOcrSession(
         }
     }
 
-    fun close() {
+    fun close(finishHost: Boolean = true) {
         if (closed) return
         closed = true
         main.removeCallbacks(pendingCapture)
@@ -372,7 +379,7 @@ internal class ScreenOcrSession(
         if (screenshotForRegion !== readingBitmap) screenshotForRegion?.recycle()
         screenshotForRegion = null
         context.unregisterReceiver(screenOff)
-        onClosed()
+        onClosed(finishHost)
     }
 
     @Composable

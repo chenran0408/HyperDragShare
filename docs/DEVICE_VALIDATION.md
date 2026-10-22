@@ -1,5 +1,11 @@
 # 目标设备验证记录
 
+## 2026-10-22：209 安装和 Portal 就绪，真实手势待验
+
+- `repair-from-189` 源码与签名安装包为 1.7.209/233；416 项测试、Lint、arm64-v8a R8 Release 通过。包在 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.209-arm64-v8a.apk`，7,411,276 bytes，SHA256 `D2059B809A089D159D2BFB062804FE3488DBEAE12A3C0B7B9606ED5E55C32759`。
+- 同签名覆盖安装成功。只结束并重新启动 `com.miui.contentextension`，未重启 SystemUI、AICR、框架或整机。设备 `dumpsys package` 为233；Portal PID11141、Root输入232ms ready、取词reader539ms ready；激活记录五项版本均233、Root许可和ready为true、错误字段为空。TIM仍为前台，没有切页面或操作私人内容。
+- 物理手指的微信文字单窗、按住滑动拖图、其他应用断连恢复、Settings屏幕识字宿主均**未验收**。旧 Root 文件日志止于10月20日；本次只读logcat只有连接就绪事件，不能把旧日志当作新版故障证据。
+
 ## 2026-10-22：208 源码与构建完成，未安装
 
 - `repair-from-189` 源码 1.7.208/232；415 项测试、Lint、R8 arm64 Release 通过。APK：`D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.208-arm64-v8a.apk`，7,411,272 bytes，SHA256 `20CD897F3C4B6C63921F8331CA36770351D61942D050B2D1A65FC8B2AD3F7AC2`，证书 SHA256 与 207 一致。

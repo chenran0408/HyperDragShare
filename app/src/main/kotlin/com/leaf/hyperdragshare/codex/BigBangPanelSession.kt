@@ -212,14 +212,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
         boomChipPage?.finishAdjacentPull()
     }
 
-    fun showOcrProgress(touchX: Int, touchY: Int) {
-        check(!closed) { "Create a new panel session after close" }
-        isRecognizing = true
-        isSegmenting = true
-        launchTouchX = touchX
-        launchTouchY = touchY
-    }
-
     private fun expandAdjacent(direction: String) {
         val page = boomChipPage ?: return
         val prepend = direction == "before"

@@ -24,6 +24,8 @@ public final class PressTriggerDetector {
     /** MOVE=2 continues one pointer; release, cancellation or a second pointer ends it. */
     public void onPointerEvent(int action, float x, float y, int pointerCount) {
         if (!active) return;
+        // Movement after confirmation belongs to the image drag, not press qualification.
+        if (fired && action == 2 && pointerCount == 1) return;
         if (action != 2 || pointerCount != 1
                 || Math.abs(x - downX) > MOVE_LIMIT || Math.abs(y - downY) > MOVE_LIMIT) cancel();
     }

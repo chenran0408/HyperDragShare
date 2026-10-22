@@ -23,16 +23,16 @@ public class ScreenOcrLifecycleTest {
     @Test public void closingBeforeCaptureCancelsBothPendingAndAlreadyDispatchedWork() throws Exception {
         AtomicInteger closed = new AtomicInteger();
         ScreenOcrSession session = new ScreenOcrSession(RuntimeEnvironment.getApplication(),
-                true, () -> { closed.incrementAndGet(); return Unit.INSTANCE; });
+                true, null, finishHost -> { closed.incrementAndGet(); return Unit.INSTANCE; });
         AtomicBoolean sourceRemoved = new AtomicBoolean();
         session.start(() -> { sourceRemoved.set(true); return Unit.INSTANCE; });
-        session.close();
+        session.close(true);
         // A callback already dispatched to the main thread must not use the shut-down executor.
         var capture = ScreenOcrSession.class.getDeclaredMethod("captureAndRecognize");
         capture.setAccessible(true);
         capture.invoke(session);
         ShadowLooper.shadowMainLooper().idleFor(Duration.ofSeconds(1));
-        session.close();
+        session.close(true);
         assertTrue(sourceRemoved.get());
         assertEquals(1, closed.get());
     }
