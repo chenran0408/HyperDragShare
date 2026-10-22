@@ -122,7 +122,6 @@ internal fun BigBangOverlayContent(
     onSearch: () -> Unit,
     onStash: () -> Unit,
     directAction: DirectEntityDestination?,
-    onDirectAction: (DirectEntityDestination) -> Unit,
     copying: Boolean,
     stashing: Boolean,
     canSplit: Boolean,
@@ -379,8 +378,7 @@ internal fun BigBangOverlayContent(
                                 "翻译选中内容或原文", { onMoreAction(BigBangMoreAction.Translate) }, ready)
                             BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Link,
                                 "链接、邮箱与电话直达", {
-                                    if (directAction != null) onDirectAction(directAction)
-                                    else onMoreAction(BigBangMoreAction.Direct)
+                                    onMoreAction(BigBangMoreAction.Direct)
                                 }, ready, primary = directAction != null)
                             BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Folder,
                                 if (stashing) "正在加入中转站" else "加入中转站", onStash, ready && !stashing)

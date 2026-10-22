@@ -965,8 +965,15 @@ final class DragShareController {
             lastX = x;
             lastY = y;
             updatePreviewPosition(x, y);
-            updateDragEdgeMenuPosition(x, y);
             updatePortalPullEffect(x, y);
+            if (isBottomInputDropZone(x, y)) {
+                if (menuShown) {
+                    if (isCircleStyle()) hideCircleMenu();
+                    else hideLinearMenu();
+                }
+                return;
+            }
+            updateDragEdgeMenuPosition(x, y);
             if (isCircleStyle()) {
                 updateCirclePointer(x, y);
                 if (menuShown) {
@@ -1121,6 +1128,14 @@ final class DragShareController {
     private boolean shouldShowSimpleMenu(float x, float y) {
         int trigger = Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP));
         return distanceFromMenuEdge(x, y) <= trigger;
+    }
+
+    private boolean isBottomInputDropZone(float x, float y) {
+        // Keep the centre of the bottom input bar a direct drop target for every
+        // menu style. Bottom corners still open the four-edge menu.
+        return y >= screenHeight - bottomInset - dp(110)
+                && x >= screenWidth * 0.15f
+                && x <= screenWidth * 0.85f;
     }
 
     private boolean isPointerInsideSimpleMenu(float x, float y) {

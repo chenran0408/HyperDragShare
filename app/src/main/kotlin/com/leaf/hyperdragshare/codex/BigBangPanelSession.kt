@@ -164,7 +164,6 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     onSearch = { openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_WEB) },
                     onStash = { stashText(selectedTextOrOriginal()) },
                     directAction = directTextDestination(directActionText),
-                    onDirectAction = { actions.openExternal(it.intent) },
                     copying = copying,
                     stashing = stashing,
                     canSplit = hasTextSelection && boomChipPage?.let {

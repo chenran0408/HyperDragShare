@@ -52,10 +52,11 @@ internal fun StashDraggableContent(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val held = rememberUpdatedState(pressed)
+    val currentEntries = rememberUpdatedState(entries)
     val scope = rememberCoroutineScope()
     Box(modifier.combinedClickable(interactionSource = interaction, enabled = enabled, onClick = onClick,
         onLongClickLabel = if (entries.size > 1) "拖出所选 ${entries.size} 项" else "拖出内容", onLongClick = if (draggable) ({
-            scope.launch { startStashDrag(view, entries, foreground, background, startDrag) { held.value } }
+            scope.launch { startStashDrag(view, currentEntries.value, foreground, background, startDrag) { held.value } }
         }) else null)) { content() }
 }
 
@@ -63,6 +64,7 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
     background: Int, startDrag: (View, ClipData, View.DragShadowBuilder, Int) -> Boolean,
     isHeld: () -> Boolean) {
     if (entries.isEmpty()) return
+    DragShareLog.i("DragShare/Stash", "drag entries=" + entries.joinToString(",") { it.kind + ":" + it.id.take(8) })
     val hasImages = entries.any { it.kind == StashStore.KIND_IMAGE }
     if (hasImages && entries.any { it.kind == StashStore.KIND_TEXT }) {
         Toast.makeText(view.context, "文字和图片请分别选取后拖出", Toast.LENGTH_LONG).show()
