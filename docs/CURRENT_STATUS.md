@@ -1,5 +1,17 @@
 # 当前功能与验证状态
 
+## 220 MiTrustService 风险门禁定向修复
+
+源码、R8 Release 和设备安装均为 `1.7.218/242`。Release APK 为 4,641,001 bytes，SHA256 `91528F1E1F481AB496BE734D3CC7FDF0FB743C409A49C398625F28C0796E67EA`；设备 `base.apk` 回读哈希一致，仅打包 `arm64-v8a`。
+
+- 提示“当前设备系统被篡改，存在安全隐患，无法进行连接”对应 MiTrustService `1.2.260825` 的 `string/system_tempering`，由 MRM 风险状态 `1` 触发。
+- 已删除全局拦截 `ServiceManager.waitForService` 的实现。该方式范围过大，而且目标提前缓存 MRM Binder 时无法生效。
+- 改为 DexKit `2.2.0` 按方法内容定位：只接受同时使用 `MiTrustService/statusEventHandle` 与 `vendor.xiaomi.hardware.mrm.IMrm/default`，或前一个标记与 `try init mrmd Service`，且无参数、返回`boolean`的唯一方法；匹配失败时保留系统原行为。
+- 当前设备真实命中`Y0.h#b`。MiTrustService 重启后日志为 `risk-detection hook installed; bypassed Y0.h#b`，证明作用域、设置读取、DexKit native 库和具体方法 Hook 均已加载。
+- 设置说明已直接写明该开关用于解除上面的系统连接警告。公开实现核对见`docs/MITRUST_RESEARCH.md`。
+- `testDebugUnitTest lintDebug assembleDebug assembleRelease`通过：423项测试0失败/0错误/0跳过，Lint与R8通过；追加运行日志后的最终Release增量构建也通过。
+- 本轮尝试从生成的原生复制卡片进入“发送到平板”，但该操作没有调用`Y0.h#b`，日志未出现`MRM risk gate bypassed`，因此不计为真实互联弹窗已通过。Hook已加载，仍待选择实际配对设备或进入完整互联检查链路验证最终弹窗。
+
 ## 219 应用商店安装推荐过滤与 MMGG 图标
 
 源码、R8 Release 和设备安装均为 `1.7.217/241`。Release APK 为 4,220,849 bytes，SHA256 `2833B3544F625234122F339F4205A9C60DE187A4E0642CA02D71840806001DC6`；设备 `base.apk` 回读哈希完全一致。

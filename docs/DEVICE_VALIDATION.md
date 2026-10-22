@@ -1,5 +1,14 @@
 # 目标设备验证记录
 
+## 2026-10-22：218 MiTrustService MRM 门禁 Hook
+
+- 设备为 Xiaomi 15 Pro、HyperOS 4.0.0.17、Android 17；MiTrustService `1.2.260825/12260825`。LSPosed 数据库中模块作用域已包含`com.xiaomi.trustservice`。
+- 当前Release为`1.7.218/242`，4,641,001 bytes，SHA256 `91528F1E1F481AB496BE734D3CC7FDF0FB743C409A49C398625F28C0796E67EA`；设备`base.apk`回读哈希一致。APK只包含`arm64-v8a/libdexkit.so`和既有arm64原生库。
+- 开启“禁用风险检测”后强停并重新启动MiTrustService。LSPosed日志明确记录`risk-detection hook installed; bypassed Y0.h#b`，说明两个字符串特征唯一匹配到无参布尔初始化方法并完成Hook。
+- 旧实现仅处理`ServiceManager.waitForService`；本轮已移除。全量检查423项单测0失败、Lint和R8 Release通过；最终只追加运行日志后再次完成R8 Release构建。
+- 通过生成URL和原生复制卡片尝试进入“发送到平板”，卡片操作没有进入`Y0.h#b`，日志没有`MRM risk gate bypassed`，页面也没有出现互联警告。由于目标业务调用未发生，本轮只确认Hook加载，不能写成风险弹窗已在真实设备连接链路通过。
+- 测试没有建立远端设备连接，没有发送测试内容，也没有修改其他互联设备。需要在用户选择实际已配对设备、进入MiTrust检查时可再做一次业务验收。
+
 ## 2026-10-22：217 应用商店安装推荐过滤
 
 - 设备为 Xiaomi 15 Pro、HyperOS 4.0.0.17、Android 17。同签名覆盖安装 `1.7.217/241`，仅 `arm64-v8a`；本地 Release APK 4,220,849 bytes，SHA256 `2833B3544F625234122F339F4205A9C60DE187A4E0642CA02D71840806001DC6`，设备 `base.apk` 回读哈希相同。

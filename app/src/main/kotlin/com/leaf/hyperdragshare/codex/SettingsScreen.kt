@@ -440,7 +440,7 @@ private fun portalSettingEntries(
         summary = context.getString(R.string.scope_restart_summary), keywords = "热重载 重启 作用域 Root LSPosed",
     ) { title, _, _ -> ScopeRestartPreference(context, title) }
     row("trustservice.disableRisk", "禁用风险检测", SettingModule.GENERAL, "运行与权限",
-        summary = "实验性系统 Hook，让 MiTrustService 将 MRM 检测视为不可用；需在 LSPosed 中勾选 MiTrustService",
+        summary = "解除“当前设备系统被篡改，存在安全隐患，无法进行连接”；需在 LSPosed 中勾选 MiTrustService",
         keywords = "MiTrustService MRM 风险 root 系统服务 Hook",
     ) { title, summary, enabled ->
         SwitchPreference(

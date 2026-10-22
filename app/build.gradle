@@ -13,8 +13,8 @@ android {
         applicationId 'com.leaf.hyperdragshare.codex'
         minSdk 33
         targetSdk 34
-        versionCode 241
-        versionName '1.7.217'
+        versionCode 242
+        versionName '1.7.218'
         ndk {
             abiFilters 'arm64-v8a'
         }
@@ -128,6 +128,7 @@ dependencies {
     implementation 'top.yukonga.miuix.kmp:miuix-icons-android:0.9.3'
     implementation 'top.yukonga.miuix.kmp:miuix-navigation3-ui-android:0.9.3'
     implementation 'top.yukonga.miuix.kmp:miuix-blur-android:0.9.3'
+    implementation 'org.luckypray:dexkit:2.2.0'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
     testImplementation 'org.robolectric:robolectric:4.14.1'
