@@ -97,8 +97,11 @@ final class ModernOverlayWindow {
             return;
         }
         animationGeneration++;
-        show();
+        prepareDecorForEnter();
         overlayView.setContentVisibleForWindowAnimation(true);
+        if (!dialog.isShowing()) {
+            dialog.show();
+        }
         View decorView = decorView();
         if (decorView == null) {
             return;

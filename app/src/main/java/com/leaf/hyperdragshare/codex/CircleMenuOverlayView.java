@@ -355,8 +355,7 @@ final class CircleMenuOverlayView extends FrameLayout {
         this.expanded = true;
         this.selectedIndex = -1;
         this.panelRect = CircleMenuGeometry.containerRect(
-                edge, isVerticalEdge(edge) ? y : x,
-                screenWidth, screenHeight, containerSize, topInset, bottomInset);
+                edge, screenWidth, screenHeight, containerSize, topInset, bottomInset);
         rebuildVisibleItems();
         setVisibility(VISIBLE);
         stopPulse();
@@ -398,6 +397,9 @@ final class CircleMenuOverlayView extends FrameLayout {
     }
 
     void updatePointer(float x, float y) {
+        if (expanded) {
+            return;
+        }
         pointerX = x;
         pointerY = y;
         invalidate();
@@ -578,8 +580,7 @@ final class CircleMenuOverlayView extends FrameLayout {
     private void positionItems() {
         if (panelRect.isEmpty()) {
             panelRect = CircleMenuGeometry.containerRect(
-                    edge, isVerticalEdge(edge) ? pointerY : pointerX,
-                    screenWidth, screenHeight, containerSize, topInset, bottomInset);
+                    edge, screenWidth, screenHeight, containerSize, topInset, bottomInset);
         }
         updateArcShader();
         for (int index = 0; index < itemViews.size(); index++) {

@@ -24,9 +24,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,9 +36,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -85,6 +85,7 @@ private const val MODERN_MENU_ICON_SIZE_DP = 40
 private const val MODERN_MENU_ITEM_WIDTH_DP = LinearMenuGeometry.ITEM_WIDTH_DP
 private const val MODERN_MENU_ITEM_HEIGHT_DP = LinearMenuGeometry.ITEM_HEIGHT_DP
 private const val MODERN_MENU_ITEM_STAGGER_MS = 38L
+private const val MODERN_MENU_ITEM_MAX_STAGGER_INDEX = 4
 private const val MODERN_CARD_CORNER_RADIUS_DP = 16f
 private const val MODERN_OVERLAY_ENTER_DURATION_MS = 220L
 private const val MODERN_OVERLAY_EXIT_DURATION_MS = 150L
@@ -292,12 +293,12 @@ internal class ModernMenuOverlayView(
 ) : ModernOverlayComposeView(context) {
     private val itemBounds = LinkedHashMap<ShareTarget, androidx.compose.ui.geometry.Rect>()
     private var selectedTargetState by mutableStateOf<ShareTarget?>(null)
-    private var scrollState: ScrollState? = null
+    private var scrollState: LazyListState? = null
 
     init {
         setOverlayContent {
             ModernOverlayTheme(settings) {
-                val state = rememberScrollState()
+                val state = rememberLazyListState()
                 SideEffect { scrollState = state }
                 DisposableEffect(Unit) {
                     onDispose {
@@ -323,14 +324,17 @@ internal class ModernMenuOverlayView(
                             )
                         }
                     } else if (vertical) {
-                        Column(
+                        LazyColumn(
+                            state = state,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .verticalScroll(state)
                                 .padding(vertical = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            targets.forEachIndexed { index, target ->
+                            itemsIndexed(
+                                items = targets,
+                                key = { _, target -> target.key() },
+                            ) { index, target ->
                                 ModernShareTarget(
                                     target = target,
                                     icon = icons[target],
@@ -348,14 +352,17 @@ internal class ModernMenuOverlayView(
                             }
                         }
                     } else {
-                        Row(
+                        LazyRow(
+                            state = state,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .horizontalScroll(state)
                                 .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            targets.forEachIndexed { index, target ->
+                            itemsIndexed(
+                                items = targets,
+                                key = { _, target -> target.key() },
+                            ) { index, target ->
                                 ModernShareTarget(
                                     target = target,
                                     icon = icons[target],
@@ -395,11 +402,7 @@ internal class ModernMenuOverlayView(
 
     fun scrollByPixels(distance: Int) {
         val state = scrollState ?: return
-        val next = (state.value + distance).coerceIn(0, state.maxValue)
-        val delta = next - state.value
-        if (delta != 0) {
-            state.dispatchRawDelta(delta.toFloat())
-        }
+        state.dispatchRawDelta(distance.toFloat())
     }
 }
 
@@ -492,7 +495,9 @@ private fun ModernShareTarget(
     var itemVisible by remember { mutableStateOf(false) }
     LaunchedEffect(visible) {
         if (visible) {
-            kotlinx.coroutines.delay(index * MODERN_MENU_ITEM_STAGGER_MS)
+            kotlinx.coroutines.delay(
+                minOf(index, MODERN_MENU_ITEM_MAX_STAGGER_INDEX) * MODERN_MENU_ITEM_STAGGER_MS,
+            )
             itemVisible = true
         } else {
             itemVisible = false

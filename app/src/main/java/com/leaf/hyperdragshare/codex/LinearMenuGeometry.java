@@ -10,7 +10,7 @@ final class LinearMenuGeometry {
     private LinearMenuGeometry() {}
 
     static int[] bounds(int position, int width, int height, int topInset, int bottomInset,
-                        int margin, int count, float density, float anchorX, float anchorY) {
+                        int margin, int count, float density) {
         int visibleCount = Math.max(1, Math.min(5, count));
         int availableWidth = Math.max(1, width - margin * 2);
         int availableHeight = Math.max(1, height - topInset - bottomInset - margin * 2);
@@ -20,11 +20,13 @@ final class LinearMenuGeometry {
                 ? SIDE_WIDTH_DP : ITEM_WIDTH_DP * visibleCount + 8)));
         int menuHeight = Math.min(availableHeight, Math.round(density * (vertical
                 ? ITEM_HEIGHT_DP * visibleCount + 8 : HEIGHT_DP)));
+        float centerX = width / 2f;
+        float centerY = (topInset + height - bottomInset) / 2f;
         int left = vertical
                 ? (position == DragShareSettings.SIMPLE_MENU_POSITION_LEFT ? margin : width - margin - menuWidth)
-                : GestureMath.clamp(Math.round(anchorX - menuWidth / 2f), margin, width - margin - menuWidth);
+                : GestureMath.clamp(Math.round(centerX - menuWidth / 2f), margin, width - margin - menuWidth);
         int top = vertical
-                ? GestureMath.clamp(Math.round(anchorY - menuHeight / 2f), topInset + margin,
+                ? GestureMath.clamp(Math.round(centerY - menuHeight / 2f), topInset + margin,
                         height - bottomInset - margin - menuHeight)
                 : (position == DragShareSettings.SIMPLE_MENU_POSITION_TOP ? topInset + margin
                         : height - bottomInset - margin - menuHeight);

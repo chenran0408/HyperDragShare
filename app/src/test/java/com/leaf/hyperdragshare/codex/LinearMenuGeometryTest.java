@@ -11,7 +11,7 @@ public final class LinearMenuGeometryTest {
             for (int position = 0; position < 4; position++) {
                 for (int count : new int[]{1, 3, 40}) {
                     int[] b = LinearMenuGeometry.bounds(position, screen[0], screen[1], 24, 16,
-                            8, count, 1f, 4, screen[1] - 2);
+                            8, count, 1f);
                     assertTrue(b[0] >= 8);
                     assertTrue(b[1] >= 32);
                     assertTrue(b[0] + b[2] <= screen[0] - 8);
@@ -26,15 +26,15 @@ public final class LinearMenuGeometryTest {
     }
 
     @Test public void sideMenuFitsContentInsteadOfCoveringWholeHeight() {
-        int[] few = LinearMenuGeometry.bounds(2, 1440, 3200, 100, 80, 30, 2, 3.75f, 500, 1400);
-        int[] many = LinearMenuGeometry.bounds(2, 1440, 3200, 100, 80, 30, 50, 3.75f, 500, 1400);
+        int[] few = LinearMenuGeometry.bounds(2, 1440, 3200, 100, 80, 30, 2, 3.75f);
+        int[] many = LinearMenuGeometry.bounds(2, 1440, 3200, 100, 80, 30, 50, 3.75f);
         assertTrue(few[3] < many[3]);
         assertTrue(many[3] < 1600);
-        assertEquals(1400, few[1] + few[3] / 2);
+        assertEquals(1610, few[1] + few[3] / 2);
     }
 
     @Test public void fewHorizontalTargetsUseLessThanScreenWidth() {
-        int[] b = LinearMenuGeometry.bounds(1, 384, 854, 24, 16, 8, 2, 1f, 192, 500);
+        int[] b = LinearMenuGeometry.bounds(1, 384, 854, 24, 16, 8, 2, 1f);
         assertTrue(b[2] < 192);
         assertEquals(192, b[0] + b[2] / 2);
     }

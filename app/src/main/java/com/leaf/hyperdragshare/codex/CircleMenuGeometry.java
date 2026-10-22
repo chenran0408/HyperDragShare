@@ -170,20 +170,18 @@ final class CircleMenuGeometry {
 
     static Rect containerRect(
             int edge,
-            float pointer,
             int width,
             int height,
             int containerSize,
             int topInset,
             int bottomInset) {
         int[] bounds = containerBounds(
-                edge, pointer, width, height, containerSize, topInset, bottomInset);
+                edge, width, height, containerSize, topInset, bottomInset);
         return new Rect(bounds[0], bounds[1], bounds[2], bounds[3]);
     }
 
     static int[] containerBounds(
             int edge,
-            float pointer,
             int width,
             int height,
             int containerSize,
@@ -200,36 +198,38 @@ final class CircleMenuGeometry {
         int left;
         int top;
         int depth = Math.max(1, size / 2);
+        int centerX = width / 2;
+        int centerY = (safeTop + height - safeBottom) / 2;
         int right;
         int bottom;
         switch (edge) {
             case EDGE_LEFT:
                 left = 0;
-                top = Math.round(pointer - size / 2f);
+                top = centerY - size / 2;
                 right = depth;
                 bottom = top + size;
                 break;
             case EDGE_RIGHT:
                 left = width - depth;
-                top = Math.round(pointer - size / 2f);
+                top = centerY - size / 2;
                 right = width;
                 bottom = top + size;
                 break;
             case EDGE_TOP:
-                left = Math.round(pointer - size / 2f);
+                left = centerX - size / 2;
                 top = safeTop;
                 right = left + size;
                 bottom = top + depth;
                 break;
             case EDGE_BOTTOM:
-                left = Math.round(pointer - size / 2f);
+                left = centerX - size / 2;
                 top = height - safeBottom - depth;
                 right = left + size;
                 bottom = height - safeBottom;
                 break;
             default:
                 left = 0;
-                top = Math.round(pointer - size / 2f);
+                top = centerY - size / 2;
                 right = depth;
                 bottom = top + size;
                 break;

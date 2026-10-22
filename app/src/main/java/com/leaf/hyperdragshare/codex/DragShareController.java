@@ -20,6 +20,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowMetrics;
@@ -39,6 +40,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 final class DragShareController {
     private static final String TAG = "DragShare/UI";
@@ -56,6 +59,13 @@ final class DragShareController {
     private static final int CIRCLE_EDGE_SOFT_DISTANCE_DP = 180;
     private static final long CIRCLE_EDGE_OPEN_DELAY_MS = 200L;
     private static final long DUPLICATE_EVENT_WINDOW_MS = 2;
+    private static final ExecutorService TARGET_QUERY_EXECUTOR =
+            Executors.newSingleThreadExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "dragshare-target-query");
+                thread.setDaemon(true);
+                return thread;
+            });
+    private static boolean modernOverlayPrewarmStarted;
 
 
     private final Context context;
@@ -140,8 +150,6 @@ final class DragShareController {
     private volatile long lastObservedEventTime;
 
     private float lastX;
-    private float menuAnchorX;
-    private float menuAnchorY;
     private float lastY;
     private long lastHandledEventTime = Long.MIN_VALUE;
     private int lastHandledAction = -1;
@@ -202,6 +210,8 @@ final class DragShareController {
     private CircleMenuOverlayView circleMenuView;
     private WindowManager.LayoutParams circleMenuParams;
     private List<ShareTarget> shareTargets = new ArrayList<>();
+    private boolean targetsLoaded;
+    private boolean targetQueryRequested;
     private ShareTarget selectedTarget;
     private boolean menuShown;
 
@@ -219,6 +229,7 @@ final class DragShareController {
         this.backgroundTouchBlocker = new BackgroundTouchBlocker(context);
         this.windowPolicy = windowPolicy == null ? OverlayWindowPolicy.portal() : windowPolicy;
         this.dragShareToast = new DragShareToast(context, this.windowPolicy);
+        prewarmModernOverlay();
     }
 
     boolean isActive() {
@@ -452,6 +463,9 @@ final class DragShareController {
         backgroundBlockAttempted = false;
         portalGlowStartedLogged = false;
         portalGlowExpandedLogged = false;
+        shareTargets = new ArrayList<>();
+        targetsLoaded = false;
+        targetQueryRequested = false;
         lastHandledEventTime = Long.MIN_VALUE;
         lastHandledAction = -1;
         settings = loadedSettings == null ? DragShareSettings.defaults() : loadedSettings;
@@ -492,27 +506,12 @@ final class DragShareController {
                     : Math.max(topInset + dp(80), screenHeight * 0.32f);
             lastX = initialX;
             lastY = initialY;
-            menuAnchorX = initialX;
-            menuAnchorY = initialY;
             updateMenuGeometry();
             updatePreviewPosition(initialX, initialY);
             updatePortalPullEffect(initialX, initialY);
             startPreviewEnterAnimation();
 
-            // Querying package icons can be comparatively slow. The preview is
-            // already visible before the bottom menu is assembled.
-            shareTargets = queryTargets(payload);
-            createMenu();
-            if (isCircleStyle() && circleMenuView != null && circleMenuParams != null) {
-                circleMenuView.setVisibility(View.VISIBLE);
-                windowManager.addView(circleMenuView, circleMenuParams);
-                updateCirclePointer(initialX, initialY);
-            }
-            log("preview shown kind=" + payload.kind
-                    + " targets=" + shareTargets.size()
-                    + " style=" + settings.uiStyle
-                    + " blockBackground=" + settings.blockBackgroundScroll
-                    + " at=" + Math.round(initialX) + "," + Math.round(initialY));
+            loadTargetsAndCreateMenu(session, payload, initialX, initialY);
         } catch (RuntimeException error) {
             failOverlay("拖拽窗口创建失败", error);
             return;
@@ -552,6 +551,120 @@ final class DragShareController {
     private List<ShareTarget> queryTargets(CapturedContent payload) {
         List<ShareTarget> queried = ShareTargetRepository.query(context, payload);
         return ShareTargetRepository.applySettings(context, queried, settings, payload.isImage());
+    }
+
+    private void prewarmModernOverlay() {
+        if (modernOverlayPrewarmStarted) {
+            return;
+        }
+        modernOverlayPrewarmStarted = true;
+        mainHandler.post(() -> {
+            try {
+                long started = SystemClock.elapsedRealtime();
+                CapturedContent content = CapturedContent.text("预热", "warmup", null);
+                ModernPreviewOverlayView warmupView = new ModernPreviewOverlayView(
+                        context, content, DragShareSettings.defaults());
+                WindowManager.LayoutParams warmupParams =
+                        overlayParams(2, 2, "DragShare modern overlay warmup");
+                warmupParams.x = -2;
+                warmupParams.y = -2;
+                ModernOverlayWindow warmupWindow = new ModernOverlayWindow(
+                        context, windowManager, warmupView, warmupParams, 0);
+                warmupView.getViewTreeObserver().addOnDrawListener(
+                        new ViewTreeObserver.OnDrawListener() {
+                            private boolean finishPosted;
+
+                            @Override
+                            public void onDraw() {
+                                if (finishPosted) {
+                                    return;
+                                }
+                                finishPosted = true;
+                                warmupView.post(() -> {
+                                    ViewTreeObserver observer = warmupView.getViewTreeObserver();
+                                    if (observer.isAlive()) {
+                                        observer.removeOnDrawListener(this);
+                                    }
+                                    warmupWindow.dispose();
+                                    log("modern overlay prewarm completed elapsed_ms="
+                                            + (SystemClock.elapsedRealtime() - started));
+                                });
+                            }
+                        });
+                warmupWindow.showAnimated();
+            } catch (RuntimeException error) {
+                log("modern overlay prewarm failed", error);
+            }
+        });
+    }
+
+    private void loadTargetsAndCreateMenu(
+            Session capturedSession,
+            CapturedContent payload,
+            float initialX,
+            float initialY) {
+        previewView.getViewTreeObserver().addOnDrawListener(
+                new ViewTreeObserver.OnDrawListener() {
+                    @Override
+                    public void onDraw() {
+                        if (targetQueryRequested) {
+                            return;
+                        }
+                        targetQueryRequested = true;
+                        previewView.post(() -> {
+                            ViewTreeObserver observer = previewView.getViewTreeObserver();
+                            if (observer.isAlive()) {
+                                observer.removeOnDrawListener(this);
+                            }
+                            queryTargetsAfterPreview(
+                                    capturedSession, payload, initialX, initialY);
+                        });
+                    }
+                });
+    }
+
+    private void queryTargetsAfterPreview(
+            Session capturedSession,
+            CapturedContent payload,
+            float initialX,
+            float initialY) {
+        TARGET_QUERY_EXECUTOR.execute(() -> {
+            long started = SystemClock.elapsedRealtime();
+            List<ShareTarget> queried;
+            try {
+                queried = queryTargets(payload);
+            } catch (RuntimeException error) {
+                mainHandler.post(() -> {
+                    if (!destroyed && active && session == capturedSession) {
+                        failOverlay("分享目标读取失败", error);
+                    }
+                });
+                return;
+            }
+            long elapsedMs = SystemClock.elapsedRealtime() - started;
+            mainHandler.post(() -> {
+                if (destroyed || !active || session != capturedSession) {
+                    return;
+                }
+                shareTargets = queried;
+                targetsLoaded = true;
+                createMenu();
+                if (isCircleStyle() && circleMenuView != null && circleMenuParams != null) {
+                    circleMenuView.setVisibility(View.VISIBLE);
+                    windowManager.addView(circleMenuView, circleMenuParams);
+                    updateCirclePointer(lastX, lastY);
+                }
+                if (!isCircleStyle() && shouldShowSimpleMenu(lastX, lastY)) {
+                    showMenuOnMain();
+                }
+                log("preview shown kind=" + payload.kind
+                        + " targets=" + shareTargets.size()
+                        + " targetQueryMs=" + elapsedMs
+                        + " style=" + settings.uiStyle
+                        + " blockBackground=" + settings.blockBackgroundScroll
+                        + " at=" + Math.round(initialX) + "," + Math.round(initialY));
+            });
+        });
     }
 
     private void createPreview(CapturedContent payload) {
@@ -1096,6 +1209,9 @@ final class DragShareController {
     }
 
     private float glowPointerFraction(float x, float y) {
+        if (menuShown) {
+            return 0.5f;
+        }
         return isVerticalSimpleMenu() ? y / Math.max(1f, screenHeight) : x / Math.max(1f, screenWidth);
     }
 
@@ -1254,6 +1370,9 @@ final class DragShareController {
         if (menuShown) {
             return;
         }
+        if (!targetsLoaded) {
+            return;
+        }
         if (isCircleStyle()) {
             if (circleMenuView == null || circlePendingEdge == CircleMenuGeometry.EDGE_NONE) {
                 return;
@@ -1262,7 +1381,10 @@ final class DragShareController {
 
             circleEdge = circlePendingEdge;
             circleScrollDirection = 0;
-            circleMenuView.expand(circleEdge, lastX, lastY);
+            circleMenuView.expand(
+                    circleEdge,
+                    screenWidth / 2f,
+                    (topInset + screenHeight - bottomInset) / 2f);
             updatePreviewPosition(lastX, lastY);
             startCirclePreviewAnimation();
             log("circle menu shown edge=" + circleEdge
@@ -1320,7 +1442,7 @@ final class DragShareController {
         }
         menuShown = true;
         updatePreviewPosition(lastX, lastY);
-        log("menu shown style=" + settings.uiStyle + " followsDragEdge=true"
+        log("menu shown style=" + settings.uiStyle + " anchoredAtCenter=true"
                 + " effectivePosition=" + simpleMenuPosition + " bounds=" + menuLeft + "," + menuTop
                 + "," + menuWidth + "," + menuHeight + " pointer=" + Math.round(lastX) + "," + Math.round(lastY));
         if (isPortalStyle()) {
@@ -1829,7 +1951,7 @@ final class DragShareController {
         int menuMargin = dp(settings.simpleMenuEdgeDistanceDp);
         int[] bounds = LinearMenuGeometry.bounds(simpleMenuPosition, screenWidth, screenHeight,
                 topInset, bottomInset, menuMargin, shareTargets.size(),
-                context.getResources().getDisplayMetrics().density, menuAnchorX, menuAnchorY);
+                context.getResources().getDisplayMetrics().density);
         menuLeft = bounds[0];
         menuTop = bounds[1];
         menuWidth = bounds[2];
