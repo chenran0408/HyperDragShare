@@ -40,8 +40,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 final class DragShareController {
     private static final String TAG = "DragShare/UI";
@@ -59,8 +60,9 @@ final class DragShareController {
     private static final int CIRCLE_EDGE_SOFT_DISTANCE_DP = 180;
     private static final long CIRCLE_EDGE_OPEN_DELAY_MS = 200L;
     private static final long DUPLICATE_EVENT_WINDOW_MS = 2;
-    private static final ExecutorService TARGET_QUERY_EXECUTOR =
-            Executors.newSingleThreadExecutor(runnable -> {
+    private static final ThreadPoolExecutor TARGET_QUERY_EXECUTOR =
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<>(), runnable -> {
                 Thread thread = new Thread(runnable, "dragshare-target-query");
                 thread.setDaemon(true);
                 return thread;
@@ -73,7 +75,13 @@ final class DragShareController {
     private final BackgroundTouchBlocker backgroundTouchBlocker;
     private final OverlayWindowPolicy windowPolicy;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final LatestRequest targetQueryRequests = new LatestRequest();
+    private final LatestTaskSlot targetQueryTask = new LatestTaskSlot(TARGET_QUERY_EXECUTOR);
     private final DragShareToast dragShareToast;
+    private Runnable modernOverlayPrewarmTask;
+    private ModernPreviewOverlayView modernOverlayPrewarmView;
+    private ModernOverlayWindow modernOverlayPrewarmWindow;
+    private ViewTreeObserver.OnDrawListener modernOverlayPrewarmDrawListener;
     private final Runnable edgeScrollRunnable = new Runnable() {
         @Override
         public void run() {
@@ -220,6 +228,9 @@ final class DragShareController {
     private List<ShareTarget> shareTargets = new ArrayList<>();
     private boolean targetsLoaded;
     private boolean targetQueryRequested;
+    private View targetQueryPreviewView;
+    private ViewTreeObserver.OnDrawListener targetQueryDrawListener;
+    private Runnable targetQueryStartRunnable;
     private ShareTarget selectedTarget;
     private boolean menuShown;
 
@@ -276,6 +287,7 @@ final class DragShareController {
             active = false;
             stopEdgeScroll();
             backgroundTouchBlocker.stop();
+            disposeModernOverlayPrewarm();
             removeGestureViews();
         }
         pendingPortalHostFloatWindowSuppression = false;
@@ -611,23 +623,27 @@ final class DragShareController {
     }
 
     private void prewarmModernOverlay() {
-        if (modernOverlayPrewarmStarted) {
+        if (destroyed || modernOverlayPrewarmStarted) {
             return;
         }
         modernOverlayPrewarmStarted = true;
-        mainHandler.post(() -> {
+        Runnable prewarm = () -> {
+            modernOverlayPrewarmTask = null;
+            if (destroyed) return;
             try {
                 long started = SystemClock.elapsedRealtime();
                 CapturedContent content = CapturedContent.text("预热", "warmup", null);
                 ModernPreviewOverlayView warmupView = new ModernPreviewOverlayView(
                         context, content, DragShareSettings.defaults());
+                modernOverlayPrewarmView = warmupView;
                 WindowManager.LayoutParams warmupParams =
                         overlayParams(2, 2, "DragShare modern overlay warmup");
                 warmupParams.x = -2;
                 warmupParams.y = -2;
                 ModernOverlayWindow warmupWindow = new ModernOverlayWindow(
                         context, windowManager, warmupView, warmupParams, 0);
-                warmupView.getViewTreeObserver().addOnDrawListener(
+                modernOverlayPrewarmWindow = warmupWindow;
+                ViewTreeObserver.OnDrawListener drawListener =
                         new ViewTreeObserver.OnDrawListener() {
                             private boolean finishPosted;
 
@@ -638,21 +654,73 @@ final class DragShareController {
                                 }
                                 finishPosted = true;
                                 warmupView.post(() -> {
-                                    ViewTreeObserver observer = warmupView.getViewTreeObserver();
-                                    if (observer.isAlive()) {
-                                        observer.removeOnDrawListener(this);
-                                    }
-                                    warmupWindow.dispose();
-                                    log("modern overlay prewarm completed elapsed_ms="
-                                            + (SystemClock.elapsedRealtime() - started));
+                                    finishModernOverlayPrewarm(
+                                            warmupView, warmupWindow, this, started);
                                 });
                             }
-                        });
+                        };
+                ViewTreeObserver observer = warmupView.getViewTreeObserver();
+                observer.addOnDrawListener(drawListener);
+                modernOverlayPrewarmDrawListener = drawListener;
                 warmupWindow.showAnimated();
             } catch (RuntimeException error) {
+                disposeModernOverlayPrewarm();
                 log("modern overlay prewarm failed", error);
             }
-        });
+        };
+        modernOverlayPrewarmTask = prewarm;
+        mainHandler.post(prewarm);
+    }
+
+    private void finishModernOverlayPrewarm(
+            ModernPreviewOverlayView warmupView,
+            ModernOverlayWindow warmupWindow,
+            ViewTreeObserver.OnDrawListener drawListener,
+            long started) {
+        ViewTreeObserver observer = warmupView.getViewTreeObserver();
+        if (observer.isAlive()) observer.removeOnDrawListener(drawListener);
+        if (modernOverlayPrewarmView != warmupView
+                || modernOverlayPrewarmWindow != warmupWindow) return;
+        modernOverlayPrewarmDrawListener = null;
+        modernOverlayPrewarmView = null;
+        modernOverlayPrewarmWindow = null;
+        try {
+            warmupWindow.dispose();
+            log("modern overlay prewarm completed elapsed_ms="
+                    + (SystemClock.elapsedRealtime() - started));
+        } catch (RuntimeException error) {
+            log("modern overlay prewarm cleanup failed", error);
+        }
+    }
+
+    private void disposeModernOverlayPrewarm() {
+        if (modernOverlayPrewarmTask != null) {
+            mainHandler.removeCallbacks(modernOverlayPrewarmTask);
+            modernOverlayPrewarmTask = null;
+        }
+        ModernPreviewOverlayView view = modernOverlayPrewarmView;
+        ModernOverlayWindow window = modernOverlayPrewarmWindow;
+        ViewTreeObserver.OnDrawListener listener = modernOverlayPrewarmDrawListener;
+        modernOverlayPrewarmView = null;
+        modernOverlayPrewarmWindow = null;
+        modernOverlayPrewarmDrawListener = null;
+        if (view != null && listener != null) {
+            ViewTreeObserver observer = view.getViewTreeObserver();
+            if (observer.isAlive()) observer.removeOnDrawListener(listener);
+        }
+        if (window != null) {
+            try {
+                window.dispose();
+            } catch (RuntimeException error) {
+                log("modern overlay prewarm cleanup failed", error);
+            }
+        } else if (view != null) {
+            try {
+                view.disposeOverlay();
+            } catch (RuntimeException error) {
+                log("modern overlay prewarm view cleanup failed", error);
+            }
+        }
     }
 
     private void loadTargetsAndCreateMenu(
@@ -660,24 +728,38 @@ final class DragShareController {
             CapturedContent payload,
             float initialX,
             float initialY) {
-        previewView.getViewTreeObserver().addOnDrawListener(
-                new ViewTreeObserver.OnDrawListener() {
+        View targetPreview = previewView;
+        ViewTreeObserver.OnDrawListener drawListener = new ViewTreeObserver.OnDrawListener() {
                     @Override
                     public void onDraw() {
-                        if (targetQueryRequested) {
+                        if (targetQueryRequested || destroyed || !active
+                                || session != capturedSession) {
                             return;
                         }
                         targetQueryRequested = true;
-                        previewView.post(() -> {
-                            ViewTreeObserver observer = previewView.getViewTreeObserver();
+                        Runnable startQuery = () -> {
+                            ViewTreeObserver observer = targetPreview.getViewTreeObserver();
                             if (observer.isAlive()) {
                                 observer.removeOnDrawListener(this);
                             }
+                            if (targetQueryPreviewView == targetPreview) {
+                                targetQueryPreviewView = null;
+                                targetQueryDrawListener = null;
+                                targetQueryStartRunnable = null;
+                            }
+                            if (destroyed || !active || session != capturedSession) return;
                             queryTargetsAfterPreview(
                                     capturedSession, payload, initialX, initialY);
-                        });
+                        };
+                        targetQueryPreviewView = targetPreview;
+                        targetQueryDrawListener = this;
+                        targetQueryStartRunnable = startQuery;
+                        targetPreview.post(startQuery);
                     }
-                });
+                };
+        targetQueryPreviewView = targetPreview;
+        targetQueryDrawListener = drawListener;
+        targetPreview.getViewTreeObserver().addOnDrawListener(drawListener);
     }
 
     private void queryTargetsAfterPreview(
@@ -685,14 +767,17 @@ final class DragShareController {
             CapturedContent payload,
             float initialX,
             float initialY) {
-        TARGET_QUERY_EXECUTOR.execute(() -> {
+        cancelTargetQuery();
+        long request = targetQueryRequests.begin();
+        targetQueryTask.submit(() -> {
             long started = SystemClock.elapsedRealtime();
             List<ShareTarget> queried;
             try {
                 queried = queryTargets(payload);
             } catch (RuntimeException error) {
                 mainHandler.post(() -> {
-                    if (!destroyed && active && session == capturedSession) {
+                    if (targetQueryRequests.accepts(request)
+                            && !destroyed && active && session == capturedSession) {
                         failOverlay("分享目标读取失败", error);
                     }
                 });
@@ -700,7 +785,8 @@ final class DragShareController {
             }
             long elapsedMs = SystemClock.elapsedRealtime() - started;
             mainHandler.post(() -> {
-                if (destroyed || !active || session != capturedSession) {
+                if (!targetQueryRequests.accepts(request)
+                        || destroyed || !active || session != capturedSession) {
                     return;
                 }
                 shareTargets = queried;
@@ -723,6 +809,26 @@ final class DragShareController {
                         + " at=" + Math.round(initialX) + "," + Math.round(initialY));
             });
         });
+    }
+
+    private void cancelTargetQuery() {
+        targetQueryRequests.invalidate();
+        targetQueryTask.cancel();
+    }
+
+    private void cancelPreviewTargetLoad() {
+        View targetPreview = targetQueryPreviewView;
+        Runnable startQuery = targetQueryStartRunnable;
+        ViewTreeObserver.OnDrawListener drawListener = targetQueryDrawListener;
+        targetQueryPreviewView = null;
+        targetQueryStartRunnable = null;
+        targetQueryDrawListener = null;
+        if (targetPreview == null) return;
+        if (startQuery != null) targetPreview.removeCallbacks(startQuery);
+        if (drawListener != null) {
+            ViewTreeObserver observer = targetPreview.getViewTreeObserver();
+            if (observer.isAlive()) observer.removeOnDrawListener(drawListener);
+        }
     }
 
     private void createPreview(CapturedContent payload) {
@@ -2045,7 +2151,8 @@ final class DragShareController {
     }
 
     private void removeGestureViews(boolean animatePreviewExit) {
-
+        cancelTargetQuery();
+        cancelPreviewTargetLoad();
         cancelModernMenuDispose();
         cancelLinearMenuFadeOut();
         if (!animatePreviewExit) {
@@ -2070,8 +2177,9 @@ final class DragShareController {
             glowView.stop();
             try {
                 windowManager.removeViewImmediate(glowView);
-            } catch (Throwable ignored) {
+            } catch (Throwable error) {
                 // Already removed or never attached.
+                log("overlay cleanup failed layer=glow", error);
             }
         }
         mainHandler.removeCallbacks(circleExpandRunnable);
@@ -2079,8 +2187,9 @@ final class DragShareController {
             circleMenuView.collapse();
             try {
                 windowManager.removeViewImmediate(circleMenuView);
-            } catch (Throwable ignored) {
+            } catch (Throwable error) {
                 // Already removed or never attached.
+                log("overlay cleanup failed layer=circle_menu", error);
             }
         }
         previewView = null;
@@ -2118,18 +2227,27 @@ final class DragShareController {
             ModernOverlayComposeView modernOverlay,
             ModernOverlayWindow modernWindow) {
         if (modernWindow != null) {
-            modernWindow.dispose();
+            try {
+                modernWindow.dispose();
+            } catch (RuntimeException error) {
+                log("overlay cleanup failed layer=modern_window", error);
+            }
             return;
         }
         if (view != null) {
             try {
                 windowManager.removeViewImmediate(view);
-            } catch (Throwable ignored) {
+            } catch (Throwable error) {
                 // Already removed or never attached.
+                log("overlay cleanup failed layer=view", error);
             }
         }
         if (modernOverlay != null) {
-            modernOverlay.disposeOverlay();
+            try {
+                modernOverlay.disposeOverlay();
+            } catch (RuntimeException error) {
+                log("overlay cleanup failed layer=compose_view", error);
+            }
         }
     }
 
