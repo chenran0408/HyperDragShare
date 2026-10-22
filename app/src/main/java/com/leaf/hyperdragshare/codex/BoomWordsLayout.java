@@ -70,6 +70,9 @@ public class BoomWordsLayout {
         mPuncBaseWidth = res.getDimensionPixelSize(R.dimen.punc_base_width);
         mWordPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
         mPuncPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+        final float defaultTextSize = res.getDimension(R.dimen.chip_text_size);
+        mWordPaint.setTextSize(defaultTextSize);
+        mPuncPaint.setTextSize(defaultTextSize);
     }
 
     public void setTextSizeSp(float textSizeSp) {
@@ -94,6 +97,10 @@ public class BoomWordsLayout {
 
     public int getChipMaxWidth() {
         return Math.max(1, Math.min(mBoomPageWidth, mChipMaxWidth));
+    }
+
+    public int getChipWidth(int index) {
+        return measureChip(index);
     }
 
     public boolean layoutWords(int[] segment, String text, int touchedIndex) {
@@ -273,11 +280,30 @@ public class BoomWordsLayout {
         final Word word = mWords.get(index);
         if (word.punc) {
             return Math.min(getChipMaxWidth(),
-                    Math.max(mPuncMinWidth, mPuncBaseWidth + (int) Math.ceil(mPuncPaint.measureText(word.word))));
+                    Math.max(mPuncMinWidth, mPuncBaseWidth
+                            + (int) Math.ceil(measuredTextWidth(mPuncPaint, word.word))));
         } else {
             return Math.min(getChipMaxWidth(),
-                    Math.max(mWordMinWidth, mWordBaseWidth + (int) Math.ceil(mWordPaint.measureText(word.word))));
+                    Math.max(mWordMinWidth, mWordBaseWidth
+                            + (int) Math.ceil(measuredTextWidth(mWordPaint, word.word))));
         }
+    }
+
+    private float measuredTextWidth(TextPaint paint, String text) {
+        float fallback = 0f;
+        final float textSize = paint.getTextSize();
+        for (int offset = 0; offset < text.length();) {
+            int codePoint = text.codePointAt(offset);
+            Character.UnicodeScript script = Character.UnicodeScript.of(codePoint);
+            boolean wide = script == Character.UnicodeScript.HAN
+                    || script == Character.UnicodeScript.HIRAGANA
+                    || script == Character.UnicodeScript.KATAKANA
+                    || script == Character.UnicodeScript.HANGUL
+                    || script == Character.UnicodeScript.BOPOMOFO;
+            fallback += textSize * (wide ? 1f : 0.55f);
+            offset += Character.charCount(codePoint);
+        }
+        return Math.max(paint.measureText(text), fallback);
     }
 
     private void generateLayout() {
@@ -288,7 +314,8 @@ public class BoomWordsLayout {
         mRowStart.clear();
         mRowIsGap.clear();
         mIdToRow = new int[mWords.size()];
-        for (int i = 0; i < mWords.size(); ++i) {
+        int i = 0;
+        while (i < mWords.size()) {
             if (isHardBreakIndex(i)) {
                 if (count > 0) {
                     addRow(start, count, false);
@@ -298,28 +325,66 @@ public class BoomWordsLayout {
                 count = 0;
                 remain = mBoomPageWidth;
             }
-            final int chipWidth = measureChip(i);
-            if (chipWidth > remain) {
-                if (count == 0) {
-                    mIdToRow[i] = mRowCount.size();
-                    addRow(i, 1, false);
-                    start = i + 1;
-                } else {
-                    addRow(start, count, false);
-                    start = i;
-                    count = 0;
-                    remain = mBoomPageWidth;
-                    --i;
-                }
-            } else {
-                ++count;
-                remain -= chipWidth;
-                mIdToRow[i] = mRowCount.size();
+            int unitEnd = wrapUnitEnd(i);
+            int unitWidth = measureRange(i, unitEnd);
+            if (unitWidth > mBoomPageWidth) {
+                unitEnd = i + 1;
+                unitWidth = measureChip(i);
             }
+            if (unitWidth > remain && count > 0) {
+                addRow(start, count, false);
+                start = i;
+                count = 0;
+                remain = mBoomPageWidth;
+                continue;
+            }
+            for (int index = i; index < unitEnd; ++index) {
+                mIdToRow[index] = mRowCount.size();
+            }
+            count += unitEnd - i;
+            remain -= unitWidth;
+            i = unitEnd;
         }
         if (count > 0) {
             addRow(start, count, false);
         }
+    }
+
+    /**
+     * Keep closing punctuation on the same wrap unit as the word it follows. A row may
+     * therefore move one word together with its punctuation instead of starting the next
+     * row with an orphan punctuation chip.
+     */
+    private int wrapUnitEnd(int start) {
+        int end = start + 1;
+        if (mWords.get(start).punc) {
+            return end;
+        }
+        while (end < mWords.size()
+                && !isHardBreakIndex(end)
+                && mWords.get(end).punc
+                && !isOpeningPunctuation(mWords.get(end).word)
+                && measureRange(start, end + 1) <= mBoomPageWidth) {
+            ++end;
+        }
+        return end;
+    }
+
+    private int measureRange(int start, int end) {
+        int width = 0;
+        for (int index = start; index < end; ++index) {
+            width += measureChip(index);
+        }
+        return width;
+    }
+
+    private boolean isOpeningPunctuation(String word) {
+        if (TextUtils.isEmpty(word)) {
+            return false;
+        }
+        int type = Character.getType(word.codePointAt(0));
+        return type == Character.START_PUNCTUATION
+                || type == Character.INITIAL_QUOTE_PUNCTUATION;
     }
 
     private void addRow(int start, int count, boolean isGap) {

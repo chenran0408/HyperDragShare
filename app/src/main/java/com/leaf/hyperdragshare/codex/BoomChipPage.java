@@ -573,6 +573,7 @@ public class BoomChipPage {
             }
             LinearLayout row = new LinearLayout(mContext);
             row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             final int rowPadding = mContext.getResources()
@@ -583,7 +584,9 @@ public class BoomChipPage {
                 TextView chipView = createChipView(isPunc);
                 BoomChip chip = new BoomChip(start + j, chipView);
                 chipView.setTag(chip);
-                row.addView(chipView);
+                row.addView(chipView, new LinearLayout.LayoutParams(
+                        mLayout.getChipWidth(start + j),
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
             }
             mBoomConent.addView(row);
         }
@@ -616,6 +619,7 @@ public class BoomChipPage {
         if (punctuation) word.setTextColor(Color.WHITE);
         else word.setTextColor(mContext.getColorStateList(R.color.boom_chip_text_color));
         word.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSizeSp);
+        word.setLineSpacing(2f * resources.getDisplayMetrics().density, 1f);
         word.setSingleLine(punctuation);
         if (punctuation) word.setEllipsize(TextUtils.TruncateAt.END);
         word.setLayoutParams(new LinearLayout.LayoutParams(

@@ -6,6 +6,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
+import android.util.TypedValue;
+
 import java.util.Arrays;
 import java.util.TreeSet;
 import org.junit.Test;
@@ -77,6 +79,118 @@ public class BoomWordsLayoutTest {
         BoomWordsLayout layout = layout("😀", 0, 1, -1);
         assertFalse(layout.canSplitSelectedWords(selected(0)));
         assertFalse(layout.canSplitSelectedWords(selected()));
+    }
+
+    @Test
+    public void graphemeInWordGapRemainsOneVisiblePunctuationChip() {
+        String family = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66";
+        String text = "A" + family + "B";
+        int familyEnd = family.length();
+        BoomWordsLayout layout = layout(text, 0, 0, familyEnd + 1, familyEnd + 1,
+                -1, 1, familyEnd);
+
+        assertEquals(3, layout.getWordCount());
+        assertEquals("A", layout.getWord(0));
+        assertEquals(family, layout.getWord(1));
+        assertTrue(layout.isPunc(1));
+        assertEquals(1, layout.getWordStart(1));
+        assertEquals("B", layout.getWord(2));
+    }
+
+    @Test
+    public void measuredRowsFollowTheActualContentWidth() {
+        BoomWordsLayout layout = layout("甲乙丙", 0, 0, 1, 1, 2, 2, -1);
+        int narrowWidth = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 50, RuntimeEnvironment.getApplication().getResources().getDisplayMetrics());
+
+        assertTrue(layout.setAvailableWidth(narrowWidth));
+        assertEquals(3, layout.getRowCount());
+        assertTrue(layout.getChipMaxWidth() <= narrowWidth);
+        assertFalse(layout.setAvailableWidth(narrowWidth));
+        assertEquals("甲乙丙", layout.getOriText());
+
+        String url = "https://example.com/" + "a".repeat(256);
+        BoomWordsLayout longWord = layout(url, 0, url.length() - 1, -1);
+        longWord.setAvailableWidth(narrowWidth);
+        assertEquals(url, longWord.getWord(0));
+        assertEquals(1, longWord.getRowCount());
+        assertEquals(narrowWidth, longWord.getChipMaxWidth());
+    }
+
+    @Test
+    public void realTextWidthMovesShortWordAfterOverlongChip() {
+        String url = "https://example.com/" + "a".repeat(80);
+        String text = url + " abc";
+        BoomWordsLayout layout = layout(text,
+                0, url.length() - 1,
+                url.length() + 1, text.length() - 1,
+                -1);
+        int width = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 120,
+                RuntimeEnvironment.getApplication().getResources().getDisplayMetrics());
+
+        layout.setAvailableWidth(width);
+
+        assertEquals(2, layout.getRowCount());
+        assertEquals(url, layout.getWord(0));
+        assertEquals("abc", layout.getWord(1));
+        assertEquals(1, layout.getRowForIndex(1));
+    }
+
+    @Test
+    public void measuredWordChipIncludesItsTextInsteadOfOnlyTheMinimumWidth() {
+        BoomWordsLayout layout = layout("example", 0, 6, -1);
+        int minimumWidth = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 36,
+                RuntimeEnvironment.getApplication().getResources().getDisplayMetrics());
+
+        assertTrue("chipWidth=" + layout.getChipWidth(0) + " minimumWidth=" + minimumWidth,
+                layout.getChipWidth(0) > minimumWidth);
+    }
+
+    @Test
+    public void trailingPunctuationWrapsWithItsPrecedingWord() {
+        BoomWordsLayout layout = layout("甲乙，丙",
+                0, 0,
+                1, 1,
+                3, 3,
+                -1,
+                2, 2);
+        int width = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 80,
+                RuntimeEnvironment.getApplication().getResources().getDisplayMetrics());
+
+        layout.setAvailableWidth(width);
+
+        assertEquals(3, layout.getRowCount());
+        assertEquals(0, layout.getRowStart(0));
+        assertEquals(1, layout.getColumnCount(0));
+        assertEquals(1, layout.getRowStart(1));
+        assertEquals(2, layout.getColumnCount(1));
+        assertEquals(3, layout.getRowStart(2));
+        assertEquals(1, layout.getColumnCount(2));
+    }
+
+    @Test
+    public void rewrappingPreservesSegmentsAndOriginalTextUsedByCopyActions() {
+        String text = "甲乙，丙丁 https://example.com/a";
+        BoomWordsLayout layout = layout(text,
+                0, 0,
+                1, 1,
+                3, 4,
+                6, text.length() - 1,
+                -1,
+                2, 2);
+        String original = layout.getOriText();
+        int[] segments = layout.getSegments();
+        int width = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 80,
+                RuntimeEnvironment.getApplication().getResources().getDisplayMetrics());
+
+        layout.setAvailableWidth(width);
+
+        assertEquals(original, layout.getOriText());
+        assertArrayEquals(segments, layout.getSegments());
     }
 
     @Test

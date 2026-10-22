@@ -8,13 +8,14 @@
     <dimen name="select_rect_margin_top">16dp</dimen>
     <dimen name="select_rect_top_offset">28dp</dimen>
     <dimen name="chip_text_size">15sp</dimen>
-    <dimen name="chip_row_padding_top">2dp</dimen>
+    <dimen name="chip_row_padding_top">4dp</dimen>
     <dimen name="chip_row_height">54dp</dimen>
-    <dimen name="chip_paragraph_gap">8dp</dimen>
+    <dimen name="chip_paragraph_gap">12dp</dimen>
     <dimen name="chip_row_move_up_offset">-30dp</dimen>
     <dimen name="chip_row_move_down_offset">18dp</dimen>
     <dimen name="word_min_width">36dp</dimen>
     <dimen name="word_base_width">18dp</dimen>
+    <dimen name="chip_max_width">260dp</dimen>
     <dimen name="punc_min_width">21dp</dimen>
     <dimen name="punc_base_width">8dp</dimen>
     <dimen name="auto_scroll_top">100dp</dimen>
