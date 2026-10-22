@@ -2063,16 +2063,16 @@ final class DragShareController {
                 default:
                     break;
             }
-            previewParams.x = GestureMath.clamp(
+            int nextX = GestureMath.clamp(
                     left,
                     dp(8),
                     Math.max(dp(8), screenWidth - previewWidth - dp(8)));
-            previewParams.y = GestureMath.clamp(
+            int nextY = GestureMath.clamp(
                     top,
                     topInset + dp(8),
                     Math.max(topInset + dp(8),
                             screenHeight - bottomInset - previewHeight - dp(8)));
-            updateOverlayLayout(previewView, modernPreviewWindow, previewParams);
+            updatePreviewLayoutIfPositionChanged(nextX, nextY);
             return;
         }
         int margin = dp(settings.simpleMenuEdgeDistanceDp);
@@ -2093,10 +2093,20 @@ final class DragShareController {
                 maxTop = Math.max(minTop, menuTop - previewHeight - margin);
             }
         }
-        previewParams.x = GestureMath.clamp(
+        int nextX = GestureMath.clamp(
                 Math.round(x - previewWidth / 2f), minLeft, maxLeft);
-        previewParams.y = GestureMath.clamp(
+        int nextY = GestureMath.clamp(
                 Math.round(y - previewHeight - dp(20)), minTop, maxTop);
+        updatePreviewLayoutIfPositionChanged(nextX, nextY);
+    }
+
+    private void updatePreviewLayoutIfPositionChanged(int nextX, int nextY) {
+        if (previewParams == null || GestureMath.samePosition(
+                previewParams.x, previewParams.y, nextX, nextY)) {
+            return;
+        }
+        previewParams.x = nextX;
+        previewParams.y = nextY;
         updateOverlayLayout(previewView, modernPreviewWindow, previewParams);
     }
 

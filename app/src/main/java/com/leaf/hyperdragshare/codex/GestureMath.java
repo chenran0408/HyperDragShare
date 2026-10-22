@@ -84,6 +84,10 @@ final class GestureMath {
         return Math.max(minimum, Math.min(maximum, value));
     }
 
+    static boolean samePosition(int currentX, int currentY, int nextX, int nextY) {
+        return currentX == nextX && currentY == nextY;
+    }
+
     static int previewLeft(float pointerX, int previewWidth, int screenWidth, int margin) {
         return clamp(
                 Math.round(pointerX - previewWidth / 2f),

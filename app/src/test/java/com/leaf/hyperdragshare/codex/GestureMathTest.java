@@ -85,6 +85,13 @@ public final class GestureMathTest {
     }
 
     @Test
+    public void unchangedPreviewCoordinatesCanSkipWindowLayoutUpdate() {
+        assertTrue(GestureMath.samePosition(24, 48, 24, 48));
+        assertFalse(GestureMath.samePosition(24, 48, 25, 48));
+        assertFalse(GestureMath.samePosition(24, 48, 24, 49));
+    }
+
+    @Test
     public void previewTracksPointerAndClampsAtScreenEdges() {
         assertEquals(8, GestureMath.previewLeft(20, 100, 1080, 8));
         assertEquals(490, GestureMath.previewLeft(540, 100, 1080, 8));
