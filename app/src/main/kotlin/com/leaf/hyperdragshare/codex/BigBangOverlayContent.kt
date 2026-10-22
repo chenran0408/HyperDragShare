@@ -156,6 +156,7 @@ internal fun BigBangOverlayContent(
     // 52dp header + one 44dp action row, their padding, and the native body's 8dp.
     val naturalPanelHeight = (bodyHeightPx / density).dp + 116.dp +
         (if (isRecognizing) 88.dp else 0.dp) +
+        (if (directAction == null || isSegmenting) 0.dp else 72.dp) +
         (if (copyFeedback == null) 0.dp else 24.dp)
     val panelMetrics = if (maximumMetrics.fullScreen) maximumMetrics else maximumMetrics.copy(
         height = minOf(maximumMetrics.height, naturalPanelHeight),
@@ -337,6 +338,9 @@ internal fun BigBangOverlayContent(
                                 top = 6.dp, bottom = 6.dp + panelMetrics.bottomSystemInset),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
+                        directAction?.takeIf { ready }?.let { action ->
+                            CopyDirectActionCard(action, onClick = { onDirectAction(action) })
+                        }
                         Row(modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -357,12 +361,6 @@ internal fun BigBangOverlayContent(
                                 BigBangIconAction(MiuixIcons.Copy,
                                     if (copying) "正在复制" else "复制", onCopy,
                                     ready && !copying, primary = true)
-                            }
-                            directAction?.takeIf { ready }?.let { action ->
-                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                    BigBangIconAction(action.icon, action.label,
-                                        { onDirectAction(action) }, true)
-                                }
                             }
                             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                                 BigBangIconAction(MiuixIcons.Search, "搜索", onSearch, ready)

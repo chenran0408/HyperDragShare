@@ -6,6 +6,9 @@
 -keep class com.leaf.hyperdragshare.codex.RootClipboardMain {
     public static void main(java.lang.String[]);
 }
+-keep class com.leaf.hyperdragshare.codex.RootProcessKeepAliveMain {
+    public static void main(java.lang.String[]);
+}
 
 # HyperGesture runtime hooks and proxies use reflection across the host boundary.
 -keep class com.leaf.hyperdragshare.gestures.xposed.** { *; }

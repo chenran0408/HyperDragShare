@@ -59,7 +59,7 @@ final class AicrCopyHooks {
                         log("copy handling failed; keeping the original copy flow: "
                                 + error.getClass().getSimpleName() + ": " + error.getMessage());
                         new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(provider.getContext(),
-                                "无法打开分词窗口，已保留系统复制操作；请查看模块诊断日志",
+                                "无法显示复制直达，已保留系统复制操作；请查看模块诊断日志",
                                 Toast.LENGTH_LONG).show());
                     } finally {
                         Binder.restoreCallingIdentity(identity);
@@ -103,7 +103,7 @@ final class AicrCopyHooks {
         lastText = text;
         Bundle result = new Bundle();
         result.putBoolean("success", true);
-        log("opened original-page text window from AICR copy");
+        log("requested copy action bubble from AICR copy");
         return result;
     }
 

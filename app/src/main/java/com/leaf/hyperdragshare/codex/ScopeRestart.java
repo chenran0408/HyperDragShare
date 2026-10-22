@@ -18,6 +18,7 @@ final class ScopeRestart {
         boolean readerRequired = ThumbTriggerSettings.read(context).enabled;
         int oldPid = ModuleActivation.injectedProcessId(context);
         ModuleActivation.clearPortalReport(context);
+        RootProcessKeepAlive.Result keepAlive = ModuleActivation.ensurePortalRootKeepAlive(context);
         runRoot("am force-stop --user current com.miui.contentextension && "
                 + "am force-stop --user current com.xiaomi.aicr && "
                 + ModuleActivation.portalStartCommand() + " && "
@@ -34,6 +35,10 @@ final class ScopeRestart {
                             && ModuleActivation.isCurrentBuildPortalRootGranted(context)
                             && ModuleActivation.isRootInputReady(context)
                             && (!readerRequired || ModuleActivation.isPressReaderReady(context))) {
+                        if (!keepAlive.ready) {
+                            throw new IOException("Root 一键清理保护未就绪（传送门服务已恢复）："
+                                    + keepAlive.detail);
+                        }
                         DragShareLog.i(TAG, "new portal foreground service/input/reader confirmed pid=" + pid
                                 + " elapsed_ms=" + (SystemClock.elapsedRealtime() - started));
                         return;
@@ -51,7 +56,9 @@ final class ScopeRestart {
             Thread.currentThread().interrupt();
             throw new IOException("作用域重载等待被中断", error);
         }
-        throw new IOException("传送门前台服务、Root 输入或取词连接尚未就绪，请查看首页状态；系统框架更新需软重启生效");
+        String keepAliveError = keepAlive.ready ? "" : "；Root 一键清理保护未就绪：" + keepAlive.detail;
+        throw new IOException("传送门前台服务、Root 输入或取词连接尚未就绪，请查看首页状态；系统框架更新需软重启生效"
+                + keepAliveError);
     }
 
     static void restartAndroidRuntime() throws IOException {

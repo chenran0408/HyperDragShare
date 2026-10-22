@@ -5,7 +5,13 @@
 > 仅用于说明历史；当前长按取词固定使用传送门 Hook、Root evdev、Root helper 与 AICR V2。
 > Root helper 内部的 `UiAutomation` 节点读取不是用户可启用的系统无障碍服务。
 
-## 当前系统能力与微信路径（1.7.211）
+## 当前系统能力与微信路径（1.7.213）
+
+213的复制直达由既有`AicrCopyHooks`剪贴板监听→`TextDirectProvider.processText`→受限`open_aicr_text` RPC进入`CopyDirectBubble`，不再直接展开整块分词窗。气泡复用`InteractiveOverlayWindow`窗口所有者，但窗口只占卡片边界，并设置NOT_FOCUSABLE/NOT_TOUCH_MODAL，键盘与底层页面继续可用。链接、邮箱、电话沿用既有解析与`CopyDirectBrowser`，用户点击才执行；分词图标打开原有分词/NER结果，6秒超时（尊重系统辅助功能延时）、外部点击、左右滑动或灭屏均关闭。新请求替换旧气泡，旧超时与接收器随窗口释放；日志只记录类型。分词选区的直达入口改为同一Miuix提示卡，移除重复的小图标，并计入自然高度。
+
+参考样本`HyperCopy_v1.8_R8 (1).apk` SHA256 `727F0107CF7616EFED2ACC8C9870CDEF44282BADAEECA89F5298AE79922F2FE2`仅静态分析：`SystemCopyOverlayService`使用普通TYPE_APPLICATION_OVERLAY、点击后打开、6秒关闭。未复制反编译代码，也未引入其system_server全局剪贴板Hook或空ClipData压制方式。我们的入口仍是已经接通的AICR监听，Portal原生卡片的分词按钮保持原页分词用途。
+
+213增加Root调用MIUI `ProcessManager`锁定名单，仅保护本模块与Portal免一键清理。设置启动与应用重载前执行一次，先读后补、写后确认；前台服务照常启动，保护失败单独记录与提示，不伪装成功。系统原生锁定状态是持久的，恢复方法与边界见[ROOT_PROCESS_LIFECYCLE.md](ROOT_PROCESS_LIFECYCLE.md)。不写/proc OOM文件、不增加轮询守护或扩大系统杀进程拦截。
 
 212 修正重载启动：设置页和 ScopeRestart 共用 `am start-foreground-service --user current -n com.miui.contentextension/.services.TextContentExtensionService` 启动传送门已有前台服务，删除仅唤醒 Provider 的旧命令。传送门5.1.5的onCreate先调用原生startForeground，Hook随后将服务就绪状态随既有注入RPC上报；onDestroy撤销服务状态，Binder死亡清除整个激活记录。重载成功需要当前版本、当前PID、前台服务、Root与输入连接都就绪，按压已启用时还需reader就绪。没有修改系统adj、禁用内存回收或增加轮询复活进程。
 

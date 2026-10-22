@@ -1,5 +1,14 @@
 # 目标设备验证记录
 
+## 2026-10-22：213 复制提示气泡与Root ProcessManager锁定
+
+- 415项测试零失败/错误，Lint、Release R8、资源压缩与arm64-only打包通过。初次整批检查1分22秒，源码审查将Root等待超时中的空catch改为try-with-resources，增量同组检查1分5秒。只安装最终包一次；版本213/237，4,221,413 bytes，SHA256 `BDA1934F26DDF57FAC65A5650DEA9F9436244C0377F18F908D7C8955CC06B7CD`，安装base.apk回读一致。证书与212相同。
+- 目标ROM定点核对了`miui.process.ProcessManager`的`isLockedApplication(String,int)`、`updateApplicationLockedState(String,int,boolean)`及服务端OneKeyClean锁定名单判定。Root app_process真机调用`--enable 0`返回`ROOT_LOCKS_READY ... changed=2`，从安装APK重复调用返回`changed=0`。只新增模块与Portal两项，其他名单不变；没有改全局内存策略。锁定后显式force-stop Portal再恢复成功，PID8376、注入/Root/输入/reader均237，服务isForeground=true，说明没有拦截强行停止。未进行一键清理或压力测试，不声称实际清理验收通过。
+- 首次用系统`content` CLI请求生成URL时，其extra解析不支持值中的冒号；改用无冒号样本仍因`getContentProviderExternal`权限被拒，均未触达产品RPC，不能算气泡失败。没有修改权限来绕过：临时Root诊断取得Provider Binder后降为模块自身UID10270，调用既有受限`open_aicr_text`，使用生成的`https://example.com/hds-213`，不读写真实剪贴板。
+- 13:39:20日志`shown kind=Url`，本地截图`work/hds213-copy-bubble.png`确认Miuix气泡、链接与分词图标；13:39:42再次显示时window focus仍为原模块设置页，13:39:43点击日志`action opened kind=Url`，实际前台变为`mark.via/.Shell`。随后恢复本模块设置页，点击气泡分词图标显示同一生成文字的原页分词和既有直达结果（`work/hds213-segment-from-bubble.png`），未新增Activity流程。
+- 窗口首帧与后续截图分开核对；分词选区新卡片未完成真实交互验收。自然复制入口、IME展开、滑动关闭、计时自动收起、全部返回顺序、深色/横屏均未本批实测，不把源码存在或窗口显示当作全量通过。AICR复制Hook本批未专门重启，受限RPC前端由213模块进程加载；Portal237已重载，SystemUI/框架未重载。
+- 未操作微信或私人内容，未改变剪贴板；测试后保留设置首页，诊断DEX/临时APK/设备截图清理。本地截图只留任务work，不提交Git。交付`D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.213-arm64-v8a.apk`，回退标签`snapshot-2026-10-22-213`。
+
 ## 2026-10-22：212 重载启动与前台服务驻留
 
 - 本批一次完整`testDebugUnitTest lintDebug assembleRelease --offline --max-workers=4 --profile`在1分15秒成功；415项测试零失败/错误，Lint、R8、资源压缩通过。仅arm64-v8a，同证书Release APK为4,205,025 bytes，SHA256 `4D4E14620CE77AD58D5F7993E60350BA2D0B6F9816A56653C92408E741D08C38`。与211同构建/ABI/签名条件差4 bytes。

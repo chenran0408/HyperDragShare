@@ -65,6 +65,7 @@
 12. 首页激活状态固定按 Root＋传送门解释：“无 Root → 当前版本未注入传送门 →
    传送门前台服务未就绪 → 传送门 Root 通道不可用 → 实际Root输入未就绪/失败 → 已启用按压但取词未就绪/失败 → 已激活”。
    212起设置启动和重载必须启动传送门原有TextContentExtensionService前台服务，不能只查询Provider：已观察到Provider-only进程adj935被umms_pressure回收。服务状态随既有注入RPC上报，不改系统内存策略，不增加定时复活。
+   213经用户授权增加Root ProcessManager锁定名单，只锁模块和Portal，保护其免原生一键清理；先读后补、写后确认，失败单独提示，不把前台服务就绪等同保护成功。此状态在系统中持久保存，恢复命令见ROOT_PROCESS_LIFECYCLE；不拦截强行停止、不全局关闭内存回收。气泡走已有AICR复制入口，原页分词走既有窗口，不增加全局剪贴板Hook或测试Activity。
    传送门 Hook 必须通过
     `ModuleActivation.reportInjected()` 上报其编译时 `BuildConfig.VERSION_CODE`；不要把普通的
     `get_settings` 调用当作注入证明，否则 APK 更新后仍运行旧代码的传送门进程会被误报为已激活。

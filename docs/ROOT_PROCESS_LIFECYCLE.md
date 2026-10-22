@@ -29,3 +29,17 @@ RootTouchSource仍需修正停止时关闭阻塞读流、旧线程finally清理�
 ## 156状态存活修复
 
 ModuleActivation以受限ProviderRPC的进程Binder token判当前连接，死亡清运行状态，旧death按token/pid隔离。模块重建丢token时旧pref不能冒称当前激活，显式重载恢复。Settings死亡通知不触发自动握手。真机停止18074后立即撤下已激活并清pref、恢复22290/180输入/reader就绪。此修复不阻止LMK，也不扩大phantom保护范围。
+
+## 213 ProcessManager的一键清理保护（已构建安装、锁定写入已验证）
+
+目标ROM本机`miui-framework-device.jar`与`/system_ext/framework/miui-services.jar`已核对：`miui.process.ProcessManager`提供`updateApplicationLockedState(String,int,boolean)`、`isLockedApplication(String,int)`与`getLockedApplication(int)`。`ProcessManagerService.checkPermission()`拒绝shell UID 2000，但允许UID 0；所以只能由Root `app_process`调用。当前主用户为0。`ProcessPolicy`将锁定状态持久写入Settings.System的`locked_apps`，更新时也会提升已运行进程的maxAdj/maxProcState。
+
+OneKeyClean日志确认曾终止adj=200的传送门。目标ROM的一键清理对应ProcessManager policy 1；其`isInWhiteList`对policy 1查询locked-app状态，命中后`ProcessCleanerBase`走trimMemory路径，不请求杀进程。实现仅在设置页显式启动或作用域重载前检查模块`com.leaf.hyperdragshare.codex`与传送门`com.miui.contentextension`；逐包先读状态，仅补未锁定项，再用`isLockedApplication`复核。FGS即使在锁定操作失败时仍继续启动，但设置页会提示并记录诊断日志，重载会将保护失败作为独立错误返回，不把FGS ready当作锁定成功。
+
+这项状态会保存在系统的锁定应用名单中；不会定时重拉进程、修改OOM文件或拦截force-stop。写入前设备这两个包均未锁定；213真机Root调用返回changed=2，从已安装APK再次调用返回changed=0，已确认锁定。恢复到原状态可用Root shell执行（模块APK绝对路径按安装位置替换）：
+
+```sh
+CLASSPATH='/data/app/<module-install-dir>/base.apk' /system/bin/app_process /system/bin com.leaf.hyperdragshare.codex.RootProcessKeepAliveMain --disable 0
+```
+
+`--disable 0`会移除主用户这两个包的锁定项；若之后手动把其中任一包加入锁定名单，请勿执行该恢复命令，以免移除用户自己的锁定设置。213构建安装与状态读回已通过，一键清理后驻留仍未实测；不承诺对LMKD、Root管理器终止或显式force-stop提供保护。锁定后本批force-stop Portal仍可结束旧宿主并启动新PID8376，未阻止显式停止。

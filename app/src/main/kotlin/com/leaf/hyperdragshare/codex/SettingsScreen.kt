@@ -864,7 +864,7 @@ private fun portalSettingEntries(
     }
 
     row("copy.enabled", "复制直达与分词", SettingModule.COPY_DIRECT, "启用与触发",
-        summary = "复制卡片接入原页分词与实体直达；也可选词后点击直达图标。需启用传送门/AICR作用域；默认关闭",
+        summary = "复制直达显示可点击气泡，链接一键打开；选词识别结果在分词窗内显示。需启用传送门/AICR作用域；默认关闭",
         keywords = "剪贴板 复制卡片 实体 识别 执行动作",
     ) { title, summary, enabled ->
         SwitchPreference(
@@ -1145,8 +1145,15 @@ internal fun ActivationStatusCard(
         var portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
         var serviceReady = ModuleActivation.isPortalServiceReady(context)
         if (!injected || !portalRootGranted || !serviceReady) {
-            withContext(Dispatchers.IO) {
-                ModuleActivation.requestPortalRuntimeStart()
+            val startAndProtectionReady = withContext(Dispatchers.IO) {
+                ModuleActivation.requestPortalRuntimeStart(context)
+            }
+            if (!startAndProtectionReady) {
+                Toast.makeText(
+                    context,
+                    "传送门启动或后台保护未确认，请查看诊断日志",
+                    Toast.LENGTH_LONG
+                ).show()
             }
             repeat(PORTAL_ACTIVATION_CHECK_ATTEMPTS) {
                 injected = ModuleActivation.isCurrentBuildInjected(context)

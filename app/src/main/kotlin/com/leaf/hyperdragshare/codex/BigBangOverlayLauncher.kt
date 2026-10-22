@@ -82,6 +82,7 @@ object BigBangOverlayLauncher {
             host?.finish()
             return
         }
+        CopyDirectBubble.dismiss()
         if (activeHost === host) activeHost = null
         active?.dismiss()
         val windowGeneration = ++generation

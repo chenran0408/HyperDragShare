@@ -144,12 +144,9 @@ public final class ShareImageProvider extends ContentProvider {
                 result.putBoolean("accepted", false);
                 return result;
             }
-            Bundle input = new Bundle();
-            input.putString(IntegrationSettings.EXTRA_TEXT, text);
-            input.putBoolean("copy_direct_source", true);
             long identity = Binder.clearCallingIdentity();
             try {
-                return BigBangOverlayLauncher.request(contextOrThrow(), input);
+                return CopyDirectBubble.request(contextOrThrow(), text);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }

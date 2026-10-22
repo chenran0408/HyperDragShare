@@ -241,8 +241,14 @@ final class ModuleActivation {
     }
 
     /** Start the host's existing foreground service without opening an Activity. */
-    static boolean requestPortalRuntimeStart() {
-        return runRootCommand(portalStartCommand());
+    static boolean requestPortalRuntimeStart(Context context) {
+        RootProcessKeepAlive.Result keepAlive = RootProcessKeepAlive.ensureLocked(context);
+        boolean started = runRootCommand(portalStartCommand());
+        return keepAlive.ready && started;
+    }
+
+    static RootProcessKeepAlive.Result ensurePortalRootKeepAlive(Context context) {
+        return RootProcessKeepAlive.ensureLocked(context);
     }
 
     static String portalStartCommand() {
