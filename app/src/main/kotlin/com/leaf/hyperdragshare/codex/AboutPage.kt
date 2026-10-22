@@ -70,7 +70,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
 
 private const val PROJECT_URL = "https://github.com/chenran0408/HyperDragShare"
-private const val COMMUNITY_URL = "https://t.me/+EMRMXl6BKllmMjdl"
+private const val QQ_GROUP_NUMBER = "1129124392"
 
 @Composable
 fun DragShareAboutPage(
@@ -342,10 +342,11 @@ private fun DragShareAboutContent(
                             },
                         )
                         ArrowPreference(
-                            title = "Telegram 讨论群",
-                            endActions = { DragShareLinkAction("Telegram") },
+                            title = "QQ 群组",
+                            summary = QQ_GROUP_NUMBER,
+                            endActions = { DragShareLinkAction("复制") },
                             onClick = {
-                                openUrl(context, COMMUNITY_URL, "未找到可打开 Telegram 链接的应用")
+                                copyQqGroupNumber(context)
                             },
                         )
                     }
@@ -458,4 +459,21 @@ private fun openUrl(context: Context, url: String, failureMessage: String) {
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
     }
+}
+
+private fun copyQqGroupNumber(context: Context) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+        as? android.content.ClipboardManager
+    clipboard?.setPrimaryClip(
+        android.content.ClipData.newPlainText("QQ 群号", QQ_GROUP_NUMBER),
+    )
+    Toast.makeText(
+        context,
+        if (clipboard == null) {
+            "QQ 群号为 $QQ_GROUP_NUMBER"
+        } else {
+            "QQ 群号 $QQ_GROUP_NUMBER 已复制"
+        },
+        Toast.LENGTH_SHORT,
+    ).show()
 }
