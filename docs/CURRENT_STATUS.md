@@ -1,6 +1,6 @@
 # 当前功能与验证状态
 
-## 221 悬浮窗系统提示、图片误捕获与 Beta/正式分流
+## 221 悬浮窗系统提示、图片问题调查与 Beta/正式分流
 
 以 `3520884`（默认分支最新提交）为唯一源码基线。设备通知转储确认截图中的
 `“MMGG”正在其他应用的上层显示` 不是模块自己的通知，而是 `android` 包中
@@ -12,29 +12,32 @@
 - 设备 DEX 已核对目标类包含 `mPackageName`、`post()` 和 `onPostNotification()`。
   新 Hook 只在包名等于本模块 `applicationId` 时让这两个发布入口返回，其他应用和系统
   自身的悬浮窗提醒保持原行为。
-- R8 mapping 明确保留 `OverlayNotificationHooks` 与包名过滤调用；Beta APK 的
-  `aapt2` 版本为 `1.7.219-beta.2/244`，只含 `arm64-v8a`，签名与设备现有正式版一致。
+- R8 mapping 明确保留 `OverlayNotificationHooks` 与包名过滤调用；诊断构建版本为
+  `1.7.219-beta.3/244`，只含 `arm64-v8a`，签名与设备现有正式版一致。
 - 发布流程改为 Beta → 用户确认 → 正式版。Beta 构建使用 `assembleBeta`，版本名带
   `-beta.N`；正式构建仍使用 `assembleRelease`，提升 `versionCode` 后才可发布。
   Beta 更新页只读取正式线，正式版版本高于 Beta 时允许切回，避免旧正式包反向覆盖。
 - 用户补充日志的 19:03:23 没有 `DragShare/Press` 取词记录，却先出现传送门图片
-  staging、宿主浮窗抑制和 19:03:24 的 `preview shown kind=IMAGE`。因此截图中的
-  应用图标误预览来自传送门 `startPickImageTask` 图片路径，不是 Root 节点分类；
-  结合另一张内联缩略图，按同一类“图片/图标误进入图片拖拽”处理，而不是只修桌面
-  场景。旧日志未记录当时的来源包名，Beta.2 已补充 `source`、`bounds` 和忽略原因日志。
-- 传送门图片现在在读取 Bitmap 前拒绝空白来源、启动器来源和任一边小于 48dp
-  的内联缩略图；Root 节点图片同步采用 48dp 下限，并拒绝带文字的交互图标。
-  这不影响桌面手势或启动器本身，只跳过不应成为拖拽内容的图标和微缩略图。
-- `testDebugUnitTest lintDebug assembleBeta` 通过：435 项测试
-  0 失败/错误/跳过，Lint 0 错误/186 警告/2 提示，R8 与 arm64-only 打包成功；
-  Beta.2 APK 为 4,657,389 bytes，SHA256
-  `5A8731CCEA07412A7F245826387ED4BF7D2BE3A3AC7DDA94F8D0704B552F3EA5`，
-  已于 21:12:13 原位覆盖安装；`firstInstallTime` 保持不变，配置未清空。
-- Beta.1 安装时设备停留在 TIM，Beta.2 覆盖安装时前台是用户页面。两轮都未执行软重启，
-  因此本轮只确认 Beta 安装、版本、签名、构建和
+  staging、宿主浮窗抑制和 19:03:24 的 `preview shown kind=IMAGE`。这条日志只能确认
+  当时走的是传送门 `startPickImageTask` 图片路径，还不足以判断为什么要捕获该内容。
+- 曾尝试用 48dp 图片下限过滤内联缩略图和交互图标，但用户指出这会破坏正常小图拖拽。
+  该行为限制已完整撤回，`AccessibilityNodeClassifier` 与动态应用排除恢复为基线逻辑；
+  不保留来源特判、尺寸特判或交互图标特判。对应的 Beta.2 分支、tag 和 Pre-release
+  已撤下，当前不再对外提供该构建。
+- 目前只增加无行为变化的诊断：传送门记录来源、`image_url`/`view_bitmap` 类型、
+  内容边界和位图尺寸；预览记录来源包名。下一步需结合用户期望行为判断是命中优先级、
+  原生拖拽来源还是拖动启动时机问题，不再用尺寸猜测。
+- 日志也做了取舍：用户提供的 24,177 行日志中有 23,372 行来自两个逐事件指针线程。
+  高频指针与重复 Portal 回调用 250ms/1s 采样，下一次输出附带
+  `sampled_suppressed` 数量；捕获命中、拒绝、手势起止和错误仍正常记录。文件保持
+  4 MiB 上限，并在每次新文件开头写入构建、级别和采样策略。
+- 诊断构建 `1.7.219-beta.3/244` 已覆盖安装，427 项测试 0 失败/错误/跳过，
+  Lint 0 错误/186 警告/2 提示，R8 与 arm64-only 打包成功；APK SHA256
+  `31938FD39D3CEF6B4AFCB6783C7B77889C5FEF7C792E9EE7DD714267FDD11969`。
+- Beta.1 安装时设备停留在 TIM，Beta.2/Beta.3 覆盖安装时前台是用户页面。均未执行软重启，
+  因此只确认历史 Beta 安装、版本、签名和
   Hook 静态接线，不声称 `system_server` 中的新代码已加载，也不声称通知已在真机消失。
-  图片新过滤同样要等传送门进程重载。软重启后的 `DragShare/OverlayNotice` 日志、
-  通知栏复现、应用图标长按和小图复测仍是正式版前置验收项。
+  软重启后的 `DragShare/OverlayNotice` 日志与通知栏复现仍是正式版前置验收项。
 
 ## 220 MiTrustService 风险门禁定向修复
 

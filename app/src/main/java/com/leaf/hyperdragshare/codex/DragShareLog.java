@@ -3,6 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.os.Process;
 import android.util.Log;
 
@@ -16,11 +17,13 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /** Logging boundary shared by the module process and the injected portal process. */
 final class DragShareLog {
@@ -34,6 +37,8 @@ final class DragShareLog {
     private static final long ROOT_COMMAND_TIMEOUT_MS = 8_000L;
     private static final long STREAM_CLOSE_TIMEOUT_MS = 1_000L;
     private static final Object FILE_LOCK = new Object();
+    private static final ConcurrentHashMap<String, SampleState> SAMPLE_STATES =
+            new ConcurrentHashMap<>();
     private static final ArrayDeque<String> PENDING_FILE_LINES = new ArrayDeque<>();
     private static final ExecutorService FILE_EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "drag-share-log-file");
@@ -87,6 +92,31 @@ final class DragShareLog {
 
     static void d(String tag, String message) {
         emit(DragShareSettings.LOG_LEVEL_DEBUG, Log.DEBUG, tag, message, null);
+    }
+
+    /** Emits at most one debug line per key/interval and reports how many were collapsed. */
+    static void dSampled(String tag, String sampleKey, long intervalMs, Supplier<String> message) {
+        if (!shouldEmit(DragShareSettings.LOG_LEVEL_DEBUG)) {
+            return;
+        }
+        String safeTag = tag == null || tag.trim().isEmpty() ? TAG : tag;
+        String key = safeTag + '\n' + (sampleKey == null ? "" : sampleKey);
+        SampleState state = SAMPLE_STATES.computeIfAbsent(key, unused -> new SampleState());
+        long now = SystemClock.elapsedRealtime();
+        synchronized (state) {
+            if (state.lastEmitMs >= 0L && now - state.lastEmitMs < intervalMs) {
+                state.suppressed++;
+                return;
+            }
+            int suppressed = state.suppressed;
+            state.suppressed = 0;
+            state.lastEmitMs = now;
+            String value = message == null ? "" : message.get();
+            if (suppressed > 0) {
+                value += " sampled_suppressed=" + suppressed;
+            }
+            emit(DragShareSettings.LOG_LEVEL_DEBUG, Log.DEBUG, safeTag, value, null);
+        }
     }
 
     static void i(String tag, String message) {
@@ -329,6 +359,16 @@ final class DragShareLog {
             }
             fileSink = RootFileSink.open(rotateOnNextOpen);
             rotateOnNextOpen = false;
+            fileSink.append(formatFileLine(
+                    Log.INFO,
+                    TAG,
+                    "diagnostic file opened build=" + BuildConfig.VERSION_NAME
+                            + "/" + BuildConfig.VERSION_CODE
+                            + " level=" + configuredLevel
+                            + " destination=" + configuredDestination
+                            + " max_bytes=" + MAX_FILE_BYTES
+                            + " sampled_debug=true",
+                    null).getBytes(StandardCharsets.UTF_8));
         }
         fileSink.append(bytes);
     }
@@ -412,5 +452,10 @@ final class DragShareLog {
             }
             process.destroy();
         }
+    }
+
+    private static final class SampleState {
+        long lastEmitMs = -1L;
+        int suppressed;
     }
 }

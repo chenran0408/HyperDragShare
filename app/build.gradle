@@ -116,7 +116,7 @@ android {
         }
         beta {
             initWith release
-            versionNameSuffix '-beta.2'
+            versionNameSuffix '-beta.3'
             buildConfigField 'String', 'UPDATE_CHANNEL', '"beta"'
             signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
         }

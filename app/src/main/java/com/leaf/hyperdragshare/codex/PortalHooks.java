@@ -383,9 +383,11 @@ final class PortalHooks {
             Object motion = properties.get(MOTION_KEY);
             if (!(motion instanceof MotionEvent)
                     || ((MotionEvent) motion).getActionMasked() != MotionEvent.ACTION_MOVE) {
-                DragShareLog.d(TAG, "portal callback keys=" + properties.keySet()
-                        + " motion=" + (motion instanceof MotionEvent)
-                        + " control=" + String.valueOf(properties.get(CONTROL_KEY)));
+                Object control = properties.get(CONTROL_KEY);
+                DragShareLog.dSampled(TAG, "callback:" + String.valueOf(control), 1_000L,
+                        () -> "portal callback keys=" + properties.keySet()
+                                + " motion=" + (motion instanceof MotionEvent)
+                                + " control=" + String.valueOf(control));
             }
             if (motion instanceof MotionEvent) {
                 // A motion-only result is not valid Taplus pick content.
@@ -523,9 +525,10 @@ final class PortalHooks {
     private static void dispatchRootPointer(
             int action, float x, float y, long eventTime, int rawTouchMajor, int rawTouchMinor, int rawWidthMajor) {
         if (action != MotionEvent.ACTION_MOVE) {
-            DragShareLog.d(TAG, "root pointer action=" + MotionEvent.actionToString(action)
-                    + " point=" + Math.round(x) + "," + Math.round(y)
-                    + " time=" + eventTime);
+            DragShareLog.dSampled(TAG, "root-pointer:" + action, 250L,
+                    () -> "root pointer action=" + MotionEvent.actionToString(action)
+                            + " point=" + Math.round(x) + "," + Math.round(y)
+                            + " time=" + eventTime);
         }
         DragShareController current = controller;
         if (current != null) {

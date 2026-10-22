@@ -354,11 +354,12 @@ final class DragShareController {
         }
         long downTime = rootDownTime;
         if (action != MotionEvent.ACTION_MOVE) {
-            DragShareLog.d(TAG, "pointer received source=" + source
-                    + " action=" + MotionEvent.actionToString(action)
-                    + " point=" + Math.round(x) + "," + Math.round(y)
-                    + " active=" + active
-                    + " time=" + eventTime);
+            DragShareLog.dSampled(TAG, "pointer:" + source + ":" + action, 250L,
+                    () -> "pointer received source=" + source
+                            + " action=" + MotionEvent.actionToString(action)
+                            + " point=" + Math.round(x) + "," + Math.round(y)
+                            + " active=" + active
+                            + " time=" + eventTime);
         }
         lastObservedX = x;
         lastObservedY = y;

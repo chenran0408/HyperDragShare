@@ -1,26 +1,31 @@
 # 目标设备验证记录
 
-## 2026-10-22：Beta 1.7.219-beta.2 安装
+## 2026-10-22：Beta 1.7.219-beta.2 撤下与图片问题复核
 
-- 以默认分支最新提交 `3520884` 为代码基线，加入传送门小图/启动器过滤后构建
-  Beta `1.7.219-beta.2/244`。Beta APK 为 4,657,389 bytes，SHA256
+- 曾以默认分支最新提交 `3520884` 为代码基线，加入 48dp 小图/启动器过滤后构建
+  Beta `1.7.219-beta.2/244`。APK 为 4,657,389 bytes，SHA256
   `5A8731CCEA07412A7F245826387ED4BF7D2BE3A3AC7DDA94F8D0704B552F3EA5`；
   `aapt2` 确认包名不变、仅 `arm64-v8a`，签名 SHA-256 仍为
   `B86A4A1D5CA870EA986585714FD2E9D349A6679FC8D7E1E682E1594D7C2C89C0`。
 - 21:12:13 使用 `adb install -r -d` 原位覆盖成功。设备读回
   `versionCode=244`、`versionName=1.7.219-beta.2`，`firstInstallTime` 仍为
   2026-10-20 21:13:25，说明安装未清数据。
-- 构建门槛通过：435 项测试 0 失败/错误/跳过，Lint 0 错误/186 警告/2 提示，
-  Beta R8 与 arm64-only 打包成功。
+- 用户指出尺寸准入不是根因修复且会破坏原有小图拖拽。该过滤及所有相关行为特判已撤回，
+  GitHub Pre-release、tag 与远端 beta 分支已删除；Beta.2 不作为发布候选保留。
 - 通知转储已定位原提示为 `android`/`AlertWindowNotification`，不是 MMGG 自己的
   通知服务。设备 framework DEX 已确认目标类、`mPackageName`、`post()` 与
   `onPostNotification()`；Beta 的 R8 mapping 也保留对应 Hook。
 - 日志显示 19:03 的用户反馈走了传送门图片路径，而不是 Root 取词：传送门先 stage
-  图片并抑制宿主浮窗，之后才出现 MMGG 的 `preview shown kind=IMAGE`。Beta.2 增加
-  来源、边界及过滤原因日志，供下次复现直接确认。
+  图片并抑制宿主浮窗，之后才出现 MMGG 的 `preview shown kind=IMAGE`。设备上的
+  Portal 5.1.5 同时支持 `imgUrl` 与 `viewBitmap` 两种图片来源，诊断构建将记录二者
+  类型而不记录 URL 或图片内容。
+- 21:20 与 21:23 两次安装诊断 Beta.3，最终读回 `versionCode=244`、
+  `versionName=1.7.219-beta.3`，`firstInstallTime` 保持 2026-10-20 21:13:25；
+  427 项测试、Lint、R8 和 arm64-only 打包通过。最终诊断 APK SHA256 为
+  `31938FD39D3CEF6B4AFCB6783C7B77889C5FEF7C792E9EE7DD714267FDD11969`。
 - 安装时设备前台是用户的酷安页面，未切到桌面、未重载传送门，也未执行
   `setprop ctl.restart zygote`。因此当前只确认安装、版本、签名、构建和静态接线；
-  应用图标长按、小图复测、通知栏消失均未声称真机通过。
+  两个图片反馈的真实命中链、应保留的原动作及通知栏消失均未声称真机通过。
 
 ## 2026-10-22：218 MiTrustService MRM 门禁 Hook
 

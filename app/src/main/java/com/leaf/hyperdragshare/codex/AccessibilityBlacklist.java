@@ -17,7 +17,6 @@ import java.util.Set;
 final class AccessibilityBlacklist {
     private static final String REASON_LAUNCHER = "系统当前启动器";
     private static final String REASON_INPUT_METHOD = "当前输入法";
-    private static final String TARGET_LAUNCHER_PACKAGE = "com.miui.home";
 
     private AccessibilityBlacklist() {}
 
@@ -67,7 +66,6 @@ final class AccessibilityBlacklist {
         } catch (Throwable ignored) {
             // The user blacklist remains effective when a ROM restricts this lookup.
         }
-        result.putIfAbsent(TARGET_LAUNCHER_PACKAGE, REASON_LAUNCHER);
         try {
             String value = Settings.Secure.getString(
                     context.getContentResolver(),
