@@ -12,13 +12,13 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical|center_horizontal"
         android:singleLine="false"
-        android:maxWidth="260dp"
+        android:maxWidth="@dimen/chip_max_width"
         android:background="@drawable/boom_chip_surface"
         android:minWidth="@dimen/word_min_width"
         android:minHeight="36dp"
         android:paddingHorizontal="9dp"
         android:paddingVertical="4dp"
-        android:includeFontPadding="false"
+        android:includeFontPadding="true"
         android:textColor="@color/boom_chip_text_color"
         android:textSize="@dimen/chip_text_size" />
 </LinearLayout>

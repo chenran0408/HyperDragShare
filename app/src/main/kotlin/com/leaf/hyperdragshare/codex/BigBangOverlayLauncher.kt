@@ -97,7 +97,6 @@ object BigBangOverlayLauncher {
             host?.finish()
             return
         }
-        CopyDirectNotification.dismiss(app)
         if (activeHost === host) activeHost = null
         active?.dismiss()
         val windowGeneration = ++generation
