@@ -2,7 +2,7 @@
 
 ## 215 中转站选中项拖出、底部输入区让位与链接直达入口
 
-源码、Debug包与设备安装均为`1.7.215/239`。真实触摸日志确认旧Portal进程`20299`从15:28持续运行到安装后，仍在执行安装前菜单代码；随后单独重启作用域，新Portal进程`12514`已自报注入、前台服务、Root输入与取词reader均为239。本批没有改版本号，也没有把Debug安装写成Release验证。
+源码、Debug包与设备安装均为`1.7.215/239`。真实触摸日志确认旧Portal进程`20299`从15:28持续运行到安装后，仍在执行安装前菜单代码；后续单独重启作用域。最终性能优化包安装后，Portal进程`3072`已自报注入、前台服务、Root输入与取词reader均为239。本批没有改版本号，也没有把Debug安装写成Release验证。
 
 - 中转站长按拖出改用`rememberUpdatedState`读取当前条目，避免LazyColumn复用槽位时闭包继续持有旧列表。日志只记录kind与8位条目ID，不记录正文或图片路径。
 - 真机定向验证：从界面顶部第一条图片拖出，日志为`image:006747ae`；滚动后从文字卡拖出，日志为`text:36876219`，两次均进入系统`startDragAndDrop`。此前“拖文字固定变成某张图片”的条目绑定问题未复现。该证据来自App已知条目和系统拖放链，不涉及聊天正文。
@@ -11,9 +11,12 @@
 - 真实手指日志进一步确认旧链路会同时启动中转站系统拖放和Root按压识别：`startDragAndDrop`后约71ms，Root `InputBlocker`取消源触摸流，系统随即`DRAG_ENDED accepted=false`，此后只剩模块自带预览，因此微信没有可领取的内容。根因不是菜单让位或`ClipData`变化，而是两个输入所有者重叠。
 - 中转站/分词浮窗等交互窗口把可见边界发布到模块Provider；Portal现在读取同一份边界，并在Root evdev的`ACTION_DOWN`落入模块浮窗时让出整次手势，不启动取词、不取消原触摸流。Provider只向SystemUI和传送门开放这份边界，未扩大其他配置读取权限。
 - 16:30定向验证：中转站范围内按下时Root明确记录`ignoring gesture started inside module overlay bounds`；随后文字拖放从`16:30:22.238`开始，直到松手后的`16:30:22.902`才由系统广播`DRAG_ENDED`，未再被Root提前取消。该次投向空白处，因此`accepted=false`符合预期，没有发送内容。
-- 针对性`RootTouchSourceTest`、`OverlayTouchRegionsTest`与`assembleDebug`通过并同签名Root覆盖安装；Portal由12514重启为24599，注入、前台服务、Root输入与取词reader均为239。APK为`app/build/outputs/apk/debug/app-debug.apk`，72,396,562 bytes，SHA256 `C3227ADA2FE721C186FC1CC4ED1641D6E1B54DAD43BF46722F2F35EE74642B77`；设备已安装base.apk哈希与本地包一致。
+- 微信真实静止长按基线为：按压确认301ms、区域截图与复核114ms、AICR 286ms、分词申请到首帧165ms；从确认到首帧约518ms，从按下到首帧约818ms。界面卡顿主要发生在首帧前的词块构建和开场动画，不在分词算法本身。
+- 词块构建不再为每个词重复inflate`boom_chip_layout`/`boom_punc_layout`和外层容器，改为直接创建与原样式等价的TextView；文字测量使用独立TextPaint。长文本开场动画由最多12行降为前6行，保留首屏效果并减少大量并行View动画。
+- 预热进程生成文本测试中，文本分词为1–6ms；180个词块、18行布局为62ms，简单文本布局为6–8ms。冷启动Activity另观察到首帧前的系统级跳过帧，不能把这部分与微信热路径混算；真实微信长按的优化后总首帧耗时仍需复测。
+- 针对性`RootTouchSourceTest`、`OverlayTouchRegionsTest`、`BoomWordsLayoutTest`与`assembleDebug`通过并同签名Root覆盖安装。APK为`app/build/outputs/apk/debug/app-debug.apk`，75,280,350 bytes，SHA256 `1525562B0F70F27AC78E84312A1515AC8948957DFB9E4298C3A69A950513C5FA`；设备已安装base.apk哈希与本地包一致。
 
-未确认：真实手指拖到当前微信输入栏后文字/图片是否被微信接收，以及四种菜单外观在同一落点的实际手感。本批不以系统拖放存活或ADB注入拖拽代替微信接收结论。
+未确认：优化后的真实微信长按总首帧耗时和持续手感；真实手指拖到当前微信输入栏后文字/图片是否被微信接收；四种菜单外观在同一落点的实际手感。本批不以系统拖放存活或ADB注入拖拽代替这些物理交互结论。
 
 ## 214 微信拖图接管、两排分词工具与原生复制提醒
 

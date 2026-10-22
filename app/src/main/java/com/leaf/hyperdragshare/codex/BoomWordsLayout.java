@@ -6,8 +6,6 @@ import android.content.res.Resources;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.util.TypedValue;
-import android.view.View;
-import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.TreeSet;
@@ -18,7 +16,8 @@ public class BoomWordsLayout {
     private final static String TAG = "BoomWordsLayout";
 
     private final int mMaxRowNumber;
-    private final int mBoomPageWidth;
+    private int mBoomPageWidth;
+    private final int mChipMaxWidth;
     private final int mWordMinWidth;
     private final int mWordBaseWidth;
     private final int mPuncMinWidth;
@@ -62,16 +61,15 @@ public class BoomWordsLayout {
         final int displayWidth = res.getDisplayMetrics().widthPixels;
         mBoomPageWidth = displayWidth - res.getDimensionPixelSize(R.dimen.page_margin_left)
                 - res.getDimensionPixelSize(R.dimen.page_margin_right);
+        mChipMaxWidth = res.getDimensionPixelSize(R.dimen.chip_max_width);
         //mMaxRowNumber = displayWidth > 1080 ? 11 : 10;
         mMaxRowNumber = 1000;
         mWordMinWidth = res.getDimensionPixelSize(R.dimen.word_min_width);
         mWordBaseWidth = res.getDimensionPixelSize(R.dimen.word_base_width);
         mPuncMinWidth = res.getDimensionPixelSize(R.dimen.punc_min_width);
         mPuncBaseWidth = res.getDimensionPixelSize(R.dimen.punc_base_width);
-        mWordPaint = ((TextView) View.inflate(context, R.layout.boom_chip_layout, null)
-                .findViewById(R.id.word)).getPaint();
-        mPuncPaint = ((TextView) View.inflate(context, R.layout.boom_punc_layout, null)
-                .findViewById(R.id.punc)).getPaint();
+        mWordPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
+        mPuncPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
     }
 
     public void setTextSizeSp(float textSizeSp) {
@@ -83,6 +81,19 @@ public class BoomWordsLayout {
         mWordPaint.setTextSize(sizePx);
         mPuncPaint.setTextSize(sizePx);
         generateLayout();
+    }
+
+    public boolean setAvailableWidth(int widthPx) {
+        if (widthPx <= 0 || widthPx == mBoomPageWidth) {
+            return false;
+        }
+        mBoomPageWidth = widthPx;
+        generateLayout();
+        return true;
+    }
+
+    public int getChipMaxWidth() {
+        return Math.max(1, Math.min(mBoomPageWidth, mChipMaxWidth));
     }
 
     public boolean layoutWords(int[] segment, String text, int touchedIndex) {
@@ -177,10 +188,12 @@ public class BoomWordsLayout {
         int start;
         int end;
         int prev = 0;
+        BreakIterator characters = BreakIterator.getCharacterInstance(Locale.ROOT);
+        characters.setText(text);
         for (int i = 0; i < segment.length; i += 2) {
             start = segment[i];
             end = segment[i + 1] + 1;
-            addGapIntoChips(prev, start);
+            addGapIntoChips(prev, start, characters);
             String trim = text.substring(start, end).replaceAll("\\p{Z}", " ").trim();
             if (!TextUtils.isEmpty(trim)) {
                 if (touchedIndex >= start && touchedIndex < end) {
@@ -190,7 +203,7 @@ public class BoomWordsLayout {
             }
             prev = end;
         }
-        addGapIntoChips(prev, text.length());
+        addGapIntoChips(prev, text.length(), characters);
 
         final int wordCount = mWords.size();
         if (wordCount > 0) {
@@ -222,15 +235,30 @@ public class BoomWordsLayout {
         return false;
     }
 
-    private void addGapIntoChips(int start, int end) {
-        for (int i = start; i < end; ++i) {
-            char punc = mOriText.charAt(i);
-            if (punc == '\n') {
+    private void addGapIntoChips(int start, int end, BreakIterator characters) {
+        int offset = start;
+        while (offset < end) {
+            int boundary = characters.following(offset);
+            int next = boundary == BreakIterator.DONE || boundary > end ? end : boundary;
+            String cluster = mOriText.substring(offset, next);
+            if (cluster.indexOf('\n') >= 0) {
                 addHardBreak();
-            } else if (!Character.isWhitespace(punc) && !Character.isSpaceChar(punc)) {
-                mWords.add(new Word(String.valueOf(punc), i, true));
+            } else if (!isWhitespace(cluster)) {
+                mWords.add(new Word(cluster, offset, true));
             }
+            offset = next;
         }
+    }
+
+    private boolean isWhitespace(String cluster) {
+        for (int offset = 0; offset < cluster.length();) {
+            int codePoint = cluster.codePointAt(offset);
+            if (!Character.isWhitespace(codePoint) && !Character.isSpaceChar(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return true;
     }
 
     private void addHardBreak() {
@@ -244,9 +272,11 @@ public class BoomWordsLayout {
     private int measureChip(int index) {
         final Word word = mWords.get(index);
         if (word.punc) {
-            return Math.max(mPuncMinWidth, mPuncBaseWidth + (int)mPuncPaint.measureText(word.word));
+            return Math.min(getChipMaxWidth(),
+                    Math.max(mPuncMinWidth, mPuncBaseWidth + (int) Math.ceil(mPuncPaint.measureText(word.word))));
         } else {
-            return Math.max(mWordMinWidth, mWordBaseWidth + (int)mWordPaint.measureText(word.word));
+            return Math.min(getChipMaxWidth(),
+                    Math.max(mWordMinWidth, mWordBaseWidth + (int) Math.ceil(mWordPaint.measureText(word.word))));
         }
     }
 

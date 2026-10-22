@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.Choreographer
 import android.view.View
@@ -281,7 +282,9 @@ internal class BigBangPanelSession(private val context: Context, private val act
         val request = requests.begin()
         Thread({
             try {
+                val started = SystemClock.elapsedRealtime()
                 val result = TextSegmenter.get(context).segment(text)
+                DragShareLog.i(TAG, "text segmentation elapsed_ms=${SystemClock.elapsedRealtime() - started}")
                 main.post {
                     if (!closed && requests.accepts(request)) handleSegmentResult(text, result)
                 }
@@ -385,11 +388,15 @@ internal class BigBangPanelSession(private val context: Context, private val act
             actions.dismiss()
             return
         }
+        val started = SystemClock.elapsedRealtime()
         if (boomChipPage?.initWords(result, text, -1, launchTouchX, launchTouchY) != true) {
             Toast.makeText(context, R.string.a_msg_no_words, Toast.LENGTH_SHORT).show()
             actions.dismiss()
             return
         }
+        val page = boomChipPage
+        DragShareLog.i(TAG, "word layout elapsed_ms=${SystemClock.elapsedRealtime() - started}"
+            + " words=${page?.mLayout?.wordCount ?: 0} rows=${page?.mLayout?.rowCount ?: 0}")
     }
 
     private fun updateLegacyTheme(

@@ -1,10 +1,13 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.Context;
-import android.view.LayoutInflater;
+import android.content.res.Resources;
+import android.graphics.Color;
+import android.text.TextUtils;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
@@ -75,7 +78,7 @@ public class BoomChipPage {
             if (DBG) {
                 LogUtils.d(TAG, "init Chip and do boom animation");
             }
-            final int animationRows = Math.min(mLayout.getRowCount(), 12);
+            final int animationRows = Math.min(mLayout.getRowCount(), 6);
             for (int i = 0; i < animationRows; ++i) {
                 final LinearLayout row = getChipRow(i);
                 if (row == null) {
@@ -145,6 +148,21 @@ public class BoomChipPage {
         mBoomConent.setOnClickListener(mDismissClickListener);
         mCancel.setOnClickListener(mDismissClickListener);
         mBoomActionHandler = new BoomActionHandler(this);
+        mBoomConent.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View view, int left, int top, int right, int bottom,
+                    int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                final int availableWidth = right - left;
+                if (availableWidth == oldRight - oldLeft || availableWidth <= 0
+                        || mLayout.getWordCount() == 0) {
+                    return;
+                }
+                // This callback runs after this view's layout. Rebuilding children here
+                // would leave the replacement chips unmeasured until another traversal,
+                // making hit testing fail during the same frame.
+                mBoomConent.post(() -> relayoutForAvailableWidth(availableWidth));
+            }
+        });
         mScroller.setOnEdgeDragListener(new CustomScrollView.OnEdgeDragListener() {
             @Override
             public void onEdgeDrag(float offset) {
@@ -156,6 +174,27 @@ public class BoomChipPage {
                 releaseAdjacentPull(offset, triggered);
             }
         });
+    }
+
+    private void relayoutForAvailableWidth(int availableWidth) {
+        if (mBoomConent.getWidth() != availableWidth || !mLayout.setAvailableWidth(availableWidth)
+                || mLayout.getWordCount() == 0) {
+            return;
+        }
+        Serializable selectedState = mBoomActionHandler.hasSelection()
+                ? captureSelectedState() : null;
+        if (selectedState != null) {
+            mSavedData = selectedState;
+            mBoomActionHandler.clearSelectionStateForRelayout();
+        }
+        mBoomConent.removeAllViews();
+        initChips(false);
+        if (selectedState != null) {
+            // Selection is keyed by word character ranges and the new chip tags
+            // already exist; restoring it does not depend on measured positions.
+            restoreSelectedState();
+            mSavedData = null;
+        }
     }
 
     public interface OnAdjacentRequestListener {
@@ -536,10 +575,12 @@ public class BoomChipPage {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            final int rowPadding = mContext.getResources()
+                    .getDimensionPixelSize(R.dimen.chip_row_padding_top);
+            row.setPadding(0, rowPadding, 0, rowPadding);
             for(int j = 0; j < count; ++j) {
                 boolean isPunc = mLayout.isPunc(start + j);
-                View chipView = LayoutInflater.from(mContext).inflate(
-                        isPunc ? R.layout.boom_punc_layout : R.layout.boom_chip_layout, null);
+                TextView chipView = createChipView(isPunc);
                 BoomChip chip = new BoomChip(start + j, chipView);
                 chipView.setTag(chip);
                 row.addView(chipView);
@@ -554,6 +595,32 @@ public class BoomChipPage {
         if (animate) {
             mBoomConent.getViewTreeObserver().addOnGlobalLayoutListener(mDoBoomAnimation);
         }
+    }
+
+    private TextView createChipView(boolean punctuation) {
+        Resources resources = mContext.getResources();
+        TextView word = new TextView(mContext);
+        word.setId(punctuation ? R.id.punc : R.id.word);
+        word.setGravity(Gravity.CENTER);
+        word.setMaxWidth(mLayout.getChipMaxWidth());
+        word.setMinWidth(resources.getDimensionPixelSize(
+                punctuation ? R.dimen.punc_min_width : R.dimen.word_min_width));
+        word.setMinHeight(Math.round(36f * resources.getDisplayMetrics().density));
+        word.setPadding(
+                Math.round((punctuation ? 4f : 9f) * resources.getDisplayMetrics().density),
+                Math.round(4f * resources.getDisplayMetrics().density),
+                Math.round((punctuation ? 4f : 9f) * resources.getDisplayMetrics().density),
+                Math.round(4f * resources.getDisplayMetrics().density));
+        word.setIncludeFontPadding(true);
+        word.setBackgroundResource(R.drawable.boom_chip_surface);
+        if (punctuation) word.setTextColor(Color.WHITE);
+        else word.setTextColor(mContext.getColorStateList(R.color.boom_chip_text_color));
+        word.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSizeSp);
+        word.setSingleLine(punctuation);
+        if (punctuation) word.setEllipsize(TextUtils.TruncateAt.END);
+        word.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        return word;
     }
 
     void restoreSelectionNow(TreeSet<Integer> selection) {
@@ -740,7 +807,6 @@ public class BoomChipPage {
                 word = (TextView) chipView.findViewById(R.id.word);
             }
             word.setText(mLayout.getWord(id));
-            word.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSizeSp);
         }
 
         public void setSelected(boolean selected) {
