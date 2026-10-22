@@ -69,6 +69,54 @@ public final class ModuleActivationTest {
         assertTrue(ModuleActivation.isCurrentBuildPortalRootGranted(context));
     }
 
+    @Test public void missingSessionIsUnknownButExplicitComponentFailuresAreUnavailable() {
+        Context context = RuntimeEnvironment.getApplication();
+        assertEquals(ModuleActivation.ReportedStatus.UNKNOWN,
+                ModuleActivation.injectionStatus(context));
+        assertEquals(ModuleActivation.ReportedStatus.UNKNOWN,
+                ModuleActivation.portalServiceStatus(context));
+
+        Lifetime lifetime = new Lifetime();
+        Bundle report = report(10, lifetime);
+        report.putBoolean(ModuleActivation.EXTRA_PORTAL_SERVICE_READY, false);
+        report.putString(ModuleActivation.EXTRA_PORTAL_ROOT_OUTCOME,
+                ModuleActivation.RootAccessOutcome.DENIED.name());
+        ModuleActivation.recordInjected(context, report);
+
+        assertEquals(ModuleActivation.ReportedStatus.READY,
+                ModuleActivation.injectionStatus(context));
+        assertEquals(ModuleActivation.ReportedStatus.UNAVAILABLE,
+                ModuleActivation.portalServiceStatus(context));
+        assertEquals(ModuleActivation.ReportedStatus.UNAVAILABLE,
+                ModuleActivation.portalRootStatus(context));
+    }
+
+    @Test public void timedOutPortalRootProbeRemainsUnknownInsteadOfDenied() {
+        Context context = RuntimeEnvironment.getApplication();
+        Lifetime lifetime = new Lifetime();
+        Bundle timedOut = report(10, lifetime);
+        timedOut.putBoolean(ModuleActivation.EXTRA_PORTAL_SERVICE_READY, true);
+        timedOut.putString(ModuleActivation.EXTRA_PORTAL_ROOT_OUTCOME,
+                ModuleActivation.RootAccessOutcome.UNKNOWN.name());
+        ModuleActivation.recordInjected(context, timedOut);
+
+        assertEquals(ModuleActivation.ReportedStatus.READY, ModuleActivation.injectionStatus(context));
+        assertEquals(ModuleActivation.ReportedStatus.UNKNOWN, ModuleActivation.portalRootStatus(context));
+        assertFalse(ModuleActivation.isCurrentBuildPortalRootGranted(context));
+    }
+
+    @Test public void emptyErrorWithoutReadySignalDoesNotClaimRootInputFailure() {
+        Context context = RuntimeEnvironment.getApplication();
+        Lifetime lifetime = new Lifetime();
+        Bundle connecting = readyReport(10, lifetime);
+        connecting.putBoolean(ModuleActivation.EXTRA_ROOT_INPUT_READY, false);
+        connecting.putString(ModuleActivation.EXTRA_ROOT_INPUT_ERROR, "");
+        ModuleActivation.recordInjected(context, connecting);
+
+        assertEquals(ModuleActivation.ReportedStatus.UNKNOWN, ModuleActivation.rootInputStatus(context));
+        assertEquals(ModuleActivation.ReportedStatus.READY, ModuleActivation.pressReaderStatus(context));
+    }
+
     @Test
     public void runtimeStartupUsesTheExistingForegroundServiceWithoutOpeningAnActivity() {
         String command = ModuleActivation.portalStartCommand();

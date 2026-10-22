@@ -31,6 +31,8 @@ internal fun SettingsHomePage(
     homeListState: LazyListState,
     searchListState: LazyListState,
     topAppBarState: TopAppBarState,
+    activation: ActivationMonitorState,
+    onOpenDiagnostics: () -> Unit,
     onOpenModule: (SettingModule) -> Unit,
     onOpenResult: (SettingEntry) -> Unit,
 ) {
@@ -78,7 +80,11 @@ internal fun SettingsHomePage(
                     }
                 } else {
                     item("status") {
-                        ActivationStatusCard(context)
+                        ActivationStatusCard(
+                            context = context,
+                            monitor = activation,
+                            onOpenDiagnostics = onOpenDiagnostics,
+                        )
                     }
                     items(SettingModule.entries.filter { it != SettingModule.GENERAL }, key = { it.name }) { module ->
                         Card(Modifier.padding(horizontal = 12.dp)) {

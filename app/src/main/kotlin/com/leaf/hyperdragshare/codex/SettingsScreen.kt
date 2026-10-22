@@ -119,8 +119,10 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import me.zhanghai.android.appiconloader.AppIconLoader
 import java.util.LinkedHashSet
@@ -128,8 +130,9 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 private const val ORDER_LIST_INDEX_OFFSET = 1
-private const val PORTAL_ACTIVATION_CHECK_ATTEMPTS = 45
-private const val PORTAL_ACTIVATION_CHECK_INTERVAL_MS = 100L
+private const val ACTIVATION_SETTLE_CHECKS = 20
+private const val ACTIVATION_SETTLE_INTERVAL_MS = 100L
+private const val PORTAL_START_TIMEOUT_MS = 10_000L
 
 private sealed interface SettingsRoute : NavKey {
     data object Main : SettingsRoute
@@ -138,11 +141,161 @@ private sealed interface SettingsRoute : NavKey {
     data object Blacklist : SettingsRoute
     data object Games : SettingsRoute
     data object About : SettingsRoute
+    data object Diagnostics : SettingsRoute
     data class Module(val module: SettingModule, val focusId: String? = null) : SettingsRoute
     data object BottomTargets : SettingsRoute
     data object HoneycombLayout : SettingsRoute
     data object HoneycombTargets : SettingsRoute
     data object Licenses : SettingsRoute
+}
+
+internal data class ActivationSnapshot(
+    val root: ActivationEvidence,
+    val injection: ActivationEvidence,
+    val portalService: ActivationEvidence,
+    val portalRoot: ActivationEvidence,
+    val rootInput: ActivationEvidence,
+    val pressReader: ActivationEvidence,
+    val overlayPermission: ActivationEvidence,
+    val thumbTriggerEnabled: Boolean,
+    val copyDirectEnabled: Boolean,
+    val rootInputError: String,
+    val pressReaderError: String,
+) {
+    val portalFeature: ActivationState
+        get() = activationFeatureState(
+            enabled = true,
+            dependencies = listOf(injection, portalService, portalRoot, rootInput),
+        )
+
+    val pressFeature: ActivationState
+        get() = activationFeatureState(
+            enabled = true,
+            dependencies = listOf(
+                injection,
+                portalService,
+                portalRoot,
+                rootInput,
+                if (thumbTriggerEnabled) pressReader else ActivationEvidence.NOT_APPLICABLE,
+            ),
+        )
+
+    val overallState: ActivationState
+        get() = activationState(
+            listOf(
+                root,
+                injection,
+                portalService,
+                portalRoot,
+                rootInput,
+                if (thumbTriggerEnabled) pressReader else ActivationEvidence.NOT_APPLICABLE,
+                overlayPermission,
+            ),
+        )
+}
+
+internal data class ActivationMonitorState(
+    val snapshot: ActivationSnapshot?,
+    val checking: Boolean,
+    val refresh: () -> Unit,
+)
+
+private fun activationSnapshot(
+    context: Context,
+    rootOutcome: ModuleActivation.RootAccessOutcome?,
+): ActivationSnapshot = ActivationSnapshot(
+    root = rootOutcome?.evidence() ?: ActivationEvidence.CHECKING,
+    injection = ModuleActivation.injectionStatus(context).evidence(),
+    portalService = ModuleActivation.portalServiceStatus(context).evidence(),
+    portalRoot = ModuleActivation.portalRootStatus(context).evidence(),
+    rootInput = ModuleActivation.rootInputStatus(context).evidence(),
+    pressReader = if (ThumbTriggerSettings.read(context).enabled) {
+        ModuleActivation.pressReaderStatus(context).evidence()
+    } else {
+        ActivationEvidence.NOT_APPLICABLE
+    },
+    overlayPermission = if (Settings.canDrawOverlays(context)) {
+        ActivationEvidence.READY
+    } else {
+        ActivationEvidence.UNAVAILABLE
+    },
+    thumbTriggerEnabled = ThumbTriggerSettings.read(context).enabled,
+    copyDirectEnabled = IntegrationSettings.isCopyDirectEnabled(context),
+    rootInputError = ModuleActivation.rootInputError(context),
+    pressReaderError = ModuleActivation.pressReaderError(context),
+)
+
+@Composable
+private fun rememberActivationMonitor(context: Context): ActivationMonitorState {
+    var snapshot by remember(context) { mutableStateOf<ActivationSnapshot?>(null) }
+    var checking by remember(context) { mutableStateOf(false) }
+    var requestGeneration by remember(context) { mutableIntStateOf(0) }
+    val requests = remember(context) { Channel<Int>(Channel.CONFLATED) }
+    val requestRefresh: () -> Unit = remember(requests) {
+        {
+            requestGeneration += 1
+            requests.trySend(requestGeneration)
+            Unit
+        }
+    }
+    val lifecycleOwner = LocalView.current.context as? LifecycleOwner
+
+    LaunchedEffect(context, requests) {
+        var startupAttempted = false
+        requestRefresh()
+        for (generation in requests) {
+            checking = true
+            val rootOutcome = withContext(Dispatchers.IO) { ModuleActivation.checkRootAccess() }
+            if (!startupAttempted) {
+                startupAttempted = true
+                val beforeStart = activationSnapshot(context, rootOutcome)
+                if (rootOutcome == ModuleActivation.RootAccessOutcome.GRANTED
+                    && (beforeStart.injection != ActivationEvidence.READY
+                        || beforeStart.portalService != ActivationEvidence.READY)
+                ) {
+                    withTimeoutOrNull(PORTAL_START_TIMEOUT_MS) {
+                        withContext(Dispatchers.IO) {
+                            ModuleActivation.requestPortalRuntimeStart(context)
+                        }
+                    }
+                    for (attempt in 0 until ACTIVATION_SETTLE_CHECKS) {
+                        val current = activationSnapshot(context, rootOutcome)
+                        if (current.injection == ActivationEvidence.READY
+                            && current.portalService == ActivationEvidence.READY
+                        ) break
+                        delay(ACTIVATION_SETTLE_INTERVAL_MS)
+                    }
+                }
+            }
+            if (generation == requestGeneration) {
+                snapshot = activationSnapshot(context, rootOutcome)
+                checking = false
+            }
+        }
+    }
+
+    DisposableEffect(context, requests) {
+        val preferences = context.getSharedPreferences(ModuleActivation.PREFS_NAME, Context.MODE_PRIVATE)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            requestRefresh()
+        }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    DisposableEffect(lifecycleOwner, requests) {
+        if (lifecycleOwner == null) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) requestRefresh()
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+    }
+
+    return ActivationMonitorState(snapshot, checking, requestRefresh)
 }
 
 @Composable
@@ -164,6 +317,7 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
     }
     MiuixTheme(controller = themeController) {
         var searchQuery by rememberSaveable { mutableStateOf("") }
+        val activationMonitor = rememberActivationMonitor(context)
         val searchListState = rememberLazyListState()
         val searchScope = rememberCoroutineScope()
         val openTargets: (String) -> Unit = { group ->
@@ -186,6 +340,7 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
         val currentSettings = rememberUpdatedState(settings)
         val currentPersist = rememberUpdatedState(persist)
         val currentDark = rememberUpdatedState(dark)
+        val currentActivationMonitor = rememberUpdatedState(activationMonitor)
         val settingsEntryProvider = remember(backStack) {
             entryProvider<NavKey> {
                 entry(SettingsRoute.Main) {
@@ -193,6 +348,8 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                         context, currentSettings.value, currentDirectory.value,
                         currentQuery.value, { searchQuery = it; searchScope.launch { searchListState.scrollToItem(0) } }, mainListState, searchListState,
                         mainTopAppBarState,
+                        activation = currentActivationMonitor.value,
+                        onOpenDiagnostics = { backStack.add(SettingsRoute.Diagnostics) },
                         onOpenModule = { backStack.add(SettingsRoute.Module(it)) },
                         onOpenResult = { entry ->
                             if (entry.enabled && entry.open != null) entry.open.invoke()
@@ -266,6 +423,16 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                     DragShareOpenSourceLicensePage(
                         dark = currentDark.value,
                         onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                    )
+                }
+                entry(SettingsRoute.Diagnostics) {
+                    ActivationDiagnosticsPage(
+                        context = context,
+                        monitor = currentActivationMonitor.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                        onOpenGeneralSettings = {
+                            backStack.add(SettingsRoute.Module(SettingModule.GENERAL, "runtime.reload"))
+                        },
                     )
                 }
             }
@@ -1127,169 +1294,214 @@ private fun portalSettingEntries(
     return entries
 }
 
-private enum class ActivationUiState {
-    Checking,
-    NoRoot,
-    NotInjected,
-    PortalServiceUnavailable,
-    PortalRootUnavailable,
-    RootInputConnecting,
-    RootInputUnavailable,
-    PressReaderConnecting,
-    PressReaderUnavailable,
-    Active,
-}
-
-private fun runtimeActivation(context: Context): ActivationUiState {
-    val inputReady = ModuleActivation.isRootInputReady(context)
-    if (!inputReady) {
-        val error = ModuleActivation.rootInputError(context)
-        return if (error.isEmpty()) ActivationUiState.RootInputConnecting else ActivationUiState.RootInputUnavailable
-    }
-    if (!ThumbTriggerSettings.read(context).enabled) return ActivationUiState.Active
-    val ready = ModuleActivation.isPressReaderReady(context)
-    val error = ModuleActivation.pressReaderError(context)
-    return when {
-        ready -> ActivationUiState.Active
-        error.isNotEmpty() -> ActivationUiState.PressReaderUnavailable
-        else -> ActivationUiState.PressReaderConnecting
-    }
-}
-
-private fun portalActivation(context: Context): ActivationUiState = when {
-    !ModuleActivation.isCurrentBuildInjected(context) -> ActivationUiState.NotInjected
-    !ModuleActivation.isPortalServiceReady(context) -> ActivationUiState.PortalServiceUnavailable
-    !ModuleActivation.isCurrentBuildPortalRootGranted(context) -> ActivationUiState.PortalRootUnavailable
-    else -> runtimeActivation(context)
-}
-
 @Composable
 internal fun ActivationStatusCard(
     context: Context,
+    monitor: ActivationMonitorState,
+    onOpenDiagnostics: () -> Unit,
 ) {
-    var refreshGeneration by remember { mutableIntStateOf(0) }
-    var state by remember { mutableStateOf(ActivationUiState.Checking) }
-    val lifecycleOwner = LocalView.current.context as? LifecycleOwner
-
-    DisposableEffect(context) {
-        val preferences = context.getSharedPreferences(ModuleActivation.PREFS_NAME, Context.MODE_PRIVATE)
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-            // Death/status reports update the card. Only entering settings requests startup.
-            if (state != ActivationUiState.Checking && state != ActivationUiState.NoRoot) {
-                state = portalActivation(context)
-            }
-        }
-        preferences.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        if (lifecycleOwner == null) {
-            onDispose { }
-        } else {
-            val observer = LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) {
-                    refreshGeneration++
-                }
-            }
-            lifecycleOwner.lifecycle.addObserver(observer)
-            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-        }
-    }
-
-    LaunchedEffect(refreshGeneration) {
-        state = ActivationUiState.Checking
-        val rootAvailable = withContext(Dispatchers.IO) {
-            ModuleActivation.hasRootAccess()
-        }
-        if (!rootAvailable) {
-            state = ActivationUiState.NoRoot
-            return@LaunchedEffect
-        }
-        var injected = ModuleActivation.isCurrentBuildInjected(context)
-        var portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
-        var serviceReady = ModuleActivation.isPortalServiceReady(context)
-        if (!injected || !portalRootGranted || !serviceReady) {
-            val startAndProtectionReady = withContext(Dispatchers.IO) {
-                ModuleActivation.requestPortalRuntimeStart(context)
-            }
-            if (!startAndProtectionReady) {
-                Toast.makeText(
-                    context,
-                    "启动或运行权限未确认，请查看诊断日志",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-            repeat(PORTAL_ACTIVATION_CHECK_ATTEMPTS) {
-                injected = ModuleActivation.isCurrentBuildInjected(context)
-                portalRootGranted = ModuleActivation.isCurrentBuildPortalRootGranted(context)
-                serviceReady = ModuleActivation.isPortalServiceReady(context)
-                if (injected && portalRootGranted && serviceReady) {
-                    state = portalActivation(context)
-                    return@LaunchedEffect
-                }
-                delay(PORTAL_ACTIVATION_CHECK_INTERVAL_MS)
-            }
-        }
-        state = portalActivation(context)
-    }
-
-    val active = state == ActivationUiState.Active
-    val title = when (state) {
-        ActivationUiState.Checking -> "正在检测"
-        ActivationUiState.NoRoot -> "未获取 Root 权限"
-        ActivationUiState.NotInjected -> "未连接传送门"
-        ActivationUiState.PortalServiceUnavailable -> "传送门服务未就绪"
-        ActivationUiState.PortalRootUnavailable -> "传送门 Root 通道不可用"
-        ActivationUiState.RootInputConnecting -> "Root 输入正在连接"
-        ActivationUiState.RootInputUnavailable -> "Root 输入不可用"
-        ActivationUiState.PressReaderConnecting -> "按压取词正在连接"
-        ActivationUiState.PressReaderUnavailable -> "按压取词连接中断"
-        ActivationUiState.Active -> "已激活"
-    }
+    val snapshot = monitor.snapshot
+    val state = snapshot?.overallState ?: ActivationState.CHECKING
     val summary = when (state) {
-        ActivationUiState.Checking -> "正在检查运行环境"
-        ActivationUiState.NoRoot -> "Root 输入通道当前不可用"
-        ActivationUiState.NotInjected -> "确认作用域已启用，在通用设置中重载模块"
-        ActivationUiState.PortalServiceUnavailable -> "前台服务尚未启动，请在通用设置中重载模块"
-        ActivationUiState.PortalRootUnavailable -> "传送门的 Root 检测未完成或未成功，请检查作用域运行状态"
-        ActivationUiState.RootInputConnecting -> "正在连接触摸输入，连接成功后才能按住取词"
-        ActivationUiState.RootInputUnavailable -> ModuleActivation.rootInputError(context)
-        ActivationUiState.PressReaderConnecting -> "正在准备取词连接，就绪后才能按住取词"
-        ActivationUiState.PressReaderUnavailable -> ModuleActivation.pressReaderError(context)
-        ActivationUiState.Active -> "传送门已加载当前模块"
+        ActivationState.CHECKING -> "正在确认运行状态${if (monitor.checking) " · 检查中" else ""}"
+        ActivationState.NORMAL -> "已检查的功能运行正常，点击查看各组件状态"
+        ActivationState.NEEDS_ACTION -> buildList {
+            if (snapshot?.root == ActivationEvidence.UNAVAILABLE) add("Root 输入功能")
+            if (snapshot?.portalFeature == ActivationState.NEEDS_ACTION) add("传送门取词与拖拽")
+            if (snapshot?.overlayPermission == ActivationEvidence.UNAVAILABLE) add("部分悬浮工具")
+            if (snapshot?.pressFeature == ActivationState.NEEDS_ACTION) add("按压取词")
+        }.distinct().joinToString("、").let { affected ->
+            if (affected.isBlank()) "有运行环节需要处理，查看具体影响和处理方法"
+            else "可能影响：$affected。点击查看处理方法"
+        }
+        ActivationState.UNKNOWN -> "部分状态暂时无法确认；这不代表权限已被拒绝"
+        ActivationState.NOT_APPLICABLE -> "当前没有需要检查的运行组件"
     }
-    val activationMethod = when (state) {
-        ActivationUiState.Checking -> "正在检测"
-        ActivationUiState.NoRoot -> "ROOT"
-        ActivationUiState.NotInjected -> "LSPosed"
-        ActivationUiState.PortalServiceUnavailable -> "传送门服务"
-        ActivationUiState.PortalRootUnavailable -> "传送门 ROOT"
-        ActivationUiState.RootInputConnecting, ActivationUiState.RootInputUnavailable -> "ROOT · 输入"
-        ActivationUiState.PressReaderConnecting, ActivationUiState.PressReaderUnavailable -> "ROOT · 取词"
-        ActivationUiState.Active -> "ROOT · LSPosed"
+    val title = when (state) {
+        ActivationState.CHECKING -> "运行状态检查中"
+        ActivationState.NORMAL -> "运行状态正常"
+        ActivationState.NEEDS_ACTION -> "有功能需要处理"
+        ActivationState.UNKNOWN -> "部分状态待确认"
+        ActivationState.NOT_APPLICABLE -> "运行状态"
     }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                imageVector = if (active) MiuixIcons.Ok else MiuixIcons.Info,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = if (active) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        SettingsNavigationPreference(
+            title = title,
+            summary = summary,
+            icon = if (state == ActivationState.NORMAL) MiuixIcons.Ok else MiuixIcons.Info,
+            onClick = onOpenDiagnostics,
+        )
+    }
+}
+
+@Composable
+internal fun ActivationDiagnosticsPage(
+    context: Context,
+    monitor: ActivationMonitorState,
+    onBack: () -> Unit,
+    onOpenGeneralSettings: () -> Unit,
+) {
+    val snapshot = monitor.snapshot
+    val rows = listOf(
+        DiagnosticRow("Root 授权", snapshot?.root ?: ActivationEvidence.CHECKING,
+            when (snapshot?.root ?: ActivationEvidence.CHECKING) {
+                ActivationEvidence.READY -> "Root 命令已成功返回"
+                ActivationEvidence.UNAVAILABLE -> "Root 管理器拒绝或未授予本次请求；仅影响依赖 Root 的功能"
+                ActivationEvidence.UNKNOWN -> "检查超时或无响应，无法判断授权结果"
+                ActivationEvidence.NOT_APPLICABLE -> "当前功能不需要 Root"
+                ActivationEvidence.CHECKING -> "正在检查"
+            }, "按压取词、部分触控输入和 Portal 运行通道"),
+        DiagnosticRow("传送门模块", snapshot?.injection ?: ActivationEvidence.CHECKING,
+            evidenceDescription(snapshot?.injection ?: ActivationEvidence.CHECKING,
+                "收到当前版本的存活模块会话", "检测到旧版本会话", "未收到当前版本的存活会话"),
+            "传送门内容捕获和相关拖拽功能"),
+        DiagnosticRow("传送门服务", snapshot?.portalService ?: ActivationEvidence.CHECKING,
+            evidenceDescription(snapshot?.portalService ?: ActivationEvidence.CHECKING,
+                "服务报告已就绪", "服务报告未就绪", "尚无可确认的服务状态"),
+            "系统传送门入口和内容捕获"),
+        DiagnosticRow("传送门 Root 通道", snapshot?.portalRoot ?: ActivationEvidence.CHECKING,
+            evidenceDescription(snapshot?.portalRoot ?: ActivationEvidence.CHECKING,
+                "传送门进程的 Root 检查成功", "传送门进程的 Root 检查被拒绝",
+                "尚无结果或检查超时；不会按未授权处理"),
+            "依赖传送门进程 Root 能力的触控和识别路径"),
+        DiagnosticRow("Root 触控输入", snapshot?.rootInput ?: ActivationEvidence.CHECKING,
+            snapshot?.rootInputError?.takeIf { it.isNotBlank() }
+                ?: evidenceDescription(snapshot?.rootInput ?: ActivationEvidence.CHECKING,
+                    "触控输入已就绪", "触控输入明确报告不可用", "没有可确认的输入状态"),
+            "按压取词及读取 Root 触控流的操作"),
+        DiagnosticRow("按压取词组件", snapshot?.pressReader ?: ActivationEvidence.CHECKING,
+            if (snapshot?.thumbTriggerEnabled == false) "拇指触发未启用，此项不适用"
+            else snapshot?.pressReaderError?.takeIf { it.isNotBlank() }
+                ?: evidenceDescription(snapshot?.pressReader ?: ActivationEvidence.CHECKING,
+                    "按压取词已就绪", "组件明确报告不可用", "未收到就绪或错误报告"),
+            "拇指触发开启时的按压识别"),
+        DiagnosticRow("应用悬浮窗权限", snapshot?.overlayPermission ?: ActivationEvidence.CHECKING,
+            evidenceDescription(snapshot?.overlayPermission ?: ActivationEvidence.CHECKING,
+                "已允许应用显示悬浮窗", "尚未允许显示悬浮窗", "权限状态暂时无法读取"),
+            "大爆炸、点按识屏和部分应用侧悬浮工具"),
+        DiagnosticRow("小米澎湃 AI 引擎", ActivationEvidence.UNKNOWN,
+            "按需调用 OCR、实体识别或条码服务；当前没有通用心跳检查，需实际使用对应识别功能确认",
+            "仅使用 AI 识别的功能；不会影响普通拖拽或手势"),
+        DiagnosticRow("系统手势作用域", ActivationEvidence.UNKNOWN,
+            "当前应用无法无打扰地验证系统进程中的模块钩子，请通过实际手势或模块管理器确认",
+            "底角、蜂巢和小窗手势"),
+        DiagnosticRow("复制直达", if (snapshot?.copyDirectEnabled == true)
+            ActivationEvidence.UNKNOWN else ActivationEvidence.NOT_APPLICABLE,
+            if (snapshot?.copyDirectEnabled == true)
+                "功能已开启，但 AICR 卡片服务按需调用，没有持续运行状态报告"
+            else "功能未启用",
+            "仅复制直达卡片；其他复制与分享功能独立运行"),
+    )
+    val scrollBehavior = MiuixScrollBehavior()
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = "运行诊断",
+                largeTitle = "运行诊断",
+                scrollBehavior = scrollBehavior,
+                navigationIcon = { BackNavigationIcon(onClick = onBack) },
             )
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
-                    color = MiuixTheme.colorScheme.onSurface)
-                Text(summary, fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                if (!active) Text(activationMethod, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        },
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+            contentPadding = PaddingValues(
+                top = padding.calculateTopPadding(),
+                bottom = padding.calculateBottomPadding() + 20.dp,
+            ),
+        ) {
+            item("diagnostics-summary") {
+                SmallTitle("功能状态")
+                Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+                    BasicComponent(
+                        title = when (snapshot?.overallState ?: ActivationState.CHECKING) {
+                            ActivationState.CHECKING -> "正在检查"
+                            ActivationState.NORMAL -> "已检查项目正常"
+                            ActivationState.NEEDS_ACTION -> "部分项目需要处理"
+                            ActivationState.UNKNOWN -> "暂时无法确认部分项目"
+                            ActivationState.NOT_APPLICABLE -> "当前没有适用项目"
+                        },
+                        summary = if (monitor.checking) "正在更新状态，当前结果保留显示" else
+                            "状态依据运行时报告和实际权限查询；未收到响应会标为待确认。",
+                        endActions = {
+                            SettingsNavigationPreference(
+                                title = "重新检查",
+                                summary = "重新读取权限和组件状态",
+                                icon = MiuixIcons.Update,
+                                onClick = monitor.refresh,
+                            )
+                        },
+                        insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+            }
+            item("diagnostics-components-title") {
+                SmallTitle("运行环节")
+            }
+            items(rows, key = { it.title }) { row -> DiagnosticEvidenceCard(row) }
+            item("diagnostics-actions") {
+                SmallTitle("处理入口")
+                Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+                    SettingsNavigationPreference(
+                        title = "打开通用设置",
+                        summary = "检查模块作用域、Root 授权或重载运行服务",
+                        icon = SettingModule.GENERAL.icon,
+                        onClick = onOpenGeneralSettings,
+                    )
+                    SettingsNavigationPreference(
+                        title = "打开悬浮窗权限",
+                        summary = "仅适用于依赖应用悬浮窗的工具",
+                        icon = MiuixIcons.Info,
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                .setData(android.net.Uri.parse("package:${context.packageName}"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(intent)
+                        },
+                    )
+                }
             }
         }
+    }
+}
+
+private data class DiagnosticRow(
+    val title: String,
+    val evidence: ActivationEvidence,
+    val detail: String,
+    val impact: String,
+)
+
+private fun evidenceDescription(
+    evidence: ActivationEvidence,
+    ready: String,
+    unavailable: String,
+    unknown: String,
+): String = when (evidence) {
+    ActivationEvidence.CHECKING -> "正在检查"
+    ActivationEvidence.READY -> ready
+    ActivationEvidence.UNAVAILABLE -> unavailable
+    ActivationEvidence.UNKNOWN -> unknown
+    ActivationEvidence.NOT_APPLICABLE -> "当前功能不适用"
+}
+
+@Composable
+private fun DiagnosticEvidenceCard(row: DiagnosticRow) {
+    val status = when (row.evidence) {
+        ActivationEvidence.CHECKING -> "检查中"
+        ActivationEvidence.READY -> "正常"
+        ActivationEvidence.UNAVAILABLE -> "需要处理"
+        ActivationEvidence.UNKNOWN -> "待确认"
+        ActivationEvidence.NOT_APPLICABLE -> "不适用"
+    }
+    Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+        BasicComponent(
+            title = "${row.title} · $status",
+            summary = "${row.detail}\n影响功能：${row.impact}",
+            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        )
     }
 }
 

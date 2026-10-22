@@ -16,6 +16,7 @@ final class ModuleActivation {
     static final String EXTRA_VERSION_CODE = "version_code";
     static final String EXTRA_PROCESS_ID = "process_id";
     static final String EXTRA_PORTAL_ROOT_GRANTED = "portal_root_granted";
+    static final String EXTRA_PORTAL_ROOT_OUTCOME = "portal_root_outcome";
     static final String EXTRA_PORTAL_SERVICE_READY = "portal_service_ready";
     static final String EXTRA_PRESS_READER_READY = "press_reader_ready";
     static final String EXTRA_PRESS_READER_ERROR = "press_reader_error";
@@ -45,6 +46,18 @@ final class ModuleActivation {
     private static IBinder.DeathRecipient portalDeath;
 
     private ModuleActivation() {}
+
+    enum RootAccessOutcome {
+        GRANTED,
+        DENIED,
+        UNKNOWN,
+    }
+
+    enum ReportedStatus {
+        READY,
+        UNAVAILABLE,
+        UNKNOWN,
+    }
 
     static boolean reportInjected(Context portalContext, boolean serviceReady) {
         Bundle extras = new Bundle();
@@ -90,7 +103,7 @@ final class ModuleActivation {
         }
         new Thread(() -> {
             try {
-                reportPortalRootAccess(reportContext, hasRootAccess());
+                reportPortalRootAccess(reportContext, checkRootAccess());
             } finally {
                 synchronized (ModuleActivation.class) {
                     portalRootProbeInFlight = false;
@@ -99,11 +112,16 @@ final class ModuleActivation {
         }, "DragShare-PortalRootCheck").start();
     }
 
-    private static boolean reportPortalRootAccess(Context portalContext, boolean rootGranted) {
+    private static boolean reportPortalRootAccess(
+            Context portalContext,
+            RootAccessOutcome outcome) {
         Bundle extras = new Bundle();
         extras.putLong(EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
         extras.putInt(EXTRA_PROCESS_ID, android.os.Process.myPid());
-        extras.putBoolean(EXTRA_PORTAL_ROOT_GRANTED, rootGranted);
+        extras.putString(EXTRA_PORTAL_ROOT_OUTCOME, outcome.name());
+        if (outcome != RootAccessOutcome.UNKNOWN) {
+            extras.putBoolean(EXTRA_PORTAL_ROOT_GRANTED, outcome == RootAccessOutcome.GRANTED);
+        }
         return reportPortalStatus(portalContext, extras);
     }
 
@@ -161,6 +179,11 @@ final class ModuleActivation {
         if (extras.containsKey(EXTRA_PORTAL_SERVICE_READY)) {
             editor.putBoolean(EXTRA_PORTAL_SERVICE_READY, extras.getBoolean(EXTRA_PORTAL_SERVICE_READY));
         }
+        if (extras.containsKey(EXTRA_PORTAL_ROOT_OUTCOME)) {
+            editor.putLong(KEY_PORTAL_ROOT_VERSION, reportedVersion)
+                    .putString(EXTRA_PORTAL_ROOT_OUTCOME,
+                            extras.getString(EXTRA_PORTAL_ROOT_OUTCOME, RootAccessOutcome.UNKNOWN.name()));
+        }
         if (extras.containsKey(EXTRA_PORTAL_ROOT_GRANTED)) {
             editor.putLong(KEY_PORTAL_ROOT_VERSION, reportedVersion)
                     .putBoolean(
@@ -192,24 +215,74 @@ final class ModuleActivation {
     }
 
     static synchronized boolean isCurrentBuildPortalRootGranted(Context context) {
-        if (!isCurrentBuildInjected(context)) {
-            return false;
-        }
-        SharedPreferences preferences = context.getSharedPreferences(
-                PREFS_NAME,
-                Context.MODE_PRIVATE);
-        return matchesCurrentBuild(preferences.getLong(KEY_PORTAL_ROOT_VERSION, -1L))
-                && preferences.getBoolean(KEY_PORTAL_ROOT_GRANTED, false);
+        return portalRootStatus(context) == ReportedStatus.READY;
     }
 
     static synchronized boolean isPortalServiceReady(Context context) {
-        return isCurrentBuildInjected(context)
-                && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                        .getBoolean(EXTRA_PORTAL_SERVICE_READY, false);
+        return portalServiceStatus(context) == ReportedStatus.READY;
+    }
+
+    static synchronized ReportedStatus injectionStatus(Context context) {
+        if (context == null) return ReportedStatus.UNKNOWN;
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (livePortal != null && livePortal.isBinderAlive()) {
+            return matchesCurrentBuild(preferences.getLong(KEY_INJECTED_VERSION, -1L))
+                    && livePortalPid == preferences.getInt(KEY_PROCESS_ID, 0)
+                    ? ReportedStatus.READY : ReportedStatus.UNAVAILABLE;
+        }
+        return ReportedStatus.UNKNOWN;
+    }
+
+    static synchronized ReportedStatus portalServiceStatus(Context context) {
+        if (injectionStatus(context) != ReportedStatus.READY) return ReportedStatus.UNKNOWN;
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (!preferences.contains(EXTRA_PORTAL_SERVICE_READY)) return ReportedStatus.UNKNOWN;
+        return preferences.getBoolean(EXTRA_PORTAL_SERVICE_READY, false)
+                ? ReportedStatus.READY : ReportedStatus.UNAVAILABLE;
+    }
+
+    static synchronized ReportedStatus portalRootStatus(Context context) {
+        if (injectionStatus(context) != ReportedStatus.READY) return ReportedStatus.UNKNOWN;
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (!matchesCurrentBuild(preferences.getLong(KEY_PORTAL_ROOT_VERSION, -1L))) {
+            return ReportedStatus.UNKNOWN;
+        }
+        String outcome = preferences.getString(EXTRA_PORTAL_ROOT_OUTCOME, null);
+        if (RootAccessOutcome.UNKNOWN.name().equals(outcome)) return ReportedStatus.UNKNOWN;
+        if (RootAccessOutcome.GRANTED.name().equals(outcome)) return ReportedStatus.READY;
+        if (RootAccessOutcome.DENIED.name().equals(outcome)) return ReportedStatus.UNAVAILABLE;
+        return preferences.contains(KEY_PORTAL_ROOT_GRANTED)
+                ? (preferences.getBoolean(KEY_PORTAL_ROOT_GRANTED, false)
+                        ? ReportedStatus.READY : ReportedStatus.UNAVAILABLE)
+                : ReportedStatus.UNKNOWN;
     }
 
     static boolean hasRootAccess() {
-        return runRootCommand("id -u");
+        return checkRootAccess() == RootAccessOutcome.GRANTED;
+    }
+
+    static RootAccessOutcome checkRootAccess() {
+        java.lang.Process process = null;
+        try {
+            process = new ProcessBuilder("su", "-c", "id -u").redirectErrorStream(true).start();
+            if (!process.waitFor(ROOT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                DragShareLog.w("DragShare/Activation", "Root availability check timed out", null);
+                return RootAccessOutcome.UNKNOWN;
+            }
+            if (process.exitValue() == 0) return RootAccessOutcome.GRANTED;
+            DragShareLog.w("DragShare/Activation", "Root availability check was rejected", null);
+            return RootAccessOutcome.DENIED;
+        } catch (IOException error) {
+            DragShareLog.w("DragShare/Activation", "Root availability check failed", error);
+            return RootAccessOutcome.UNKNOWN;
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            DragShareLog.w("DragShare/Activation", "Root availability check interrupted", error);
+            return RootAccessOutcome.UNKNOWN;
+        } finally {
+            if (process != null) process.destroy();
+        }
     }
 
     static synchronized boolean isPressReaderReady(Context context) {
@@ -217,6 +290,11 @@ final class ModuleActivation {
         SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         return matchesCurrentBuild(preferences.getLong(KEY_PRESS_READER_VERSION, -1L))
                 && preferences.getBoolean(EXTRA_PRESS_READER_READY, false);
+    }
+
+    static synchronized ReportedStatus pressReaderStatus(Context context) {
+        return reportedStatus(context, KEY_PRESS_READER_VERSION, EXTRA_PRESS_READER_READY,
+                EXTRA_PRESS_READER_ERROR);
     }
 
     static synchronized String pressReaderError(Context context) {
@@ -231,6 +309,25 @@ final class ModuleActivation {
         SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         return matchesCurrentBuild(preferences.getLong(KEY_ROOT_INPUT_VERSION, -1L))
                 && preferences.getBoolean(EXTRA_ROOT_INPUT_READY, false);
+    }
+
+    static synchronized ReportedStatus rootInputStatus(Context context) {
+        return reportedStatus(context, KEY_ROOT_INPUT_VERSION, EXTRA_ROOT_INPUT_READY,
+                EXTRA_ROOT_INPUT_ERROR);
+    }
+
+    private static ReportedStatus reportedStatus(
+            Context context,
+            String versionKey,
+            String readyKey,
+            String errorKey) {
+        if (injectionStatus(context) != ReportedStatus.READY) return ReportedStatus.UNKNOWN;
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (!matchesCurrentBuild(preferences.getLong(versionKey, -1L))
+                || !preferences.contains(readyKey)) return ReportedStatus.UNKNOWN;
+        if (preferences.getBoolean(readyKey, false)) return ReportedStatus.READY;
+        return preferences.getString(errorKey, "").isEmpty()
+                ? ReportedStatus.UNKNOWN : ReportedStatus.UNAVAILABLE;
     }
 
     static synchronized String rootInputError(Context context) {
@@ -295,7 +392,8 @@ final class ModuleActivation {
                 .remove(KEY_INJECTED_VERSION).remove(KEY_PORTAL_ROOT_VERSION)
                 .remove(KEY_ROOT_INPUT_VERSION).remove(EXTRA_ROOT_INPUT_READY).remove(EXTRA_ROOT_INPUT_ERROR)
                 .remove(KEY_PRESS_READER_VERSION).remove(EXTRA_PRESS_READER_READY).remove(EXTRA_PRESS_READER_ERROR)
-                .remove(KEY_PORTAL_ROOT_GRANTED).remove(EXTRA_PORTAL_SERVICE_READY)
+                .remove(KEY_PORTAL_ROOT_GRANTED).remove(EXTRA_PORTAL_ROOT_OUTCOME)
+                .remove(EXTRA_PORTAL_SERVICE_READY)
                 .remove(KEY_PROCESS_ID).apply();
     }
 
