@@ -39,7 +39,7 @@ internal fun SettingsHomePage(
     val searching = query.isNotBlank()
     val results = if (searching) directory.filter { it.matches(query) } else emptyList()
     Scaffold(topBar = {
-        SmallTopAppBar(title = "HyperDragShare", scrollBehavior = scrollBehavior)
+        SmallTopAppBar(title = "MMGG", scrollBehavior = scrollBehavior)
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             SearchBar(

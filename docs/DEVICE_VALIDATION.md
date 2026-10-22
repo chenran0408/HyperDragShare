@@ -1,5 +1,16 @@
 # 目标设备验证记录
 
+## 2026-10-22：214 / MMGG整批收尾
+
+- 初包417测试/Lint/R8通过并于14:06安装238；实际生成分词面板居中、两侧有余量，两排44dp触区图标完整显示。图文来自本地生成URL，不操作微信。用户追加改名与广告入口要求后，收齐再构建最终包，没有将中间增量包安装。
+- 最终`testDebugUnitTest lintDebug assembleDebug assembleRelease --offline --max-workers=4`用时1分45秒，417测试零失败/错误，Lint、Debug、R8和资源压缩通过。包名`com.leaf.hyperdragshare.codex`，显示名MMGG，1.7.214/238，仅arm64-v8a，签名与213一致。
+- 最终APK 4,221,449 bytes，比213同条件增加36 bytes。SHA256 `806FC98AC4F586AEC77F2706100262B6B95DBC71FFB7A69EF0DDD220299755DA`，设备base.apk回读完全一致。交付`D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\MMGG-1.7.214-arm64-v8a.apk`；旧214初包移出outputs，避免同版本误取。
+- 原生提醒故障定点核对：普通shell读取`content://statusbar.notification`被要求SystemUI通知权限，Root UID0可调用；该包copy_direct频道初始`canShowFloat=false`，HIGH重要性并不保证横幅。精确setFloat后canFloat读回true，横幅实际显示；没有改全局勿扰或其他应用/频道。
+- 最终安装后，主动把这个测试频道设回false，从MMGG自己的MainActivity进入真实产品启动流程；读回`canShowFloat=true`，POST_NOTIFICATIONS=true，证明最终代码实际配置成功。14:37生成URL受限RPC返回accepted，原生横幅实际可见，仅URL与自建“分词”按钮，没有获取应用按钮。这个样本不能代表所有系统广告已移除；最终通知已关闭系统自动上下文操作。
+- Portal最终PID22138，前台服务isForeground=true，注入/Root/输入/reader均238，错误为空。最初安装后2秒读取曾看到旧PID29548的磁盘记录，异步准备后再次核对才确认新PID，不用旧记录冒称新进程就绪。AICR、SystemUI与系统框架本批未专门重载，未宣称这些Hook加载238。
+- 微信慢滑动接管、实际取词速度、中转站新按钮存入与拖出、WebView复制与键盘返回尚未手指实测；417测试不替代这些交互。小米翻译仅提取APK/静态核对，未绑服务、发送文本或联网翻译。
+- 未修改用户私有内容或真实剪贴板。截图仅任务work存放，不提交；设备诊断DEX与本批截图临时文件清理。回退标签`snapshot-2026-10-22-214`。本批三次构建、两次同版本覆盖安装，原因见CURRENT_STATUS，不称只构建安装一次。
+
 ## 2026-10-22：213 复制提示气泡与Root ProcessManager锁定
 
 - 415项测试零失败/错误，Lint、Release R8、资源压缩与arm64-only打包通过。初次整批检查1分22秒，源码审查将Root等待超时中的空catch改为try-with-resources，增量同组检查1分5秒。只安装最终包一次；版本213/237，4,221,413 bytes，SHA256 `BDA1934F26DDF57FAC65A5650DEA9F9436244C0377F18F908D7C8955CC06B7CD`，安装base.apk回读一致。证书与212相同。

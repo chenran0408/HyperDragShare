@@ -24,6 +24,7 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.basic.Scaffold
+import java.io.IOException
 
 /** A module-UID panel session shared by Activity and interactive overlay hosts. */
 internal class BigBangPanelSession(private val context: Context, private val actions: Actions) {
@@ -70,6 +71,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var isSegmenting by mutableStateOf(true)
     private var isRecognizing by mutableStateOf(false)
     private var copying by mutableStateOf(false)
+    private var stashing by mutableStateOf(false)
     private var copyFeedback by mutableStateOf<String?>(null)
     private var undoEditState by mutableStateOf<Bundle?>(null)
     private var beforeText: String? = null
@@ -160,9 +162,11 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     onSelectAll = { selectAll() },
                     onCopy = { copyText(selectedTextOrOriginal()) },
                     onSearch = { openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_WEB) },
+                    onStash = { stashText(selectedTextOrOriginal()) },
                     directAction = directTextDestination(directActionText),
                     onDirectAction = { actions.openExternal(it.intent) },
                     copying = copying,
+                    stashing = stashing,
                     canSplit = hasTextSelection && boomChipPage?.let {
                         it.mLayout.canSplitSelectedWords(it.mBoomActionHandler.mSelectedId) } == true,
                     canMerge = hasTextSelection && boomChipPage?.let {
@@ -331,6 +335,44 @@ internal class BigBangPanelSession(private val context: Context, private val act
                 if (error == null) closeAfterCopyIfEnabled()
             }
         }
+    }
+
+    private fun stashText(text: String) {
+        if (closed || stashing || text.isBlank()) return
+        val content = CapturedContent.text(text, null, null) ?: return
+        main.removeCallbacks(clearCopyFeedback)
+        stashing = true
+        copyFeedback = "正在加入中转站…"
+        Thread({
+            try {
+                StashClient.put(context, content, null)
+                main.post {
+                    if (!closed) {
+                        stashing = false
+                        copyFeedback = "已加入中转站"
+                        main.postDelayed(clearCopyFeedback, 1_500L)
+                    }
+                }
+            } catch (error: IOException) {
+                DragShareLog.w(TAG, "unable to add segmented text to stash", error)
+                main.post {
+                    if (!closed) {
+                        stashing = false
+                        copyFeedback = "加入中转站失败：${error.message ?: "无法存入"}"
+                        main.postDelayed(clearCopyFeedback, 1_500L)
+                    }
+                }
+            } catch (error: RuntimeException) {
+                DragShareLog.w(TAG, "unable to add segmented text to stash", error)
+                main.post {
+                    if (!closed) {
+                        stashing = false
+                        copyFeedback = "加入中转站失败：${error.message ?: "无法存入"}"
+                        main.postDelayed(clearCopyFeedback, 1_500L)
+                    }
+                }
+            }
+        }, "bigbang-stash-text").start()
     }
 
     private fun handleSegmentResult(

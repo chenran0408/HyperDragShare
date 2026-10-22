@@ -5,7 +5,17 @@
 > 仅用于说明历史；当前长按取词固定使用传送门 Hook、Root evdev、Root helper 与 AICR V2。
 > Root helper 内部的 `UiAutomation` 节点读取不是用户可启用的系统无障碍服务。
 
-## 当前系统能力与微信路径（1.7.213）
+## 当前系统能力与微信路径（1.7.214）
+
+214替换下段213自绘气泡：`open_aicr_text`进入`CopyDirectNotification`，使用系统NotificationManager/高优先级`copy_direct`频道，6秒超时、固定ID替换、点击PendingIntent直达与“分词”操作。Root启动/重载授予POST_NOTIFICATIONS，精确调用`content://statusbar.notification`的`setFloat`（package/channel_id/canShowFloat），随后`canFloat`确认；实际目标ROM新频道默认false，仅HIGH重要性无法显示横幅。没有拦截全局通知或修改勿扰，原生Portal私有Cue协议未接入。
+
+本通知设置`allowSystemGeneratedContextualActions=false`，不允许系统另插上下文推荐；自己的点击动作仍保留。AICR `processText`在模块接受请求后被既有Hook替代，Portal独立commerce复制浮层是另一条链路，尚无实际广告来源证据，不盲目拦截。工程名、应用显示名改MMGG，存储/包名/Provider authority与签名不改；更新资产识别兼容已正式发布的旧文件名前缀。
+
+214主面板两排常用图标，More仅窗口外观；新增加入既有中转站，复用StashClient.put并在标题反馈。以BoxWithConstraints限定宽高，非全屏保留12dp侧边余量，拖动偏移只在可见范围生效。自有SearchOverlayWindow活跃时受限复制入口直接返回suppressed，避免在内部词典/WebView选词时重复弹出通知；保留原生WebView选词和返回。
+
+214微信`PendingWeChat`的Bitmap存活延长到真实Root UP。OCR可立即显示文字，后续MOVE仍可发携带press_confirmed_at的关闭请求，然后由`showImageForPressTakeover`按同一downTime接管；早于截图完成的MOVE记录意图，截图到达可直接进拖图。取消标记同步阻止未展示的旧分词请求，异步关闭只匹配本次窗口。不新增猜测性的内容分类、等待计时或第二条OCR链。
+
+以下213气泡说明是历史版本记录，`CopyDirectBubble`已从当前源码删除：
 
 213的复制直达由既有`AicrCopyHooks`剪贴板监听→`TextDirectProvider.processText`→受限`open_aicr_text` RPC进入`CopyDirectBubble`，不再直接展开整块分词窗。气泡复用`InteractiveOverlayWindow`窗口所有者，但窗口只占卡片边界，并设置NOT_FOCUSABLE/NOT_TOUCH_MODAL，键盘与底层页面继续可用。链接、邮箱、电话沿用既有解析与`CopyDirectBrowser`，用户点击才执行；分词图标打开原有分词/NER结果，6秒超时（尊重系统辅助功能延时）、外部点击、左右滑动或灭屏均关闭。新请求替换旧气泡，旧超时与接收器随窗口释放；日志只记录类型。分词选区的直达入口改为同一Miuix提示卡，移除重复的小图标，并计入自然高度。
 

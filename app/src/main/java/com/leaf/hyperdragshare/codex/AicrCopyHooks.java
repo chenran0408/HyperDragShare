@@ -97,13 +97,19 @@ final class AicrCopyHooks {
         input.putString(IntegrationSettings.EXTRA_TEXT, text);
         Bundle accepted = context.getContentResolver().call(PROVIDER_URI,
                 IntegrationSettings.METHOD_OPEN_AICR_TEXT, null, input);
-        if (accepted == null || !accepted.getBoolean("accepted", false)) return null;
+        if (accepted == null || !accepted.getBoolean("accepted", false)) {
+            String error = accepted == null ? "模块未返回复制直达结果" : accepted.getString("error", "复制直达未接受请求");
+            log("copy action notification unavailable: " + error);
+            new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context,
+                    error, Toast.LENGTH_LONG).show());
+            return null;
+        }
         lastLaunchAt = now;
         lastClipTimestamp = timestamp;
         lastText = text;
         Bundle result = new Bundle();
         result.putBoolean("success", true);
-        log("requested copy action bubble from AICR copy");
+        log("requested system copy notification from AICR copy");
         return result;
     }
 

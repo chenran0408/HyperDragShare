@@ -235,7 +235,7 @@ private fun DragShareAboutContent(
             }
             val nameProgress = fadeProgress(scrollProgress, start = 0.20f, end = 0.35f)
             Text(
-                text = "HyperDragShare",
+                text = "MMGG",
                 modifier = Modifier
                     .padding(top = 12.dp, bottom = 5.dp)
                     .graphicsLayer {

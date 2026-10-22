@@ -12,7 +12,9 @@ import android.widget.Toast
 
 /** Search sits above its source panel; dismissing it reveals the unchanged selection. */
 internal object SearchOverlayWindow {
-    private var active: InteractiveOverlayWindow? = null
+    @Volatile private var active: InteractiveOverlayWindow? = null
+
+    fun isOpen(): Boolean = active != null
 
     fun show(context: Context, owner: View, text: String, type: Int,
         openExternal: (Intent) -> Unit): Boolean {

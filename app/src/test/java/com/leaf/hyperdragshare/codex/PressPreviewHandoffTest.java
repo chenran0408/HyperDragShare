@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.view.MotionEvent;
 
 import org.junit.Test;
@@ -115,6 +117,42 @@ public final class PressPreviewHandoffTest {
 
         assertTrue(controller.isActive());
         assertTrue(controller.canContinuePress(1000L));
+        controller.destroy();
+    }
+
+    @Test public void samePressImageTakeoverWaitsForThePhysicalRootUp() throws Exception {
+        DragShareController controller = controller();
+        down(controller, 100L);
+        controller.handoffToPress(100L);
+        Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        controller.showImageForPressTakeover(
+                CapturedContent.image(bitmap, "com.tencent.mm", new Rect(), true),
+                20f, 30f, DragShareSettings.defaults(), 100L);
+        ShadowLooper.shadowMainLooper().idle();
+
+        assertEquals(100L, field(controller, "rootDownTime").getLong(controller));
+        assertEquals(-1L, field(controller, "pressHandoffTime").getLong(controller));
+        controller.acceptPointerEvent(MotionEvent.ACTION_UP, 20f, 30f, 400L, "root");
+        ShadowLooper.shadowMainLooper().idle();
+        assertEquals(-1L, field(controller, "rootDownTime").getLong(controller));
+        controller.destroy();
+        if (!bitmap.isRecycled()) bitmap.recycle();
+    }
+
+    @Test public void staleImageTakeoverRecyclesOwnedBitmapWithoutEndingNextPress() throws Exception {
+        DragShareController controller = controller();
+        down(controller, 100L);
+        controller.handoffToPress(100L);
+        controller.acceptPointerEvent(MotionEvent.ACTION_DOWN, 20f, 30f, 1000L, "root");
+        Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        controller.showImageForPressTakeover(
+                CapturedContent.image(bitmap, "com.tencent.mm", new Rect(), true),
+                20f, 30f, DragShareSettings.defaults(), 100L);
+        ShadowLooper.shadowMainLooper().idle();
+
+        assertTrue(bitmap.isRecycled());
+        assertEquals(1000L, field(controller, "rootDownTime").getLong(controller));
+        assertEquals(-1L, field(controller, "pressHandoffTime").getLong(controller));
         controller.destroy();
     }
 

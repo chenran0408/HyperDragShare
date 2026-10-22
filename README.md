@@ -1,10 +1,10 @@
-# HyperDragShare — HyperOS 增强版
+# MMGG — Make Mi Great Genesis
 
-基于 [Leaf-lsgtky/HyperDragShare](https://github.com/Leaf-lsgtky/HyperDragShare) 的开源分支，为 Xiaomi HyperOS 增加拖拽手势、原页分词、OCR 和临时中转站。
+让小米伟大重生。基于 [Leaf-lsgtky/HyperDragShare](https://github.com/Leaf-lsgtky/HyperDragShare) 的开源分支，为 Xiaomi HyperOS 增加拖拽手势、原页分词、OCR 和临时中转站。MMGG 的第二个 G 代表 Genesis；工程与应用显示名已更换，包名和现有配置保留，仍可覆盖更新。
 
 [下载正式版 APK](https://github.com/chenran0408/HyperDragShare/releases/latest) · 仅 **arm64-v8a**，使用 **R8 压缩**。
 
-当前开发批次为 **1.7.213**，正式版仍以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
+当前开发批次为 **1.7.214**，正式版仍以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
 
 ## 用户使用
 
@@ -16,10 +16,10 @@
 
 启动或重载时会用 Root 将本模块和传送门加入小米的后台锁定名单，减少一键清理中断；系统“强行停止”仍然有效。
 
-- **分词**：单指静止按住文字，选词后复制、搜索、查词或直接拖出；识别到链接、邮箱或电话时，会出现可点击的直达提示卡。使用系统 ICU 分词，支持多语言混排；全选后可拆词，支持合并和撤销。根据按住时长、位移判断，不检测真实触摸面积。
+- **分词**：单指静止按住文字，两排图标可直接选词、拆词、合并、复制、搜索、查词或加入中转站；按住选中的内容可拖出。识别到链接、邮箱或电话时，可用直达图标取用。使用系统 ICU 分词，支持多语言混排及撤销。根据按住时长、位移判断，不检测真实触摸面积。
 - **中转站**：临时收集图文，点灰色侧条展开；拖动移动，松手自动贴边。按住内容直接拖给其他应用，多选文字可一起拖出。微信接收后可能直接发送，请先在文件传输助手试用。
 - **识字与拖拽**：按住图片后拖向屏幕四边，从菜单选择识字、扫码或其他目标。识字使用系统 AICR V2，二维码和条形码使用系统 AICR 条码插件，不附带分词词典、OCR 模型或扫码引擎。微信优先接收传送门文字/图片结果，取不到文字时再局部识字；系统服务不可用会说明原因。
-- **复制直达**：在设置中开启后，系统复制直达入口会显示短暂气泡；识别到链接、邮箱或电话可直接点击取用，旁边的分词图标进入原页分词。气泡不抢键盘，点外部或滑动即可收起，约6秒自动消失。网页可指定浏览器，不会自动打开或发送内容。
+- **复制直达**：在设置中开启后，以系统通知提示识别到的链接、邮箱或电话；点击取用，“分词”操作进入原页浮窗。提醒约6秒自动消失，网页可指定浏览器，不会自动打开或发送内容。通知与悬浮提醒需要开启；启动或重载时由 Root 配置本模块所需权限。在本模块自己的搜索或词典窗口中复制，不再重复弹出复制直达，保留网页原有选词行为。
 - **手势与侧栏**：底角扇形、二段蜂巢和小窗动作，左右底角可分别关闭；原生 Dock 增加固定功能入口，快捷应用仍保留。边缘侧滑交给 HyperOS 原生侧栏，不再由本模块抢占。游戏避让和应用黑名单可在设置中管理。
 
 推荐作用域：传送门、澎湃 AI 引擎、系统框架、系统界面、系统桌面、安全服务。安全服务 Hook 仅在 `com.miui.securitycenter:ui` 工作；不要加入 `com.miui.contentcatcher`。
@@ -54,6 +54,8 @@ AicrBarcodeClient.Request scan = AicrBarcodeClient.scan(context, bitmap, (codes,
 
 以上 ROM 私有接口只针对表中版本做了本机静态/运行核验，不是跨 ROM 的公开稳定 API。系统版本变化后应重新核对 Binder 协议、类名和布局；未核验时让 Hook 明确失败并保留原生行为。更多设计边界与历史验证见[实现说明](docs/IMPLEMENTATION.md)、[设备记录](docs/DEVICE_VALIDATION.md)、[OCR 说明](docs/IMAGE_OCR.md)和[中转站说明](docs/STASH.md)。
 
+小米翻译内部 Binder 接口已做静态核对，存在系统签名权限、调用 UID 与使用授权限制，尚未接入；当前翻译入口仍沿用原实现。详见[小米翻译接口记录](docs/XIAOMI_TRANSLATION.md)。
+
 ## 构建
 
 使用 JDK 21 与 Android SDK 37：
@@ -70,4 +72,4 @@ Release 启用 R8；自行构建需配置自己的签名。构建 APK 位于 `ap
 
 ## English
 
-HyperDragShare is an open-source HyperOS fork for drag gestures, in-page text selection, OCR, and a temporary drag-and-drop stash. It requires an arm64-v8a device, Root and LSPosed. The verified target is Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17; other ROMs are unverified. AICR V2 is an OCR service, not Xiaomi's screen-recognition feature. Release APKs are optimized with R8; check [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) for the APK. Licensed under GPL-3.0-only; upstream attribution is preserved.
+MMGG (Make Mi Great Genesis), a HyperDragShare fork, adds drag gestures, in-page text selection, OCR, and a temporary drag-and-drop stash to HyperOS. It requires an arm64-v8a device, Root and LSPosed. The verified target is Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17; other ROMs are unverified. AICR V2 is an OCR service, not Xiaomi's screen-recognition feature. Release APKs are optimized with R8; check [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) for the APK. Licensed under GPL-3.0-only; upstream attribution is preserved.

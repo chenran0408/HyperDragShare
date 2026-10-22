@@ -283,6 +283,31 @@ final class DragShareController {
         runOnMain(() -> showOnMain(content, initialX, initialY, loadedSettings, downTime));
     }
 
+    /** Reclaim a still-active Root press after its OCR text handoff was shown. */
+    void showImageForPressTakeover(
+            CapturedContent content,
+            float initialX,
+            float initialY,
+            DragShareSettings loadedSettings,
+            long downTime) {
+        if (content == null) return;
+        runOnMain(() -> {
+            if (destroyed || downTime < 0L || rootDownTime != downTime
+                    || (pressHandoffTime >= 0L && pressHandoffTime != downTime)) {
+                if (content.isImage() && content.bitmapOwnedByDragShare
+                        && !content.bitmap.isRecycled()) content.bitmap.recycle();
+                log("press image takeover rejected because Root press changed");
+                return;
+            }
+            pressHandoffTime = -1L;
+            pressPipelineDownTime = -1L;
+            if (active && session != null && session.rootDownTime == downTime) {
+                cancelGestureOnMain();
+            }
+            showOnMain(content, initialX, initialY, loadedSettings, downTime);
+        });
+    }
+
     void cancelActiveSession() {
         runOnMain(this::cancelGestureOnMain);
     }

@@ -776,7 +776,7 @@ private fun portalSettingEntries(
     }
 
     row("drag.blockTouch", "阻止背景滑动", SettingModule.PORTAL, "拖拽触摸与滚动",
-        summary = "HyperDragShare 开始后尝试取消原页面触摸",
+        summary = "MMGG 开始后尝试取消原页面触摸",
         keywords = "拖拽 背景 触摸 滑动",
         enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
     ) { title, summary, enabled ->
@@ -864,7 +864,7 @@ private fun portalSettingEntries(
     }
 
     row("copy.enabled", "复制直达与分词", SettingModule.COPY_DIRECT, "启用与触发",
-        summary = "复制直达显示可点击气泡，链接一键打开；选词识别结果在分词窗内显示。需启用传送门/AICR作用域；默认关闭",
+        summary = "复制后用系统浮动通知显示直达动作，点击打开链接；需启用传送门/AICR作用域",
         keywords = "剪贴板 复制卡片 实体 识别 执行动作",
     ) { title, summary, enabled ->
         SwitchPreference(
@@ -874,6 +874,12 @@ private fun portalSettingEntries(
             onCheckedChange = { enabled ->
                 IntegrationSettings.setCopyDirectEnabled(context, enabled)
                 copyDirectEnabled = enabled
+                if (enabled) coroutineScope.launch {
+                    val ready = withContext(Dispatchers.IO) {
+                        ModuleActivation.ensureCopyDirectNotificationPermission(context)
+                    }
+                    if (!ready) Toast.makeText(context, "复制直达通知授权失败，请查看诊断日志", Toast.LENGTH_LONG).show()
+                }
             },
             enabled = enabled,
         )
@@ -1053,7 +1059,7 @@ private fun portalSettingEntries(
         summary = "查看正式版更新说明，下载并安装新版本",
         keywords = "更新 版本 升级 下载 安装 release", icon = MiuixIcons.Update,
     ) { title, _, enabled -> AppUpdatePreference(title = title, enabled = enabled) }
-    navigationRow("about", "关于 HyperDragShare", SettingModule.GENERAL, "关于",
+    navigationRow("about", "关于 MMGG", SettingModule.GENERAL, "关于",
         summary = "版本 ${BuildConfig.VERSION_NAME}",
         keywords = "版本 说明 许可 使用指南",
         onClick = onOpenAbout,
@@ -1151,7 +1157,7 @@ internal fun ActivationStatusCard(
             if (!startAndProtectionReady) {
                 Toast.makeText(
                     context,
-                    "传送门启动或后台保护未确认，请查看诊断日志",
+                    "启动或运行权限未确认，请查看诊断日志",
                     Toast.LENGTH_LONG
                 ).show()
             }

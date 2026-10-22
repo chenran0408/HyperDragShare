@@ -61,7 +61,7 @@ private const val UPDATE_PREFS = "app_update"
 private const val KEY_DOWNLOAD_ID = "download_id"
 private const val KEY_DOWNLOAD_NAME = "download_name"
 private const val MIME_APK = "application/vnd.android.package-archive"
-private val RELEASE_ASSET_PATTERN = Pattern.compile("HyperDragShare-(\\d+(?:\\.\\d+){1,3})-arm64-v8a\\.apk")
+private val RELEASE_ASSET_PATTERN = Pattern.compile("(?:MMGG|HyperDragShare)-(\\d+(?:\\.\\d+){1,3})-arm64-v8a\\.apk")
 
 private data class ReleaseInfo(
     val versionName: String,
@@ -337,7 +337,8 @@ private fun fetchLatestRelease(): ReleaseInfo {
     )
     val asset = assetPattern.findAll(assetsHtml).firstOrNull { match ->
         val name = match.groupValues[2]
-        RELEASE_ASSET_PATTERN.matcher(name).matches() && name == "HyperDragShare-$version-arm64-v8a.apk"
+        val matcher = RELEASE_ASSET_PATTERN.matcher(name)
+        matcher.matches() && matcher.group(1) == version
     } ?: throw IllegalArgumentException("正式版没有 arm64-v8a APK，已停止下载以避免安装错误架构。")
     val assetName = asset.groupValues[2]
     val downloadUrl = "https://github.com${asset.groupValues[1]}"
@@ -403,7 +404,7 @@ private fun enqueueDownload(context: Context, release: ReleaseInfo): Pair<Long, 
         ?: throw IOException("系统下载服务不可用。")
     val filename = "${release.assetName.removeSuffix(".apk")}-${System.currentTimeMillis()}.apk"
     val request = DownloadManager.Request(Uri.parse(release.downloadUrl))
-        .setTitle("HyperDragShare ${release.versionName}")
+        .setTitle("MMGG ${release.versionName}")
         .setDescription("正在下载 arm64-v8a 官方安装包")
         .setMimeType(MIME_APK)
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
@@ -471,7 +472,7 @@ private fun verifyDownloadedApk(context: Context, filename: String, release: Rel
             ?: return VerifiedApk(null, "安装包无法读取，文件可能已损坏，请重新下载。")
         if (archive.packageName != context.packageName) {
             Log.w(UPDATE_TAG, "Downloaded APK package name did not match this app")
-            return VerifiedApk(null, "安装包校验失败：文件不是 HyperDragShare 安装包，请重新下载。")
+            return VerifiedApk(null, "安装包校验失败：文件不是 MMGG 安装包，请重新下载。")
         }
         if (archive.versionName != release.versionName) {
             return VerifiedApk(null, "安装包版本与当前正式版不匹配，请重新下载。")

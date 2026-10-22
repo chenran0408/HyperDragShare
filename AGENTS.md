@@ -8,6 +8,8 @@
 
 当前按批次任务目录为 `docs/TASK_BATCHES.md`；`NEXT_INTEGRATION_BATCH.md`是历史记录，不能把其中已完成的待办再做一次。子代理Luna high并行处理独立范围，由主任务统一构建、安装和验收。
 
+214将复制提醒替换为系统原生通知，不再恢复213的自绘气泡；HyperOS的copy_direct频道悬浮开关与POST_NOTIFICATIONS是两个独立条件，启动/重载仅配置本模块此频道。分词两排工具包含加入中转站，More仅窗口外观；旧文档“移除分词中转站入口”已被用户本轮需求覆盖。微信OCR完成后保留同次图像候选到真实UP，后续MOVE仍可接管，勿恢复立即回收。小米翻译静态限制见docs/XIAOMI_TRANSLATION.md，不等于已接通；不绕过CTA，不把Root UID0当system UID1000。
+
 本文是后续自动化代理在本工程内工作的约束。当前源码和
 `docs/IMPLEMENTATION.md` 是实现事实来源；`E:\workspace\TaplusContentPreview`
 只可作为早期传送门内容抓取思路的参考，不代表可运行基线。

@@ -19,6 +19,7 @@ final class ScopeRestart {
         int oldPid = ModuleActivation.injectedProcessId(context);
         ModuleActivation.clearPortalReport(context);
         RootProcessKeepAlive.Result keepAlive = ModuleActivation.ensurePortalRootKeepAlive(context);
+        boolean notificationReady = ModuleActivation.ensureCopyDirectNotificationPermission(context);
         runRoot("am force-stop --user current com.miui.contentextension && "
                 + "am force-stop --user current com.xiaomi.aicr && "
                 + ModuleActivation.portalStartCommand() + " && "
@@ -38,6 +39,9 @@ final class ScopeRestart {
                         if (!keepAlive.ready) {
                             throw new IOException("Root 一键清理保护未就绪（传送门服务已恢复）："
                                     + keepAlive.detail);
+                        }
+                        if (!notificationReady) {
+                            throw new IOException("传送门已恢复，但复制直达通知权限未就绪，请查看诊断日志");
                         }
                         DragShareLog.i(TAG, "new portal foreground service/input/reader confirmed pid=" + pid
                                 + " elapsed_ms=" + (SystemClock.elapsedRealtime() - started));

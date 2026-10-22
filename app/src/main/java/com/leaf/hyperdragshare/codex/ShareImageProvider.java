@@ -101,6 +101,15 @@ public final class ShareImageProvider extends ContentProvider {
                 Binder.restoreCallingIdentity(identity);
             }
         }
+        if (BigBangOverlayLauncher.METHOD_DISMISS_PRESS.equals(method)) {
+            enforcePortalCaller();
+            long identity = Binder.clearCallingIdentity();
+            try {
+                return BigBangOverlayLauncher.dismissPressWindow(extras);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
         if (BigBangOverlayLauncher.METHOD_OPEN.equals(method)) {
             enforcePortalCaller();
             long identity = Binder.clearCallingIdentity();
@@ -146,7 +155,7 @@ public final class ShareImageProvider extends ContentProvider {
             }
             long identity = Binder.clearCallingIdentity();
             try {
-                return CopyDirectBubble.request(contextOrThrow(), text);
+                return CopyDirectNotification.request(contextOrThrow(), text);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }

@@ -40,8 +40,8 @@ internal fun FirstRunGuide(
 
     OverlayDialog(
         show = show,
-        title = "开始使用 HyperDragShare",
-        summary = "Root + LSPosed 模块，功能在当前页面使用。",
+        title = "开始使用 MMGG",
+        summary = "MMGG（Make Mi Great Genesis）是 Root + LSPosed 模块，功能在当前页面使用。",
         onDismissRequest = {
             show = false
             onDismiss()

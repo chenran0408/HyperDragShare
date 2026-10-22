@@ -79,7 +79,7 @@ internal class StashSurfaceHost private constructor(
     }
 
     private fun attributes() = SurfaceControlViewHost.LayoutParams(width, height, false).apply {
-        setTitle("HyperDragShare sidebar stash")
+        setTitle("MMGG sidebar stash")
     }
 
     fun requestClose() {

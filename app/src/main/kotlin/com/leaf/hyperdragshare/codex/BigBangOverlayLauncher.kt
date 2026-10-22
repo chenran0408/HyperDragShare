@@ -19,10 +19,24 @@ import android.widget.Toast
 /** Requests enter through the provider's module/portal UID check; UI stays in the module process. */
 object BigBangOverlayLauncher {
     const val METHOD_OPEN = "open_bigbang_window"
+    const val METHOD_DISMISS_PRESS = "dismiss_press_bigbang_window"
     private val main = Handler(Looper.getMainLooper())
     private var active: InteractiveOverlayWindow? = null
     private var activeHost: android.app.Activity? = null
     private var generation = 0L
+    private var activePressAt = 0L
+    @Volatile private var cancelledPressAt = 0L
+
+    /** Cancels only this gesture's queued or visible panel, never a later user request. */
+    @JvmStatic fun dismissPressWindow(input: Bundle?): Bundle {
+        val confirmedAt = input?.getLong("press_confirmed_at") ?: 0L
+        require(confirmedAt > 0L) { "缺少按压窗口标识" }
+        cancelledPressAt = confirmedAt
+        main.post {
+            if (activePressAt == confirmedAt) active?.dismiss()
+        }
+        return Bundle().apply { putBoolean("accepted", true) }
+    }
 
     @JvmStatic fun request(context: Context, input: Bundle?): Bundle {
         val args = requireNotNull(input) { "缺少分词窗口请求" }
@@ -77,12 +91,13 @@ object BigBangOverlayLauncher {
     private fun open(app: Context, text: String, x: Int, y: Int, savedState: Bundle? = null,
         before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L, copyDirect: Boolean = false,
         host: android.app.Activity? = null) {
+        if (host == null && pressConfirmedAt > 0L && pressConfirmedAt == cancelledPressAt) return
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             host?.finish()
             return
         }
-        CopyDirectBubble.dismiss()
+        CopyDirectNotification.dismiss(app)
         if (activeHost === host) activeHost = null
         active?.dismiss()
         val windowGeneration = ++generation
@@ -161,6 +176,7 @@ object BigBangOverlayLauncher {
                 app.unregisterReceiver(screenOff)
                 if (active === overlay) {
                     active = null
+                    activePressAt = 0L
                 }
                 if (host != null && activeHost === host) {
                     activeHost = null
@@ -171,6 +187,7 @@ object BigBangOverlayLauncher {
         ) { session.Content() }
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         active = overlay
+        activePressAt = pressConfirmedAt
         activeHost = host
         if (overlay.show(pressConfirmedAt)) {
             session.open(text, x, y, savedState, before, after)

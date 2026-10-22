@@ -56,6 +56,9 @@ final class PressCaptureSource {
     private CapturedContent cached;
     private float downX;
     private float downY;
+    private float latestX;
+    private float latestY;
+    private boolean weChatImageDragIntent;
 
     private static final class PendingWeChat {
         final CapturedContent content;
@@ -64,6 +67,8 @@ final class PressCaptureSource {
         boolean ocrComplete;
         String text;
         Exception error;
+        boolean textDelivered;
+        boolean textWindowAccepted;
 
         PendingWeChat(CapturedContent content, long request) {
             this.content = content;
@@ -150,6 +155,8 @@ final class PressCaptureSource {
 
     private void handlePointer(int action, float x, float y, long time) {
         if (stopped) return;
+        latestX = x;
+        latestY = y;
         if (action == MotionEvent.ACTION_DOWN) {
             cancelGesture();
             downTime = time;
@@ -157,6 +164,8 @@ final class PressCaptureSource {
             pointerDown = true;
             downX = x;
             downY = y;
+            latestX = x;
+            latestY = y;
         }
         if (!allowed()) {
             cancelGesture();
@@ -165,11 +174,13 @@ final class PressCaptureSource {
         boolean hadFired = detector.isFired();
         if (action != MotionEvent.ACTION_DOWN) detector.onPointerEvent(action, x, y, 1);
         if (action == MotionEvent.ACTION_UP) pointerDown = false;
-        if (action == MotionEvent.ACTION_MOVE && pendingWeChat != null
+        if (action == MotionEvent.ACTION_MOVE
                 && Math.hypot(x - downX, y - downY) > WECHAT_DRAG_DISTANCE_DP
                         * context.getResources().getDisplayMetrics().density) {
-            dragWeChatImage(x, y);
+            weChatImageDragIntent = true;
+            if (pendingWeChat != null) dragWeChatImage(x, y);
         }
+        if (action == MotionEvent.ACTION_UP) finishWeChatPress();
         if (action == MotionEvent.ACTION_UP && hadFired) {
             main.removeCallbacks(classify);
             main.removeCallbacks(fire);
@@ -188,11 +199,22 @@ final class PressCaptureSource {
         if (Looper.myLooper() != Looper.getMainLooper() || stopped || !pointerDown
                 || !detector.isActive() || !"com.tencent.mm".equals(content.sourcePackage)
                 || !settings.isSharingEnabled(content.isImage())
-                || !controller.canContinuePress(downTime)
-                || (displayQueued && pendingWeChat == null)) return false;
-        generation++;
+                || !controller.canContinuePress(downTime)) return false;
         PendingWeChat pending = pendingWeChat;
+        if (!content.isImage() && pending != null && pending.textWindowAccepted) {
+            // OCR has already opened this press's text window; do not replace it with
+            // a second text result, and keep its screenshot available for an image drag.
+            return true;
+        }
+        boolean imageTakeover = content.isImage() && pending != null;
+        if (imageTakeover && pending.textWindowAccepted && !dismissWeChatTextWindow()) {
+            recycle(content);
+            showFailure("无法收起本次分词窗口，图片拖拽未接管");
+            return true;
+        }
+        generation++;
         pendingWeChat = null;
+        weChatImageDragIntent = false;
         if (pending != null && pending.ocrComplete) recycle(pending.content);
         if (activeOcrRequest != null) {
             activeOcrRequest.cancel();
@@ -205,7 +227,11 @@ final class PressCaptureSource {
         controller.notePressPipeline(downTime);
         DragShareLog.i(TAG, "press accepted native portal source=com.tencent.mm kind="
                 + (content.isImage() ? "image" : "text"));
-        if (detector.isFired()) display();
+        if (imageTakeover) {
+            cached = null;
+            displayQueued = false;
+            controller.showImageForPressTakeover(content, latestX, latestY, settings, downTime);
+        } else if (detector.isFired()) display();
         else schedule();
         return true;
     }
@@ -397,9 +423,17 @@ final class PressCaptureSource {
     }
 
     private void openWeChatOcrDirect(long request, CapturedContent content) {
-        startTouchBlocker(request);
+        if (weChatImageDragIntent) {
+            weChatImageDragIntent = false;
+            CapturedContent image = CapturedContent.image(content.bitmap,
+                    content.sourcePackage, content.sourceBounds, true);
+            DragShareLog.i(TAG, "WeChat press moved to image before OCR started");
+            controller.showImageForPressTakeover(image, latestX, latestY, settings, downTime);
+            return;
+        }
         PendingWeChat pending = new PendingWeChat(content, request);
         pendingWeChat = pending;
+        startTouchBlocker(request);
         DragShareLog.i(TAG, "WeChat OCR started elapsedFromConfirmMs="
                 + (SystemClock.uptimeMillis() - confirmedAt) + "; gesture decides text or image");
         activeOcrRequest = AicrOcrClient.recognize(context, content.bitmap, (text, error) -> {
@@ -420,11 +454,17 @@ final class PressCaptureSource {
 
     private void dragWeChatImage(float x, float y) {
         PendingWeChat pending = pendingWeChat;
-        pendingWeChat = null;
+        if (pending.textWindowAccepted && !dismissWeChatTextWindow()) {
+            showFailure("无法收起本次分词窗口，图片拖拽未接管");
+            return;
+        }
         CapturedContent source = pending.content;
         android.graphics.Bitmap bitmap = pending.ocrComplete
                 ? source.bitmap
                 : source.bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false);
+        pendingWeChat = null;
+        generation++;
+        weChatImageDragIntent = false;
         if (!pending.ocrComplete && activeOcrRequest != null) {
             activeOcrRequest.cancel();
             activeOcrRequest = null;
@@ -440,15 +480,20 @@ final class PressCaptureSource {
                 source.sourceBounds, true);
         DragShareLog.i(TAG, "WeChat press moved to image drag elapsedFromConfirmMs="
                 + (SystemClock.uptimeMillis() - confirmedAt));
-        controller.show(image, x, y, settings);
+        controller.showImageForPressTakeover(image, x, y, settings, downTime);
     }
 
     private void deliverWeChatText() {
         PendingWeChat pending = pendingWeChat;
         if (pending == null || !pending.ocrComplete) return;
-        pendingWeChat = null;
-        recycle(pending.content);
+        if (pending.textDelivered) {
+            finishWeChatCandidateIfReleased(pending);
+            return;
+        }
         if (pending.error != null) {
+            if (pointerDown) return;
+            pendingWeChat = null;
+            recycle(pending.content);
             DragShareLog.w(TAG, "WeChat OCR direct failed", pending.error);
             showFailure("微信文字识别失败：" + pending.error.getMessage());
             controller.endPressPipeline(downTime);
@@ -456,11 +501,15 @@ final class PressCaptureSource {
             return;
         }
         if (pending.text == null || pending.text.isBlank()) {
+            if (pointerDown) return;
+            pendingWeChat = null;
+            recycle(pending.content);
             showFailure("这次按压没有识别出文字");
             controller.endPressPipeline(downTime);
             blocker.stopAsync();
             return;
         }
+        pending.textDelivered = true;
         Bundle recognized = new Bundle();
         recognized.putString("text", pending.text);
         recognized.putLong("press_confirmed_at", confirmedAt);
@@ -470,16 +519,47 @@ final class PressCaptureSource {
             Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
                     BigBangOverlayLauncher.METHOD_OPEN, null, recognized);
             completeHandoff(result, pending.request);
+            if (pending.textWindowAccepted) {
+                DragShareLog.i(TAG, "WeChat OCR text window accepted; image candidate retained until root release");
+            }
         } catch (SecurityException | IllegalStateException | IllegalArgumentException failure) {
             DragShareLog.w(TAG, "cannot open WeChat text panel", failure);
             showFailure("无法显示微信识别结果：" + failure.getMessage());
             controller.endPressPipeline(downTime);
             blocker.stopAsync();
         }
+        finishWeChatCandidateIfReleased(pending);
+    }
+
+    private void finishWeChatPress() {
+        PendingWeChat pending = pendingWeChat;
+        if (pending != null && pending.ocrComplete) deliverWeChatText();
+    }
+
+    private void finishWeChatCandidateIfReleased(PendingWeChat pending) {
+        if (!pointerDown && pendingWeChat == pending) {
+            pendingWeChat = null;
+            recycle(pending.content);
+        }
+    }
+
+    private boolean dismissWeChatTextWindow() {
+        Bundle request = new Bundle();
+        request.putLong("press_confirmed_at", confirmedAt);
+        try {
+            Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                    BigBangOverlayLauncher.METHOD_DISMISS_PRESS, null, request);
+            return result != null && result.getBoolean("accepted");
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException error) {
+            DragShareLog.w(TAG, "cannot dismiss this WeChat press window", error);
+            return false;
+        }
     }
 
     private void completeHandoff(Bundle result, long request) {
         if (result != null && result.getBoolean("accepted")) {
+            PendingWeChat pending = pendingWeChat;
+            if (pending != null && pending.request == request) pending.textWindowAccepted = true;
             startTouchBlocker(request);
             controller.handoffToPress(downTime);
         } else {
@@ -505,6 +585,7 @@ final class PressCaptureSource {
         pointerDown = false;
         PendingWeChat pending = pendingWeChat;
         pendingWeChat = null;
+        weChatImageDragIntent = false;
         if (pending != null && pending.ocrComplete) recycle(pending.content);
         if (activeOcrRequest != null) {
             activeOcrRequest.cancel();
