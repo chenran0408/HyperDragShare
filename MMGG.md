@@ -116,7 +116,10 @@ MMGG 不会把聊天内容、截图或中转站数据上传到项目服务器。
 
 MMGG 保留 HyperDragShare 原作者与贡献者的项目历史和许可证。合并的手势能力来自
 用户的 [FanFreeform](https://github.com/chenran0408/FanFreeform)，界面使用
-[Miuix](https://github.com/compose-miuix-ui/miuix)。
+[Miuix](https://github.com/compose-miuix-ui/miuix)。项目也感谢 XiaomiHelper、
+HyperCeiler、HyperTweak、MiTrustBuster、BigBang_NovaText、FlymeFreeform、
+HyperCopy、MI Big Bang 与 ColorOS Big Bang 等项目的作者和贡献者提供的代码或技术参考。
+每项的用途、来源和许可证边界见[致谢与参考来源](docs/ACKNOWLEDGEMENTS.md)。
 
 项目沿用 GPL-3.0-only 许可证。安装、使用与二次分发前，请同时阅读
 [README](README.md)、[设备验证记录](docs/DEVICE_VALIDATION.md) 与仓库许可证。

@@ -69,7 +69,7 @@ Release 启用 R8；自行构建需配置自己的签名。构建 APK 位于 `ap
 
 ## 许可与致谢
 
-保留 HyperDragShare 原作者及贡献者的著作权与项目历史；合并手势来自用户的 [FanFreeform](https://github.com/chenran0408/FanFreeform)，界面使用 [Miuix](https://github.com/compose-miuix-ui/miuix)。本分支沿用 [GPL-3.0-only](LICENSE)。第三方组件和参考项目的许可证、归属说明以对应源码文件为准；本项目不分发参考 APK，也不复制反编译实现。
+保留 HyperDragShare 原作者及贡献者的著作权与项目历史；合并手势来自用户的 [FanFreeform](https://github.com/chenran0408/FanFreeform)，界面使用 [Miuix](https://github.com/compose-miuix-ui/miuix)。本分支沿用 [GPL-3.0-only](LICENSE)。完整分类、许可证和参考范围见[致谢与参考来源](docs/ACKNOWLEDGEMENTS.md)。本项目不分发参考 APK，也不复制反编译实现。
 
 ## English
 
