@@ -23,6 +23,10 @@
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="text/plain" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="application/zip" />
+        </intent>
     </queries>
 
     <application
@@ -140,6 +144,13 @@
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/Theme.DragShare.BigBangOverlay" />
+
+        <activity
+            android:name=".TouchProbeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity="" />
 
         <activity
             android:name=".ImageOcrActivity"

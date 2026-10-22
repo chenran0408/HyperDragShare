@@ -1097,6 +1097,23 @@ private fun portalSettingEntries(
         onClick = openLogExport,
     )
 
+    if (BuildConfig.UPDATE_CHANNEL == "beta") {
+        navigationRow(
+            "touch.probe",
+            "触控报告内测",
+            SettingModule.GENERAL,
+            "日志与诊断",
+            summary = "4 步引导，检查手机能否分辨指尖和拇指指腹按压",
+            keywords = "触控 面积 拇指 测试 适配 报告 touch probe",
+            onClick = {
+                context.startActivity(
+                    Intent(context, TouchProbeActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+        )
+    }
+
     row("app.update", "检查更新", SettingModule.GENERAL, "关于",
         summary = "查看正式版更新说明，下载并安装新版本",
         keywords = "更新 版本 升级 下载 安装 release", icon = MiuixIcons.Update,
