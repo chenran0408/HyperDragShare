@@ -1,6 +1,8 @@
 package com.leaf.hyperdragshare.codex;
 
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -20,6 +22,45 @@ import java.lang.reflect.Method;
 @Config(manifest = Config.NONE)
 @LooperMode(LooperMode.Mode.PAUSED)
 public final class DragSharePreviewLifecycleTest {
+    @Test public void missingTerminalInputCancelsStaleSessionAndReleasesItsOwner() throws Exception {
+        DragShareController controller = controller();
+        Object session = session("stale", 100L);
+        set(controller, "active", true);
+        set(controller, "session", session);
+        invoke(controller, "refreshStaleInputWatchdog", new Class<?>[0]);
+
+        ShadowLooper.shadowMainLooper().idleFor(
+                DragShareController.STALE_INPUT_TIMEOUT_MS - 1, java.util.concurrent.TimeUnit.MILLISECONDS);
+        assertTrue(controller.isActive());
+        ShadowLooper.shadowMainLooper().idleFor(1, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        assertFalse(controller.isActive());
+        assertTrue((boolean) get(session, "cancelled"));
+        assertNull(get(controller, "staleInputWatchdog"));
+        controller.destroy();
+        ShadowLooper.shadowMainLooper().idle();
+    }
+
+    @Test public void oldWatchdogCannotCancelReplacementSession() throws Exception {
+        DragShareController controller = controller();
+        Object first = session("first", 100L);
+        Object replacement = session("replacement", 200L);
+        set(controller, "active", true);
+        set(controller, "session", first);
+        invoke(controller, "refreshStaleInputWatchdog", new Class<?>[0]);
+        Runnable oldWatchdog = (Runnable) get(controller, "staleInputWatchdog");
+
+        set(controller, "session", replacement);
+        invoke(controller, "refreshStaleInputWatchdog", new Class<?>[0]);
+        oldWatchdog.run();
+
+        assertTrue(controller.isActive());
+        assertFalse((boolean) get(replacement, "cancelled"));
+        assertTrue(get(controller, "staleInputWatchdog") != oldWatchdog);
+        controller.destroy();
+        ShadowLooper.shadowMainLooper().idle();
+    }
+
     @Test public void endingBeforePostedQueryStartCannotStartWorkLater() throws Exception {
         DragShareController controller = controller();
         View preview = new View(RuntimeEnvironment.getApplication());

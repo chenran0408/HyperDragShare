@@ -60,6 +60,9 @@ final class DragShareController {
     private static final int CIRCLE_EDGE_SOFT_DISTANCE_DP = 180;
     private static final long CIRCLE_EDGE_OPEN_DELAY_MS = 200L;
     private static final long DUPLICATE_EVENT_WINDOW_MS = 2;
+    // Emergency recovery only: normal completion still follows Root UP/CANCEL. A long
+    // stationary drag remains valid for 30 seconds without input before being cancelled.
+    static final long STALE_INPUT_TIMEOUT_MS = 30_000L;
     private static final ThreadPoolExecutor TARGET_QUERY_EXECUTOR =
             new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
                     new LinkedBlockingQueue<>(), runnable -> {
@@ -79,6 +82,7 @@ final class DragShareController {
     private final LatestTaskSlot targetQueryTask = new LatestTaskSlot(TARGET_QUERY_EXECUTOR);
     private final DragShareToast dragShareToast;
     private Runnable modernOverlayPrewarmTask;
+    private Runnable staleInputWatchdog;
     private ModernPreviewOverlayView modernOverlayPrewarmView;
     private ModernOverlayWindow modernOverlayPrewarmWindow;
     private ViewTreeObserver.OnDrawListener modernOverlayPrewarmDrawListener;
@@ -564,6 +568,7 @@ final class DragShareController {
             }
             showPreviewOverlay();
             active = true;
+            refreshStaleInputWatchdog();
             pendingPortalHostFloatWindowSuppression = false;
 
             traceAccessibility("overlay added kind=" + payload.kind);
@@ -1216,6 +1221,9 @@ final class DragShareController {
         lastHandledAction = action;
         lastX = x;
         lastY = y;
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
+            refreshStaleInputWatchdog();
+        }
 
         if (action == MotionEvent.ACTION_CANCEL) {
             log("gesture cancelled source=" + source);
@@ -1781,6 +1789,7 @@ final class DragShareController {
             log("background scroll lock skipped because root input was not active");
         }
         active = false;
+        cancelStaleInputWatchdog();
         stopEdgeScroll();
         backgroundTouchBlocker.stop();
         if (afterDeactivate != null) {
@@ -1810,6 +1819,7 @@ final class DragShareController {
             return;
         }
         active = false;
+        cancelStaleInputWatchdog();
         stopEdgeScroll();
         backgroundTouchBlocker.stop();
         removeGestureViews(true);
@@ -1826,6 +1836,30 @@ final class DragShareController {
         if (active) cancelGestureOnMain();
         else removeGestureViews();
         showToast(message + "，已取消本次拖拽；详情见诊断日志", Toast.LENGTH_LONG);
+    }
+
+    private void refreshStaleInputWatchdog() {
+        cancelStaleInputWatchdog();
+        Session observedSession = session;
+        if (!active || observedSession == null || destroyed) return;
+        Runnable watchdog = new Runnable() {
+            @Override
+            public void run() {
+                if (staleInputWatchdog != this) return;
+                staleInputWatchdog = null;
+                if (!active || destroyed || session != observedSession) return;
+                log("gesture cancelled after root input became stale");
+                cancelGestureOnMain();
+            }
+        };
+        staleInputWatchdog = watchdog;
+        mainHandler.postDelayed(watchdog, STALE_INPUT_TIMEOUT_MS);
+    }
+
+    private void cancelStaleInputWatchdog() {
+        Runnable watchdog = staleInputWatchdog;
+        staleInputWatchdog = null;
+        if (watchdog != null) mainHandler.removeCallbacks(watchdog);
     }
 
     private void launchPendingShare(Session pendingSession) {
@@ -2151,6 +2185,7 @@ final class DragShareController {
     }
 
     private void removeGestureViews(boolean animatePreviewExit) {
+        cancelStaleInputWatchdog();
         cancelTargetQuery();
         cancelPreviewTargetLoad();
         cancelModernMenuDispose();
