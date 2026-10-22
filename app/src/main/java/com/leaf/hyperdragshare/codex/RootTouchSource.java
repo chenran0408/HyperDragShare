@@ -8,6 +8,8 @@ import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.WindowManager;
 
+import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,6 +61,7 @@ final class RootTouchSource {
         int rawMaxY;
         // Main-queue state of the gesture actually delivered to the host.
         boolean pointerDown;
+        boolean ignoredGesture;
         float lastX;
         float lastY;
 
@@ -107,9 +110,13 @@ final class RootTouchSource {
                 Process owned = run.cancel();
                 if (owned != null) launch("drag-share-input-stop", () -> endProcess(owned));
                 if (run.pointerDown) {
+                    boolean deliverCancel = !run.ignoredGesture;
                     run.pointerDown = false;
-                    listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
-                            SystemClock.uptimeMillis(), 0, 0, 0);
+                    run.ignoredGesture = false;
+                    if (deliverCancel) {
+                        listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
+                                SystemClock.uptimeMillis(), 0, 0, 0);
+                    }
                 }
             }
             if (currentRun == null) publishState(false, "");
@@ -197,9 +204,13 @@ final class RootTouchSource {
             mainHandler.post(() -> {
                 if (currentRun != run) return;
                 if (run.pointerDown) {
+                    boolean deliverCancel = !run.ignoredGesture;
                     run.pointerDown = false;
-                    listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
-                            SystemClock.uptimeMillis(), 0, 0, 0);
+                    run.ignoredGesture = false;
+                    if (deliverCancel) {
+                        listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
+                                SystemClock.uptimeMillis(), 0, 0, 0);
+                    }
                     if (currentRun != run) return;
                 }
                 currentRun = null;
@@ -419,8 +430,20 @@ final class RootTouchSource {
             manager.getDefaultDisplay().getRealMetrics(metrics);
             float[] point = GestureMath.mapRawPoint(rawX, rawY, run.rawMaxX, run.rawMaxY,
                     metrics.widthPixels, metrics.heightPixels, manager.getDefaultDisplay().getRotation());
-            if (action == MotionEvent.ACTION_DOWN) run.pointerDown = true;
+            if (action == MotionEvent.ACTION_DOWN) {
+                run.pointerDown = true;
+                run.ignoredGesture = OverlayTouchRegions.contains(point[0], point[1]);
+                if (run.ignoredGesture) {
+                    DragShareLog.i(TAG, "ignoring gesture started inside module overlay bounds");
+                }
+            }
             else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) run.pointerDown = false;
+            if (run.ignoredGesture) {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    run.ignoredGesture = false;
+                }
+                return;
+            }
             run.lastX = point[0];
             run.lastY = point[1];
             listener.onPointerEvent(action, point[0], point[1], eventTime, major, minor, width);

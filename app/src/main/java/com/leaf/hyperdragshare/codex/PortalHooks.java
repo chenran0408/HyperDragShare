@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
+
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -52,6 +54,7 @@ final class PortalHooks {
     private static volatile ClassLoader portalClassLoader;
     private static volatile ContentObserver settingsObserver;
     private static volatile String xposedBridgeVersion = "unavailable";
+    private static boolean overlayTouchObserved;
 
     private PortalHooks() {}
 
@@ -81,6 +84,7 @@ final class PortalHooks {
                         Context context = ((Context) param.thisObject).getApplicationContext();
                         try {
                             portalContext = context;
+                            observeOverlayTouchRegions(context);
                             registerSettingsObserver(context);
                             applyPortalRuntime();
                             activationReported = reportPortalActivation(context);
@@ -494,6 +498,12 @@ final class PortalHooks {
         } catch (Throwable error) {
             log("unable to observe settings changes", error);
         }
+    }
+
+    private static synchronized void observeOverlayTouchRegions(Context context) {
+        if (overlayTouchObserved) return;
+        OverlayTouchRegions.observe(context, new Handler(Looper.getMainLooper()), () -> {});
+        overlayTouchObserved = true;
     }
 
     private static void unregisterSettingsObserver() {

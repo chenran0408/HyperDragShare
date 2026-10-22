@@ -6,11 +6,14 @@
 
 - 中转站长按拖出改用`rememberUpdatedState`读取当前条目，避免LazyColumn复用槽位时闭包继续持有旧列表。日志只记录kind与8位条目ID，不记录正文或图片路径。
 - 真机定向验证：从界面顶部第一条图片拖出，日志为`image:006747ae`；滚动后从文字卡拖出，日志为`text:36876219`，两次均进入系统`startDragAndDrop`。此前“拖文字固定变成某张图片”的条目绑定问题未复现。该证据来自App已知条目和系统拖放链，不涉及聊天正文。
-- 所有菜单样式在底边中央共同留出输入栏直落区：距屏幕底部110dp以内且横向15%–85%会关闭已打开菜单并禁止再次打开；底边两角和其他边仍可打开。源码已构建安装，但本机菜单触发依赖Root evdev真实触摸，ADB注入坐标不会进入该数据源，因此该条只记为待真实手指确认。
+- 所有菜单样式在底边中央共同留出输入栏直落区：距屏幕底部110dp以内且横向15%–85%会关闭已打开菜单并禁止再次打开；底边两角和其他边仍可打开。用户已在新Portal上确认输入栏处不再弹出菜单。
 - 分词面板的链接直达图标统一先打开现有直达建议浮窗；点击图标不再绕过建议浮窗直接启动目标，具体链接仍由同一浮窗执行。
-- `assembleDebug`通过并同签名Root覆盖安装；未重复运行截图矩阵、合成OCR样本或无数据面积实验。APK为`app/build/outputs/apk/debug/app-debug.apk`，72,396,562 bytes，SHA256 `656329FEC7F5D6ECF556169B4E011F5FC9BA77EAC393078B29746B19907FAE34`；设备已安装base.apk哈希与本地包一致。
+- 真实手指日志进一步确认旧链路会同时启动中转站系统拖放和Root按压识别：`startDragAndDrop`后约71ms，Root `InputBlocker`取消源触摸流，系统随即`DRAG_ENDED accepted=false`，此后只剩模块自带预览，因此微信没有可领取的内容。根因不是菜单让位或`ClipData`变化，而是两个输入所有者重叠。
+- 中转站/分词浮窗等交互窗口把可见边界发布到模块Provider；Portal现在读取同一份边界，并在Root evdev的`ACTION_DOWN`落入模块浮窗时让出整次手势，不启动取词、不取消原触摸流。Provider只向SystemUI和传送门开放这份边界，未扩大其他配置读取权限。
+- 16:30定向验证：中转站范围内按下时Root明确记录`ignoring gesture started inside module overlay bounds`；随后文字拖放从`16:30:22.238`开始，直到松手后的`16:30:22.902`才由系统广播`DRAG_ENDED`，未再被Root提前取消。该次投向空白处，因此`accepted=false`符合预期，没有发送内容。
+- 针对性`RootTouchSourceTest`、`OverlayTouchRegionsTest`与`assembleDebug`通过并同签名Root覆盖安装；Portal由12514重启为24599，注入、前台服务、Root输入与取词reader均为239。APK为`app/build/outputs/apk/debug/app-debug.apk`，72,396,562 bytes，SHA256 `C3227ADA2FE721C186FC1CC4ED1641D6E1B54DAD43BF46722F2F35EE74642B77`；设备已安装base.apk哈希与本地包一致。
 
-未确认：真实手指拖到当前微信输入栏时菜单是否完全避让、图片或文字是否被微信接收，以及四种菜单外观在同一落点的实际手感。本批不以ADB注入拖拽代替这些物理输入结论。
+未确认：真实手指拖到当前微信输入栏后文字/图片是否被微信接收，以及四种菜单外观在同一落点的实际手感。本批不以系统拖放存活或ADB注入拖拽代替微信接收结论。
 
 ## 214 微信拖图接管、两排分词工具与原生复制提醒
 

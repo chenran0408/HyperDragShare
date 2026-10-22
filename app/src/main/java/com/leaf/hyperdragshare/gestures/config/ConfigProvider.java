@@ -35,6 +35,7 @@ import com.leaf.hyperdragshare.codex.GameCapturePolicy;
 
 public final class ConfigProvider extends ContentProvider {
     private static final String TAG = "HyperDragShareConfig";
+    private static final String TAPLUS_PACKAGE = "com.miui.contentextension";
 
     @Override
     public boolean onCreate() {
@@ -43,20 +44,12 @@ public final class ConfigProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
-        enforceCaller();
         Context context = requireProviderContext();
         if (ConfigContract.METHOD_GET_OVERLAY_TOUCH.equals(method)) {
-            try {
-                int systemUiUid = context.getPackageManager()
-                        .getApplicationInfo("com.android.systemui", 0).uid;
-                if (Binder.getCallingUid() != systemUiUid) {
-                    throw new SecurityException("Only SystemUI can read overlay touch bounds");
-                }
-            } catch (PackageManager.NameNotFoundException error) {
-                throw new SecurityException("SystemUI is unavailable", error);
-            }
+            enforceOverlayTouchCaller(context);
             return OverlayTouchRegions.read();
         }
+        enforceCaller();
         SharedPreferences prefs = context.getSharedPreferences(ConfigContract.PREFS, Context.MODE_PRIVATE);
         if ("get_catalog".equals(method)) {
             Bundle out = new Bundle();
@@ -780,6 +773,23 @@ public final class ConfigProvider extends ContentProvider {
             }
         }
         throw new SecurityException("Caller cannot read FanFreeform configuration");
+    }
+
+    private void enforceOverlayTouchCaller(Context context) {
+        int uid = Binder.getCallingUid();
+        if (uid == Process.myUid() || uid == Process.SYSTEM_UID) {
+            return;
+        }
+        String[] packages = context.getPackageManager().getPackagesForUid(uid);
+        if (packages != null) {
+            for (String packageName : packages) {
+                if ("com.android.systemui".equals(packageName)
+                        || TAPLUS_PACKAGE.equals(packageName)) {
+                    return;
+                }
+            }
+        }
+        throw new SecurityException("Only SystemUI and Portal can read overlay touch bounds");
     }
 
     @Override public String getType(Uri uri) { return null; }
