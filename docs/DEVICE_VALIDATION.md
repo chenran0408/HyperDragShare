@@ -1,5 +1,13 @@
 # 目标设备验证记录
 
+## 2026-10-22：211 系统分词/扫码替换合批安装，前台服务状态核对
+
+- 用户确认210微信真实手指“文字单窗，图片可拖”；同时补充文字慢、易误拖。用户确认系统ICU与AICR条码普通UID调用此前已实机通过，本轮不再重复API实验。新211扫码适配器和微信路由不能仅凭旧接口结论称端到端通过。
+- 211/235，414项测试零失败/错误/跳过，Lint及R8 arm64 Release通过（成功构建1分7秒）。同签名包路径 `D:\CODEX\Tasks\2026-10-20\new-chat-2\outputs\HyperDragShare-1.7.211-arm64-v8a.apk`，SHA256 `C2B1AB68CD6584AD9D94FD971B23E9601DAFE5355FDDBCB4B69868E6A78C3E1F`；4,205,029 bytes，相比210的7,411,272 bytes减少43.26%。ZIP和DEX检查确认jieba字典、HMM、JNI与ZXing确实未打包；只有arm64-v8a的AndroidX graphics path库。
+- 后台覆盖安装成功，设备包版本235；回读已安装base.apk的SHA256与交付包完全一致，releaseRuntimeClasspath无jieba/ZXing/MLKit依赖。未清数据/重启整机/切用户页面。Provider唤醒Portal21655曾成功ready，但13:06:14被系统以adj935/umms_pressure回收，module_activation清空；不是崩溃，也不是AICR或分词错误。随后依已核对传送门5.1.5的onCreate/startForeground流程，仅显式启动其现有TextContentExtensionService；Portal8736、isForeground=true，注入/Root/reader均235，Root输入220ms、reader629ms ready、错误为空。未全局禁用内存回收，未强停contentcatcher。
+- 设备在支付宝/淘宝使用中，未打开生成样本或浮窗。211实际混排选词/拆词、系统扫码多码/条形码界面、新微信速度和防误拖、Settings OCR上层可见性均未本轮实测。早先临时探针包安装被系统拒绝，未使用Root绕过，也没有探针留在已装列表；用户随后说明API已经验证，停止重复探针。
+- 待办：ScopeRestart目前只Provider握手，需在后续批次改为正确启动现有前台服务；不把本次手工启动当作源码问题已解决。
+
 ## 2026-10-22：210 安装与 Root/Portal 就绪，微信新分流待手指验收
 
 - 209 实际手指反馈：用户确认非微信文字分词、图片拖拽均能用；微信文字仅单窗但慢，图片被送去分词。12:34:56 酷安图片按压后日志显示 `preview shown kind=IMAGE` 与 `menu shown`；微信多次进入 `kind=ocr_region`，AICR 233–601ms，分词窗首帧在确认后 323–718ms。连续快速按压一次被 AICR 单请求门限拒绝。没有读取或保留聊天正文。

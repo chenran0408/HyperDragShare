@@ -111,10 +111,6 @@ fun DragShareOpenSourceLicensePage(
                                 summary = "GNU General Public License v3.0 · GPL-3.0-only · Copyright (C) 2026 Leaf",
                             )
                             BasicComponent(
-                                title = "cppjieba",
-                                summary = "MIT License · Copyright (c) 2013",
-                            )
-                            BasicComponent(
                                 title = "Miuix for Compose",
                                 summary = "miuix-ui、preference、icons、navigation3-ui、blur、shader · Apache License 2.0",
                             )
@@ -143,19 +139,6 @@ fun DragShareOpenSourceLicensePage(
                         )
                     }
 
-                    item(key = "mit-title") {
-                        SmallTitle(text = "MIT License")
-                    }
-                    item(key = "mit-license") {
-                        LicenseTextCard(
-                            title = "MIT License",
-                            notices = "适用组件\ncppjieba - Copyright (c) 2013",
-                            license = MIT_LICENSE,
-                            backdrop = cardBackdrop,
-                            glassColors = glassColors,
-                            surfaceColor = surfaceColor,
-                        )
-                    }
 
                     item(key = "apache-title") {
                         SmallTitle(text = "Apache License 2.0")
@@ -904,29 +887,6 @@ may consider it more useful to permit linking proprietary applications with
 the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
-"""
-
-private const val MIT_LICENSE = """MIT License
-
-Copyright (c) 2013
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 """
 
 private const val APACHE_LICENSE_2_0 = """Apache License

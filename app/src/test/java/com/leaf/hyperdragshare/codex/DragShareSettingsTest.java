@@ -57,7 +57,6 @@ public final class DragShareSettingsTest {
                 settings.imageSharingEnabled);
         assertTrue(settings.isTargetVisible(DragShareSettings.TARGET_COPY_TEXT));
         assertTrue(settings.isTargetVisible(DragShareSettings.TARGET_COPY_IMAGE));
-        assertTrue(settings.preloadTextSegmenter);
         assertEquals(
                 DragShareSettings.DEFAULT_SIMPLE_MENU_POSITION,
                 settings.simpleMenuPosition);
@@ -127,7 +126,6 @@ public final class DragShareSettingsTest {
                 new LinkedHashSet<>(),
                 DragShareSettings.DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
                 DragShareSettings.DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
-                true,
                 DragShareSettings.DEFAULT_MODERN_BLUR_RADIUS_DP,
                 DragShareSettings.DEFAULT_MODERN_GLASS_OPACITY_PERCENT,
                 DragShareSettings.LOG_LEVEL_DEBUG,
@@ -172,7 +170,6 @@ public final class DragShareSettingsTest {
                 new LinkedHashSet<>(),
                 DragShareSettings.DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
                 DragShareSettings.DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
-                true,
                 DragShareSettings.DEFAULT_MODERN_BLUR_RADIUS_DP,
                 DragShareSettings.DEFAULT_MODERN_GLASS_OPACITY_PERCENT,
                 99,
@@ -289,7 +286,6 @@ public final class DragShareSettingsTest {
                 new LinkedHashSet<>(),
                 DragShareSettings.DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
                 DragShareSettings.DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
-                true,
                 Integer.MAX_VALUE,
                 Integer.MIN_VALUE);
 
@@ -552,10 +548,8 @@ public final class DragShareSettingsTest {
                 DragShareSettings.DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
                 DragShareSettings.DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
                 false,
-                false,
                 true);
 
-        assertFalse(settings.preloadTextSegmenter);
         assertFalse(settings.isTargetVisible(DragShareSettings.TARGET_COPY_TEXT));
         assertTrue(settings.isTargetVisible(DragShareSettings.TARGET_COPY_IMAGE));
         List<ShareTarget> textTargets = ShareTargetRepository.applySettings(
@@ -577,12 +571,10 @@ public final class DragShareSettingsTest {
         assertTrue(imageTargets.get(2).isSaveToLocal());
         assertTrue(imageTargets.get(3).isQrScan());
         assertTrue(imageTargets.get(4).isImageOcr());
-        assertFalse(DragShareSettings.fromBundle(settings.toBundle()).preloadTextSegmenter);
         assertFalse(DragShareSettings.fromBundle(settings.toBundle())
                 .isTargetVisible(DragShareSettings.TARGET_COPY_TEXT));
         assertTrue(DragShareSettings.fromBundle(settings.toBundle())
                 .isTargetVisible(DragShareSettings.TARGET_COPY_IMAGE));
-        assertTrue(DragShareSettings.fromBundle(new Bundle()).preloadTextSegmenter);
         assertTrue(DragShareSettings.fromBundle(new Bundle())
                 .isTargetVisible(DragShareSettings.TARGET_COPY_TEXT));
         assertTrue(DragShareSettings.fromBundle(new Bundle())

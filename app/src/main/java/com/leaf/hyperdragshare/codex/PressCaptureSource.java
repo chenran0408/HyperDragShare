@@ -21,8 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** One press pipeline for both hosts: classify once, then use the confirmed gesture's result. */
 final class PressCaptureSource {
     private static final String TAG = "DragShare/Press";
-    private static final long WECHAT_DRAG_DECISION_MS = 400L;
-    private static final float WECHAT_DRAG_DISTANCE_PX = 36f;
+    private static final float WECHAT_DRAG_DISTANCE_DP = 36f;
     private static final long READER_RETRY_FIRST_MS = 3000L;
     private static final long READER_RETRY_MAX_MS = 30000L;
     private final Context context;
@@ -35,7 +34,6 @@ final class PressCaptureSource {
     private final PressTriggerDetector detector = new PressTriggerDetector();
     private final Runnable classify = this::classifyPress;
     private final Runnable fire = this::firePress;
-    private final Runnable finishWeChatText = this::deliverWeChatText;
     private volatile SharedRootNodeCapture.Connection nodeSession;
     private volatile boolean stopped;
     private long readerRetryDelayMs;
@@ -64,7 +62,6 @@ final class PressCaptureSource {
         final long request;
         final long started;
         boolean ocrComplete;
-        boolean released;
         String text;
         Exception error;
 
@@ -169,15 +166,11 @@ final class PressCaptureSource {
         if (action != MotionEvent.ACTION_DOWN) detector.onPointerEvent(action, x, y, 1);
         if (action == MotionEvent.ACTION_UP) pointerDown = false;
         if (action == MotionEvent.ACTION_MOVE && pendingWeChat != null
-                && (Math.abs(x - downX) > WECHAT_DRAG_DISTANCE_PX
-                || Math.abs(y - downY) > WECHAT_DRAG_DISTANCE_PX)) {
+                && Math.hypot(x - downX, y - downY) > WECHAT_DRAG_DISTANCE_DP
+                        * context.getResources().getDisplayMetrics().density) {
             dragWeChatImage(x, y);
         }
         if (action == MotionEvent.ACTION_UP && hadFired) {
-            if (pendingWeChat != null) {
-                pendingWeChat.released = true;
-                deliverWeChatText();
-            }
             main.removeCallbacks(classify);
             main.removeCallbacks(fire);
             blocker.stopAsync();
@@ -188,6 +181,33 @@ final class PressCaptureSource {
             return;
         }
         schedule();
+    }
+
+    /** Prefer the host's actual text/image result over the same press's approximate OCR region. */
+    boolean acceptWeChatPortalContent(CapturedContent content) {
+        if (Looper.myLooper() != Looper.getMainLooper() || stopped || !pointerDown
+                || !detector.isActive() || !"com.tencent.mm".equals(content.sourcePackage)
+                || !settings.isSharingEnabled(content.isImage())
+                || !controller.canContinuePress(downTime)
+                || (displayQueued && pendingWeChat == null)) return false;
+        generation++;
+        PendingWeChat pending = pendingWeChat;
+        pendingWeChat = null;
+        if (pending != null && pending.ocrComplete) recycle(pending.content);
+        if (activeOcrRequest != null) {
+            activeOcrRequest.cancel();
+            activeOcrRequest = null;
+        }
+        recycle(cached);
+        cached = content;
+        lookupRunning = false;
+        displayQueued = false;
+        controller.notePressPipeline(downTime);
+        DragShareLog.i(TAG, "press accepted native portal source=com.tencent.mm kind="
+                + (content.isImage() ? "image" : "text"));
+        if (detector.isFired()) display();
+        else schedule();
+        return true;
     }
 
     private boolean allowed() {
@@ -206,7 +226,7 @@ final class PressCaptureSource {
     }
 
     private void classifyPress() {
-        if (allowed() && detector.takeClassification(SystemClock.uptimeMillis())) lookup();
+        if (allowed() && detector.takeClassification(SystemClock.uptimeMillis()) && cached == null) lookup();
     }
 
     private void firePress() {
@@ -401,7 +421,6 @@ final class PressCaptureSource {
     private void dragWeChatImage(float x, float y) {
         PendingWeChat pending = pendingWeChat;
         pendingWeChat = null;
-        main.removeCallbacks(finishWeChatText);
         CapturedContent source = pending.content;
         android.graphics.Bitmap bitmap = pending.ocrComplete
                 ? source.bitmap
@@ -427,14 +446,7 @@ final class PressCaptureSource {
     private void deliverWeChatText() {
         PendingWeChat pending = pendingWeChat;
         if (pending == null || !pending.ocrComplete) return;
-        if (pending.error == null && !pending.released
-                && SystemClock.uptimeMillis() - confirmedAt < WECHAT_DRAG_DECISION_MS) {
-            main.removeCallbacks(finishWeChatText);
-            main.postAtTime(finishWeChatText, confirmedAt + WECHAT_DRAG_DECISION_MS);
-            return;
-        }
         pendingWeChat = null;
-        main.removeCallbacks(finishWeChatText);
         recycle(pending.content);
         if (pending.error != null) {
             DragShareLog.w(TAG, "WeChat OCR direct failed", pending.error);
@@ -493,7 +505,6 @@ final class PressCaptureSource {
         pointerDown = false;
         PendingWeChat pending = pendingWeChat;
         pendingWeChat = null;
-        main.removeCallbacks(finishWeChatText);
         if (pending != null && pending.ocrComplete) recycle(pending.content);
         if (activeOcrRequest != null) {
             activeOcrRequest.cancel();

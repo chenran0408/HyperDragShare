@@ -13,8 +13,8 @@ android {
         applicationId 'com.leaf.hyperdragshare.codex'
         minSdk 33
         targetSdk 34
-        versionCode 234
-        versionName '1.7.210'
+        versionCode 235
+        versionName '1.7.211'
         ndk {
             abiFilters 'arm64-v8a'
         }
@@ -34,15 +34,6 @@ android {
         compose true
         buildConfig true
     }
-
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/CMakeLists.txt')
-            version '3.22.1'
-        }
-    }
-
-    ndkVersion '26.1.10909125'
 
     packagingOptions {
         jniLibs {
@@ -123,7 +114,6 @@ android {
 }
 
 dependencies {
-    implementation 'com.google.zxing:core:3.5.4'
     compileOnly 'de.robv.android.xposed:api:82'
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.activity:activity-compose:1.13.0'

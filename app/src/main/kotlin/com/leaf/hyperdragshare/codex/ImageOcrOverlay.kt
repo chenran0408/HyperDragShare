@@ -148,6 +148,7 @@ object ImageOcrOverlay {
         private var cancelled = false
         private var resultDelivered = false
         private var aicr: AicrOcrClient.Request? = null
+        private var barcode: AicrBarcodeClient.Request? = null
         private val screenOff: android.content.BroadcastReceiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: Context, intent: android.content.Intent) = window.dismiss()
         }
@@ -160,6 +161,7 @@ object ImageOcrOverlay {
             onDismissed = {
                 cancelled = true
                 aicr?.cancel()
+                barcode?.cancel()
                 app.unregisterReceiver(screenOff)
                 owner?.removeOnAttachStateChangeListener(ownerListener)
                 val wasActive = active === this
@@ -194,7 +196,7 @@ object ImageOcrOverlay {
                                     leftInset = metrics.leftSystemInset,
                                     rightInset = metrics.rightSystemInset,
                                     leading = {
-                                        Text(if (qr) "二维码" else "图片识字", fontSize = 18.sp,
+                                        Text(if (qr) "扫码" else "图片识字", fontSize = 18.sp,
                                             fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface)
                                     },
                                     center = {},
@@ -224,7 +226,7 @@ object ImageOcrOverlay {
                                     Row(verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                         CircularProgressIndicator()
-                                        Text(if (qr) "正在识别二维码…" else "正在识别图片…", fontSize = 14.sp,
+                                        Text(if (qr) "正在识别二维码和条形码…" else "正在识别图片…", fontSize = 14.sp,
                                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                     }
                                 }
@@ -289,15 +291,10 @@ object ImageOcrOverlay {
                                 (info.size.height * scale).toInt().coerceAtLeast(1))
                         }
                     }
-                    if (qr) {
-                        val found = try { QrImageDecoder.decode(bitmap) } finally { bitmap.recycle() }
-                        main.post {
-                            if (!cancelled) {
-                                if (found.isEmpty()) errorText = "这张图片没有发现二维码" else codes = found
-                            }
-                        }
-                    } else main.post {
-                        if (cancelled) bitmap.recycle() else recognize(bitmap)
+                    main.post {
+                        if (cancelled) bitmap.recycle()
+                        else if (qr) scanBarcode(bitmap)
+                        else recognize(bitmap)
                     }
                 } catch (error: java.io.IOException) {
                     main.post { failed(error) }
@@ -357,6 +354,17 @@ object ImageOcrOverlay {
                 bitmap.recycle()
                 if (!cancelled) {
                     if (error == null) completed(text.orEmpty()) else failed(error)
+                }
+            }
+        }
+
+        private fun scanBarcode(bitmap: Bitmap) {
+            barcode = AicrBarcodeClient.scan(app, bitmap) { found, error ->
+                bitmap.recycle()
+                if (!cancelled) {
+                    if (error != null) failed(error)
+                    else if (found.isEmpty()) errorText = "这张图片没有发现二维码或条形码"
+                    else codes = found
                 }
             }
         }

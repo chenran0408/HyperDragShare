@@ -278,11 +278,16 @@ final class PortalHooks {
                 applyPortalRuntime();
                 DragShareController current = controller;
                 if (current != null) {
+                    PressCaptureSource press = thumbCaptureSource;
+                    CapturedContent content = PortalContentCaptureSource.capture(param.thisObject, settings);
+                    if (content != null && press != null && press.acceptWeChatPortalContent(content)) {
+                        return;
+                    }
                     if (current.isAwaitingRootRelease()) {
+                        if (content != null && content.isImage()) content.bitmap.recycle();
                         log("portal pick ignored while Root press owns the gesture");
                         return;
                     }
-                    CapturedContent content = PortalContentCaptureSource.capture(param.thisObject, settings);
                     if (content == null) {
                         return;
                     }

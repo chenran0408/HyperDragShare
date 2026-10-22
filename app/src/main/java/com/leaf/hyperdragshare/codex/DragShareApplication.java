@@ -2,7 +2,7 @@ package com.leaf.hyperdragshare.codex;
 
 import android.app.Application;
 
-/** Starts the optional tokenizer warm-up for every module-app process. */
+/** Application-level initialization shared by module-app processes. */
 public final class DragShareApplication extends Application {
     @Override
     public void onCreate() {
@@ -10,7 +10,6 @@ public final class DragShareApplication extends Application {
         DragShareLog.configure(DragShareSettings.readLocal(this));
         DragShareDiagnostics.captureRuntimeOnce(this, "module application created", null);
         ForegroundActivity.install(this);
-        TextSegmenter.preloadIfEnabled(this);
         SharedImageCleanupJob.schedule(this);
     }
 }

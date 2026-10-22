@@ -160,9 +160,6 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
 
     val persist: (DragShareSettings) -> Unit = { next ->
         next.saveLocal(context)
-        if (next.preloadTextSegmenter && !settings.preloadTextSegmenter) {
-            TextSegmenter.preload(context)
-        }
         settings = next
     }
     MiuixTheme(controller = themeController) {
@@ -507,21 +504,6 @@ private fun portalSettingEntries(
         keywords = "游戏 名单 手动 添加",
         onClick = onOpenGames,
     )
-
-    row("segmentation.preload", "预加载分词库", SettingModule.PORTAL, "分词与取用",
-        summary = "减少首次打开分词的等待",
-        keywords = "分词 速度 预热",
-    ) { title, summary, enabled ->
-        SwitchPreference(
-            title = title,
-            summary = summary,
-            checked = settings.preloadTextSegmenter,
-            onCheckedChange = { checked ->
-                persist(copySettings(settings, preloadTextSegmenter = checked))
-            },
-            enabled = enabled,
-        )
-    }
 
     row("segmentation.haptic", "选词触感反馈", SettingModule.PORTAL, "分词与取用",
         summary = "手指选中或取消词语时轻振一次",
@@ -2289,7 +2271,6 @@ private fun copySettings(
     contentCaptureMode: Int = current.contentCaptureMode,
     textSharingEnabled: Boolean = current.textSharingEnabled,
     imageSharingEnabled: Boolean = current.imageSharingEnabled,
-    preloadTextSegmenter: Boolean = current.preloadTextSegmenter,
     simpleMenuPosition: Int = current.simpleMenuPosition,
     simpleMenuOpacityPercent: Int = current.simpleMenuOpacityPercent,
     simpleMenuCornerRadiusDp: Int = current.simpleMenuCornerRadiusDp,
@@ -2331,7 +2312,6 @@ private fun copySettings(
     accessibilityBlacklistedPackages,
     accessibilityLongPressTimeoutMillis,
     accessibilityRecognitionSensitivityPercent,
-    preloadTextSegmenter,
     modernBlurRadiusDp,
     modernGlassOpacityPercent,
     logLevel,

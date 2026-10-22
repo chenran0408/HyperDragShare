@@ -70,7 +70,7 @@
 13. 产品只支持 Root＋LSPosed，不提供系统无障碍服务或无 Root 来源。长按取词固定使用传送门
     Hook、Root evdev、Root helper 与 AICR；不得重新声明 `BIND_ACCESSIBILITY_SERVICE`，也不得在
     设置中恢复“传送门／无障碍”选择。旧 `content_capture_mode` 值不得改变运行来源。Xposed API
-    仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、`MiuiMotionSource`、
+    仅可用于 `MainHook`、`PortalHooks`、`PortalContentCaptureSource`、
     `AicrCopyHooks`、`BackTapFrameworkHooks`、`RootProcessFrameworkHooks`、`NativeSidebarHooks` 和合并后的 `gestures.xposed` 包；AICR 与框架 Hook 必须保持包名、目标类和方法
     的精确限制，普通运行时不得导入 Xposed API。
 14. 节点树只在一次明确请求后读取：用户已启用按压入口且单指静止按住120ms后的分类、按住时长确认或用户主动点取。
@@ -93,7 +93,8 @@
 - `MainHook.java`：限制注入包名。
 - `PortalHooks.java`：安装传送门 Hook、管理生命周期、输入源仲裁和宿主取消信号。
 - `RootTouchSource.java`、`EvdevTouchParser.java`：发现触摸设备、解析 evdev 多点触控帧，稳定生成 DOWN/MOVE/UP/CANCEL。
-- `MiuiMotionSource.java`：MIUI 系统监听回退。
+- `TextSegmenter.java`：系统ICU多语言分词与字素边界，不再使用jieba/JNI/词典或预载设置。
+- `AicrBarcodeClient.java`：系统AICR条码异步插件，申请版本为空字符串；复用原图片结果浮窗，不打包ZXing/MLKit。
 - `CapturedContent.java`、`OverlayWindowPolicy.java`：文字/图片模型和传送门悬浮窗口类型。
 - `DragShareController.java`：拖拽会话、悬浮预览、方向菜单、边缘滚动、近手传感器和落点选择；不依赖 Xposed。
 - `PortalGlowView.java`：流光样式的全屏不可触摸光效、下拉进度和托盘展开绘制。

@@ -4,7 +4,7 @@
 
 [下载正式版 APK](https://github.com/chenran0408/HyperDragShare/releases/latest) · 仅 **arm64-v8a**，使用 **R8 压缩**。
 
-当前开发批次为 **1.7.189**，正式版仍以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
+当前开发批次为 **1.7.211**，正式版仍以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
 
 ## 用户使用
 
@@ -14,9 +14,9 @@
 2. 打开设置，调整取词时间和需要的手势。长按取词固定使用传送门 Hook、Root evdev 与 Root helper，不需要也不会申请系统无障碍服务。首页可搜索设置，点结果直接定位；未启用的功能会说明前置开关。
 3. 回到其他应用使用，操作在当前页面上方完成，只有设置需要进入本应用。
 
-- **分词**：单指静止按住文字，选词后复制、搜索、查词或直接拖出；选中内容明确是链接、邮箱或电话时，浮窗会多出对应直达按钮。全选后可拆词，支持合并和撤销。根据按住时长、位移判断，不检测真实触摸面积。
+- **分词**：单指静止按住文字，选词后复制、搜索、查词或直接拖出；选中内容明确是链接、邮箱或电话时，浮窗会多出对应直达按钮。使用系统 ICU 分词，支持多语言混排；全选后可拆词，支持合并和撤销。根据按住时长、位移判断，不检测真实触摸面积。
 - **中转站**：临时收集图文，点灰色侧条展开；拖动移动，松手自动贴边。按住内容直接拖给其他应用，多选文字可一起拖出。微信接收后可能直接发送，请先在文件传输助手试用。
-- **识字与拖拽**：非微信图片按压先进入可拖拽预览，分享菜单提供图片识字和扫码；微信继续直接使用快速 OCR。图片、屏幕/选区识字统一使用系统 AICR V2，不附带其他 OCR 模型；系统服务不可用会说明原因。文字分词不提供“把文字变成二维码”的入口。复制直达需在设置中开启，可显示实体建议并指定网页浏览器。链接、拨号、邮件均由用户主动点按执行。
+- **识字与拖拽**：按住图片后拖向屏幕四边，从菜单选择识字、扫码或其他目标。识字使用系统 AICR V2，二维码和条形码使用系统 AICR 条码插件，不附带分词词典、OCR 模型或扫码引擎。微信优先接收传送门文字/图片结果，取不到文字时再局部识字；系统服务不可用会说明原因。复制直达需在设置中开启，可显示实体建议并指定网页浏览器。链接、拨号、邮件均由用户主动点按执行。
 - **手势与侧栏**：底角扇形、二段蜂巢和小窗动作，左右底角可分别关闭；原生 Dock 增加固定功能入口，快捷应用仍保留。边缘侧滑交给 HyperOS 原生侧栏，不再由本模块抢占。游戏避让和应用黑名单可在设置中管理。
 
 推荐作用域：传送门、澎湃 AI 引擎、系统框架、系统界面、系统桌面、安全服务。安全服务 Hook 仅在 `com.miui.securitycenter:ui` 工作；不要加入 `com.miui.contentcatcher`。
@@ -35,6 +35,8 @@
 | 原生侧栏 | `NativeSidebarHooks.java` | 安全中心 40001365、SDK 37 的 `com.miui.securitycenter:ui`；扩展原生 `p0` Dock，不替换其快捷应用列表 |
 | AICR 图片 OCR | `AicrOcrClient.java` | AICR Core 视觉服务 V2；普通应用 UID Binder 客户端 |
 | AICR 实体识别 | `AicrNerClient.java`、`CopyDirectSuggestions.kt` | AICR Core NER V1；显式文本请求与内联建议 |
+| 系统条码识别 | `AicrBarcodeClient.java` | AICR 4.12.26 的 `IBarcodeService`；多码结果回调 |
+| 系统多语言分词 | `TextSegmenter.java` | Android ICU 词边界与字素边界；保留原文位置 |
 | Root 输入 | `RootTouchSource.java`、`RootNodeCaptureClient.java` | 通过 Root evdev 输入与受限节点读取；不依赖触点面积 |
 
 普通应用可参考客户端调用（回调主线程，失败通过 `error` 返回；页面关闭调用请求的 `cancel()`）：
@@ -42,9 +44,10 @@
 ```java
 AicrOcrClient.Request ocr = AicrOcrClient.recognize(context, bitmap, (text, error) -> { /* 显示结果或错误 */ });
 AicrNerClient.Request ner = AicrNerClient.extract(context, text, (entities, error) -> { /* 显示实体或错误 */ });
+AicrBarcodeClient.Request scan = AicrBarcodeClient.scan(context, bitmap, (codes, error) -> { /* 显示码值或错误 */ });
 ```
 
-客户端直接绑定 `com.xiaomi.aicr.access.AiCrCoreService`：OCR 使用 `IVisionService` V2，实体识别使用 `INerService` V1；保持 Bitmap 存活至 OCR 回调。具体绑定参数和 Parcel 协议见对应源码；小爱能力查询 Provider 不能用于 OCR。
+客户端直接绑定 `com.xiaomi.aicr.access.AiCrCoreService`：OCR 使用 `IVisionService` V2，实体识别使用 `INerService` V1，扫码使用 `IBarcodeService`，申请版本为空字符串。保持 Bitmap 存活至请求回调。绑定参数和扫码协议见[系统分词与条码接口](docs/SYSTEM_TEXT_AND_BARCODE.md)；小爱能力查询 Provider 不能用于 OCR。
 
 以上 ROM 私有接口只针对表中版本做了本机静态/运行核验，不是跨 ROM 的公开稳定 API。系统版本变化后应重新核对 Binder 协议、类名和布局；未核验时让 Hook 明确失败并保留原生行为。更多设计边界与历史验证见[实现说明](docs/IMPLEMENTATION.md)、[设备记录](docs/DEVICE_VALIDATION.md)、[OCR 说明](docs/IMAGE_OCR.md)和[中转站说明](docs/STASH.md)。
 

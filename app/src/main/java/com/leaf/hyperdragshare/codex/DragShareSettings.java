@@ -91,7 +91,6 @@ public final class DragShareSettings {
     public static final boolean DEFAULT_BLOCK_BACKGROUND_SCROLL = false;
     public static final boolean DEFAULT_TEXT_SHARING_ENABLED = true;
     public static final boolean DEFAULT_IMAGE_SHARING_ENABLED = true;
-    public static final boolean DEFAULT_PRELOAD_TEXT_SEGMENTER = true;
     public static final boolean DEFAULT_CLOSE_MENU_WHEN_POINTER_LEAVES = true;
     public static final boolean DEFAULT_ACCESSIBILITY_LANDSCAPE_RECOGNITION_ENABLED = false;
     public static final int MIN_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS = 250;
@@ -129,7 +128,6 @@ public final class DragShareSettings {
     private static final String KEY_IMAGE_SHARING_ENABLED = "image_sharing_enabled";
     private static final String KEY_TEXT_COPY_ENABLED = "text_copy_enabled";
     private static final String KEY_IMAGE_COPY_ENABLED = "image_copy_enabled";
-    private static final String KEY_PRELOAD_TEXT_SEGMENTER = "preload_text_segmenter";
     private static final String KEY_SIMPLE_MENU_POSITION = "simple_menu_position";
     private static final String KEY_SIMPLE_MENU_OPACITY = "simple_menu_opacity_percent";
     private static final String KEY_SIMPLE_MENU_CORNER_RADIUS = "simple_menu_corner_radius_dp";
@@ -160,7 +158,6 @@ public final class DragShareSettings {
     public final boolean blockBackgroundScroll;
     public final boolean textSharingEnabled;
     public final boolean imageSharingEnabled;
-    public final boolean preloadTextSegmenter;
     public final int simpleMenuPosition;
     public final int simpleMenuOpacityPercent;
     public final int simpleMenuCornerRadiusDp;
@@ -446,54 +443,6 @@ public final class DragShareSettings {
                 accessibilityBlacklistedPackages,
                 accessibilityLongPressTimeoutMillis,
                 accessibilityRecognitionSensitivityPercent,
-                DEFAULT_PRELOAD_TEXT_SEGMENTER);
-    }
-
-    /** Full constructor including all accessibility settings and tokenizer warm-up preference. */
-    public DragShareSettings(
-            int colorMode,
-            int uiStyle,
-            int edgeTriggerDp,
-            int scrollSpeedDpPerSecond,
-            boolean blockBackgroundScroll,
-            boolean textSharingEnabled,
-            boolean imageSharingEnabled,
-            int simpleMenuPosition,
-            int simpleMenuOpacityPercent,
-            int simpleMenuCornerRadiusDp,
-            int simpleMenuEdgeDistanceDp,
-            int iconOpacityPercent,
-            boolean closeMenuWhenPointerLeaves,
-            Set<String> hiddenTargetKeys,
-            List<String> targetOrder,
-            int contentCaptureMode,
-            boolean accessibilityLandscapeRecognitionEnabled,
-            Set<String> accessibilityBlacklistedPackages,
-            int accessibilityLongPressTimeoutMillis,
-            int accessibilityRecognitionSensitivityPercent,
-            boolean preloadTextSegmenter) {
-        this(
-                colorMode,
-                uiStyle,
-                edgeTriggerDp,
-                scrollSpeedDpPerSecond,
-                blockBackgroundScroll,
-                textSharingEnabled,
-                imageSharingEnabled,
-                simpleMenuPosition,
-                simpleMenuOpacityPercent,
-                simpleMenuCornerRadiusDp,
-                simpleMenuEdgeDistanceDp,
-                iconOpacityPercent,
-                closeMenuWhenPointerLeaves,
-                hiddenTargetKeys,
-                targetOrder,
-                contentCaptureMode,
-                accessibilityLandscapeRecognitionEnabled,
-                accessibilityBlacklistedPackages,
-                accessibilityLongPressTimeoutMillis,
-                accessibilityRecognitionSensitivityPercent,
-                preloadTextSegmenter,
                 DEFAULT_MODERN_BLUR_RADIUS_DP,
                 DEFAULT_MODERN_GLASS_OPACITY_PERCENT);
     }
@@ -523,7 +472,6 @@ public final class DragShareSettings {
             Set<String> accessibilityBlacklistedPackages,
             int accessibilityLongPressTimeoutMillis,
             int accessibilityRecognitionSensitivityPercent,
-            boolean preloadTextSegmenter,
             boolean textCopyEnabled,
             boolean imageCopyEnabled) {
         this(
@@ -550,7 +498,6 @@ public final class DragShareSettings {
                 accessibilityBlacklistedPackages,
                 accessibilityLongPressTimeoutMillis,
                 accessibilityRecognitionSensitivityPercent,
-                preloadTextSegmenter,
                 DEFAULT_MODERN_BLUR_RADIUS_DP,
                 DEFAULT_MODERN_GLASS_OPACITY_PERCENT);
     }
@@ -577,7 +524,6 @@ public final class DragShareSettings {
             Set<String> accessibilityBlacklistedPackages,
             int accessibilityLongPressTimeoutMillis,
             int accessibilityRecognitionSensitivityPercent,
-            boolean preloadTextSegmenter,
             int modernBlurRadiusDp,
             int modernGlassOpacityPercent) {
         this(
@@ -601,7 +547,6 @@ public final class DragShareSettings {
                 accessibilityBlacklistedPackages,
                 accessibilityLongPressTimeoutMillis,
                 accessibilityRecognitionSensitivityPercent,
-                preloadTextSegmenter,
                 modernBlurRadiusDp,
                 modernGlassOpacityPercent,
                 DEFAULT_LOG_LEVEL,
@@ -631,7 +576,6 @@ public final class DragShareSettings {
             Set<String> accessibilityBlacklistedPackages,
             int accessibilityLongPressTimeoutMillis,
             int accessibilityRecognitionSensitivityPercent,
-            boolean preloadTextSegmenter,
             int modernBlurRadiusDp,
             int modernGlassOpacityPercent,
             int logLevel,
@@ -658,7 +602,6 @@ public final class DragShareSettings {
                 accessibilityBlacklistedPackages,
                 accessibilityLongPressTimeoutMillis,
                 accessibilityRecognitionSensitivityPercent,
-                preloadTextSegmenter,
                 modernBlurRadiusDp,
                 modernGlassOpacityPercent,
                 logLevel,
@@ -689,7 +632,6 @@ public final class DragShareSettings {
             Set<String> accessibilityBlacklistedPackages,
             int accessibilityLongPressTimeoutMillis,
             int accessibilityRecognitionSensitivityPercent,
-            boolean preloadTextSegmenter,
             int modernBlurRadiusDp,
             int modernGlassOpacityPercent,
             int logLevel,
@@ -716,7 +658,6 @@ public final class DragShareSettings {
         this.blockBackgroundScroll = blockBackgroundScroll;
         this.textSharingEnabled = textSharingEnabled;
         this.imageSharingEnabled = imageSharingEnabled;
-        this.preloadTextSegmenter = preloadTextSegmenter;
         this.simpleMenuPosition = normalizeSimpleMenuPosition(simpleMenuPosition);
         this.simpleMenuOpacityPercent = clamp(
                 simpleMenuOpacityPercent,
@@ -842,9 +783,6 @@ public final class DragShareSettings {
                 preferences.getInt(
                         KEY_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
                         DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT),
-                preferences.getBoolean(
-                        KEY_PRELOAD_TEXT_SEGMENTER,
-                        DEFAULT_PRELOAD_TEXT_SEGMENTER),
                 preferences.getInt(
                         KEY_MODERN_BLUR_RADIUS,
                         DEFAULT_MODERN_BLUR_RADIUS_DP),
@@ -873,7 +811,6 @@ public final class DragShareSettings {
                 .putBoolean(KEY_IMAGE_SHARING_ENABLED, imageSharingEnabled)
                 .remove(KEY_TEXT_COPY_ENABLED)
                 .remove(KEY_IMAGE_COPY_ENABLED)
-                .putBoolean(KEY_PRELOAD_TEXT_SEGMENTER, preloadTextSegmenter)
                 .putInt(KEY_SIMPLE_MENU_POSITION, simpleMenuPosition)
                 .putInt(KEY_SIMPLE_MENU_OPACITY, simpleMenuOpacityPercent)
                 .putInt(KEY_SIMPLE_MENU_CORNER_RADIUS, simpleMenuCornerRadiusDp)
@@ -944,7 +881,6 @@ public final class DragShareSettings {
         result.putBoolean(
                 KEY_IMAGE_COPY_ENABLED,
                 isTargetVisible(TARGET_COPY_IMAGE));
-        result.putBoolean(KEY_PRELOAD_TEXT_SEGMENTER, preloadTextSegmenter);
         result.putInt(KEY_SIMPLE_MENU_POSITION, simpleMenuPosition);
         result.putInt(KEY_SIMPLE_MENU_OPACITY, simpleMenuOpacityPercent);
         result.putInt(KEY_SIMPLE_MENU_CORNER_RADIUS, simpleMenuCornerRadiusDp);
@@ -1039,9 +975,6 @@ public final class DragShareSettings {
                 bundle.getInt(
                         KEY_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
                         DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT),
-                bundle.getBoolean(
-                        KEY_PRELOAD_TEXT_SEGMENTER,
-                        DEFAULT_PRELOAD_TEXT_SEGMENTER),
                 bundle.getInt(
                         KEY_MODERN_BLUR_RADIUS,
                         DEFAULT_MODERN_BLUR_RADIUS_DP),

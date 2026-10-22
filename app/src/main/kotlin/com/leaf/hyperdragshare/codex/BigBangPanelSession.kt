@@ -296,7 +296,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         DragShareLog.w(TAG, "local text segmentation failed", error)
         main.post {
             if (!closed && requests.accepts(request)) {
-                Toast.makeText(context, "分词失败：${error.message ?: "词典或分词库不可用"}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "分词失败：${error.message ?: "无法处理这段文字"}", Toast.LENGTH_LONG).show()
                 actions.dismiss()
             }
         }
