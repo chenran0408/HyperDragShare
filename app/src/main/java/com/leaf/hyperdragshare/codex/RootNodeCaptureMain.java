@@ -719,9 +719,9 @@ public final class RootNodeCaptureMain {
 
     static boolean holdControlAtPoint(List<AccessibilityNodeSnapshot> nodes, float x, float y, String source) {
         for (AccessibilityNodeSnapshot label : nodes) {
-            if (!label.visible || !label.enabled || !source.equals(label.packageName)
+            if (!label.visible || !source.equals(label.packageName)
                     || !label.bounds.contains((int) x, (int) y)) continue;
-            if (label.rangeControl) return true;
+            if (label.enabled && label.rangeControl) return true;
             String text = normalizeHoldText(label.text);
             String description = normalizeHoldText(label.contentDescription);
             boolean exactVoicePrompt = HOLD_PROMPTS.contains(text) || HOLD_PROMPTS.contains(description);
@@ -734,11 +734,14 @@ public final class RootNodeCaptureMain {
             if (!exactVoicePrompt && !embeddedVoicePrompt && !videoSpeedPrompt
                     && !cameraCapturePrompt) continue;
             for (AccessibilityNodeSnapshot control : nodes) {
-                if (!control.visible || !control.enabled || !source.equals(control.packageName)
+                if (!control.visible || !source.equals(control.packageName)
                         || !isScopedControl(control, label)) continue;
                 boolean interactive = control.editable || control.clickable || control.longClickable;
+                // Explicit hold controls keep their gesture even when accessibility
+                // reports them disabled. Preserve the pre-slider avoidance rule.
                 if (videoSpeedPrompt && !control.editable && interactive) return true;
-                if (cameraCapturePrompt && !control.editable && interactive) return true;
+                if (cameraCapturePrompt && label.enabled && control.enabled
+                        && !control.editable && interactive) return true;
                 boolean voiceControl = !embeddedVoicePrompt || control.editable
                         || ((control.clickable || control.longClickable)
                         && (isVoiceButtonClass(control.className) || control != label));

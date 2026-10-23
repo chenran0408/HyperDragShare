@@ -1,5 +1,15 @@
 # 当前功能与验证状态
 
+## 2026-10-24 beta12 至 beta17 长按控件避让回退调查
+
+用户明确对照 beta12（9b32ae8）与 beta17（5210611）。历史提交 db41204 在新增滑条/拍摄避让时，将 enabled 检查同时应用到已有语音/倍速规则：有明确交互标签且仍保留 clickable/longClickable/editable 元数据的可见控件，只要 enabled=false 就失去原有避让。这是代码覆盖范围缩小；并无证据证明用户现场控件的实际 enabled 状态。
+
+通过真实 Root 按压入口的 Robolectric 测试，模拟停用状态的“长按倍速播放”“按住说话”“松开发送”，以及停用父控件/子标签组合。修复前新增2项测试均失败（22项中2失败），修复恢复语音/倍速原有避让，不要求 enabled=true；滑条及拍摄新规则的启用检查保留。阴性用例继续覆盖普通正文、不可见/其他应用节点、只读进度与停用拍摄控件。
+
+定向命令：`:app:testDebugUnitTest --tests com.leaf.hyperdragshare.codex.RootImageSelectionTest --tests com.leaf.hyperdragshare.codex.PressPreviewHandoffTest --tests com.leaf.hyperdragshare.codex.AccessibilityNodeClassifierTest --no-daemon`，46项全部通过。结果与日志在任务目录 `D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/work/hold-regression-before.log`、`hold-regression-after.log`及对应XML。这是逻辑模拟；未安装新包或实机复现。版本仍beta17，修复待后续面板修改后集中构建。
+
+回退未被旧测试拦住的原因：已有倍速/语音用例均默认 enabled=true；新增 disabled 用例只验证新的滑条/拍摄范围，未验证旧避让在相同状态下仍保持。新增回归以旧规则兼容性为断言，防止此条件再次收紧既有覆盖。
+
 ## 222 beta.7 交互与轻量性能整理（beta 分支）
 
 本批以 `0435d1269cd2efc5f9fee3d50d4165b630a33e1c`（1.7.219-beta.6）为代码基线，仅推进 beta 分支；不修改正式版 `repair-from-189`，不连接、安装或操作真机。

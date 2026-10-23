@@ -110,6 +110,29 @@ public final class RootImageSelectionTest {
         assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(inert), 30, 30, "reader"));
     }
 
+    @Test public void disabledExplicitHoldControlsStillYieldAtPressEntry() throws Exception {
+        for (String prompt : List.of("长按倍速播放", "按住说话", "松开发送")) {
+            AccessibilityNodeInfo control = pressRoot("android.widget.Button", prompt);
+            control.setLongClickable(true);
+            control.setEnabled(false);
+            try {
+                JSONObject result = capturePress(control);
+                assertEquals(prompt, "excluded_hold_control", result.optString("reason"));
+                assertFalse(result.getBoolean("found"));
+            } finally { recyclePressRoot(control); }
+        }
+    }
+
+    @Test public void disabledParentAndLabelPreserveExplicitSpeedAvoidance() {
+        AccessibilityNodeSnapshot parent = node("android.view.ViewGroup", "reader")
+                .enabled(false).longClickable(true).leaf(false).depth(0).build();
+        AccessibilityNodeSnapshot label = node("android.widget.TextView", "reader")
+                .enabled(false).bounds(new Rect(20, 20, 200, 100))
+                .text("按住倍速").depth(1).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(parent, label), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(parent, label), 250, 150, "reader"));
+    }
+
     @Test public void speedPhraseInOrdinaryTextDoesNotBlockCaptureAndImagesStillSelect() {
         AccessibilityNodeSnapshot paragraph = node("android.widget.TextView", "reader")
                 .text("这个视频可以长按倍速播放，普通介绍文字仍可读取。")
