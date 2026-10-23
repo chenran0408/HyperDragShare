@@ -1,5 +1,15 @@
 # 当前功能与验证状态
 
+## 2026-10-24 虎扑图片预览无法拖动
+
+用户beta17日志与 `D:/BUG反馈记录/10.24/1.mp4` 对应：00:25:09接受虎扑view_bitmap、显示现代预览后，00:25:39因Root输入失活取消；未见Root移动/释放或Java崩溃。库存有两个独立小米触屏（event7 97599×59599、event8 119999×260799）及蓝牙手表触摸设备。旧算法确定返回首个event7，而视频1200×2608与event8范围比例对应。这是明确的设备选择缺陷；日志未包含启动选中设备，故实际进程选中event7仍是强候选解释，并非实机捕获已证实。
+
+Root输入现在以当前显示的自然方向宽高比匹配具备有效MT坐标的内置候选，排除Bluetooth输入；多个候选比例无法区分时报告无法确认，不再任取第一项。启动日志增加显示尺寸/旋转。该匹配是静态坐标几何选择，尚未证明实际设备的事件活跃性；原始坐标比例异常、多屏同形及运行中切屏需后续实测，必要时重载输入。
+
+同时修复无物理Root DOWN也允许showOnMain(-1)创建不可触摸预览的问题：现在保留原生宿主行为、释放本次独立Bitmap并记录原因。不改变真实Root UP/CANCEL或用Portal控制码结束活动手势，不缩短固定超时掩盖源错误。
+
+已执行旧算法模拟，新增4项先失败；初批修后RootTouchSource/PressPreviewHandoff/DragSharePreviewLifecycle/EvdevTouchParser定向通过。日志与XML保存在任务work/frozen-preview-before/after.log等；正式最终回归见任务交付记录。视频/用户原始日志不进Git。
+
 ## 2026-10-24 分词面板连续触摸模拟
 
 在前次滑选防跳动基础上补充按下即进入布局冻结：取消旧选区仍在运行的行动画，待抬手/取消后按最终选区重新排布；滑选中不再增加/移除词区底部padding，避免滚动范围随选区变化。待长按拖出、拖出失败恢复、多指取消均继续沿原路径结束。模拟检查通过SwipeSelectView、BigBangMeasuredLayoutMatrix、BigBangSelectionToolbarGeometry；修前连续触摸/滚动范围断言失败，修后通过。证据在任务work/panel-press-before.log/.xml和panel-press-after.log/.xml。此为Robolectric触控/视图测量验证，未执行Compose可见界面或真机手势，不代表完整上游样式已经验收。
