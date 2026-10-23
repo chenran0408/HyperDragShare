@@ -417,6 +417,10 @@ final class PressCaptureSource {
             openWeChatOcrDirect(request, content);
             return;
         }
+        if (isWeChatScreenCapture(content)) {
+            rejectWeChatScreenCapture(content, "image_candidate");
+            return;
+        }
         if (!pointerDown) {
             DragShareLog.i(TAG, "image press ended before drag preview was ready");
             recycle(content);
@@ -429,11 +433,7 @@ final class PressCaptureSource {
 
     private void openWeChatOcrDirect(long request, CapturedContent content) {
         if (weChatImageDragIntent) {
-            weChatImageDragIntent = false;
-            CapturedContent image = CapturedContent.image(content.bitmap,
-                    content.sourcePackage, content.sourceBounds, true);
-            DragShareLog.i(TAG, "WeChat press moved to image before OCR started");
-            controller.showContentForPressTakeover(image, latestX, latestY, settings, downTime);
+            rejectWeChatScreenCapture(content, "drag_before_ocr");
             return;
         }
         PendingWeChat pending = new PendingWeChat(content, request);
@@ -485,6 +485,18 @@ final class PressCaptureSource {
             return;
         }
         CapturedContent source = pending.content;
+        if (isWeChatScreenCapture(source)) {
+            pendingWeChat = null;
+            generation++;
+            weChatImageDragIntent = false;
+            if (!pending.ocrComplete && activeOcrRequest != null) {
+                activeOcrRequest.cancel();
+                activeOcrRequest = null;
+            }
+            blocker.stopAsync();
+            rejectWeChatScreenCapture(source, "ocr_region_drag");
+            return;
+        }
         android.graphics.Bitmap bitmap = pending.ocrComplete
                 ? source.bitmap
                 : source.bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false);
@@ -580,6 +592,19 @@ final class PressCaptureSource {
             DragShareLog.w(TAG, "cannot dismiss this WeChat press window", error);
             return false;
         }
+    }
+
+    private static boolean isWeChatScreenCapture(CapturedContent content) {
+        return content != null && "com.tencent.mm".equals(content.sourcePackage)
+                && content.isImage() && content.screenCaptureImage;
+    }
+
+    private void rejectWeChatScreenCapture(CapturedContent content, String stage) {
+        DragShareLog.i(TAG, "WeChat image drag rejected source=screen_capture stage=" + stage);
+        recycle(content);
+        showFailure("微信当前没有提供原图，已取消截图拖拽；请通过传送门选择原图");
+        controller.endPressPipeline(downTime);
+        blocker.stopAsync();
     }
 
     private void completeHandoff(Bundle result, long request) {

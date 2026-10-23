@@ -441,7 +441,7 @@ final class RootNodeCaptureClient {
                 screen = null;
                 return pressOcrRegion
                         ? CapturedContent.pressOcrRegion(image, source, verifiedBounds)
-                        : CapturedContent.image(image, source, verifiedBounds, true);
+                        : CapturedContent.screenCaptureImage(image, source, verifiedBounds);
             }
             int width = node.getInt("width"), height = node.getInt("height");
             if (screen.getWidth() != width || screen.getHeight() != height) {
@@ -457,7 +457,7 @@ final class RootNodeCaptureClient {
             if (pressOcrRegion) {
                 return CapturedContent.pressOcrRegion(image, source, crop);
             }
-            return CapturedContent.image(image, source, crop, true);
+            return CapturedContent.screenCaptureImage(image, source, crop);
         } finally {
             if (screen != null) screen.recycle();
         }

@@ -19,6 +19,8 @@ final class CapturedContent {
     final Rect sourceBounds;
     final boolean bitmapOwnedByDragShare;
     final boolean pressOcrRegion;
+    /** True when pixels came from a screen capture rather than the source app's media payload. */
+    final boolean screenCaptureImage;
 
     private CapturedContent(
             Kind kind,
@@ -28,6 +30,7 @@ final class CapturedContent {
             Rect sourceBounds,
             boolean bitmapOwnedByDragShare,
             boolean pressOcrRegion,
+            boolean screenCaptureImage,
             String beforeText,
             String afterText) {
         this.kind = kind;
@@ -39,6 +42,7 @@ final class CapturedContent {
         this.sourceBounds = sourceBounds == null ? null : new Rect(sourceBounds);
         this.bitmapOwnedByDragShare = bitmapOwnedByDragShare;
         this.pressOcrRegion = pressOcrRegion;
+        this.screenCaptureImage = screenCaptureImage;
     }
 
     static CapturedContent text(String value, String sourcePackage, Rect sourceBounds) {
@@ -51,7 +55,7 @@ final class CapturedContent {
             return null;
         }
         return new CapturedContent(Kind.TEXT, value, null, sourcePackage, sourceBounds,
-                false, false, beforeText, afterText);
+                false, false, false, beforeText, afterText);
     }
 
     static CapturedContent image(
@@ -70,14 +74,24 @@ final class CapturedContent {
                 sourceBounds,
                 bitmapOwnedByDragShare,
                 false,
+                false,
                 null,
                 null);
+    }
+
+    static CapturedContent screenCaptureImage(
+            Bitmap value,
+            String sourcePackage,
+            Rect sourceBounds) {
+        if (value == null || value.isRecycled()) return null;
+        return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
+                true, false, true, null, null);
     }
 
     static CapturedContent pressOcrRegion(Bitmap value, String sourcePackage, Rect sourceBounds) {
         if (value == null || value.isRecycled()) return null;
         return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
-                true, true, null, null);
+                true, true, true, null, null);
     }
 
     boolean isImage() {

@@ -2,6 +2,7 @@ package com.leaf.hyperdragshare.codex;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.graphics.Bitmap;
@@ -263,7 +264,7 @@ public final class PressPreviewHandoffTest {
         }
     }
 
-    @Test public void imageOnlySettingKeepsWeChatOcrRegionAsAnImageDrag() throws Exception {
+    @Test public void imageOnlySettingDoesNotMislabelWeChatScreenshotAsOriginalImage() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         Bundle values = new Bundle();
         values.putBoolean("text_sharing_enabled", false);
@@ -285,11 +286,9 @@ public final class PressPreviewHandoffTest {
             invokeDragCandidate(source, 80f, 90f);
             ShadowLooper.shadowMainLooper().idle();
 
-            Object session = field(controller, "session").get(controller);
-            CapturedContent payload = (CapturedContent) field(session, "payload").get(session);
-            assertEquals(CapturedContent.Kind.IMAGE, payload.kind);
-            assertTrue(payload.bitmap == screenshot);
-            assertFalse(screenshot.isRecycled());
+            assertNull(field(controller, "session").get(controller));
+            assertTrue(screenshot.isRecycled());
+            assertNull(field(source, "pendingWeChat").get(source));
         } finally {
             source.stop();
             controller.destroy();
@@ -298,7 +297,7 @@ public final class PressPreviewHandoffTest {
         }
     }
 
-    @Test public void completedOcrWithoutAcceptedTextWindowKeepsWeChatRegionAsImage() throws Exception {
+    @Test public void completedWeChatOcrDoesNotDragTheFallbackScreenshot() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         DragShareController controller = controller();
         down(controller, 100L);
@@ -318,11 +317,35 @@ public final class PressPreviewHandoffTest {
             invokeDragCandidate(source, 80f, 90f);
             ShadowLooper.shadowMainLooper().idle();
 
-            Object session = field(controller, "session").get(controller);
-            CapturedContent payload = (CapturedContent) field(session, "payload").get(session);
-            assertEquals(CapturedContent.Kind.IMAGE, payload.kind);
-            assertTrue(payload.bitmap == screenshot);
-            assertFalse(screenshot.isRecycled());
+            assertNull(field(controller, "session").get(controller));
+            assertTrue(screenshot.isRecycled());
+            assertNull(field(source, "pendingWeChat").get(source));
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!screenshot.isRecycled()) screenshot.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void accessibilityImageScreenshotIsNotPresentedAsAWeChatOriginal() throws Exception {
+        DragShareController controller = controller();
+        down(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(
+                RuntimeEnvironment.getApplication(), null, controller, DragShareSettings.defaults());
+        Bitmap screenshot = Bitmap.createBitmap(3, 3, Bitmap.Config.ARGB_8888);
+        CapturedContent candidate = CapturedContent.screenCaptureImage(
+                screenshot, "com.tencent.mm", new Rect(10, 20, 300, 500));
+
+        try {
+            java.lang.reflect.Method openImage = PressCaptureSource.class.getDeclaredMethod(
+                    "openImage", long.class, CapturedContent.class);
+            openImage.setAccessible(true);
+            openImage.invoke(source, 8L, candidate);
+            ShadowLooper.shadowMainLooper().idle();
+
+            assertNull(field(controller, "session").get(controller));
+            assertTrue(screenshot.isRecycled());
         } finally {
             source.stop();
             controller.destroy();
