@@ -5,6 +5,23 @@ import org.junit.Test
 
 class BigBangSelectionToolbarGeometryTest {
     @Test
+    fun labeledSelectionActionsRemainClearOfTheFirstVisibleWordRow() {
+        val toolbarHeight = SELECTION_ACTION_TOOLBAR_HEIGHT_DP
+        val toolbarGap = 8
+        val reservedTop = toolbarHeight + toolbarGap
+        val toolbarTop = selectionToolbarTopY(
+            anchorYpx = 0,
+            pageTopInsetPx = reservedTop,
+            toolbarHeightPx = toolbarHeight,
+            gapPx = toolbarGap,
+            viewportHeightPx = 240,
+        )
+
+        assertEquals(0, toolbarTop)
+        assertEquals(toolbarGap, reservedTop - (toolbarTop + toolbarHeight))
+    }
+
+    @Test
     fun firstVisibleRowHasAReservedToolbarAreaAboveIt() {
         assertEquals(
             0,

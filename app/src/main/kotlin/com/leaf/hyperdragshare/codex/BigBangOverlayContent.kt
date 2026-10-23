@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
@@ -47,6 +49,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.TransformOrigin
@@ -93,7 +96,8 @@ import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
-private val SELECTION_ACTION_TOOLBAR_HEIGHT = 48.dp
+internal const val SELECTION_ACTION_TOOLBAR_HEIGHT_DP = 56
+private val SELECTION_ACTION_TOOLBAR_HEIGHT = SELECTION_ACTION_TOOLBAR_HEIGHT_DP.dp
 private val SELECTION_ACTION_TOOLBAR_GAP = 8.dp
 private val SELECTION_ACTION_TOP_RESERVE =
     SELECTION_ACTION_TOOLBAR_HEIGHT + SELECTION_ACTION_TOOLBAR_GAP
@@ -495,25 +499,45 @@ internal fun BigBangOverlayContent(
                                             RoundedCornerShape(16.dp),
                                         )
                                         .border(1.dp, panelBorder.copy(alpha = panelOpacity), RoundedCornerShape(16.dp))
-                                        .horizontalScroll(rememberScrollState())
                                         .padding(horizontal = 4.dp, vertical = 2.dp),
                                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Search,
-                                        "搜索选中内容", onSearch, actionReady)
-                                    BigBangToolbarAction(Modifier.width(44.dp), DictionaryIcon,
-                                        "用词典查询选中内容",
-                                        { onMoreAction(BigBangMoreAction.Dictionary) }, actionReady)
-                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Cut,
-                                        "拆分选中词语", { onMoreAction(BigBangMoreAction.Split) }, canSplit)
-                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Share,
-                                        "分享选中内容", { onMoreAction(BigBangMoreAction.Share) }, actionReady)
-                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Copy,
-                                        if (copying) "正在复制" else "复制选中内容", onCopy,
-                                        actionReady && !copying, primary = true)
-                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.More,
-                                        "更多选中操作", { showSelectionMore = true }, actionReady)
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        BigBangLabeledToolbarAction(
+                                            Modifier.weight(1f), MiuixIcons.Search, "搜索",
+                                            "搜索选中内容", onSearch, actionReady,
+                                        )
+                                        BigBangLabeledToolbarAction(
+                                            Modifier.weight(1f), DictionaryIcon, "词典",
+                                            "用词典查询选中内容",
+                                            { onMoreAction(BigBangMoreAction.Dictionary) }, actionReady,
+                                        )
+                                        BigBangLabeledToolbarAction(
+                                            Modifier.weight(1f), MiuixIcons.Cut, "拆词",
+                                            "拆分选中词语",
+                                            { onMoreAction(BigBangMoreAction.Split) }, canSplit,
+                                        )
+                                        BigBangLabeledToolbarAction(
+                                            Modifier.weight(1f), MiuixIcons.Share, "分享",
+                                            "分享选中内容",
+                                            { onMoreAction(BigBangMoreAction.Share) }, actionReady,
+                                        )
+                                        BigBangLabeledToolbarAction(
+                                            Modifier.weight(1f), MiuixIcons.Copy,
+                                            if (copying) "复制中" else "复制",
+                                            if (copying) "正在复制" else "复制选中内容",
+                                            onCopy, actionReady && !copying, primary = true,
+                                        )
+                                    }
+                                    BigBangLabeledToolbarAction(
+                                        Modifier.width(48.dp), MiuixIcons.More, "更多",
+                                        "更多选中操作", { showSelectionMore = true }, actionReady,
+                                    )
                                 }
                             }
                         }
@@ -698,6 +722,50 @@ private fun BigBangToolbarAction(
                     tint = (if (primary || toggled) MiuixTheme.colorScheme.primary
                         else MiuixTheme.colorScheme.onSurface).copy(alpha = if (enabled) 1f else 0.38f))
             }
+        }
+    }
+}
+
+@Composable
+private fun BigBangLabeledToolbarAction(
+    modifier: Modifier,
+    icon: ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    primary: Boolean = false,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    TooltipBox(text = description, enabled = enabled) {
+        Column(
+            modifier = modifier
+                .height(48.dp)
+                .clip(shape)
+                .background(
+                    if (enabled && primary) MiuixTheme.colorScheme.primary.copy(alpha = 0.13f)
+                    else Color.Transparent,
+                )
+                .clickable(enabled = enabled, onClick = onClick)
+                .semantics { contentDescription = description },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = (if (primary) MiuixTheme.colorScheme.primary
+                    else MiuixTheme.colorScheme.onSurface).copy(alpha = if (enabled) 1f else 0.38f),
+            )
+            Text(
+                text = title,
+                color = (if (primary) MiuixTheme.colorScheme.primary
+                    else MiuixTheme.colorScheme.onSurface).copy(alpha = if (enabled) 1f else 0.38f),
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
