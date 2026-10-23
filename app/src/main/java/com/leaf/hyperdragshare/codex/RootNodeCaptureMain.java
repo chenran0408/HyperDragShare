@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** Explicit node lookups in app_process; serving mode never traverses nodes while idle. */
 @android.annotation.TargetApi(34)
@@ -37,6 +38,7 @@ public final class RootNodeCaptureMain {
 
     // WMS identity is used only for a node-less WeChat conversation capture.
     private static final int WINDOW_MANAGER_CAPTURE = -2;
+    private static final Pattern HOLD_WHITESPACE = Pattern.compile("\\s+");
     private static final Set<String> HOLD_PROMPTS = Set.of(
             "按住说话", "按住讲话", "长按说话", "长按讲话", "按住语音输入",
             "长按语音输入", "按住语音说话", "按住开始说话", "按住开始录音",
@@ -714,12 +716,13 @@ public final class RootNodeCaptureMain {
         for (AccessibilityNodeSnapshot label : nodes) {
             if (!label.visible || !source.equals(label.packageName)
                     || !label.bounds.contains((int) x, (int) y)) continue;
-            String text = label.text;
-            String description = label.contentDescription;
-            boolean exactVoicePrompt = holdLabel(text) || holdLabel(description);
+            String text = normalizeHoldText(label.text);
+            String description = normalizeHoldText(label.contentDescription);
+            boolean exactVoicePrompt = HOLD_PROMPTS.contains(text) || HOLD_PROMPTS.contains(description);
             boolean embeddedVoicePrompt = !exactVoicePrompt
                     && (containsHoldLabel(text) || containsHoldLabel(description));
-            boolean videoSpeedPrompt = videoSpeedHoldLabel(text) || videoSpeedHoldLabel(description);
+            boolean videoSpeedPrompt = VIDEO_SPEED_HOLD_PROMPTS.contains(text)
+                    || VIDEO_SPEED_HOLD_PROMPTS.contains(description);
             if (!exactVoicePrompt && !embeddedVoicePrompt && !videoSpeedPrompt) continue;
             for (AccessibilityNodeSnapshot control : nodes) {
                 if (!control.visible || !source.equals(control.packageName)
@@ -744,14 +747,7 @@ public final class RootNodeCaptureMain {
         return labelArea > 0 && controlArea <= labelArea * 16L;
     }
 
-    private static boolean holdLabel(String text) {
-        if (text == null) return false;
-        return HOLD_PROMPTS.contains(normalizeHoldText(text));
-    }
-
-    private static boolean containsHoldLabel(String text) {
-        if (text == null) return false;
-        String normalized = normalizeHoldText(text);
+    private static boolean containsHoldLabel(String normalized) {
         for (String phrase : HOLD_PROMPTS) {
             if (normalized.contains(phrase)) return true;
         }
@@ -759,16 +755,12 @@ public final class RootNodeCaptureMain {
     }
 
     private static String normalizeHoldText(String text) {
-        return text.replaceAll("\\s+", "").toLowerCase(java.util.Locale.ROOT);
+        return text == null ? "" : HOLD_WHITESPACE.matcher(text).replaceAll("")
+                .toLowerCase(java.util.Locale.ROOT);
     }
 
     private static boolean isVoiceButtonClass(String className) {
         return className != null && className.endsWith("Button");
-    }
-
-    private static boolean videoSpeedHoldLabel(String text) {
-        if (text == null) return false;
-        return VIDEO_SPEED_HOLD_PROMPTS.contains(normalizeHoldText(text));
     }
 
     private static JSONObject contentResult(AccessibilityCandidateSelector.Selection selection,

@@ -38,6 +38,20 @@ public final class RootImageSelectionTest {
         assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(control, label), 250, 150, "reader"));
     }
 
+    @Test public void holdNormalizationRetainsCaseWhitespaceAndNullSemantics() {
+        for (String prompt : List.of(" HOLD\tTO\nTALK ", "按\r住 说\t话")) {
+            AccessibilityNodeSnapshot button = node("android.widget.Button", "reader")
+                    .text(prompt).clickable(true).build();
+            assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(button), 30, 30, "reader"));
+        }
+        AccessibilityNodeSnapshot description = node("android.widget.Button", "reader")
+                .text(null).contentDescription("PRESS AND HOLD TO SPEAK").clickable(true).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(description), 30, 30, "reader"));
+        AccessibilityNodeSnapshot empty = node("android.widget.Button", "reader")
+                .text(null).contentDescription(null).clickable(true).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(empty), 30, 30, "reader"));
+    }
+
     @Test public void combinedVoicePromptOnEditableInputIsExcluded() {
         AccessibilityNodeSnapshot input = node("android.widget.EditText", "reader")
                 .text("发消息或按住说话...").editable(true).build();
