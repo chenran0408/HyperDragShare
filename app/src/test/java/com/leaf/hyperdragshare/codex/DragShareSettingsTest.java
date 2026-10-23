@@ -21,13 +21,19 @@ import java.util.List;
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public final class DragShareSettingsTest {
-    @Test public void legacyMenuDirectionsAllBecomeDragEdgeFollowing() {
-        for (int oldPosition = 0; oldPosition <= 4; oldPosition++) {
+    @Test public void menuDirectionsPreserveAllSupportedValuesAndRejectUnknownValues() {
+        for (int position = DragShareSettings.SIMPLE_MENU_POSITION_TOP;
+                position <= DragShareSettings.SIMPLE_MENU_POSITION_DRAG_EDGE; position++) {
             Bundle stored = new Bundle();
-            stored.putInt("simple_menu_position", oldPosition);
-            assertEquals(DragShareSettings.SIMPLE_MENU_POSITION_DRAG_EDGE,
-                    DragShareSettings.fromBundle(stored).simpleMenuPosition);
+            stored.putInt("simple_menu_position", position);
+            DragShareSettings settings = DragShareSettings.fromBundle(stored);
+            assertEquals(position, settings.simpleMenuPosition);
+            assertEquals(position, settings.toBundle().getInt("simple_menu_position"));
         }
+        Bundle invalid = new Bundle();
+        invalid.putInt("simple_menu_position", 99);
+        assertEquals(DragShareSettings.DEFAULT_SIMPLE_MENU_POSITION,
+                DragShareSettings.fromBundle(invalid).simpleMenuPosition);
     }
     @Test
     public void defaultsUseModernStyleAndFullIconOpacity() {
@@ -94,8 +100,7 @@ public final class DragShareSettingsTest {
         assertEquals(DragShareSettings.LOG_LEVEL_INFO, settings.logLevel);
         assertEquals(DragShareSettings.LOG_DESTINATION_SYSTEM, settings.logDestination);
         assertFalse(settings.pauseAutomaticInGames);
-        assertEquals(650, settings.resolveAccessibilityLongPressTimeoutMillis(650));
-        assertEquals(300, settings.resolvePressConfirmationTimeoutMillis());
+        assertEquals(600, settings.resolvePressConfirmationTimeoutMillis());
         assertEquals(1f, settings.accessibilityTouchSlopMultiplier(), 0f);
         assertFalse(settings.isAccessibilityRecognitionEnabledForOrientation(
                 Configuration.ORIENTATION_LANDSCAPE));
@@ -624,6 +629,60 @@ public final class DragShareSettingsTest {
         assertEquals(
                 DragShareSettings.MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
                 settings.accessibilityRecognitionSensitivityPercent);
+    }
+
+    @Test
+    public void legacyFollowSystemSentinelMigratesToExplicitDefault() {
+        Bundle legacy = new Bundle();
+        legacy.putInt("accessibility_long_press_timeout_millis", 0);
+        DragShareSettings migrated = DragShareSettings.fromBundle(legacy);
+
+        assertEquals(600, migrated.accessibilityLongPressTimeoutMillis);
+        assertEquals(600, migrated.toBundle().getInt("accessibility_long_press_timeout_millis"));
+        assertEquals(600, migrated.resolvePressConfirmationTimeoutMillis());
+    }
+
+    @Test
+    public void readingLegacyLocalPreferencePersistsTheMigratedDefault() {
+        Context context = RuntimeEnvironment.getApplication();
+        DragShareSettings previous = DragShareSettings.readLocal(context);
+        android.content.SharedPreferences preferences = context.getSharedPreferences(
+                "drag_share_settings", Context.MODE_PRIVATE);
+        try {
+            preferences.edit().putInt("accessibility_long_press_timeout_millis", 0).commit();
+
+            DragShareSettings migrated = DragShareSettings.readLocal(context);
+
+            assertEquals(600, migrated.accessibilityLongPressTimeoutMillis);
+            assertEquals(600, preferences.getInt("accessibility_long_press_timeout_millis", -1));
+        } finally {
+            previous.saveLocal(context);
+        }
+    }
+
+    @Test
+    public void validCustomPressConfirmationSurvivesBundlesAndExpandedRange() {
+        for (int value : new int[] {250, 700, 1200, 1800, 3000}) {
+            Bundle stored = new Bundle();
+            stored.putInt("accessibility_long_press_timeout_millis", value);
+            DragShareSettings settings = DragShareSettings.fromBundle(stored);
+
+            assertEquals(value, settings.accessibilityLongPressTimeoutMillis);
+            assertEquals(value, settings.toBundle().getInt(
+                    "accessibility_long_press_timeout_millis"));
+            assertEquals(value, settings.resolvePressConfirmationTimeoutMillis());
+        }
+    }
+
+    @Test
+    public void customPressConfirmationClampsToExpandedEndpoints() {
+        Bundle below = new Bundle();
+        below.putInt("accessibility_long_press_timeout_millis", 120);
+        assertEquals(250, DragShareSettings.fromBundle(below).accessibilityLongPressTimeoutMillis);
+
+        Bundle above = new Bundle();
+        above.putInt("accessibility_long_press_timeout_millis", 4500);
+        assertEquals(3000, DragShareSettings.fromBundle(above).accessibilityLongPressTimeoutMillis);
     }
 
     @Test

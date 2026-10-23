@@ -6,6 +6,9 @@ import static org.junit.Assert.assertTrue;
 
 import android.graphics.Bitmap;
 import android.graphics.Rect;
+import android.content.Context;
+import android.content.pm.ProviderInfo;
+import android.os.Bundle;
 import android.view.MotionEvent;
 
 import org.junit.Test;
@@ -14,6 +17,7 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
+import org.robolectric.shadows.ShadowContentResolver;
 import org.robolectric.shadows.ShadowLooper;
 
 import java.lang.reflect.Field;
@@ -125,7 +129,7 @@ public final class PressPreviewHandoffTest {
         down(controller, 100L);
         controller.handoffToPress(100L);
         Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
-        controller.showImageForPressTakeover(
+        controller.showContentForPressTakeover(
                 CapturedContent.image(bitmap, "com.tencent.mm", new Rect(), true),
                 20f, 30f, DragShareSettings.defaults(), 100L);
         ShadowLooper.shadowMainLooper().idle();
@@ -145,7 +149,7 @@ public final class PressPreviewHandoffTest {
         controller.handoffToPress(100L);
         controller.acceptPointerEvent(MotionEvent.ACTION_DOWN, 20f, 30f, 1000L, "root");
         Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
-        controller.showImageForPressTakeover(
+        controller.showContentForPressTakeover(
                 CapturedContent.image(bitmap, "com.tencent.mm", new Rect(), true),
                 20f, 30f, DragShareSettings.defaults(), 100L);
         ShadowLooper.shadowMainLooper().idle();
@@ -154,6 +158,203 @@ public final class PressPreviewHandoffTest {
         assertEquals(1000L, field(controller, "rootDownTime").getLong(controller));
         assertEquals(-1L, field(controller, "pressHandoffTime").getLong(controller));
         controller.destroy();
+    }
+
+    @Test public void portalImageReplacesActiveRootImageWhenNoOcrIsPending() throws Exception {
+        DragShareController controller = controller();
+        down(controller, 100L);
+        Object rootSession = nativeSession(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(
+                RuntimeEnvironment.getApplication(), null, controller, DragShareSettings.defaults());
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        ((PressTriggerDetector) field(source, "detector").get(source)).start(20f, 30f, 100L, 500L);
+        Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        CapturedContent content = CapturedContent.image(
+                bitmap, "com.tencent.mm", new Rect(0, 0, 2, 2), true);
+
+        try {
+            assertTrue(source.acceptWeChatPortalContent(content));
+            assertTrue((boolean) field(rootSession, "cancelled").get(rootSession));
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!bitmap.isRecycled()) bitmap.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void recognizedWeChatOcrTextMovesAsTextAfterItsSegmentationWindow() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        registerShareProvider(context);
+        DragShareController controller = controller();
+        down(controller, 100L);
+        controller.handoffToPress(100L);
+        PressCaptureSource source = new PressCaptureSource(
+                context, null, controller, DragShareSettings.defaults());
+        Bitmap screenshot = Bitmap.createBitmap(3, 3, Bitmap.Config.ARGB_8888);
+        CapturedContent region = CapturedContent.pressOcrRegion(
+                screenshot, "com.tencent.mm", new Rect(10, 20, 300, 500));
+        Object pending = pendingWeChat(region, 4L, true, "识别出的当前文字");
+
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        field(source, "confirmedAt").setLong(source, 600L);
+        field(source, "generation").setLong(source, 4L);
+        field(source, "pendingWeChat").set(source, pending);
+
+        try {
+            invokeDragCandidate(source, 80f, 90f);
+            ShadowLooper.shadowMainLooper().idle();
+
+            Object session = field(controller, "session").get(controller);
+            CapturedContent payload = (CapturedContent) field(session, "payload").get(session);
+            assertEquals(CapturedContent.Kind.TEXT, payload.kind);
+            assertEquals("识别出的当前文字", payload.text);
+            assertEquals("com.tencent.mm", payload.sourcePackage);
+            assertTrue(screenshot.isRecycled());
+            assertEquals(null, field(source, "pendingWeChat").get(source));
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!screenshot.isRecycled()) screenshot.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void actualPortalImageStillReplacesRecognizedWeChatOcrText() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        registerShareProvider(context);
+        DragShareController controller = controller();
+        down(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(
+                context, null, controller, DragShareSettings.defaults());
+        Bitmap screenshot = Bitmap.createBitmap(3, 3, Bitmap.Config.ARGB_8888);
+        Bitmap portalImage = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888);
+        CapturedContent region = CapturedContent.pressOcrRegion(
+                screenshot, "com.tencent.mm", new Rect(10, 20, 300, 500));
+        Object pending = pendingWeChat(region, 5L, true, "识别出的当前文字");
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        field(source, "confirmedAt").setLong(source, 600L);
+        field(source, "generation").setLong(source, 5L);
+        field(source, "pendingWeChat").set(source, pending);
+        ((PressTriggerDetector) field(source, "detector").get(source))
+                .start(20f, 30f, 100L, 500L);
+        CapturedContent actualPortalImage = CapturedContent.image(
+                portalImage, "com.tencent.mm", new Rect(10, 20, 200, 220), true);
+
+        try {
+            assertTrue(source.acceptWeChatPortalContent(actualPortalImage));
+            ShadowLooper.shadowMainLooper().idle();
+
+            Object session = field(controller, "session").get(controller);
+            CapturedContent payload = (CapturedContent) field(session, "payload").get(session);
+            assertEquals(CapturedContent.Kind.IMAGE, payload.kind);
+            assertTrue(payload.bitmap == portalImage);
+            assertTrue(screenshot.isRecycled());
+            assertFalse(portalImage.isRecycled());
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!screenshot.isRecycled()) screenshot.recycle();
+            if (!portalImage.isRecycled()) portalImage.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void imageOnlySettingKeepsWeChatOcrRegionAsAnImageDrag() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        Bundle values = new Bundle();
+        values.putBoolean("text_sharing_enabled", false);
+        DragShareSettings imageOnly = DragShareSettings.fromBundle(values);
+        DragShareController controller = controller();
+        down(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(context, null, controller, imageOnly);
+        Bitmap screenshot = Bitmap.createBitmap(3, 3, Bitmap.Config.ARGB_8888);
+        CapturedContent region = CapturedContent.pressOcrRegion(
+                screenshot, "com.tencent.mm", new Rect(10, 20, 300, 500));
+        Object pending = pendingWeChat(region, 6L, false, "识别出的当前文字");
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        field(source, "confirmedAt").setLong(source, 600L);
+        field(source, "generation").setLong(source, 6L);
+        field(source, "pendingWeChat").set(source, pending);
+
+        try {
+            invokeDragCandidate(source, 80f, 90f);
+            ShadowLooper.shadowMainLooper().idle();
+
+            Object session = field(controller, "session").get(controller);
+            CapturedContent payload = (CapturedContent) field(session, "payload").get(session);
+            assertEquals(CapturedContent.Kind.IMAGE, payload.kind);
+            assertTrue(payload.bitmap == screenshot);
+            assertFalse(screenshot.isRecycled());
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!screenshot.isRecycled()) screenshot.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void completedOcrWithoutAcceptedTextWindowKeepsWeChatRegionAsImage() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        DragShareController controller = controller();
+        down(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(
+                context, null, controller, DragShareSettings.defaults());
+        Bitmap screenshot = Bitmap.createBitmap(3, 3, Bitmap.Config.ARGB_8888);
+        CapturedContent region = CapturedContent.pressOcrRegion(
+                screenshot, "com.tencent.mm", new Rect(10, 20, 300, 500));
+        Object pending = pendingWeChat(region, 7L, false, "识别出的当前文字");
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        field(source, "confirmedAt").setLong(source, 600L);
+        field(source, "generation").setLong(source, 7L);
+        field(source, "pendingWeChat").set(source, pending);
+
+        try {
+            invokeDragCandidate(source, 80f, 90f);
+            ShadowLooper.shadowMainLooper().idle();
+
+            Object session = field(controller, "session").get(controller);
+            CapturedContent payload = (CapturedContent) field(session, "payload").get(session);
+            assertEquals(CapturedContent.Kind.IMAGE, payload.kind);
+            assertTrue(payload.bitmap == screenshot);
+            assertFalse(screenshot.isRecycled());
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!screenshot.isRecycled()) screenshot.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void portalImageCallbackFromOldDownTimeIsRejectedByPressSource() throws Exception {
+        DragShareController controller = controller();
+        down(controller, 100L);
+        controller.handoffToPress(100L);
+        controller.acceptPointerEvent(MotionEvent.ACTION_DOWN, 20f, 30f, 1000L, "root");
+        ShadowLooper.shadowMainLooper().idle();
+        PressCaptureSource source = new PressCaptureSource(
+                RuntimeEnvironment.getApplication(), null, controller, DragShareSettings.defaults());
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        ((PressTriggerDetector) field(source, "detector").get(source)).start(20f, 30f, 100L, 500L);
+        Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        CapturedContent content = CapturedContent.image(
+                bitmap, "com.tencent.mm", new Rect(0, 0, 2, 2), true);
+
+        try {
+            assertFalse(source.acceptWeChatPortalContent(content));
+            assertTrue(controller.canContinuePress(1000L));
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!bitmap.isRecycled()) bitmap.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
     }
 
     private static DragShareController controller() {
@@ -174,6 +375,34 @@ public final class PressPreviewHandoffTest {
         field(controller, "session").set(controller, session);
         field(controller, "active").set(controller, true);
         return session;
+    }
+
+    private static Object pendingWeChat(CapturedContent content, long request, boolean textWindowAccepted,
+                                        String text) throws Exception {
+        Class<?> type = Class.forName(PressCaptureSource.class.getName() + "$PendingWeChat");
+        var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class);
+        constructor.setAccessible(true);
+        Object pending = constructor.newInstance(content, request);
+        field(pending, "ocrComplete").setBoolean(pending, true);
+        field(pending, "text").set(pending, text);
+        field(pending, "textDelivered").setBoolean(pending, textWindowAccepted);
+        field(pending, "textWindowAccepted").setBoolean(pending, textWindowAccepted);
+        return pending;
+    }
+
+    private static void invokeDragCandidate(PressCaptureSource source, float x, float y) throws Exception {
+        var method = PressCaptureSource.class.getDeclaredMethod(
+                "dragWeChatPressCandidate", float.class, float.class);
+        method.setAccessible(true);
+        method.invoke(source, x, y);
+    }
+
+    private static void registerShareProvider(Context context) {
+        ShareImageProvider provider = new ShareImageProvider();
+        ProviderInfo info = new ProviderInfo();
+        info.authority = ImageStagingClient.AUTHORITY;
+        provider.attachInfo(context, info);
+        ShadowContentResolver.registerProviderInternal(ImageStagingClient.AUTHORITY, provider);
     }
 
     private static Field field(Object object, String name) throws Exception {

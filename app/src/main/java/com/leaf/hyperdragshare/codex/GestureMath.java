@@ -5,6 +5,23 @@ final class GestureMath {
 
     private GestureMath() {}
 
+    static int initialMenuPosition(int configuredPosition, float touchX, int screenWidth) {
+        if (configuredPosition >= DragShareSettings.SIMPLE_MENU_POSITION_TOP
+                && configuredPosition <= DragShareSettings.SIMPLE_MENU_POSITION_RIGHT) {
+            return configuredPosition;
+        }
+        if (configuredPosition == DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND) {
+            return touchX < Math.max(1, screenWidth) / 2f
+                    ? DragShareSettings.SIMPLE_MENU_POSITION_LEFT
+                    : DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
+        }
+        return DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM;
+    }
+
+    static boolean followsDragEdge(int configuredPosition) {
+        return configuredPosition == DragShareSettings.SIMPLE_MENU_POSITION_DRAG_EDGE;
+    }
+
     static boolean shouldShowMenu(float pointerY, int triggerTop) {
         return pointerY >= triggerTop;
     }
@@ -158,6 +175,20 @@ final class GestureMath {
             if (distances[i] < distances[edge]) edge = i;
         }
         return distances[edge] <= trigger ? edge : -1;
+    }
+
+    /**
+     * Preserve the central bottom input drop area except where it overlaps an
+     * active bottom menu's actual edge-trigger band.
+     */
+    static boolean shouldDeferToBottomInputDropZone(float x, float y, int width,
+            int height, int bottomInset, int zoneHeight, int bottomTriggerHeight, int menuPosition) {
+        boolean inInputDropArea = y >= height - bottomInset - zoneHeight
+                && x >= width * 0.15f
+                && x <= width * 0.85f;
+        boolean inBottomMenuTrigger = menuPosition == DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM
+                && y >= height - bottomInset - bottomTriggerHeight;
+        return inInputDropArea && !inBottomMenuTrigger;
     }
 
     static float clamp01(float value) {

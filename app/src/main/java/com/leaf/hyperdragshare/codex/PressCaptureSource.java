@@ -178,7 +178,7 @@ final class PressCaptureSource {
                 && Math.hypot(x - downX, y - downY) > WECHAT_DRAG_DISTANCE_DP
                         * context.getResources().getDisplayMetrics().density) {
             weChatImageDragIntent = true;
-            if (pendingWeChat != null) dragWeChatImage(x, y);
+            if (pendingWeChat != null) dragWeChatPressCandidate(x, y);
         }
         if (action == MotionEvent.ACTION_UP) finishWeChatPress();
         if (action == MotionEvent.ACTION_UP && hadFired) {
@@ -196,18 +196,23 @@ final class PressCaptureSource {
 
     /** Prefer the host's actual text/image result over the same press's approximate OCR region. */
     boolean acceptWeChatPortalContent(CapturedContent content) {
-        if (Looper.myLooper() != Looper.getMainLooper() || stopped || !pointerDown
-                || !detector.isActive() || !"com.tencent.mm".equals(content.sourcePackage)
-                || !settings.isSharingEnabled(content.isImage())
-                || !controller.canContinuePress(downTime)) return false;
+        boolean ownsCurrentPress = Looper.myLooper() == Looper.getMainLooper()
+                && !stopped && pointerDown && detector.isActive()
+                && controller.canContinuePress(downTime);
+        boolean isWeChatSource = content != null
+                && "com.tencent.mm".equals(content.sourcePackage);
+        if (!ownsCurrentPress || !isWeChatSource
+                || !settings.isSharingEnabled(content.isImage())) return false;
         PendingWeChat pending = pendingWeChat;
         if (!content.isImage() && pending != null && pending.textWindowAccepted) {
             // OCR has already opened this press's text window; do not replace it with
             // a second text result, and keep its screenshot available for an image drag.
             return true;
         }
-        boolean imageTakeover = content.isImage() && pending != null;
-        if (imageTakeover && pending.textWindowAccepted && !dismissWeChatTextWindow()) {
+        boolean imageTakeover = content.isImage() && isWeChatSource && ownsCurrentPress
+                && (pending != null || controller.isActive());
+        if (imageTakeover && pending != null && pending.textWindowAccepted
+                && !dismissWeChatTextWindow()) {
             recycle(content);
             showFailure("无法收起本次分词窗口，图片拖拽未接管");
             return true;
@@ -230,7 +235,7 @@ final class PressCaptureSource {
         if (imageTakeover) {
             cached = null;
             displayQueued = false;
-            controller.showImageForPressTakeover(content, latestX, latestY, settings, downTime);
+            controller.showContentForPressTakeover(content, latestX, latestY, settings, downTime);
         } else if (detector.isFired()) display();
         else schedule();
         return true;
@@ -428,7 +433,7 @@ final class PressCaptureSource {
             CapturedContent image = CapturedContent.image(content.bitmap,
                     content.sourcePackage, content.sourceBounds, true);
             DragShareLog.i(TAG, "WeChat press moved to image before OCR started");
-            controller.showImageForPressTakeover(image, latestX, latestY, settings, downTime);
+            controller.showContentForPressTakeover(image, latestX, latestY, settings, downTime);
             return;
         }
         PendingWeChat pending = new PendingWeChat(content, request);
@@ -452,8 +457,29 @@ final class PressCaptureSource {
         });
     }
 
-    private void dragWeChatImage(float x, float y) {
+    private void dragWeChatPressCandidate(float x, float y) {
         PendingWeChat pending = pendingWeChat;
+        if (pending.ocrComplete && pending.textWindowAccepted
+                && settings.isSharingEnabled(false)
+                && pending.text != null && !pending.text.isBlank()) {
+            if (pending.textWindowAccepted && !dismissWeChatTextWindow()) {
+                showFailure("无法收起本次分词窗口，文字拖拽未接管");
+                return;
+            }
+            CapturedContent text = CapturedContent.text(
+                    pending.text, pending.content.sourcePackage, pending.content.sourceBounds);
+            pendingWeChat = null;
+            generation++;
+            weChatImageDragIntent = false;
+            blocker.stopAsync();
+            recycle(pending.content);
+            DragShareLog.i(TAG, "WeChat OCR text moved to drag menu elapsedFromConfirmMs="
+                    + (SystemClock.uptimeMillis() - confirmedAt));
+            // The takeover API accepts either payload kind; it restores this Root press
+            // after the BigBang text window handed it off.
+            controller.showContentForPressTakeover(text, x, y, settings, downTime);
+            return;
+        }
         if (pending.textWindowAccepted && !dismissWeChatTextWindow()) {
             showFailure("无法收起本次分词窗口，图片拖拽未接管");
             return;
@@ -480,7 +506,7 @@ final class PressCaptureSource {
                 source.sourceBounds, true);
         DragShareLog.i(TAG, "WeChat press moved to image drag elapsedFromConfirmMs="
                 + (SystemClock.uptimeMillis() - confirmedAt));
-        controller.showImageForPressTakeover(image, x, y, settings, downTime);
+        controller.showContentForPressTakeover(image, x, y, settings, downTime);
     }
 
     private void deliverWeChatText() {

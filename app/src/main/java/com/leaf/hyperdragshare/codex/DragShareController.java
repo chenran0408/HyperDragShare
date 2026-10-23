@@ -195,6 +195,7 @@ final class DragShareController {
     private int menuLeft;
     private int menuWidth;
     private int simpleMenuPosition = DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM;
+    private int configuredSimpleMenuPosition = DragShareSettings.DEFAULT_SIMPLE_MENU_POSITION;
 
 
 
@@ -319,7 +320,7 @@ final class DragShareController {
     }
 
     /** Reclaim a still-active Root press after its OCR text handoff was shown. */
-    void showImageForPressTakeover(
+    void showContentForPressTakeover(
             CapturedContent content,
             float initialX,
             float initialY,
@@ -331,7 +332,7 @@ final class DragShareController {
                     || (pressHandoffTime >= 0L && pressHandoffTime != downTime)) {
                 if (content.isImage() && content.bitmapOwnedByDragShare
                         && !content.bitmap.isRecycled()) content.bitmap.recycle();
-                log("press image takeover rejected because Root press changed");
+                log("press content takeover rejected because Root press changed");
                 return;
             }
             pressHandoffTime = -1L;
@@ -543,8 +544,7 @@ final class DragShareController {
         lastHandledAction = -1;
         settings = loadedSettings == null ? DragShareSettings.defaults() : loadedSettings;
 
-
-
+        configuredSimpleMenuPosition = settings.simpleMenuPosition;
 
         palette = OverlayColors.from(settings.isDarkTheme(context));
         stopEdgeScroll();
@@ -580,6 +580,8 @@ final class DragShareController {
                     : Math.max(topInset + dp(80), screenHeight * 0.32f);
             lastX = initialX;
             lastY = initialY;
+            simpleMenuPosition = GestureMath.initialMenuPosition(
+                    configuredSimpleMenuPosition, initialX, screenWidth);
             updateMenuGeometry();
             updatePreviewPosition(initialX, initialY);
             updatePortalPullEffect(initialX, initialY);
@@ -1251,14 +1253,16 @@ final class DragShareController {
             lastY = y;
             updatePreviewPosition(x, y);
             updatePortalPullEffect(x, y);
-            if (isBottomInputDropZone(x, y)) {
+            updateDragEdgeMenuPosition(x, y);
+            if (GestureMath.shouldDeferToBottomInputDropZone(
+                    x, y, screenWidth, screenHeight, bottomInset, dp(110),
+                    Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP)), simpleMenuPosition)) {
                 if (menuShown) {
                     if (isCircleStyle()) hideCircleMenu();
                     else hideLinearMenu();
                 }
                 return;
             }
-            updateDragEdgeMenuPosition(x, y);
             if (isCircleStyle()) {
                 updateCirclePointer(x, y);
                 if (menuShown) {
@@ -1418,14 +1422,6 @@ final class DragShareController {
         return distanceFromMenuEdge(x, y) <= trigger;
     }
 
-    private boolean isBottomInputDropZone(float x, float y) {
-        // Keep the centre of the bottom input bar a direct drop target for every
-        // menu style. Bottom corners still open the four-edge menu.
-        return y >= screenHeight - bottomInset - dp(110)
-                && x >= screenWidth * 0.15f
-                && x <= screenWidth * 0.85f;
-    }
-
     private boolean isPointerInsideSimpleMenu(float x, float y) {
         return menuShown
                 && x >= menuLeft
@@ -1478,6 +1474,9 @@ final class DragShareController {
 
 
     private void updateDragEdgeMenuPosition(float x, float y) {
+        if (!GestureMath.followsDragEdge(configuredSimpleMenuPosition)) {
+            return;
+        }
         int edge = GestureMath.nearestMenuEdge(x, y, screenWidth, topInset,
                 screenHeight - bottomInset, Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP)),
                 simpleMenuPosition);

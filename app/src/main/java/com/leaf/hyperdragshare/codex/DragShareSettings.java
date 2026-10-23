@@ -94,9 +94,8 @@ public final class DragShareSettings {
     public static final boolean DEFAULT_CLOSE_MENU_WHEN_POINTER_LEAVES = true;
     public static final boolean DEFAULT_ACCESSIBILITY_LANDSCAPE_RECOGNITION_ENABLED = false;
     public static final int MIN_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS = 250;
-    /** Uses the platform long-press delay until the user moves the setting slider. */
-    public static final int DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS = 0;
-    public static final int MAX_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS = 1200;
+    public static final int DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS = 600;
+    public static final int MAX_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS = 3000;
     public static final int MIN_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT = 50;
     public static final int DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT = 100;
     public static final int MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT = 200;
@@ -728,6 +727,15 @@ public final class DragShareSettings {
         SharedPreferences preferences = context.getSharedPreferences(
                 PREFS_NAME,
                 Context.MODE_PRIVATE);
+        int longPressTimeoutMillis = preferences.getInt(
+                KEY_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
+                DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS);
+        if (longPressTimeoutMillis == 0) {
+            longPressTimeoutMillis = DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS;
+            preferences.edit()
+                    .putInt(KEY_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS, longPressTimeoutMillis)
+                    .apply();
+        }
         Set<String> hiddenTargetKeys = migrateLegacyCopyTargetVisibility(
                 preferences.getStringSet(KEY_HIDDEN_TARGETS, Collections.emptySet()),
                 preferences.getBoolean(KEY_TEXT_COPY_ENABLED, true),
@@ -777,9 +785,7 @@ public final class DragShareSettings {
                 preferences.getStringSet(
                         KEY_ACCESSIBILITY_BLACKLISTED_PACKAGES,
                         Collections.emptySet()),
-                preferences.getInt(
-                        KEY_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
-                        DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS),
+                longPressTimeoutMillis,
                 preferences.getInt(
                         KEY_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT,
                         DEFAULT_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT),
@@ -1023,20 +1029,8 @@ public final class DragShareSettings {
                 || orientation != Configuration.ORIENTATION_LANDSCAPE;
     }
 
-    public int resolveAccessibilityLongPressTimeoutMillis(int systemTimeoutMillis) {
-        if (accessibilityLongPressTimeoutMillis
-                != DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS) {
-            return accessibilityLongPressTimeoutMillis;
-        }
-        return clamp(
-                systemTimeoutMillis,
-                MIN_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
-                MAX_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS);
-    }
-
     public int resolvePressConfirmationTimeoutMillis() {
-        return accessibilityLongPressTimeoutMillis == DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS
-                ? 300 : accessibilityLongPressTimeoutMillis;
+        return accessibilityLongPressTimeoutMillis;
     }
 
     public float accessibilityTouchSlopMultiplier() {
@@ -1134,7 +1128,9 @@ public final class DragShareSettings {
     }
 
     private static int normalizeSimpleMenuPosition(int position) {
-        return SIMPLE_MENU_POSITION_DRAG_EDGE;
+        return position >= SIMPLE_MENU_POSITION_TOP && position <= SIMPLE_MENU_POSITION_DRAG_EDGE
+                ? position
+                : DEFAULT_SIMPLE_MENU_POSITION;
     }
 
     private static int normalizeContentCaptureMode(int mode) {
@@ -1144,9 +1140,8 @@ public final class DragShareSettings {
     }
 
     private static int normalizeAccessibilityLongPressTimeout(int timeoutMillis) {
-        if (timeoutMillis == DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS) {
-            return timeoutMillis;
-        }
+        // Older builds persisted 0 as a "follow system" sentinel.
+        if (timeoutMillis == 0) return DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS;
         return clamp(
                 timeoutMillis,
                 MIN_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,

@@ -6,6 +6,7 @@ import android.graphics.PointF;
 import android.graphics.Rect;
 import android.os.Bundle;
 
+import java.net.URI;
 import java.util.Map;
 
 import de.robv.android.xposed.XposedHelpers;
@@ -47,17 +48,25 @@ final class PortalContentCaptureSource {
                 String value = (String) XposedHelpers.getStaticObjectField(serviceClass, "sContent");
                 return CapturedContent.text(value, sourcePackage, sourceBounds);
             }
+            Object result = XposedHelpers.getStaticObjectField(serviceClass, "mCatcherResult");
+            Bundle imageMode = imagePickMode(result);
+            if (!hasCurrentImagePayload(imageMode)) {
+                DragShareLog.i("DragShare/PortalCapture",
+                        "portal image ignored source=" + sourcePackage + " reason=missing_image_payload");
+                return null;
+            }
             Bitmap value = (Bitmap) XposedHelpers.callStaticMethod(serviceClass, "getBitmap");
-            if (value == null || value.isRecycled()) {
+            if (!matchesCurrentImageBitmap(imageMode, value)) {
+                DragShareLog.i("DragShare/PortalCapture",
+                        "portal image ignored source=" + sourcePackage + " reason=stale_bitmap");
                 return null;
             }
             // HyperOS 4's cancelTask() recycles the service-owned sBitmap. The
             // module stages images asynchronously, so keep an independent snapshot.
             Bitmap snapshot = value.copy(Bitmap.Config.ARGB_8888, false);
-            Object result = XposedHelpers.getStaticObjectField(serviceClass, "mCatcherResult");
             DragShareLog.i("DragShare/PortalCapture",
                     "portal image accepted source=" + sourcePackage
-                            + " origin=" + imageOrigin(result)
+                            + " origin=" + imageOrigin(imageMode)
                             + " bounds=" + sourceBounds
                             + " bitmap=" + snapshot.getWidth() + "x" + snapshot.getHeight());
             return CapturedContent.image(snapshot, sourcePackage, sourceBounds, true);
@@ -71,30 +80,58 @@ final class PortalContentCaptureSource {
         }
     }
 
-    private static String imageOrigin(Object result) {
-        if (result == null) {
-            return "unknown";
-        }
+    private static Bundle imagePickMode(Object result) {
+        if (result == null) return null;
         try {
             Object params = XposedHelpers.callMethod(result, "getParams", "image_pick");
-            if (!(params instanceof Map)) {
-                return "unknown";
-            }
+            if (!(params instanceof Map)) return null;
             Object mode = ((Map<?, ?>) params).get("image_pick_mode");
-            if (!(mode instanceof Bundle)) {
-                return "other";
-            }
-            Bundle bundle = (Bundle) mode;
-            if (bundle.containsKey("imgUrl")) {
-                return "image_url";
-            }
-            if (bundle.containsKey("viewBitmap")) {
-                return "view_bitmap";
-            }
-            return "other";
+            return mode instanceof Bundle ? (Bundle) mode : null;
         } catch (RuntimeException | LinkageError error) {
-            return "unknown";
+            return null;
         }
+    }
+
+    static boolean hasCurrentImagePayload(Bundle imageMode) {
+        if (imageMode == null) return false;
+        if (imageMode.containsKey("imgUrl")) {
+            Object url = imageMode.get("imgUrl");
+            return url instanceof String && isLoadableImageUrl((String) url);
+        }
+        if (imageMode.containsKey("viewBitmap")) {
+            Object candidate = imageMode.get("viewBitmap");
+            return candidate instanceof Bitmap && !((Bitmap) candidate).isRecycled();
+        }
+        return false;
+    }
+
+    static boolean matchesCurrentImageBitmap(Bundle imageMode, Bitmap value) {
+        if (!hasCurrentImagePayload(imageMode) || value == null || value.isRecycled()) return false;
+        if (imageMode.containsKey("imgUrl")) return true;
+        if (imageMode.containsKey("viewBitmap")) {
+            return value == imageMode.get("viewBitmap");
+        }
+        return true;
+    }
+
+    private static boolean isLoadableImageUrl(String value) {
+        if (value == null || value.isEmpty() || !value.equals(value.trim())) return false;
+        String normalized = value.startsWith("//") ? "http:" + value : value;
+        try {
+            URI uri = new URI(normalized);
+            String scheme = uri.getScheme();
+            return ("http".equals(scheme) || "https".equals(scheme))
+                    && uri.getHost() != null && !uri.getHost().isEmpty();
+        } catch (java.net.URISyntaxException error) {
+            return false;
+        }
+    }
+
+    private static String imageOrigin(Bundle imageMode) {
+        if (imageMode == null) return "unknown";
+        if (imageMode.containsKey("imgUrl")) return "image_url";
+        if (imageMode.containsKey("viewBitmap")) return "view_bitmap";
+        return "other";
     }
 
     static PointF initialPoint(Object taplusService, float fallbackX, float fallbackY) {

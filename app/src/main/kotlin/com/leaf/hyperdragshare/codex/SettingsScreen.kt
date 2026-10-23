@@ -815,6 +815,36 @@ private fun portalSettingEntries(
         )
     }
 
+    row("drag.position", "菜单出现位置", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "靠近手按压起点所在屏幕侧；跟随拖拽边会随手指切换",
+        keywords = "菜单 顶部 底部 左侧 右侧 靠近手 跟随拖拽边 位置",
+        enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
+    ) { title, summary, enabled ->
+        val positions = listOf(
+            DragShareSettings.SIMPLE_MENU_POSITION_TOP,
+            DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM,
+            DragShareSettings.SIMPLE_MENU_POSITION_LEFT,
+            DragShareSettings.SIMPLE_MENU_POSITION_RIGHT,
+            DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND,
+            DragShareSettings.SIMPLE_MENU_POSITION_DRAG_EDGE,
+        )
+        OverlayDropdownPreference(
+            title = title,
+            summary = summary,
+            items = listOf("顶部", "底部", "左侧", "右侧", "靠近手", "跟随拖拽边"),
+            selectedIndex = settings.simpleMenuPosition.coerceIn(0, positions.lastIndex),
+            onSelectedIndexChange = { selected ->
+                persist(
+                    copySettings(
+                        settings,
+                        simpleMenuPosition = positions[selected.coerceIn(0, positions.lastIndex)],
+                    ),
+                )
+            },
+            enabled = enabled,
+        )
+    }
+
     row("drag.simple.opacity", "背景不透明度", SettingModule.PORTAL, "拖拽菜单外观",
         summary = "",
         keywords = "简洁 背景 透明",
