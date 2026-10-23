@@ -136,8 +136,11 @@ final class GestureMath {
         return Math.max(1f, 1.23f - distanceInItems * 0.13f);
     }
 
-    static boolean nearHandMenuOnRight(float tilt) {
-        return tilt > 0f;
+    static int nearHandMenuPosition(float originX, float pointerX, float slop, int current) {
+        float delta = pointerX - originX;
+        if (Math.abs(delta) <= Math.max(0f, slop)) return current;
+        return delta < 0f ? DragShareSettings.SIMPLE_MENU_POSITION_LEFT
+                : DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
     }
 
     static float[] mapRawPoint(

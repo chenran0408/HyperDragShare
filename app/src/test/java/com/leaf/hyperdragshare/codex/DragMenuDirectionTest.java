@@ -14,6 +14,31 @@ import static org.junit.Assert.assertTrue;
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = 35)
 public final class DragMenuDirectionTest {
+    @Test public void nearHandMovesToDraggedSideBeforeTargetsFinishLoading() throws Exception {
+        DragShareController controller = new DragShareController(RuntimeEnvironment.getApplication());
+        var update = DragShareController.class.getDeclaredMethod("updateGestureMenuPosition", float.class, float.class);
+        update.setAccessible(true);
+        field("configuredSimpleMenuPosition").setInt(controller, DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND);
+        for (int style = 0; style < 4; style++) {
+            Bundle values = new Bundle();
+            values.putInt("ui_style", style);
+            field("settings").set(controller, DragShareSettings.fromBundle(values));
+            field("menuDragOriginX").setFloat(controller, 100f);
+            field("simpleMenuPosition").setInt(controller, DragShareSettings.SIMPLE_MENU_POSITION_LEFT);
+            update.invoke(controller, 300f, 400f);
+            assertEquals("right drag while still in the left screen half, style=" + style,
+                    DragShareSettings.SIMPLE_MENU_POSITION_RIGHT, field("simpleMenuPosition").getInt(controller));
+            update.invoke(controller, 98f, 400f);
+            assertEquals("jitter near origin retains the selected side",
+                    DragShareSettings.SIMPLE_MENU_POSITION_RIGHT, field("simpleMenuPosition").getInt(controller));
+            field("menuDragOriginX").setFloat(controller, 900f);
+            update.invoke(controller, 700f, 400f);
+            assertEquals("left drag while still in the right screen half",
+                    DragShareSettings.SIMPLE_MENU_POSITION_LEFT, field("simpleMenuPosition").getInt(controller));
+        }
+        controller.destroy();
+    }
+
     @Test public void positionPolicyUsesFixedSidesNearHandAndFollowEdgeAcrossStyles() {
         for (int style = 0; style < 4; style++) {
             Bundle values = new Bundle();

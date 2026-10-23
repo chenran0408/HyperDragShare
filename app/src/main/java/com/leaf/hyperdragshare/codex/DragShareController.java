@@ -170,6 +170,7 @@ final class DragShareController {
     private int gestureTraceMoves;
 
     private float lastX;
+    private float menuDragOriginX;
     private float lastY;
     private long lastHandledEventTime = Long.MIN_VALUE;
     private int lastHandledAction = -1;
@@ -579,6 +580,7 @@ final class DragShareController {
                     ? requestedInitialY
                     : Math.max(topInset + dp(80), screenHeight * 0.32f);
             lastX = initialX;
+            menuDragOriginX = initialX;
             lastY = initialY;
             simpleMenuPosition = GestureMath.initialMenuPosition(
                     configuredSimpleMenuPosition, initialX, screenWidth);
@@ -1253,7 +1255,7 @@ final class DragShareController {
             lastY = y;
             updatePreviewPosition(x, y);
             updatePortalPullEffect(x, y);
-            updateDragEdgeMenuPosition(x, y);
+            updateGestureMenuPosition(x, y);
             if (GestureMath.shouldDeferToBottomInputDropZone(
                     x, y, screenWidth, screenHeight, bottomInset, dp(110),
                     Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP)), simpleMenuPosition)) {
@@ -1473,13 +1475,17 @@ final class DragShareController {
 
 
 
-    private void updateDragEdgeMenuPosition(float x, float y) {
-        if (!GestureMath.followsDragEdge(configuredSimpleMenuPosition)) {
+    private void updateGestureMenuPosition(float x, float y) {
+        final int edge;
+        if (configuredSimpleMenuPosition == DragShareSettings.SIMPLE_MENU_POSITION_NEAR_HAND) {
+            edge = GestureMath.nearHandMenuPosition(menuDragOriginX, x, dp(12), simpleMenuPosition);
+        } else if (GestureMath.followsDragEdge(configuredSimpleMenuPosition)) {
+            edge = GestureMath.nearestMenuEdge(x, y, screenWidth, topInset,
+                    screenHeight - bottomInset, Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP)),
+                    simpleMenuPosition);
+        } else {
             return;
         }
-        int edge = GestureMath.nearestMenuEdge(x, y, screenWidth, topInset,
-                screenHeight - bottomInset, Math.max(dp(settings.edgeTriggerDp), dp(MENU_TRIGGER_DP)),
-                simpleMenuPosition);
         if (edge < 0 || edge == simpleMenuPosition) return;
         if (isCircleStyle()) hideCircleMenu();
         repositionMenu(edge);
@@ -1487,6 +1493,11 @@ final class DragShareController {
 
     private void repositionMenu(int nextPosition) {
         if (nextPosition == simpleMenuPosition) {
+            return;
+        }
+        if (!targetsLoaded) {
+            simpleMenuPosition = nextPosition;
+            updateMenuGeometry();
             return;
         }
         if (isCircleStyle()) {

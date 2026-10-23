@@ -117,9 +117,13 @@ public final class GestureMathTest {
     }
 
     @Test
-    public void nearHandMenuUsesTheLowerSideOfTheDevice() {
-        assertTrue(GestureMath.nearHandMenuOnRight(0.2f));
-        assertFalse(GestureMath.nearHandMenuOnRight(-0.2f));
+    public void nearHandMenuUsesDragDirectionAndIgnoresSmallMovement() {
+        int left = DragShareSettings.SIMPLE_MENU_POSITION_LEFT;
+        int right = DragShareSettings.SIMPLE_MENU_POSITION_RIGHT;
+        assertEquals(right, GestureMath.nearHandMenuPosition(100f, 140f, 12f, left));
+        assertEquals(left, GestureMath.nearHandMenuPosition(900f, 860f, 12f, right));
+        assertEquals(right, GestureMath.nearHandMenuPosition(500f, 494f, 12f, right));
+        assertEquals(left, GestureMath.nearHandMenuPosition(500f, 512f, 12f, left));
     }
 
     @Test
