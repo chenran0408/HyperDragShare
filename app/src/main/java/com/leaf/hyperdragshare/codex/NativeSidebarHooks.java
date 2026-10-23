@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.ContentProviderClient;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Rect;
@@ -215,6 +216,7 @@ final class NativeSidebarHooks {
         ISidebarContent content;
         IBinder.DeathRecipient contentDeath;
         SurfaceView surface;
+        ISidebarDragCallback dragCallback;
         final ISidebarHost host = new ISidebarHost.Stub() {
             @Override public void requestClose() {
                 turbo.post(() -> {
@@ -223,6 +225,12 @@ final class NativeSidebarHooks {
                         catch (RuntimeException error) { fail(error); }
                     }
                 });
+            }
+
+            @Override public void startDrag(ClipData clip, int flags, ISidebarDragCallback callback) {
+                enforceModuleCaller();
+                if (callback == null) return;
+                turbo.post(() -> startEmbeddedDrag(clip, flags, callback));
             }
         };
 
@@ -270,7 +278,7 @@ final class NativeSidebarHooks {
         }
 
         void select(Section section) {
-            if (disposed || switching || XposedHelpers.getBooleanField(turbo, "s")) return;
+            if (disposed || switching || dragCallback != null || XposedHelpers.getBooleanField(turbo, "s")) return;
             if (section == selected) section = scene == 4 ? Section.APPS : Section.TOOLS;
             try {
                 releaseContent(); restoreVisibility();
@@ -403,6 +411,8 @@ final class NativeSidebarHooks {
 
         void releaseContent() {
             ++generation;
+            cancelEmbeddedDrag();
+            finishEmbeddedDrag(false);
             ISidebarContent lease = content; content = null;
             if (lease != null) {
                 if (contentDeath != null) lease.asBinder().unlinkToDeath(contentDeath, 0);
@@ -414,6 +424,75 @@ final class NativeSidebarHooks {
             contentDeath = null; surface = null;
             pane.removeAllViews();
             if (pane.getParent() == turbo) turbo.removeView(pane);
+        }
+
+        void cancelEmbeddedDrag() {
+            SurfaceView source = surface;
+            if (dragCallback == null || source == null) return;
+            try { source.cancelDragAndDrop(); }
+            catch (RuntimeException error) {
+                DragShareLog.w(TAG, "Unable to cancel native sidebar drag during release", error);
+            }
+        }
+
+        void startEmbeddedDrag(ClipData clip, int flags, ISidebarDragCallback callback) {
+            SurfaceView source = surface;
+            int allowedFlags = View.DRAG_FLAG_GLOBAL | View.DRAG_FLAG_GLOBAL_URI_READ;
+            if (disposed || selected != Section.STASH || content == null || dragCallback != null
+                    || source == null || !source.isAttachedToWindow() || clip == null || clip.getItemCount() == 0
+                    || (flags & View.DRAG_FLAG_GLOBAL) == 0 || (flags & ~allowedFlags) != 0) {
+                notifyDragStarted(callback, false);
+                return;
+            }
+            dragCallback = callback;
+            final ISidebarDragCallback session = callback;
+            source.setOnDragListener((view, event) -> {
+                if (event.getAction() == android.view.DragEvent.ACTION_DRAG_ENDED) {
+                    if (dragCallback == session) finishEmbeddedDrag(event.getResult());
+                    return true;
+                }
+                return event.getAction() != android.view.DragEvent.ACTION_DROP;
+            });
+            boolean started;
+            try {
+                started = source.startDragAndDrop(clip, new View.DragShadowBuilder(source), null, flags);
+            } catch (RuntimeException error) {
+                DragShareLog.w(TAG, "Native sidebar could not start stash drag", error);
+                started = false;
+            }
+            notifyDragStarted(session, started);
+            if (!started) {
+                source.setOnDragListener(null);
+                dragCallback = null;
+            }
+        }
+
+        void notifyDragStarted(ISidebarDragCallback callback, boolean started) {
+            try { callback.onStarted(started); }
+            catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before start result", error); }
+        }
+
+        void enforceModuleCaller() {
+            final int callingUid = Binder.getCallingUid();
+            final int moduleUid;
+            try {
+                moduleUid = context.getPackageManager()
+                        .getApplicationInfo(BuildConfig.APPLICATION_ID, 0).uid;
+            } catch (PackageManager.NameNotFoundException error) {
+                throw new SecurityException("Sidebar drag module is not installed", error);
+            }
+            if (callingUid != moduleUid)
+                throw new SecurityException("Sidebar drag request came from an untrusted UID");
+        }
+
+        void finishEmbeddedDrag(boolean accepted) {
+            ISidebarDragCallback callback = dragCallback;
+            dragCallback = null;
+            SurfaceView source = surface;
+            if (source != null) source.setOnDragListener(null);
+            if (callback == null) return;
+            try { callback.onEnded(accepted); }
+            catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before end result", error); }
         }
 
         void message(String message) {

@@ -59,7 +59,6 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,33 +105,13 @@ object StashOverlayPanel {
         }
     }
 
-    @JvmStatic fun showCollapsed(context: Context) {
-        val app = context.applicationContext
-        main.post {
-            if (app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return@post
-            active?.takeIf { it.embedded != null }?.let { it.collapse(); return@post }
-            if (!Settings.canDrawOverlays(app)) {
-                Toast.makeText(app, "悬浮窗权限已关闭，无法恢复中转站侧条", Toast.LENGTH_LONG).show()
-                return@post
-            }
-            val shelf = active ?: Shelf(app).also { active = it }
-            shelf.collapse()
-            shelf.refresh()
-        }
-    }
-
     /** Saving should leave the source application usable, without opening a tray over it. */
     @JvmStatic fun contentAdded(context: Context) {
         val app = context.applicationContext
         main.post {
             if (app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return@post
-            active?.takeIf { it.embedded != null }?.let { it.refresh(); return@post }
-            if (!Settings.canDrawOverlays(app)) {
-                Toast.makeText(app, "内容已保存；开启模块悬浮窗权限后可使用中转站侧条", Toast.LENGTH_LONG).show()
-                return@post
-            }
-            val shelf = active ?: Shelf(app).also { active = it; it.collapse() }
-            shelf.refresh()
+            // The content is already durable in StashStore. Refresh only an open shelf.
+            active?.refresh()
         }
     }
 
@@ -194,8 +173,8 @@ object StashOverlayPanel {
         private var loading by mutableStateOf(false)
         private var reloadRequested = false
         private var message by mutableStateOf<String?>(null)
-        private var expanded by mutableStateOf(true)
         private var draggingContent by mutableStateOf(false)
+        private var embeddedDragRequestPending = false
         private var dragContentWidthDp = 0f
         private var dragContentHeightDp = 0f
         private var selectionMode by mutableStateOf(false)
@@ -220,6 +199,7 @@ object StashOverlayPanel {
             onDismissed = {
                 app.unregisterReceiver(screenOffReceiver)
                 displayManager.unregisterDisplayListener(displayListener)
+                reloadRequested = false
                 scope.cancel()
                 if (active === this) active = null
             },
@@ -255,24 +235,47 @@ object StashOverlayPanel {
 
         fun expand() {
             if (overlay.isDragHandoffActive) return
-            expanded = true
             resize()
             if (overlay.show()) reload()
         }
 
         fun collapse() {
             if (overlay.isDragHandoffActive) return
-            confirmDelete = false
             if (embedded != null) {
                 embedded.requestClose()
                 return
             }
-            expanded = false
-            resize()
+            overlay.dismiss()
         }
 
         private fun startContentDrag(source: View, clip: ClipData,
             shadow: View.DragShadowBuilder, flags: Int): Boolean {
+            if (embedded != null) {
+                if (embeddedDragRequestPending) return false
+                embeddedDragRequestPending = true
+                overlay.observeDragHandoff({ active === this@Shelf },
+                    onDropped = ::collapse,
+                    onFinished = { draggingContent = false })
+                embedded.startDrag(clip, flags,
+                    onStarted = { started ->
+                        if (started) {
+                            val density = context.resources.displayMetrics.density
+                            dragContentWidthDp = overlay.composeView.width / density
+                            dragContentHeightDp = overlay.composeView.height / density
+                            draggingContent = true
+                        } else {
+                            embeddedDragRequestPending = false
+                            overlay.cancelTextDragObservation()
+                            Toast.makeText(context, "系统未能开始拖拽，请重试", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onEnded = { accepted ->
+                        embeddedDragRequestPending = false
+                        overlay.cancelTextDragObservation()
+                        if (accepted) collapse()
+                    })
+                return true
+            }
             overlay.observeDragHandoff({ active === this@Shelf },
                 onDropped = ::collapse,
                 onStarted = {
@@ -317,7 +320,7 @@ object StashOverlayPanel {
                 WindowInsets.Type.mandatorySystemGestures())
             val bottomInset = maxOf(insets.bottom, navigationGestures.bottom, imeBottomInset)
             val density = context.resources.displayMetrics.density
-            val showPanel = expanded && !draggingContent
+            val showPanel = !draggingContent
             overlay.window.attributes = overlay.window.attributes.apply {
                 // Both dimensions are at most 40% of the display: area <= 16%, below 1/6.
                 width = if (showPanel) minOf((200 * density).toInt(), (metrics.width() * .4f).toInt())
@@ -344,7 +347,7 @@ object StashOverlayPanel {
             resize()
         }
 
-        private fun handleMove(event: MotionEvent, expandOnTap: Boolean): Boolean {
+        private fun handleMove(event: MotionEvent): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     dragStartRawX = event.rawX
@@ -366,7 +369,7 @@ object StashOverlayPanel {
                     }
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (moving) finishMove() else if (expandOnTap) expand()
+                    if (moving) finishMove()
                     moving = false
                 }
                 MotionEvent.ACTION_CANCEL -> {
@@ -384,7 +387,7 @@ object StashOverlayPanel {
             Column(
                 Modifier.fillMaxWidth().height(48.dp)
                     .then(if (embedded == null) Modifier.systemGestureExclusion()
-                        .pointerInteropFilter { handleMove(it, false) } else Modifier)
+                    .pointerInteropFilter { handleMove(it) } else Modifier)
                     .semantics { contentDescription = if (embedded == null) "拖动中转站，松手自动贴边" else "中转站" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -403,26 +406,6 @@ object StashOverlayPanel {
             }
         }
 
-        @OptIn(ExperimentalComposeUiApi::class)
-        @Composable private fun CollapsedHandle() {
-            Box(
-                Modifier.fillMaxSize()
-                    .systemGestureExclusion()
-                    .semantics {
-                        contentDescription = "展开中转站，${entries.size} 项；拖动后自动贴边"
-                        onClick("展开中转站") { expand(); true }
-                    }
-                    .pointerInteropFilter { handleMove(it, true) },
-                contentAlignment = if (onLeft) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                Box(
-                    Modifier.width(5.dp).height(64.dp)
-                        .background(MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .85f),
-                            RoundedCornerShape(3.dp))
-                )
-            }
-        }
-
         private fun reload() {
             if (loading) {
                 reloadRequested = true
@@ -433,14 +416,9 @@ object StashOverlayPanel {
                 message = null
                 try {
                     val updated = withContext(Dispatchers.IO) { StashStore(app).use { it.listEntries() } }
-                    val newestChanged = updated.firstOrNull()?.id != entries.firstOrNull()?.id
                     entries = updated
                     if (openedBatchId != null && entries.none { it.batchId == openedBatchId }) openedBatchId = null
                     preview = preview?.let { image -> entries.firstOrNull { it.id == image.id } }
-                    if (newestChanged && !expanded && !selectionMode && preview == null && openedBatchId == null) {
-                        // Apply with the new item provider, rather than keeping the old first key.
-                        listState.requestScrollToItem(0)
-                    }
                     selectedIds = selectedIds.intersect(entries.map { it.id }.toSet())
                 } catch (error: IOException) {
                     report("读取中转站失败", error)
@@ -624,8 +602,8 @@ object StashOverlayPanel {
                 ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
             }) {
                 Box(Modifier.fillMaxSize()) {
-                    if (expanded) Column(
-                        // Keep the drag source composed at its original size while the window collapses.
+                    Column(
+                        // Keep the drag source composed at its original size while the window shrinks.
                         modifier = (if (draggingContent)
                             Modifier.requiredSize(dragContentWidthDp.dp, dragContentHeightDp.dp)
                             else Modifier.fillMaxSize())
@@ -770,7 +748,6 @@ object StashOverlayPanel {
                             }
                         }
                     }
-                    if (embedded == null && (!expanded || draggingContent)) CollapsedHandle()
                 }
             }
         }

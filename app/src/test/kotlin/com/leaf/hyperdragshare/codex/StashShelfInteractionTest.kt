@@ -2,6 +2,7 @@ package com.leaf.hyperdragshare.codex
 
 import android.content.Context
 import android.graphics.Rect
+import android.os.Looper
 import android.view.MotionEvent
 import androidx.compose.runtime.MutableState
 import org.junit.Assert.assertEquals
@@ -14,6 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.util.ReflectionHelpers
 import org.robolectric.util.ReflectionHelpers.ClassParameter
@@ -21,7 +23,7 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE, sdk = [35])
 class StashShelfInteractionTest {
-    @Test fun backLeavesChildLayersBeforeCollapsingAndKeepsSelection() = withShelf { shelf ->
+    @Test fun backLeavesChildLayersBeforeDismissingAndKeepsSelection() = withShelf { shelf ->
         val image = entry("image", "group", 0, image = true)
         val ids = setOf(image.id, "other")
         state(shelf, "selectedIds", ids)
@@ -35,20 +37,25 @@ class StashShelfInteractionTest {
         assertSame(image, state(shelf, "preview"))
         call(shelf, "back")
         assertNull(state(shelf, "preview"))
-        assertEquals(true, state(shelf, "expanded"))
         call(shelf, "back")
         assertNull(state(shelf, "openedBatchId"))
-        assertEquals(true, state(shelf, "expanded"))
         call(shelf, "back")
-        assertEquals(false, state(shelf, "expanded"))
         assertEquals(ids, state(shelf, "selectedIds"))
         assertEquals(true, state(shelf, "selectionMode"))
+        assertTrue(field(field(shelf, "overlay")!!, "disposed") as Boolean)
+    }
 
-        // Content drag and the collapse button both use collapse(), not Back's preview exit.
-        state(shelf, "preview", image)
+    @Test fun collapseDismissesTheShelfWindow() = withShelf { shelf ->
         call(shelf, "collapse")
-        assertSame(image, state(shelf, "preview"))
-        assertEquals(ids, state(shelf, "selectedIds"))
+        assertTrue(field(field(shelf, "overlay")!!, "disposed") as Boolean)
+    }
+
+    @Test fun savingContentDoesNotCreateAnInactiveCollapsedOverlay() {
+        val active = StashOverlayPanel::class.java.getDeclaredField("active").apply { isAccessible = true }
+        active.set(StashOverlayPanel, null)
+        StashOverlayPanel.contentAdded(RuntimeEnvironment.getApplication())
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull(active.get(StashOverlayPanel))
     }
 
     @Test fun groupBrowsingDoesNotTruncateTheDragSelectionOrReverseItsOrder() = withShelf { shelf ->
@@ -68,18 +75,18 @@ class StashShelfInteractionTest {
             (0 until clip.itemCount).map { clip.getItemAt(it).text.toString() })
     }
 
-    @Test fun cancelledHandleMoveRestoresPositionWithoutSavingANewEdge() {
+    @Test fun cancelledExpandedWindowMoveRestoresPositionWithoutSavingANewEdge() {
         val context = RuntimeEnvironment.getApplication()
         val preferences = context.getSharedPreferences("stash_window_position", Context.MODE_PRIVATE)
         preferences.edit().putBoolean("left", true).putFloat("center_y", .4f).commit()
         withShelf { shelf ->
-            call(shelf, "collapse")
+            call(shelf, "resize", false)
             val overlay = field(shelf, "overlay") as InteractiveOverlayWindow
             val startX = overlay.window.attributes.x
             val startY = overlay.window.attributes.y
             fun move(action: Int, x: Float, y: Float) {
                 val event = MotionEvent.obtain(0L, 0L, action, x, y, 0)
-                try { call(shelf, "handleMove", event, false) } finally { event.recycle() }
+                try { call(shelf, "handleMove", event) } finally { event.recycle() }
             }
             move(MotionEvent.ACTION_DOWN, startX + 5f, startY + 5f)
             move(MotionEvent.ACTION_MOVE, startX + 605f, startY + 105f)
