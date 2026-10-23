@@ -24,6 +24,15 @@
             android:clipChildren="false"
             android:layout_marginTop="7dp">
 
+            <View
+                android:id="@+id/boom_selection_region"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginLeft="8dp"
+                android:layout_marginRight="8dp"
+                android:background="@drawable/boom_multi_select_bg"
+                android:visibility="gone" />
+
             <com.leaf.hyperdragshare.codex.SwipeSelectView
                 android:id="@+id/boom_content"
                 android:layout_width="match_parent"

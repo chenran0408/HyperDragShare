@@ -21,6 +21,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowLooper
+import java.time.Duration
 import java.util.TreeSet
 import kotlin.math.roundToInt
 
@@ -150,6 +151,91 @@ class BigBangMeasuredLayoutMatrixTest {
             }
         } finally {
             context.resources.updateConfiguration(original, originalMetrics)
+        }
+    }
+
+    @Test
+    @Config(sdk = [35], application = Application::class,
+        fontScale = 1.0f, qualifiers = "w360dp-h760dp-port")
+    fun selectingWordsHighlightsSelectionAndMovesRowsAroundIt() {
+        val fixture = openFixture(widthDp = 360, viewportHeightDp = 760)
+        try {
+            val text = (0 until 48).joinToString(" ") { "词块${it}长中文内容" }
+            assertTrue(fixture.page.initWords(wordSegments(text), text, -1, -1, -1))
+            measure(fixture.root, 360, fixture)
+
+            val words = fixture.root.findViewById<SwipeSelectView>(R.id.boom_content)
+            val selected = TreeSet((9..11).toList())
+            val firstSelectedRow = fixture.page.mLayout.getRowForIndex(selected.first())
+            val lastSelectedRow = fixture.page.mLayout.getRowForIndex(selected.last())
+            assertTrue("fixture selection must be inside the chip list", firstSelectedRow > 0)
+            assertTrue("fixture must leave unselected rows below selection",
+                lastSelectedRow < words.childCount - 1)
+
+            fixture.page.restoreSelectionNow(selected)
+            ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(240))
+
+            val focus = fixture.root.findViewById<View>(R.id.boom_selection_region)
+            assertEquals(View.VISIBLE, focus.visibility)
+            assertTrue("focus band must cover the selected row span", focus.height > 0)
+            val firstSelected = words.getChildAt(firstSelectedRow)
+            val lastSelected = words.getChildAt(lastSelectedRow)
+            assertTrue("focus band starts above the first selected row",
+                focus.y < words.y + firstSelected.top)
+            assertTrue("focus band ends below the last selected row",
+                focus.y + focus.height > words.y + lastSelected.bottom)
+            assertEquals("rows above the selected span move up as in the reference",
+                fixture.root.resources.getDimension(R.dimen.chip_row_move_up_offset),
+                words.getChildAt(firstSelectedRow - 1).translationY, 0.5f)
+            assertEquals("selected rows stay in place", 0f,
+                words.getChildAt(firstSelectedRow).translationY, 0.5f)
+            assertEquals("rows below the selected span move down as in the reference",
+                fixture.root.resources.getDimension(R.dimen.chip_row_move_down_offset),
+                words.getChildAt(lastSelectedRow + 1).translationY, 0.5f)
+            assertTrue("the moved final rows have matching scroll padding",
+                words.paddingBottom >= fixture.root.resources.getDimensionPixelSize(
+                    R.dimen.chip_row_move_down_offset))
+
+            fixture.page.handleClick()
+            ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(240))
+            assertEquals(View.GONE, focus.visibility)
+            for (index in 0 until words.childCount) {
+                assertEquals("row $index returns after clearing selection", 0f,
+                    words.getChildAt(index).translationY, 0.5f)
+            }
+            assertEquals(0, words.paddingBottom)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    @Config(sdk = [35], application = Application::class,
+        fontScale = 1.0f, qualifiers = "w360dp-h760dp-port")
+    fun clearingSelectionBeforeRowAnimationAdvancesCancelsPendingMoves() {
+        val fixture = openFixture(widthDp = 360, viewportHeightDp = 760)
+        try {
+            val text = (0 until 48).joinToString(" ") { "词块${it}长中文内容" }
+            assertTrue(fixture.page.initWords(wordSegments(text), text, -1, -1, -1))
+            measure(fixture.root, 360, fixture)
+
+            fixture.page.restoreSelectionNow(TreeSet((9..11).toList()))
+            val focus = fixture.root.findViewById<View>(R.id.boom_selection_region)
+            assertEquals(View.VISIBLE, focus.visibility)
+
+            // Clear immediately, before the row property animators advance a frame.
+            assertTrue(fixture.page.handleClick())
+            ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(240))
+
+            val words = fixture.root.findViewById<SwipeSelectView>(R.id.boom_content)
+            assertEquals(View.GONE, focus.visibility)
+            for (index in 0 until words.childCount) {
+                assertEquals("row $index stays in place after the pending move is cancelled", 0f,
+                    words.getChildAt(index).translationY, 0.5f)
+            }
+            assertEquals(0, words.paddingBottom)
+        } finally {
+            fixture.close()
         }
     }
 

@@ -11,6 +11,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -42,10 +43,17 @@ public class BoomChipPage {
     final View.OnClickListener mDismissClickListener;
 
     private final SwipeSelectView mBoomConent;
+    private final View mSelectionRegion;
     private final boolean mEnableLegacyMask;
     private final TextView mAdjacentTopHint;
     private final TextView mAdjacentBottomHint;
     private final int mScrollerBaseInset;
+    private final int mContentBaseBottomPadding;
+    private final int mSelectionRowMoveUpOffset;
+    private final int mSelectionRowMoveDownOffset;
+    private final int mSelectionRegionExpand;
+    private int mPresentedTopRow = Integer.MIN_VALUE;
+    private int mPresentedBottomRow = Integer.MIN_VALUE;
 
     Serializable mSavedData;
     private OnAdjacentRequestListener mOnAdjacentRequestListener;
@@ -120,6 +128,7 @@ public class BoomChipPage {
         mBoomPage = contentView;
         mBoomTable = contentView.findViewById(R.id.boom_table);
         mBoomConent = (SwipeSelectView) contentView.findViewById(R.id.boom_content);
+        mSelectionRegion = contentView.findViewById(R.id.boom_selection_region);
         mMask = contentView.findViewById(R.id.boom_mask);
         mCancel = contentView.findViewById(R.id.mask_cancel);
         mScroller = (CustomScrollView) contentView.findViewById(R.id.boom_scroller);
@@ -134,6 +143,12 @@ public class BoomChipPage {
             mMask.setVisibility(View.GONE);
             removeLegacyChromeSpacing();
         }
+        mContentBaseBottomPadding = mBoomConent.getPaddingBottom();
+        Resources resources = mContext.getResources();
+        mSelectionRowMoveUpOffset = resources.getDimensionPixelSize(R.dimen.chip_row_move_up_offset);
+        mSelectionRowMoveDownOffset = resources.getDimensionPixelSize(R.dimen.chip_row_move_down_offset);
+        mSelectionRegionExpand = resources.getDimensionPixelSize(R.dimen.chip_row_padding_top)
+                + Math.round(5f * resources.getDisplayMetrics().density);
         mLayout = new BoomWordsLayout(mContext);
         mBoomConent.setBoomPage(this);
         mDismissClickListener = new View.OnClickListener() {
@@ -159,6 +174,7 @@ public class BoomChipPage {
             public void onLayoutChange(View view, int left, int top, int right, int bottom,
                     int oldLeft, int oldTop, int oldRight, int oldBottom) {
                 final int availableWidth = right - left;
+                if (hasSelection()) mBoomConent.post(() -> notifySelectionChanged());
                 if (availableWidth == oldRight - oldLeft || availableWidth <= 0
                         || mLayout.getWordCount() == 0) {
                     return;
@@ -216,7 +232,62 @@ public class BoomChipPage {
     }
 
     void notifySelectionChanged() {
+        updateSelectionPresentation();
         if (mOnSelectionChanged != null) mOnSelectionChanged.run();
+    }
+
+    private void updateSelectionPresentation() {
+        if (mBoomActionHandler == null) return;
+        boolean hasSelection = mBoomActionHandler.hasSelection();
+        int topRow = hasSelection
+                ? mLayout.getRowForIndex(mBoomActionHandler.mSelectedId.first()) : -1;
+        int bottomRow = hasSelection
+                ? mLayout.getRowForIndex(mBoomActionHandler.mSelectedId.last()) : -1;
+        if (topRow != mPresentedTopRow || bottomRow != mPresentedBottomRow) {
+            for (int rowIndex = 0; rowIndex < mLayout.getRowCount(); rowIndex++) {
+                float target = !hasSelection ? 0f
+                        : rowIndex < topRow ? mSelectionRowMoveUpOffset
+                        : rowIndex > bottomRow ? mSelectionRowMoveDownOffset
+                        : 0f;
+                moveChipRow(rowIndex, target);
+            }
+            mPresentedTopRow = topRow;
+            mPresentedBottomRow = bottomRow;
+        }
+
+        int targetBottomPadding = mContentBaseBottomPadding
+                + (hasSelection ? mSelectionRowMoveDownOffset : 0);
+        if (mBoomConent.getPaddingBottom() != targetBottomPadding) {
+            mBoomConent.setPadding(
+                    mBoomConent.getPaddingLeft(),
+                    mBoomConent.getPaddingTop(),
+                    mBoomConent.getPaddingRight(),
+                    targetBottomPadding
+            );
+        }
+        if (!hasSelection || topRow < 0 || bottomRow < topRow) {
+            mSelectionRegion.setVisibility(View.GONE);
+            return;
+        }
+        View first = mBoomConent.getChildAt(topRow);
+        View last = mBoomConent.getChildAt(bottomRow);
+        if (first == null || last == null || first.getHeight() <= 0 || last.getHeight() <= 0) {
+            mSelectionRegion.setVisibility(View.GONE);
+            return;
+        }
+        int top = mBoomConent.getTop() + first.getTop() - mSelectionRegionExpand;
+        int bottom = mBoomConent.getTop() + last.getBottom() + mSelectionRegionExpand;
+        ViewGroup.MarginLayoutParams rawParams = (ViewGroup.MarginLayoutParams) mSelectionRegion.getLayoutParams();
+        FrameLayout.LayoutParams params = rawParams instanceof FrameLayout.LayoutParams
+                ? (FrameLayout.LayoutParams) rawParams
+                : new FrameLayout.LayoutParams(rawParams.width, rawParams.height);
+        int height = Math.max(0, bottom - top);
+        if (params.height != height) {
+            params.height = height;
+            mSelectionRegion.setLayoutParams(params);
+        }
+        mSelectionRegion.setTranslationY(top);
+        mSelectionRegion.setVisibility(View.VISIBLE);
     }
 
     public boolean hasSelection() {
@@ -339,13 +410,15 @@ public class BoomChipPage {
                     chip.setSelected(false);
                 }
             }
-            BoomAnimator.makeMoveAnimation(row, row.getTranslationY(), 0);
         }
     }
 
     public void moveChipRow(int row, float to) {
         View child = mBoomConent.getChildAt(row);
-        BoomAnimator.makeMoveAnimation(child, child.getTranslationY(), to);
+        if (child == null) return;
+        child.animate().cancel();
+        if (Math.abs(child.getTranslationY() - to) <= 0.5f) return;
+        child.animate().translationY(to).setDuration(BoomAnimator.BOOM_DURATION).start();
     }
 
     public int getRowTop(int row) {
@@ -577,6 +650,8 @@ public class BoomChipPage {
     }
 
     private void initChips(boolean animate) {
+        mPresentedTopRow = Integer.MIN_VALUE;
+        mPresentedBottomRow = Integer.MIN_VALUE;
         for (int i = 0; i < mLayout.getRowCount(); ++i) {
             final int start = mLayout.getRowStart(i);
             final int count = mLayout.getColumnCount(i);
