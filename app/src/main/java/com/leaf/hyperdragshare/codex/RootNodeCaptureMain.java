@@ -51,6 +51,11 @@ public final class RootNodeCaptureMain {
     private static final Set<String> VIDEO_SPEED_HOLD_PROMPTS = Set.of(
             "长按倍速播放", "按住倍速", "按住倍速播放", "长按快进", "按住快进",
             "长按加速播放", "按住加速播放");
+    private static final Set<String> CAMERA_CAPTURE_PROMPTS = Set.of(
+            "拍照", "拍照按钮", "拍摄", "拍摄按钮", "拍摄照片", "开始拍照", "开始拍摄",
+            "按住拍摄", "长按拍摄", "拍摄视频", "开始录像", "录像", "录制视频",
+            "录制", "录制按钮", "开始录制", "停止录制", "按住录制", "长按录制", "快门",
+            "takephoto", "takepicture", "shutter", "record", "recordvideo", "startrecording", "stoprecording");
     private static PressWindowSnapshot pressWindow;
     private static Rect pressRegion;
     private static String pressVerificationError = "";
@@ -714,8 +719,9 @@ public final class RootNodeCaptureMain {
 
     static boolean holdControlAtPoint(List<AccessibilityNodeSnapshot> nodes, float x, float y, String source) {
         for (AccessibilityNodeSnapshot label : nodes) {
-            if (!label.visible || !source.equals(label.packageName)
+            if (!label.visible || !label.enabled || !source.equals(label.packageName)
                     || !label.bounds.contains((int) x, (int) y)) continue;
+            if (label.rangeControl) return true;
             String text = normalizeHoldText(label.text);
             String description = normalizeHoldText(label.contentDescription);
             boolean exactVoicePrompt = HOLD_PROMPTS.contains(text) || HOLD_PROMPTS.contains(description);
@@ -723,16 +729,20 @@ public final class RootNodeCaptureMain {
                     && (containsHoldLabel(text) || containsHoldLabel(description));
             boolean videoSpeedPrompt = VIDEO_SPEED_HOLD_PROMPTS.contains(text)
                     || VIDEO_SPEED_HOLD_PROMPTS.contains(description);
-            if (!exactVoicePrompt && !embeddedVoicePrompt && !videoSpeedPrompt) continue;
+            boolean cameraCapturePrompt = CAMERA_CAPTURE_PROMPTS.contains(text)
+                    || CAMERA_CAPTURE_PROMPTS.contains(description);
+            if (!exactVoicePrompt && !embeddedVoicePrompt && !videoSpeedPrompt
+                    && !cameraCapturePrompt) continue;
             for (AccessibilityNodeSnapshot control : nodes) {
-                if (!control.visible || !source.equals(control.packageName)
+                if (!control.visible || !control.enabled || !source.equals(control.packageName)
                         || !isScopedControl(control, label)) continue;
                 boolean interactive = control.editable || control.clickable || control.longClickable;
                 if (videoSpeedPrompt && !control.editable && interactive) return true;
+                if (cameraCapturePrompt && !control.editable && interactive) return true;
                 boolean voiceControl = !embeddedVoicePrompt || control.editable
                         || ((control.clickable || control.longClickable)
-                        && isVoiceButtonClass(control.className));
-                if (!videoSpeedPrompt && interactive && voiceControl) return true;
+                        && (isVoiceButtonClass(control.className) || control != label));
+                if (!videoSpeedPrompt && !cameraCapturePrompt && interactive && voiceControl) return true;
             }
         }
         return false;
@@ -837,8 +847,9 @@ public final class RootNodeCaptureMain {
                 .packageName(string(node.getPackageName())).className(className)
                 .viewId(node.getViewIdResourceName()).text(string(node.getText()))
                 .contentDescription(string(node.getContentDescription()))
-                .visible(node.isVisibleToUser()).editable(node.isEditable())
+                .visible(node.isVisibleToUser()).enabled(node.isEnabled()).editable(node.isEditable())
                 .clickable(node.isClickable()).longClickable(node.isLongClickable())
+                .rangeControl(isAdjustableRangeControl(node, className))
                 .important(node.isImportantForAccessibility()).leaf(count == 0)
                 .insideWebView(insideWeb).depth(depth).traversalOrder(nodes.size()).build());
         for (int i = 0; i < count; i++) {
@@ -850,6 +861,34 @@ public final class RootNodeCaptureMain {
                 child.recycle();
             }
         }
+    }
+
+    private static boolean isAdjustableRangeControl(AccessibilityNodeInfo node, String className) {
+        if (!node.isVisibleToUser() || !node.isEnabled()) return false;
+        AccessibilityNodeInfo.RangeInfo range = node.getRangeInfo();
+        boolean hasRange = range != null;
+        List<AccessibilityNodeInfo.AccessibilityAction> actions = node.getActionList();
+        boolean canSetProgress = hasAction(actions,
+                AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS);
+        boolean canAdjustByScroll = node.isScrollable()
+                || hasAction(actions, AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+                || hasAction(actions, AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD);
+        boolean standardSliderRole = className != null
+                && (className.endsWith("SeekBar") || className.endsWith("Slider"));
+        if (hasRange) return canSetProgress || canAdjustByScroll || standardSliderRole
+                && (node.isClickable() || node.isLongClickable());
+        return standardSliderRole && (canSetProgress || canAdjustByScroll
+                || node.isClickable() || node.isLongClickable());
+    }
+
+    private static boolean hasAction(List<AccessibilityNodeInfo.AccessibilityAction> actions,
+                                     AccessibilityNodeInfo.AccessibilityAction expected) {
+        if (actions == null) return false;
+        int actionId = expected.getId();
+        for (AccessibilityNodeInfo.AccessibilityAction action : actions) {
+            if (action != null && action.getId() == actionId) return true;
+        }
+        return false;
     }
 
     private static String string(CharSequence value) {

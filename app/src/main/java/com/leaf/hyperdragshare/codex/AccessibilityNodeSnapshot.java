@@ -11,10 +11,12 @@ final class AccessibilityNodeSnapshot {
     final String text;
     final String contentDescription;
     final boolean visible;
+    final boolean enabled;
     final boolean editable;
     final boolean password;
     final boolean clickable;
     final boolean longClickable;
+    final boolean rangeControl;
     final boolean important;
     final boolean leaf;
     final boolean insideWebView;
@@ -30,10 +32,12 @@ final class AccessibilityNodeSnapshot {
         this.text = builder.text;
         this.contentDescription = builder.contentDescription;
         this.visible = builder.visible;
+        this.enabled = builder.enabled;
         this.editable = builder.editable;
         this.password = builder.password;
         this.clickable = builder.clickable;
         this.longClickable = builder.longClickable;
+        this.rangeControl = builder.rangeControl;
         this.important = builder.important;
         this.leaf = builder.leaf;
         this.insideWebView = builder.insideWebView;
@@ -50,10 +54,12 @@ final class AccessibilityNodeSnapshot {
         private String text;
         private String contentDescription;
         private boolean visible = true;
+        private boolean enabled = true;
         private boolean editable;
         private boolean password;
         private boolean clickable;
         private boolean longClickable;
+        private boolean rangeControl;
         private boolean important = true;
         private boolean leaf = true;
         private boolean insideWebView;
@@ -68,10 +74,12 @@ final class AccessibilityNodeSnapshot {
         Builder text(String value) { text = value; return this; }
         Builder contentDescription(String value) { contentDescription = value; return this; }
         Builder visible(boolean value) { visible = value; return this; }
+        Builder enabled(boolean value) { enabled = value; return this; }
         Builder editable(boolean value) { editable = value; return this; }
         Builder password(boolean value) { password = value; return this; }
         Builder clickable(boolean value) { clickable = value; return this; }
         Builder longClickable(boolean value) { longClickable = value; return this; }
+        Builder rangeControl(boolean value) { rangeControl = value; return this; }
         Builder important(boolean value) { important = value; return this; }
         Builder leaf(boolean value) { leaf = value; return this; }
         Builder insideWebView(boolean value) { insideWebView = value; return this; }

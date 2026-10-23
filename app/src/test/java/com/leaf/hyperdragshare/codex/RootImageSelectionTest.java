@@ -7,18 +7,30 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 import android.graphics.Rect;
+import android.app.UiAutomation;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.accessibility.AccessibilityWindowInfo;
+import android.view.accessibility.AccessibilityNodeInfo;
 import java.util.ArrayList;
 import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
+import org.robolectric.annotation.LooperMode;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowAccessibilityWindowInfo;
+import org.robolectric.shadows.ShadowAccessibilityNodeInfo;
+import org.robolectric.shadows.ShadowUiAutomation;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(manifest = Config.NONE)
+@Config(manifest = Config.NONE, shadows = RootImageSelectionTest.AutomationShadow.class)
+@LooperMode(LooperMode.Mode.PAUSED)
 public final class RootImageSelectionTest {
     private final AccessibilityNodeClassifier classifier = new AccessibilityNodeClassifier(1f, 1080, 2400);
 
@@ -65,6 +77,21 @@ public final class RootImageSelectionTest {
                 .bounds(new Rect(20, 20, 200, 100)).text("发消息或按住说话...")
                 .depth(1).build();
         assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(input, hint), 30, 30, "reader"));
+    }
+
+    @Test public void compositeVoicePromptChildOfGenericInteractiveParentIsExcluded() {
+        AccessibilityNodeSnapshot input = node("android.view.ViewGroup", "reader")
+                .clickable(true).leaf(false).depth(0).build();
+        AccessibilityNodeSnapshot hint = node("android.widget.TextView", "reader")
+                .bounds(new Rect(20, 20, 200, 100)).text("发消息或按住说话...")
+                .depth(1).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(input, hint), 30, 30, "reader"));
+
+        // A clickable prose node with the same words is still ordinary text.
+        AccessibilityNodeSnapshot prose = node("android.widget.TextView", "reader")
+                .text("按住语音说话可以开始录音，这是帮助说明。")
+                .clickable(true).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(prose), 30, 30, "reader"));
     }
 
     @Test public void explicitVideoSpeedHoldLabelsRequireAnInteractiveControl() {
@@ -125,6 +152,87 @@ public final class RootImageSelectionTest {
                 .bounds(new Rect(20, 20, 200, 100)).text("按住说话").depth(1).build();
         assertFalse(RootNodeCaptureMain.holdControlAtPoint(
                 List.of(largeClickablePage, ordinaryLabel), 30, 30, "reader"));
+    }
+
+    @Test public void adjustableRangeControlIsExcludedAtActualPressCaptureEntry() throws Exception {
+        AccessibilityNodeInfo range = pressRoot("android.view.View", null);
+        range.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+                AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, 0f, 100f, 35f));
+        range.setScrollable(true);
+        try {
+            JSONObject result = capturePress(range);
+            assertFalse(result.getBoolean("found"));
+            assertEquals("excluded_hold_control", result.getString("reason"));
+        } finally { recyclePressRoot(range); }
+
+        AccessibilityNodeInfo progressAction = pressRoot("android.view.View", null);
+        progressAction.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+                AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, 0f, 100f, 35f));
+        progressAction.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS);
+        try {
+            JSONObject result = capturePress(progressAction);
+            assertEquals("excluded_hold_control", result.getString("reason"));
+        } finally { recyclePressRoot(progressAction); }
+    }
+
+    @Test public void readOnlyProgressAndDisabledSliderDoNotBlockPressCapture() throws Exception {
+        AccessibilityNodeInfo readOnlyProgress = pressRoot("android.widget.ProgressBar", "播放进度 01:20");
+        readOnlyProgress.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+                AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, 0f, 100f, 35f));
+        try {
+            JSONObject result = capturePress(readOnlyProgress);
+            assertTrue(result.getBoolean("found"));
+            assertEquals("text", result.getString("kind"));
+            assertFalse("read-only progress metadata is not hold-control avoidance",
+                    "excluded_hold_control".equals(result.optString("reason")));
+        } finally { recyclePressRoot(readOnlyProgress); }
+
+        AccessibilityNodeInfo disabledSlider = pressRoot("android.widget.SeekBar", null);
+        disabledSlider.setEnabled(false);
+        disabledSlider.setClickable(true);
+        disabledSlider.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+                AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, 0f, 1f, .5f));
+        try {
+            JSONObject result = capturePress(disabledSlider);
+            assertFalse(result.getBoolean("found"));
+            assertFalse("disabled controls do not enter hold-control avoidance",
+                    "excluded_hold_control".equals(result.optString("reason")));
+        } finally { recyclePressRoot(disabledSlider); }
+    }
+
+    @Test public void standardInteractiveSeekBarAndExplicitCameraControlAreExcluded() throws Exception {
+        AccessibilityNodeInfo seekBar = pressRoot("android.widget.SeekBar", null);
+        seekBar.setClickable(true);
+        try {
+            JSONObject result = capturePress(seekBar);
+            assertEquals("excluded_hold_control", result.getString("reason"));
+        } finally { recyclePressRoot(seekBar); }
+
+        AccessibilityNodeInfo camera = pressRoot("android.widget.Button", "拍摄");
+        camera.setClickable(true);
+        try {
+            JSONObject result = capturePress(camera);
+            assertEquals("excluded_hold_control", result.getString("reason"));
+        } finally { recyclePressRoot(camera); }
+
+        AccessibilityNodeInfo disabledCamera = pressRoot("android.widget.Button", "拍摄");
+        disabledCamera.setClickable(true);
+        disabledCamera.setEnabled(false);
+        try {
+            JSONObject result = capturePress(disabledCamera);
+            assertTrue(result.getBoolean("found"));
+            assertEquals("text", result.getString("kind"));
+            assertFalse("disabled camera controls are not hold-control exclusions",
+                    "excluded_hold_control".equals(result.optString("reason")));
+        } finally { recyclePressRoot(disabledCamera); }
+
+        AccessibilityNodeInfo prose = pressRoot("android.widget.TextView", "这段视频拍摄了日落过程，仍是普通正文。");
+        prose.setClickable(true);
+        try {
+            JSONObject result = capturePress(prose);
+            assertTrue(result.getBoolean("found"));
+            assertEquals("text", result.getString("kind"));
+        } finally { recyclePressRoot(prose); }
     }
 
     @Test public void imageRequiresEnabledTypeAndExplicitImageNode() {
@@ -220,5 +328,48 @@ public final class RootImageSelectionTest {
     private static AccessibilityNodeSnapshot.Builder node(String className, String packageName) {
         return new AccessibilityNodeSnapshot.Builder().bounds(new Rect(0, 0, 300, 200))
                 .className(className).packageName(packageName).visible(true).leaf(true).traversalOrder(1);
+    }
+
+    private static AccessibilityNodeInfo pressRoot(String className, String text) {
+        AccessibilityWindowInfo window = window(AccessibilityWindowInfo.TYPE_APPLICATION,
+                new Rect(0, 0, 1000, 2000));
+        AccessibilityNodeInfo root = AccessibilityNodeInfo.obtain();
+        root.setPackageName("reader");
+        root.setClassName(className);
+        root.setText(text);
+        root.setVisibleToUser(true);
+        root.setEnabled(true);
+        root.setBoundsInScreen(new Rect(0, 0, 300, 200));
+        Shadow.<ShadowAccessibilityNodeInfo>extract(root).setAccessibilityWindowInfo(window);
+        return root;
+    }
+
+    private static JSONObject capturePress(AccessibilityNodeInfo root) throws Exception {
+        UiAutomation automation = Shadow.newInstanceOf(UiAutomation.class);
+        AutomationShadow automationShadow = Shadow.extract(automation);
+        automationShadow.root = root;
+        JSONObject request = new JSONObject().put("x", 30).put("y", 30)
+                .put("density", 1).put("width", 1000).put("height", 2000)
+                .put("blocked", new JSONArray()).put("press_lookup", true)
+                .put("allow_text", true).put("allow_images", false);
+        return RootNodeCaptureMain.captureRequest(request, automation,
+                new Object(), new int[]{0}, new Handler(Looper.getMainLooper()));
+    }
+
+    private static void recyclePressRoot(AccessibilityNodeInfo root) {
+        AccessibilityWindowInfo window = root.getWindow();
+        root.recycle();
+        if (window != null) window.recycle();
+    }
+
+    @Implements(UiAutomation.class)
+    public static class AutomationShadow extends ShadowUiAutomation {
+        AccessibilityNodeInfo root;
+
+        @Implementation protected void clearCache() {}
+        @Implementation protected List<AccessibilityWindowInfo> getWindows() { return List.of(); }
+        @Implementation protected AccessibilityNodeInfo getRootInActiveWindow() {
+            return root == null ? null : AccessibilityNodeInfo.obtain(root);
+        }
     }
 }
