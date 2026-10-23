@@ -26,9 +26,7 @@ public final class TouchProbeReport {
     private TouchProbeReport() {}
 
     public static String exportFileName() {
-        return "MMGG-" + BuildConfig.VERSION_NAME + "-touch-probe-"
-                + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date())
-                + ".txt";
+        return ExportFileNames.touchReport("txt", null, ExportFileNames.timestampNow());
     }
 
     public static File writeLatest(

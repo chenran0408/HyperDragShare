@@ -66,14 +66,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import kotlin.concurrent.thread
 
-private data class TouchProbeUiState(
+internal data class TouchProbeUiState(
     val running: Boolean = false,
     val status: String = "尚未开始",
     val connection: TouchReportReader.ConnectionInfo? = null,
     val snapshot: TouchProbeCollector.Snapshot = TouchProbeCollector().snapshot(),
     val armedGroup: TouchProbeCollector.Group? = null,
     val captureActive: Boolean = false,
+    val exportInFlight: Boolean = false,
 )
+
+internal interface TouchProbeReaderHandle {
+    fun start()
+    fun close()
+}
 
 /**
  * Beta-only compatibility probe. It observes the selected fields and never feeds them into
@@ -82,11 +88,22 @@ private data class TouchProbeUiState(
 class TouchProbeActivity : ComponentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val collector = TouchProbeCollector()
-    private var reader: TouchReportReader? = null
+    private var reader: TouchProbeReaderHandle? = null
+    private var readerGeneration = 0L
     private var connection: TouchReportReader.ConnectionInfo? = null
-    private var reconnectTask: Runnable? = null
     private var lastUiAt = 0L
+    private var exportInFlight = false
     private var uiState by mutableStateOf(TouchProbeUiState())
+
+    internal var readerFactory: (TouchReportReader.Listener) -> TouchProbeReaderHandle = { listener ->
+        val activeReader = TouchReportReader(listener)
+        object : TouchProbeReaderHandle {
+            override fun start() = activeReader.start()
+            override fun close() = activeReader.close()
+        }
+    }
+
+    internal val currentUiState: TouchProbeUiState get() = uiState
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,7 +146,7 @@ class TouchProbeActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun startProbe() {
+    internal fun startProbe() {
         stopProbe("重新连接")
         collector.reset()
         connection = null
@@ -137,42 +154,29 @@ class TouchProbeActivity : ComponentActivity() {
     }
 
     private fun openReader() {
+        val session = ++readerGeneration
         lastUiAt = 0L
         publish(TouchProbeUiState(running = true, status = "正在查找触控服务与算法库…"))
-        val activeReader = TouchReportReader(object : TouchReportReader.Listener {
+        lateinit var activeReader: TouchProbeReaderHandle
+        val listener = object : TouchReportReader.Listener {
             override fun onReady(value: TouchReportReader.ConnectionInfo) {
-                connection = value
-                publish(
-                    TouchProbeUiState(
-                        running = true,
-                        status = when {
-                            value.selection.isExactLibrary && value.pointerMatchesProfile ->
-                                "连接成功：算法库精确匹配，等待真实按压验证"
-                            value.selection.isCandidate ->
-                                "连接成功：算法库代码特征匹配，布局待验证"
-                            !value.selection.isExactLibrary ->
-                                "已连接：未知算法库，仅收集诊断数据"
-                            else ->
-                                "连接成功：正在验证动态报告位置"
-                        },
-                        connection = value,
-                        snapshot = collector.snapshot(),
-                        armedGroup = uiState.armedGroup,
-                        captureActive = uiState.captureActive,
-                    ),
-                )
-            }
-
-            override fun onFrame(frame: com.leaf.hyperdragshare.codex.touchprobe.TouchReportLayout.Frame) {
-                collector.accept(frame)
-                val now = SystemClock.elapsedRealtime()
-                if (!uiState.captureActive && now - lastUiAt >= 80L) {
-                    lastUiAt = now
+                mainHandler.post {
+                    if (!isCurrentReader(session, activeReader)) return@post
+                    connection = value
                     publish(
                         TouchProbeUiState(
                             running = true,
-                            status = uiState.status,
-                            connection = connection,
+                            status = when {
+                                value.selection.isExactLibrary && value.pointerMatchesProfile ->
+                                    "连接成功：算法库精确匹配，等待真实按压验证"
+                                value.selection.isCandidate ->
+                                    "连接成功：算法库代码特征匹配，布局待验证"
+                                !value.selection.isExactLibrary ->
+                                    "已连接：未知算法库，仅收集诊断数据"
+                                else ->
+                                    "连接成功：正在验证动态报告位置"
+                            },
+                            connection = value,
                             snapshot = collector.snapshot(),
                             armedGroup = uiState.armedGroup,
                             captureActive = uiState.captureActive,
@@ -181,40 +185,56 @@ class TouchProbeActivity : ComponentActivity() {
                 }
             }
 
-            override fun onFailure(message: String?, error: Throwable?) {
-                val detail = message?.takeIf { it.isNotBlank() }
-                    ?: error?.message?.takeIf { it.isNotBlank() }
-                    ?: "未知错误"
-                reader = null
-                collector.cancelActiveGroup("触控读取中断，本次按压未计入")
-                publish(
-                    TouchProbeUiState(
-                        running = true,
-                        status = "触控服务发生变化，正在重新解析：$detail",
-                        connection = connection,
-                        snapshot = collector.snapshot(),
-                        armedGroup = null,
-                        captureActive = false,
-                    ),
-                )
-                reconnectTask?.let { mainHandler.removeCallbacks(it) }
-                val retry = Runnable {
-                    reconnectTask = null
-                    if (!isFinishing && !isDestroyed && uiState.running) {
-                        openReader()
+            override fun onFrame(frame: com.leaf.hyperdragshare.codex.touchprobe.TouchReportLayout.Frame) {
+                mainHandler.post {
+                    if (!isCurrentReader(session, activeReader)) return@post
+                    collector.accept(frame)
+                    val now = SystemClock.elapsedRealtime()
+                    if (!uiState.captureActive && now - lastUiAt >= 80L) {
+                        lastUiAt = now
+                        publish(
+                            TouchProbeUiState(
+                                running = true,
+                                status = uiState.status,
+                                connection = connection,
+                                snapshot = collector.snapshot(),
+                                armedGroup = uiState.armedGroup,
+                                captureActive = uiState.captureActive,
+                            ),
+                        )
                     }
                 }
-                reconnectTask = retry
-                mainHandler.postDelayed(retry, 1_200L)
             }
-        })
+
+            override fun onFailure(message: String?, error: Throwable?) {
+                mainHandler.post {
+                    if (!isCurrentReader(session, activeReader)) return@post
+                    reader = null
+                    readerGeneration++
+                    val detail = message?.takeIf { it.isNotBlank() }
+                        ?: error?.message?.takeIf { it.isNotBlank() }
+                        ?: "未知错误"
+                    collector.cancelActiveGroup("触控读取中断，本次按压未计入")
+                    publish(
+                        TouchProbeUiState(
+                            running = false,
+                            status = "触控数据流已中断，采样已停止：$detail",
+                            connection = connection,
+                            snapshot = collector.snapshot(),
+                            armedGroup = null,
+                            captureActive = false,
+                        ),
+                    )
+                }
+            }
+        }
+        activeReader = readerFactory(listener)
         reader = activeReader
         activeReader.start()
     }
 
-    private fun stopProbe(reason: String) {
-        reconnectTask?.let { mainHandler.removeCallbacks(it) }
-        reconnectTask = null
+    internal fun stopProbe(reason: String) {
+        readerGeneration++
         val active = reader
         reader = null
         active?.close()
@@ -234,6 +254,9 @@ class TouchProbeActivity : ComponentActivity() {
             )
         }
     }
+
+    private fun isCurrentReader(session: Long, candidate: TouchProbeReaderHandle): Boolean =
+        session == readerGeneration && reader === candidate
 
     private fun armSample(group: TouchProbeCollector.Group) {
         if (!uiState.running || uiState.captureActive) return
@@ -315,10 +338,11 @@ class TouchProbeActivity : ComponentActivity() {
     }
 
     private fun publish(next: TouchProbeUiState) {
+        val apply = { uiState = next.copy(exportInFlight = exportInFlight) }
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            uiState = next
+            apply()
         } else {
-            mainHandler.post { uiState = next }
+            mainHandler.post { apply() }
         }
     }
 
@@ -327,6 +351,9 @@ class TouchProbeActivity : ComponentActivity() {
             Toast.makeText(this, "请先抬起手指，再分享测试结果", Toast.LENGTH_SHORT).show()
             return
         }
+        if (exportInFlight) return
+        exportInFlight = true
+        publish(uiState.copy(exportInFlight = true))
         val connectionSnapshot = connection
         val sampleSnapshot = collector.snapshot()
         val currentStatus = uiState.status
@@ -341,6 +368,24 @@ class TouchProbeActivity : ComponentActivity() {
                 )
             }
             mainHandler.post {
+                exportInFlight = false
+                uiState = uiState.copy(exportInFlight = false)
+                if (isFinishing || isDestroyed) {
+                    result.onSuccess {
+                        Toast.makeText(
+                            applicationContext,
+                            "结果已生成，但页面已关闭，未打开分享面板",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }.onFailure { error ->
+                        Toast.makeText(
+                            applicationContext,
+                            "无法生成测试结果：${error.message}",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    return@post
+                }
                 result.onSuccess { exported ->
                     val sendResult = runCatching {
                         val uri = FileProvider.getUriForFile(
@@ -788,11 +833,8 @@ private fun TouchProbeScreen(
                 item {
                     SmallTitle("分享测试结果")
                     Text(
-                        text = if (state.status.startsWith(
-                                "触控服务发生变化，正在重新解析",
-                            )) {
-                            "暂时无法读取完整触控数据。先点“停止检测”可导出诊断报告，" +
-                                "用于确认失败发生在哪个阶段。"
+                        text = if (state.status.startsWith("触控数据流已中断")) {
+                            "本次采样已停止。可以分享当前诊断报告，或手动重新检测。"
                         } else {
                             "报告用于跨机型适配，包含手机型号、系统版本、测试结果和异常原因；" +
                                 "不包含页面文字、截图、剪贴板或应用内容。" +
@@ -803,8 +845,7 @@ private fun TouchProbeScreen(
                     )
                     TextButton(
                         text = "分享测试结果",
-                        enabled = !state.captureActive &&
-                            !state.status.startsWith("触控服务发生变化，正在重新解析"),
+                        enabled = !state.captureActive && !state.exportInFlight,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         colors = ButtonDefaults.textButtonColorsPrimary(),
                         onClick = { onShare(TouchProbeExporter.Options.smartDefault()) },
@@ -814,8 +855,7 @@ private fun TouchProbeScreen(
                             BasicComponent(
                                 title = "适配排查选项",
                                 summary = "仅在自动检测需要补充算法库或重新采集时使用",
-                                enabled = !state.captureActive &&
-                                    !state.status.startsWith("触控服务发生变化，正在重新解析"),
+                                enabled = !state.captureActive && !state.exportInFlight,
                                 onClick = { showExportOptions = true },
                             )
                         }
@@ -937,6 +977,7 @@ private fun TouchProbeScreen(
                     )
                     TextButton(
                         text = "按选项分享",
+                        enabled = !state.exportInFlight,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.textButtonColorsPrimary(),
                         onClick = {

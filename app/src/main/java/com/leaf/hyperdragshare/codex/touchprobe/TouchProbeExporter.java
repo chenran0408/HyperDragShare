@@ -132,7 +132,7 @@ public final class TouchProbeExporter {
             throw new IOException("无法创建触控报告目录");
         }
 
-        String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
+        String stamp = ExportFileNames.timestampNow();
         TouchDeviceMapParser.DeviceMap identityMap =
                 connection == null ? null : connection.map;
         TouchDeviceMapParser.DeviceMap copyMap = null;
@@ -204,8 +204,7 @@ public final class TouchProbeExporter {
         if (attach) {
             output = new File(
                     directory,
-                    "MMGG-touch-probe-" + safeFilePart(model(identityMap))
-                            + "-" + stamp + ".zip");
+                    outputFileName(PackageKind.ADAPTER_ZIP, model(identityMap), stamp));
             writeAdapterPackage(
                     output,
                     report,
@@ -217,8 +216,7 @@ public final class TouchProbeExporter {
         } else {
             output = new File(
                     directory,
-                    "MMGG-" + BuildConfig.VERSION_NAME + "-touch-probe-"
-                            + stamp + ".txt");
+                    outputFileName(PackageKind.TEXT_REPORT, null, stamp));
             try (OutputStreamWriterHolder writer = new OutputStreamWriterHolder(output)) {
                 writer.write(report);
             }
@@ -239,6 +237,12 @@ public final class TouchProbeExporter {
                 attach && libraryCopy != null && "verified".equals(libraryCopy.state),
                 libraryCopy,
                 refreshWarning);
+    }
+
+    static String outputFileName(PackageKind kind, String model, String timestamp) {
+        return kind == PackageKind.ADAPTER_ZIP
+                ? ExportFileNames.touchReport("zip", model, timestamp)
+                : ExportFileNames.touchReport("txt", null, timestamp);
     }
 
     private static TouchLibraryCopy copyLibrary(
@@ -673,11 +677,6 @@ public final class TouchProbeExporter {
 
     private static String safe(String value) {
         return value == null ? "" : value.replace('\n', ' ').replace('\r', ' ').replace('\0', '?');
-    }
-
-    private static String safeFilePart(String value) {
-        String normalized = safe(value).replaceAll("[^A-Za-z0-9._-]+", "-");
-        return normalized.isBlank() ? "unknown-model" : normalized;
     }
 
     private static final class OutputStreamWriterHolder implements AutoCloseable {

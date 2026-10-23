@@ -31,6 +31,24 @@ public class TouchProbeExporterTest {
     @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
+    public void outputFilesUseVersionedTouchReportNamesForTextAndAdapterPackages() {
+        String timestamp = "20261023-035206-123";
+        String prefix = "MMGG-" + com.leaf.hyperdragshare.codex.BuildConfig.VERSION_NAME
+                + "-touch-report";
+
+        assertEquals(
+                prefix + "-" + timestamp + ".txt",
+                TouchProbeExporter.outputFileName(
+                        TouchProbeExporter.PackageKind.TEXT_REPORT, null, timestamp));
+        assertEquals(
+                prefix + "-Xiaomi-15-Pro-" + timestamp + ".zip",
+                TouchProbeExporter.outputFileName(
+                        TouchProbeExporter.PackageKind.ADAPTER_ZIP,
+                        "Xiaomi 15/Pro",
+                        timestamp));
+    }
+
+    @Test
     public void knownLibraryExportsCompactReportUnlessLibraryIsForced() {
         Context context = RuntimeEnvironment.getApplication();
         TouchDeviceMapParser.DeviceMap map = map(TouchProfileRegistry.REFERENCE_LIBRARY_SHA256);

@@ -8,6 +8,8 @@ import android.os.Process;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.leaf.hyperdragshare.codex.touchprobe.ExportFileNames;
+
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -143,9 +145,7 @@ final class DragShareLog {
     }
 
     static String exportFileName() {
-        return "HyperDragShare-" + new SimpleDateFormat(
-                "yyyyMMdd-HHmmss",
-                Locale.US).format(new Date()) + ".log";
+        return ExportFileNames.runtimeLog();
     }
 
     /** Copies the root-owned diagnostic file to a user-selected document URI. */
