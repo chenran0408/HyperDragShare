@@ -15,8 +15,11 @@ import android.content.Context;
 import android.os.Bundle;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
@@ -737,6 +740,261 @@ public final class DragShareSettingsTest {
                 "pkg.allowed",
                 new LinkedHashSet<>(Arrays.asList("pkg.user")),
                 new LinkedHashSet<>(Arrays.asList("pkg.builtin"))));
+    }
+
+    @Test
+    public void builderStartsWithTheSameValuesAsDefaults() {
+        assertSettingsEqual(DragShareSettings.defaults(), DragShareSettings.builder().build());
+    }
+
+    @Test
+    public void changingOneFieldOnNonDefaultSettingsPreservesEveryOtherField() {
+        DragShareSettings current = nonDefaultSettings();
+
+        DragShareSettings updated = current.toBuilder()
+                .setEdgeTriggerDp(123)
+                .build();
+
+        assertEquals(123, updated.edgeTriggerDp);
+        assertSettingsEqualExcept(current, updated, "edgeTriggerDp");
+    }
+
+    @Test
+    public void successiveBuilderUpdatesRetainPreviousFieldChanges() {
+        DragShareSettings first = DragShareSettings.defaults().toBuilder()
+                .setColorMode(DragShareSettings.COLOR_DARK)
+                .build();
+        DragShareSettings second = first.toBuilder()
+                .setLogLevel(DragShareSettings.LOG_LEVEL_DEBUG)
+                .build();
+
+        assertEquals(DragShareSettings.COLOR_DARK, second.colorMode);
+        assertEquals(DragShareSettings.LOG_LEVEL_DEBUG, second.logLevel);
+        assertSettingsEqualExcept(DragShareSettings.defaults(), second, "colorMode", "logLevel");
+    }
+
+    @Test
+    public void allBuilderFieldsSurviveLocalPreferencesAndBundleRoundTrips() {
+        Context context = RuntimeEnvironment.getApplication();
+        DragShareSettings previous = DragShareSettings.readLocal(context);
+        DragShareSettings settings = nonDefaultSettings();
+        try {
+            settings.saveLocal(context);
+
+            assertSettingsEqual(settings, DragShareSettings.readLocal(context));
+            assertSettingsEqual(settings, DragShareSettings.fromBundle(settings.toBundle()));
+        } finally {
+            previous.saveLocal(context);
+        }
+    }
+
+    @Test
+    public void absentBundleFieldsKeepCurrentDefaultsAndLegacyRules() {
+        assertSettingsEqual(DragShareSettings.defaults(), DragShareSettings.fromBundle(new Bundle()));
+        assertSettingsEqual(DragShareSettings.defaults(), DragShareSettings.fromBundle(null));
+
+        Bundle legacy = new Bundle();
+        legacy.putInt("accessibility_long_press_timeout_millis", 0);
+        DragShareSettings migrated = DragShareSettings.fromBundle(legacy);
+        assertEquals(DragShareSettings.DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
+                migrated.accessibilityLongPressTimeoutMillis);
+        assertEquals(DragShareSettings.DEFAULT_ACCESSIBILITY_LONG_PRESS_TIMEOUT_MILLIS,
+                migrated.toBundle().getInt("accessibility_long_press_timeout_millis"));
+    }
+
+    @Test
+    public void builderCollectionSettersAndBuildTakeIndependentSnapshots() {
+        Set<String> hidden = new LinkedHashSet<>(Arrays.asList("hidden.before"));
+        List<String> order = new ArrayList<>(Arrays.asList("target.before"));
+        Set<String> blacklist = new LinkedHashSet<>(Arrays.asList("blacklist.before"));
+        Set<String> games = new LinkedHashSet<>(Arrays.asList("game.before"));
+
+        DragShareSettings.Builder builder = DragShareSettings.defaults().toBuilder()
+                .setHiddenTargetKeys(hidden)
+                .setTargetOrder(order)
+                .setAccessibilityBlacklistedPackages(blacklist)
+                .setManualGamePackages(games);
+        hidden.add("hidden.after-setter");
+        order.add("target.after-setter");
+        blacklist.add("blacklist.after-setter");
+        games.add("game.after-setter");
+
+        DragShareSettings built = builder.build();
+        hidden.add("hidden.after-build");
+        order.add("target.after-build");
+        blacklist.add("blacklist.after-build");
+        games.add("game.after-build");
+        builder.setHiddenTargetKeys(Collections.singleton("builder.changed.after-build"));
+        builder.setTargetOrder(Collections.singletonList("builder.changed.after-build"));
+        builder.setAccessibilityBlacklistedPackages(Collections.singleton("builder.changed.after-build"));
+        builder.setManualGamePackages(Collections.singleton("builder.changed.after-build"));
+
+        assertEquals(Collections.singleton("hidden.before"), built.hiddenTargetKeys);
+        assertEquals(Collections.singletonList("target.before"), built.targetOrder);
+        assertEquals(Collections.singleton("blacklist.before"),
+                built.accessibilityBlacklistedPackages);
+        assertEquals(Collections.singleton("game.before"), built.manualGamePackages);
+        assertUnmodifiableSet(built.hiddenTargetKeys);
+        assertUnmodifiableList(built.targetOrder);
+        assertUnmodifiableSet(built.accessibilityBlacklistedPackages);
+        assertUnmodifiableSet(built.manualGamePackages);
+    }
+
+    @Test
+    public void builderUsesTheExistingConstructorBoundaryNormalization() {
+        Set<String> hidden = new LinkedHashSet<>(Arrays.asList("hidden"));
+        List<String> order = Arrays.asList("target");
+        Set<String> blacklist = new LinkedHashSet<>(Arrays.asList("blocked"));
+        Set<String> games = new LinkedHashSet<>(Arrays.asList("game"));
+        DragShareSettings constructorResult = new DragShareSettings(
+                99,
+                99,
+                DragShareSettings.MIN_EDGE_TRIGGER_DP - 1,
+                DragShareSettings.MAX_SCROLL_SPEED_DP_PER_SECOND + 1,
+                true,
+                false,
+                false,
+                99,
+                DragShareSettings.MIN_SIMPLE_MENU_OPACITY_PERCENT - 1,
+                DragShareSettings.MAX_SIMPLE_MENU_CORNER_RADIUS_DP + 1,
+                DragShareSettings.MAX_SIMPLE_MENU_EDGE_DISTANCE_DP + 1,
+                DragShareSettings.MIN_ICON_OPACITY_PERCENT - 1,
+                false,
+                hidden,
+                order,
+                99,
+                true,
+                blacklist,
+                0,
+                DragShareSettings.MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT + 1,
+                DragShareSettings.MAX_MODERN_BLUR_RADIUS_DP + 1,
+                DragShareSettings.MIN_MODERN_GLASS_OPACITY_PERCENT - 1,
+                99,
+                99,
+                true,
+                games);
+
+        DragShareSettings builderResult = DragShareSettings.builder()
+                .setColorMode(99)
+                .setUiStyle(99)
+                .setEdgeTriggerDp(DragShareSettings.MIN_EDGE_TRIGGER_DP - 1)
+                .setScrollSpeedDpPerSecond(DragShareSettings.MAX_SCROLL_SPEED_DP_PER_SECOND + 1)
+                .setBlockBackgroundScroll(true)
+                .setTextSharingEnabled(false)
+                .setImageSharingEnabled(false)
+                .setSimpleMenuPosition(99)
+                .setSimpleMenuOpacityPercent(DragShareSettings.MIN_SIMPLE_MENU_OPACITY_PERCENT - 1)
+                .setSimpleMenuCornerRadiusDp(DragShareSettings.MAX_SIMPLE_MENU_CORNER_RADIUS_DP + 1)
+                .setSimpleMenuEdgeDistanceDp(DragShareSettings.MAX_SIMPLE_MENU_EDGE_DISTANCE_DP + 1)
+                .setIconOpacityPercent(DragShareSettings.MIN_ICON_OPACITY_PERCENT - 1)
+                .setCloseMenuWhenPointerLeaves(false)
+                .setHiddenTargetKeys(hidden)
+                .setTargetOrder(order)
+                .setContentCaptureMode(99)
+                .setAccessibilityLandscapeRecognitionEnabled(true)
+                .setAccessibilityBlacklistedPackages(blacklist)
+                .setAccessibilityLongPressTimeoutMillis(0)
+                .setAccessibilityRecognitionSensitivityPercent(
+                        DragShareSettings.MAX_ACCESSIBILITY_RECOGNITION_SENSITIVITY_PERCENT + 1)
+                .setModernBlurRadiusDp(DragShareSettings.MAX_MODERN_BLUR_RADIUS_DP + 1)
+                .setModernGlassOpacityPercent(
+                        DragShareSettings.MIN_MODERN_GLASS_OPACITY_PERCENT - 1)
+                .setLogLevel(99)
+                .setLogDestination(99)
+                .setPauseAutomaticInGames(true)
+                .setManualGamePackages(games)
+                .build();
+
+        assertSettingsEqual(constructorResult, builderResult);
+    }
+
+    private static DragShareSettings nonDefaultSettings() {
+        return DragShareSettings.builder()
+                .setColorMode(DragShareSettings.COLOR_SYSTEM)
+                .setContentCaptureMode(DragShareSettings.CONTENT_CAPTURE_ACCESSIBILITY)
+                .setUiStyle(DragShareSettings.STYLE_CIRCLE)
+                .setEdgeTriggerDp(91)
+                .setScrollSpeedDpPerSecond(777)
+                .setBlockBackgroundScroll(true)
+                .setTextSharingEnabled(false)
+                .setImageSharingEnabled(false)
+                .setSimpleMenuPosition(DragShareSettings.SIMPLE_MENU_POSITION_TOP)
+                .setSimpleMenuOpacityPercent(83)
+                .setSimpleMenuCornerRadiusDp(17)
+                .setSimpleMenuEdgeDistanceDp(23)
+                .setIconOpacityPercent(47)
+                .setModernBlurRadiusDp(88)
+                .setModernGlassOpacityPercent(91)
+                .setCloseMenuWhenPointerLeaves(false)
+                .setHiddenTargetKeys(new LinkedHashSet<>(Arrays.asList("target.hidden")))
+                .setTargetOrder(Arrays.asList("target.first", "target.second"))
+                .setAccessibilityLandscapeRecognitionEnabled(true)
+                .setAccessibilityBlacklistedPackages(
+                        new LinkedHashSet<>(Arrays.asList("app.blocked")))
+                .setAccessibilityLongPressTimeoutMillis(1250)
+                .setAccessibilityRecognitionSensitivityPercent(137)
+                .setLogLevel(DragShareSettings.LOG_LEVEL_DEBUG)
+                .setLogDestination(DragShareSettings.LOG_DESTINATION_FILE)
+                .setPauseAutomaticInGames(true)
+                .setManualGamePackages(new LinkedHashSet<>(Arrays.asList("app.game")))
+                .build();
+    }
+
+    private static void assertSettingsEqual(
+            DragShareSettings expected,
+            DragShareSettings actual) {
+        assertSettingsEqualExcept(expected, actual);
+    }
+
+    private static void assertSettingsEqualExcept(
+            DragShareSettings expected,
+            DragShareSettings actual,
+            String... excludedFields) {
+        List<String> excluded = Arrays.asList(excludedFields);
+        if (!excluded.contains("colorMode")) assertEquals(expected.colorMode, actual.colorMode);
+        if (!excluded.contains("contentCaptureMode")) assertEquals(expected.contentCaptureMode, actual.contentCaptureMode);
+        if (!excluded.contains("uiStyle")) assertEquals(expected.uiStyle, actual.uiStyle);
+        if (!excluded.contains("edgeTriggerDp")) assertEquals(expected.edgeTriggerDp, actual.edgeTriggerDp);
+        if (!excluded.contains("scrollSpeedDpPerSecond")) assertEquals(expected.scrollSpeedDpPerSecond, actual.scrollSpeedDpPerSecond);
+        if (!excluded.contains("blockBackgroundScroll")) assertEquals(expected.blockBackgroundScroll, actual.blockBackgroundScroll);
+        if (!excluded.contains("textSharingEnabled")) assertEquals(expected.textSharingEnabled, actual.textSharingEnabled);
+        if (!excluded.contains("imageSharingEnabled")) assertEquals(expected.imageSharingEnabled, actual.imageSharingEnabled);
+        if (!excluded.contains("simpleMenuPosition")) assertEquals(expected.simpleMenuPosition, actual.simpleMenuPosition);
+        if (!excluded.contains("simpleMenuOpacityPercent")) assertEquals(expected.simpleMenuOpacityPercent, actual.simpleMenuOpacityPercent);
+        if (!excluded.contains("simpleMenuCornerRadiusDp")) assertEquals(expected.simpleMenuCornerRadiusDp, actual.simpleMenuCornerRadiusDp);
+        if (!excluded.contains("simpleMenuEdgeDistanceDp")) assertEquals(expected.simpleMenuEdgeDistanceDp, actual.simpleMenuEdgeDistanceDp);
+        if (!excluded.contains("iconOpacityPercent")) assertEquals(expected.iconOpacityPercent, actual.iconOpacityPercent);
+        if (!excluded.contains("modernBlurRadiusDp")) assertEquals(expected.modernBlurRadiusDp, actual.modernBlurRadiusDp);
+        if (!excluded.contains("modernGlassOpacityPercent")) assertEquals(expected.modernGlassOpacityPercent, actual.modernGlassOpacityPercent);
+        if (!excluded.contains("closeMenuWhenPointerLeaves")) assertEquals(expected.closeMenuWhenPointerLeaves, actual.closeMenuWhenPointerLeaves);
+        if (!excluded.contains("hiddenTargetKeys")) assertEquals(expected.hiddenTargetKeys, actual.hiddenTargetKeys);
+        if (!excluded.contains("targetOrder")) assertEquals(expected.targetOrder, actual.targetOrder);
+        if (!excluded.contains("accessibilityLandscapeRecognitionEnabled")) assertEquals(expected.accessibilityLandscapeRecognitionEnabled, actual.accessibilityLandscapeRecognitionEnabled);
+        if (!excluded.contains("accessibilityBlacklistedPackages")) assertEquals(expected.accessibilityBlacklistedPackages, actual.accessibilityBlacklistedPackages);
+        if (!excluded.contains("accessibilityLongPressTimeoutMillis")) assertEquals(expected.accessibilityLongPressTimeoutMillis, actual.accessibilityLongPressTimeoutMillis);
+        if (!excluded.contains("accessibilityRecognitionSensitivityPercent")) assertEquals(expected.accessibilityRecognitionSensitivityPercent, actual.accessibilityRecognitionSensitivityPercent);
+        if (!excluded.contains("logLevel")) assertEquals(expected.logLevel, actual.logLevel);
+        if (!excluded.contains("logDestination")) assertEquals(expected.logDestination, actual.logDestination);
+        if (!excluded.contains("pauseAutomaticInGames")) assertEquals(expected.pauseAutomaticInGames, actual.pauseAutomaticInGames);
+        if (!excluded.contains("manualGamePackages")) assertEquals(expected.manualGamePackages, actual.manualGamePackages);
+    }
+
+    private static void assertUnmodifiableSet(Set<String> values) {
+        try {
+            values.add("must.not.be.added");
+            throw new AssertionError("Expected an immutable set");
+        } catch (UnsupportedOperationException expected) {
+            // The settings value owns an immutable snapshot.
+        }
+    }
+
+    private static void assertUnmodifiableList(List<String> values) {
+        try {
+            values.add("must.not.be.added");
+            throw new AssertionError("Expected an immutable list");
+        } catch (UnsupportedOperationException expected) {
+            // The settings value owns an immutable snapshot.
+        }
     }
 
 }

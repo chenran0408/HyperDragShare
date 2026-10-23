@@ -700,6 +700,249 @@ public final class DragShareSettings {
         this.manualGamePackages = immutableKeys(manualGamePackages);
     }
 
+    /** Starts a settings builder populated with the current defaults. */
+    public static Builder builder() {
+        return new Builder(defaults());
+    }
+
+    /** Copies this immutable settings value into a builder. */
+    public Builder toBuilder() {
+        return new Builder(this);
+    }
+
+    /**
+     * Mutable copy used to create one immutable {@link DragShareSettings} value.
+     * Collection setters take a snapshot immediately; validation remains in the
+     * existing full constructor invoked by {@link #build()}.
+     */
+    public static final class Builder {
+        private int colorMode;
+        private int contentCaptureMode;
+        private int uiStyle;
+        private int edgeTriggerDp;
+        private int scrollSpeedDpPerSecond;
+        private boolean blockBackgroundScroll;
+        private boolean textSharingEnabled;
+        private boolean imageSharingEnabled;
+        private int simpleMenuPosition;
+        private int simpleMenuOpacityPercent;
+        private int simpleMenuCornerRadiusDp;
+        private int simpleMenuEdgeDistanceDp;
+        private int iconOpacityPercent;
+        private int modernBlurRadiusDp;
+        private int modernGlassOpacityPercent;
+        private boolean closeMenuWhenPointerLeaves;
+        private Set<String> hiddenTargetKeys;
+        private List<String> targetOrder;
+        private boolean accessibilityLandscapeRecognitionEnabled;
+        private Set<String> accessibilityBlacklistedPackages;
+        private int accessibilityLongPressTimeoutMillis;
+        private int accessibilityRecognitionSensitivityPercent;
+        private int logLevel;
+        private int logDestination;
+        private boolean pauseAutomaticInGames;
+        private Set<String> manualGamePackages;
+
+        private Builder(DragShareSettings source) {
+            colorMode = source.colorMode;
+            contentCaptureMode = source.contentCaptureMode;
+            uiStyle = source.uiStyle;
+            edgeTriggerDp = source.edgeTriggerDp;
+            scrollSpeedDpPerSecond = source.scrollSpeedDpPerSecond;
+            blockBackgroundScroll = source.blockBackgroundScroll;
+            textSharingEnabled = source.textSharingEnabled;
+            imageSharingEnabled = source.imageSharingEnabled;
+            simpleMenuPosition = source.simpleMenuPosition;
+            simpleMenuOpacityPercent = source.simpleMenuOpacityPercent;
+            simpleMenuCornerRadiusDp = source.simpleMenuCornerRadiusDp;
+            simpleMenuEdgeDistanceDp = source.simpleMenuEdgeDistanceDp;
+            iconOpacityPercent = source.iconOpacityPercent;
+            modernBlurRadiusDp = source.modernBlurRadiusDp;
+            modernGlassOpacityPercent = source.modernGlassOpacityPercent;
+            closeMenuWhenPointerLeaves = source.closeMenuWhenPointerLeaves;
+            hiddenTargetKeys = copySet(source.hiddenTargetKeys);
+            targetOrder = copyList(source.targetOrder);
+            accessibilityLandscapeRecognitionEnabled =
+                    source.accessibilityLandscapeRecognitionEnabled;
+            accessibilityBlacklistedPackages = copySet(source.accessibilityBlacklistedPackages);
+            accessibilityLongPressTimeoutMillis = source.accessibilityLongPressTimeoutMillis;
+            accessibilityRecognitionSensitivityPercent =
+                    source.accessibilityRecognitionSensitivityPercent;
+            logLevel = source.logLevel;
+            logDestination = source.logDestination;
+            pauseAutomaticInGames = source.pauseAutomaticInGames;
+            manualGamePackages = copySet(source.manualGamePackages);
+        }
+
+        private static Set<String> copySet(Set<String> values) {
+            return values == null ? null : new LinkedHashSet<>(values);
+        }
+
+        private static List<String> copyList(List<String> values) {
+            return values == null ? null : new ArrayList<>(values);
+        }
+
+        public Builder setColorMode(int value) {
+            colorMode = value;
+            return this;
+        }
+
+        public Builder setContentCaptureMode(int value) {
+            contentCaptureMode = value;
+            return this;
+        }
+
+        public Builder setUiStyle(int value) {
+            uiStyle = value;
+            return this;
+        }
+
+        public Builder setEdgeTriggerDp(int value) {
+            edgeTriggerDp = value;
+            return this;
+        }
+
+        public Builder setScrollSpeedDpPerSecond(int value) {
+            scrollSpeedDpPerSecond = value;
+            return this;
+        }
+
+        public Builder setBlockBackgroundScroll(boolean value) {
+            blockBackgroundScroll = value;
+            return this;
+        }
+
+        public Builder setTextSharingEnabled(boolean value) {
+            textSharingEnabled = value;
+            return this;
+        }
+
+        public Builder setImageSharingEnabled(boolean value) {
+            imageSharingEnabled = value;
+            return this;
+        }
+
+        public Builder setSimpleMenuPosition(int value) {
+            simpleMenuPosition = value;
+            return this;
+        }
+
+        public Builder setSimpleMenuOpacityPercent(int value) {
+            simpleMenuOpacityPercent = value;
+            return this;
+        }
+
+        public Builder setSimpleMenuCornerRadiusDp(int value) {
+            simpleMenuCornerRadiusDp = value;
+            return this;
+        }
+
+        public Builder setSimpleMenuEdgeDistanceDp(int value) {
+            simpleMenuEdgeDistanceDp = value;
+            return this;
+        }
+
+        public Builder setIconOpacityPercent(int value) {
+            iconOpacityPercent = value;
+            return this;
+        }
+
+        public Builder setModernBlurRadiusDp(int value) {
+            modernBlurRadiusDp = value;
+            return this;
+        }
+
+        public Builder setModernGlassOpacityPercent(int value) {
+            modernGlassOpacityPercent = value;
+            return this;
+        }
+
+        public Builder setCloseMenuWhenPointerLeaves(boolean value) {
+            closeMenuWhenPointerLeaves = value;
+            return this;
+        }
+
+        public Builder setHiddenTargetKeys(Set<String> values) {
+            hiddenTargetKeys = copySet(values);
+            return this;
+        }
+
+        public Builder setTargetOrder(List<String> values) {
+            targetOrder = copyList(values);
+            return this;
+        }
+
+        public Builder setAccessibilityLandscapeRecognitionEnabled(boolean value) {
+            accessibilityLandscapeRecognitionEnabled = value;
+            return this;
+        }
+
+        public Builder setAccessibilityBlacklistedPackages(Set<String> values) {
+            accessibilityBlacklistedPackages = copySet(values);
+            return this;
+        }
+
+        public Builder setAccessibilityLongPressTimeoutMillis(int value) {
+            accessibilityLongPressTimeoutMillis = value;
+            return this;
+        }
+
+        public Builder setAccessibilityRecognitionSensitivityPercent(int value) {
+            accessibilityRecognitionSensitivityPercent = value;
+            return this;
+        }
+
+        public Builder setLogLevel(int value) {
+            logLevel = value;
+            return this;
+        }
+
+        public Builder setLogDestination(int value) {
+            logDestination = value;
+            return this;
+        }
+
+        public Builder setPauseAutomaticInGames(boolean value) {
+            pauseAutomaticInGames = value;
+            return this;
+        }
+
+        public Builder setManualGamePackages(Set<String> values) {
+            manualGamePackages = copySet(values);
+            return this;
+        }
+
+        public DragShareSettings build() {
+            return new DragShareSettings(
+                    colorMode,
+                    uiStyle,
+                    edgeTriggerDp,
+                    scrollSpeedDpPerSecond,
+                    blockBackgroundScroll,
+                    textSharingEnabled,
+                    imageSharingEnabled,
+                    simpleMenuPosition,
+                    simpleMenuOpacityPercent,
+                    simpleMenuCornerRadiusDp,
+                    simpleMenuEdgeDistanceDp,
+                    iconOpacityPercent,
+                    closeMenuWhenPointerLeaves,
+                    hiddenTargetKeys,
+                    targetOrder,
+                    contentCaptureMode,
+                    accessibilityLandscapeRecognitionEnabled,
+                    accessibilityBlacklistedPackages,
+                    accessibilityLongPressTimeoutMillis,
+                    accessibilityRecognitionSensitivityPercent,
+                    modernBlurRadiusDp,
+                    modernGlassOpacityPercent,
+                    logLevel,
+                    logDestination,
+                    pauseAutomaticInGames,
+                    manualGamePackages);
+        }
+    }
+
     public static DragShareSettings defaults() {
         return new DragShareSettings(
                 COLOR_LIGHT,
