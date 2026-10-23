@@ -1471,3 +1471,7 @@ build375共404项单测0失败/错误/跳过；修复Lint缩进后build376的lin
 - `testDebugUnitTest lintDebug assembleRelease` 成功：406 tests、0 failed/error/skipped；Lint 0 errors/188 warnings/2 hints；R8、资源压缩及 arm64-only 均确认。
 - 安装 `1.7.189/213`，设备 `base.apk` SHA256 与交付 APK 同为 `1DA13F528CB29188E75661988D04BDB9D7C557F730AB73C80B9AFD64461C9C29`。Portal PID 9040 已加载，Root input ready 218ms，press reader ready 531ms。
 - 未使用 ADB 注入代替真实按压。当前页面的真实物理拖拽和落点到目标应用尚未验收；测试没有保留含 WLAN 密码的截图，也未提交用户页面内容。
+
+## 2026-10-23 beta.12 验证边界
+
+最终版本254包已构建并验签，529逻辑/Robolectric测试通过，Lint0错误187警告2提示。Xiaomi 2410DPN6CC / Android17 / HyperOS4前期只做beta11生成文字面板和系统玻璃API元数据验证；最终beta12安装前ADB设备已断开。未安装或热重载254，未把历史版本253宿主自报视为254。没有新整机/软重启、没有清数据或发送消息。完整未验项目及恢复顺序见FEEDBACK_2026_10_23_BETA12.md和本轮外部TASK_CHECKLIST。
