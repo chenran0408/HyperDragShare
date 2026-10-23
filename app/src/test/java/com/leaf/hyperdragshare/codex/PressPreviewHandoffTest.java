@@ -354,6 +354,53 @@ public final class PressPreviewHandoffTest {
         }
     }
 
+    @Test public void unclassifiedWeChatImageIsNotPresentedAsAnOriginal() throws Exception {
+        DragShareController controller = controller();
+        down(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(
+                RuntimeEnvironment.getApplication(), null, controller, DragShareSettings.defaults());
+        Bitmap bitmap = Bitmap.createBitmap(3, 3, Bitmap.Config.ARGB_8888);
+        CapturedContent candidate = CapturedContent.image(
+                bitmap, "com.tencent.mm", new Rect(10, 20, 300, 500), true);
+
+        try {
+            java.lang.reflect.Method openImage = PressCaptureSource.class.getDeclaredMethod(
+                    "openImage", long.class, CapturedContent.class);
+            openImage.setAccessible(true);
+            openImage.invoke(source, 8L, candidate);
+            ShadowLooper.shadowMainLooper().idle();
+
+            assertNull(field(controller, "session").get(controller));
+            assertTrue(bitmap.isRecycled());
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!bitmap.isRecycled()) bitmap.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void portalMediaImageIsTheOnlyTrustedWeChatImageOrigin() {
+        Bitmap portalImage = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        Bitmap rootImage = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        Bitmap unknownImage = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+        try {
+            CapturedContent portal = CapturedContent.portalMediaImage(
+                    portalImage, "com.tencent.mm", new Rect(0, 0, 2, 2));
+            CapturedContent root = CapturedContent.screenCaptureImage(
+                    rootImage, "com.tencent.mm", new Rect(0, 0, 2, 2));
+
+            assertEquals(CapturedContent.ImageOrigin.PORTAL_MEDIA, portal.imageOrigin);
+            assertEquals(CapturedContent.ImageOrigin.SCREEN_CAPTURE, root.imageOrigin);
+            assertEquals(CapturedContent.ImageOrigin.UNKNOWN,
+                    CapturedContent.image(unknownImage, "com.tencent.mm", new Rect(), true).imageOrigin);
+        } finally {
+            if (!portalImage.isRecycled()) portalImage.recycle();
+            if (!rootImage.isRecycled()) rootImage.recycle();
+            if (!unknownImage.isRecycled()) unknownImage.recycle();
+        }
+    }
+
     @Test public void portalImageCallbackFromOldDownTimeIsRejectedByPressSource() throws Exception {
         DragShareController controller = controller();
         down(controller, 100L);

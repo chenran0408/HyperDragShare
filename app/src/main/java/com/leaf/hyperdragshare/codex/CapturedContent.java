@@ -5,6 +5,12 @@ import android.graphics.Rect;
 
 /** Immutable, source-neutral content handed to the common share UI. */
 final class CapturedContent {
+    enum ImageOrigin {
+        UNKNOWN,
+        PORTAL_MEDIA,
+        SCREEN_CAPTURE
+    }
+
     enum Kind {
         TEXT,
         IMAGE
@@ -19,8 +25,7 @@ final class CapturedContent {
     final Rect sourceBounds;
     final boolean bitmapOwnedByDragShare;
     final boolean pressOcrRegion;
-    /** True when pixels came from a screen capture rather than the source app's media payload. */
-    final boolean screenCaptureImage;
+    final ImageOrigin imageOrigin;
 
     private CapturedContent(
             Kind kind,
@@ -30,7 +35,7 @@ final class CapturedContent {
             Rect sourceBounds,
             boolean bitmapOwnedByDragShare,
             boolean pressOcrRegion,
-            boolean screenCaptureImage,
+            ImageOrigin imageOrigin,
             String beforeText,
             String afterText) {
         this.kind = kind;
@@ -42,7 +47,7 @@ final class CapturedContent {
         this.sourceBounds = sourceBounds == null ? null : new Rect(sourceBounds);
         this.bitmapOwnedByDragShare = bitmapOwnedByDragShare;
         this.pressOcrRegion = pressOcrRegion;
-        this.screenCaptureImage = screenCaptureImage;
+        this.imageOrigin = imageOrigin;
     }
 
     static CapturedContent text(String value, String sourcePackage, Rect sourceBounds) {
@@ -55,7 +60,7 @@ final class CapturedContent {
             return null;
         }
         return new CapturedContent(Kind.TEXT, value, null, sourcePackage, sourceBounds,
-                false, false, false, beforeText, afterText);
+                false, false, ImageOrigin.UNKNOWN, beforeText, afterText);
     }
 
     static CapturedContent image(
@@ -74,7 +79,7 @@ final class CapturedContent {
                 sourceBounds,
                 bitmapOwnedByDragShare,
                 false,
-                false,
+                ImageOrigin.UNKNOWN,
                 null,
                 null);
     }
@@ -85,13 +90,19 @@ final class CapturedContent {
             Rect sourceBounds) {
         if (value == null || value.isRecycled()) return null;
         return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
-                true, false, true, null, null);
+                true, false, ImageOrigin.SCREEN_CAPTURE, null, null);
+    }
+
+    static CapturedContent portalMediaImage(Bitmap value, String sourcePackage, Rect sourceBounds) {
+        if (value == null || value.isRecycled()) return null;
+        return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
+                true, false, ImageOrigin.PORTAL_MEDIA, null, null);
     }
 
     static CapturedContent pressOcrRegion(Bitmap value, String sourcePackage, Rect sourceBounds) {
         if (value == null || value.isRecycled()) return null;
         return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
-                true, true, true, null, null);
+                true, true, ImageOrigin.SCREEN_CAPTURE, null, null);
     }
 
     boolean isImage() {

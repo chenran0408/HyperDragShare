@@ -69,7 +69,7 @@ final class PortalContentCaptureSource {
                             + " origin=" + imageOrigin(imageMode)
                             + " bounds=" + sourceBounds
                             + " bitmap=" + snapshot.getWidth() + "x" + snapshot.getHeight());
-            return CapturedContent.image(snapshot, sourcePackage, sourceBounds, true);
+            return CapturedContent.portalMediaImage(snapshot, sourcePackage, sourceBounds);
         } catch (NoSuchFieldError | NoSuchMethodError | XposedHelpers.InvocationTargetError | RuntimeException error) {
             DragShareLog.w("DragShare/PortalCapture", "Unable to read portal 5.1.5 content; keeping host behavior", error);
             if (taplusService instanceof android.content.Context) {

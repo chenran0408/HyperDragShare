@@ -417,7 +417,7 @@ final class PressCaptureSource {
             openWeChatOcrDirect(request, content);
             return;
         }
-        if (isWeChatScreenCapture(content)) {
+        if (isUnverifiedWeChatImage(content)) {
             rejectWeChatScreenCapture(content, "image_candidate");
             return;
         }
@@ -485,7 +485,7 @@ final class PressCaptureSource {
             return;
         }
         CapturedContent source = pending.content;
-        if (isWeChatScreenCapture(source)) {
+        if (isUnverifiedWeChatImage(source)) {
             pendingWeChat = null;
             generation++;
             weChatImageDragIntent = false;
@@ -594,15 +594,18 @@ final class PressCaptureSource {
         }
     }
 
-    private static boolean isWeChatScreenCapture(CapturedContent content) {
+    private static boolean isUnverifiedWeChatImage(CapturedContent content) {
         return content != null && "com.tencent.mm".equals(content.sourcePackage)
-                && content.isImage() && content.screenCaptureImage;
+                && content.isImage()
+                && content.imageOrigin != CapturedContent.ImageOrigin.PORTAL_MEDIA;
     }
 
     private void rejectWeChatScreenCapture(CapturedContent content, String stage) {
-        DragShareLog.i(TAG, "WeChat image drag rejected source=screen_capture stage=" + stage);
+        DragShareLog.i(TAG, "WeChat image drag rejected source="
+                + (content == null ? "unknown" : content.imageOrigin.name().toLowerCase())
+                + " stage=" + stage);
         recycle(content);
-        showFailure("微信当前没有提供原图，已取消截图拖拽；请通过传送门选择原图");
+        showFailure("这次按压没有取得可用原图，已取消截图拖拽；请通过传送门选择原图");
         controller.endPressPipeline(downTime);
         blocker.stopAsync();
     }
