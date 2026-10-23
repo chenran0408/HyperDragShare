@@ -435,6 +435,16 @@ internal class BigBangPanelSession(private val context: Context, private val act
         when (action) {
             BigBangMoreAction.Direct -> showDirectActions(selectedTextOrOriginal())
             BigBangMoreAction.Dictionary -> openSearch(selectedTextOrOriginal(), BoomActionHandler.SEARCH_DICTIONARY)
+            BigBangMoreAction.Share -> {
+                val text = selectedTextOrOriginal()
+                if (text.isNotBlank()) {
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, text)
+                    }
+                    actions.openExternal(android.content.Intent.createChooser(send, null))
+                }
+            }
             BigBangMoreAction.Split, BigBangMoreAction.Merge -> {
                 val page = boomChipPage ?: return
                 val previous = Bundle().also {

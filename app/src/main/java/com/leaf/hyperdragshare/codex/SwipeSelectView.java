@@ -204,11 +204,17 @@ public class SwipeSelectView extends LinearLayout {
     }
 
     private void finishTouch() {
+        boolean wasSelecting = mGesture == Gesture.SELECTING;
         mGesture = Gesture.IDLE;
         requestDisallowInterceptTouchEvent(false);
         mAutoScrollVelocity = 0;
         removeCallbacks(mStartDrag);
         removeCallbacks(mAutoScroll);
+        if (wasSelecting) mBoomPage.notifySelectionChanged();
+    }
+
+    boolean isSelectionGestureActive() {
+        return mGesture == Gesture.SELECTING;
     }
 
     @Override protected void onDetachedFromWindow() {

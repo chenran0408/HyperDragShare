@@ -167,6 +167,47 @@ public class SwipeSelectViewTest {
         assertTrue(page.mBoomActionHandler.mSelectedId.isEmpty());
     }
 
+    @Test public void slidingSelectionKeepsRowsStillUntilGestureEnds() {
+        open();
+        page.prepareForReinit();
+        int wordCount = 80;
+        int[] segments = new int[wordCount * 2 + 1];
+        StringBuilder text = new StringBuilder(wordCount);
+        for (int i = 0; i < wordCount; i++) {
+            segments[i * 2] = segments[i * 2 + 1] = i;
+            text.append('甲');
+        }
+        segments[segments.length - 1] = -1;
+        assertTrue(page.initWords(segments, text.toString(), -1, -1, -1));
+        root.measure(View.MeasureSpec.makeMeasureSpec(480, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY));
+        root.layout(0, 0, 480, 800);
+        assertTrue(words.getChildCount() >= 3);
+
+        LinearLayout firstRow = (LinearLayout) words.getChildAt(0);
+        View firstChip = firstRow.getChildAt(0);
+        LinearLayout secondRow = (LinearLayout) words.getChildAt(1);
+        View lastSecondRowChip = secondRow.getChildAt(secondRow.getChildCount() - 1);
+        float startX = firstRow.getLeft() + firstChip.getLeft() + firstChip.getWidth() / 2f;
+        float startY = firstRow.getTop() + firstChip.getTop() + firstChip.getHeight() / 2f;
+        float endX = secondRow.getLeft() + lastSecondRowChip.getLeft()
+                + lastSecondRowChip.getWidth() / 2f;
+        float endY = secondRow.getTop() + lastSecondRowChip.getTop()
+                + lastSecondRowChip.getHeight() / 2f;
+        LinearLayout rowBelowSelection = (LinearLayout) words.getChildAt(2);
+
+        event(MotionEvent.ACTION_DOWN, startX, startY);
+        event(MotionEvent.ACTION_MOVE, endX, endY);
+        assertTrue(words.isSelectionGestureActive());
+        assertEquals(0f, rowBelowSelection.getTranslationY(), 0f);
+
+        event(MotionEvent.ACTION_UP, endX, endY);
+        assertFalse(words.isSelectionGestureActive());
+        ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(500));
+        assertEquals(context.getResources().getDimensionPixelSize(R.dimen.chip_row_move_down_offset),
+                rowBelowSelection.getTranslationY(), 0.1f);
+    }
+
     @Test public void horizontalIntentIsNotStolenByTheVerticalScrollView() {
         open();
         page.mScroller.setEdgeDragEnabled(false);

@@ -243,7 +243,11 @@ public class BoomChipPage {
                 ? mLayout.getRowForIndex(mBoomActionHandler.mSelectedId.first()) : -1;
         int bottomRow = hasSelection
                 ? mLayout.getRowForIndex(mBoomActionHandler.mSelectedId.last()) : -1;
-        if (topRow != mPresentedTopRow || bottomRow != mPresentedBottomRow) {
+        // Sliding selection can cross word rows on every MotionEvent. Keep the rows
+        // stationary while the finger is down; restarting their entrance/exit
+        // animators at touch frequency makes the selection visibly flicker.
+        if (!mBoomConent.isSelectionGestureActive()
+                && (topRow != mPresentedTopRow || bottomRow != mPresentedBottomRow)) {
             for (int rowIndex = 0; rowIndex < mLayout.getRowCount(); rowIndex++) {
                 float target = !hasSelection ? 0f
                         : rowIndex < topRow ? mSelectionRowMoveUpOffset

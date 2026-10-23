@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
@@ -89,6 +90,7 @@ import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Tasks
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 
 private val SELECTION_ACTION_TOOLBAR_HEIGHT = 48.dp
@@ -112,6 +114,7 @@ internal enum class BigBangMoreAction {
     Direct,
     Split,
     Merge,
+    Share,
     Translate,
     UndoEdit,
     TextSize,
@@ -182,7 +185,7 @@ internal fun BigBangOverlayContent(
     val hasSelectionToolbar = hasTextSelection && actionReady && selectionActionAnchorY >= 0
     val selectionToolbarTopInset = if (hasSelectionToolbar) SELECTION_ACTION_TOP_RESERVE else 0.dp
     val naturalPanelHeight = (bodyHeightPx / density).dp +
-        (if (hasSelectionToolbar) 60.dp + selectionToolbarTopInset else 187.dp) +
+        (if (hasSelectionToolbar) SELECTION_ACTION_TOOLBAR_HEIGHT + selectionToolbarTopInset else 187.dp) +
         (if (isRecognizing) 88.dp else 0.dp)
     val panelMetrics = if (maximumMetrics.fullScreen) maximumMetrics else maximumMetrics.copy(
         height = minOf(maximumMetrics.height, naturalPanelHeight),
@@ -207,6 +210,7 @@ internal fun BigBangOverlayContent(
     val panelShape = androidx.compose.foundation.shape.RoundedCornerShape(panelMetrics.cornerRadius)
     var panelVisible by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showSelectionMore by remember { mutableStateOf(false) }
     var showEditor by remember { mutableStateOf(false) }
     var editorText by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
@@ -485,60 +489,31 @@ internal fun BigBangOverlayContent(
                                     modifier = Modifier.align(Alignment.TopCenter)
                                         .offset(y = toolbarY)
                                         .widthIn(max = maxWidth)
-                                        .horizontalScroll(rememberScrollState())
+                                        .height(SELECTION_ACTION_TOOLBAR_HEIGHT)
                                         .background(
                                             MiuixTheme.colorScheme.surfaceContainer.copy(alpha = panelOpacity),
                                             RoundedCornerShape(16.dp),
                                         )
+                                        .border(1.dp, panelBorder.copy(alpha = panelOpacity), RoundedCornerShape(16.dp))
+                                        .horizontalScroll(rememberScrollState())
                                         .padding(horizontal = 4.dp, vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp), MiuixIcons.Search,
-                                        "搜索选中内容", onSearch, actionReady,
-                                    )
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp), DictionaryIcon,
+                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Search,
+                                        "搜索选中内容", onSearch, actionReady)
+                                    BigBangToolbarAction(Modifier.width(44.dp), DictionaryIcon,
                                         "用词典查询选中内容",
-                                        { onMoreAction(BigBangMoreAction.Dictionary) }, actionReady,
-                                    )
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp), MiuixIcons.Cut,
-                                        "拆分选中词语", { onMoreAction(BigBangMoreAction.Split) },
-                                        canSplit,
-                                    )
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp), MiuixIcons.Merge,
-                                        "合并选中词语", { onMoreAction(BigBangMoreAction.Merge) },
-                                        canMerge,
-                                    )
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp),
-                                        MiuixIcons.Copy,
-                                        if (copying) "正在复制" else "复制选中内容",
-                                        onCopy,
-                                        actionReady && !copying,
-                                        primary = true,
-                                    )
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp), MiuixIcons.Translate,
-                                        "翻译选中内容",
-                                        { onMoreAction(BigBangMoreAction.Translate) }, actionReady,
-                                    )
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp), MiuixIcons.Link,
-                                        "链接、邮箱与电话直达",
-                                        { onMoreAction(BigBangMoreAction.Direct) },
-                                        actionReady,
-                                        primary = directAction != null,
-                                    )
-                                    BigBangToolbarAction(
-                                        Modifier.width(44.dp), MiuixIcons.Folder,
-                                        if (stashing) "正在加入中转站" else "加入中转站",
-                                        onStash,
-                                        actionReady && !stashing,
-                                    )
+                                        { onMoreAction(BigBangMoreAction.Dictionary) }, actionReady)
+                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Cut,
+                                        "拆分选中词语", { onMoreAction(BigBangMoreAction.Split) }, canSplit)
+                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Share,
+                                        "分享选中内容", { onMoreAction(BigBangMoreAction.Share) }, actionReady)
+                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.Copy,
+                                        if (copying) "正在复制" else "复制选中内容", onCopy,
+                                        actionReady && !copying, primary = true)
+                                    BigBangToolbarAction(Modifier.width(44.dp), MiuixIcons.More,
+                                        "更多选中操作", { showSelectionMore = true }, actionReady)
                                 }
                             }
                         }
@@ -654,6 +629,41 @@ internal fun BigBangOverlayContent(
                         enabled = ready,
                         onClick = { onMoreAction(BigBangMoreAction.PanelAdjustment) },
                     )
+                }
+            }
+        }
+    }
+
+    OverlayDialog(
+        show = showSelectionMore,
+        title = "选中内容操作",
+        onDismissRequest = { showSelectionMore = false },
+    ) {
+        Column(
+            modifier = Modifier
+                .heightIn(max = (configuration.screenHeightDp * 0.55f).dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Card {
+                Column {
+                    BigBangMoreRow(MiuixIcons.Merge, "合并选中词语", canMerge) {
+                        showSelectionMore = false
+                        onMoreAction(BigBangMoreAction.Merge)
+                    }
+                    BigBangMoreRow(MiuixIcons.Translate, "翻译选中内容", actionReady) {
+                        showSelectionMore = false
+                        onMoreAction(BigBangMoreAction.Translate)
+                    }
+                    BigBangMoreRow(MiuixIcons.Link, "链接、邮箱与电话直达", actionReady) {
+                        showSelectionMore = false
+                        onMoreAction(BigBangMoreAction.Direct)
+                    }
+                    BigBangMoreRow(MiuixIcons.Folder,
+                        if (stashing) "正在加入中转站" else "加入中转站",
+                        actionReady && !stashing) {
+                        showSelectionMore = false
+                        onStash()
+                    }
                 }
             }
         }
