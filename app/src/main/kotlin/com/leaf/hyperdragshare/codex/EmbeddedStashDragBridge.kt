@@ -6,7 +6,7 @@ import android.os.Handler
 /** Keeps the module-side drag state alive while the native host window owns system drag startup. */
 internal class EmbeddedStashDragBridge(
     private val main: Handler,
-    private val startNativeDrag: (ClipData, Int, Callback) -> Unit,
+    private val startNativeDrag: (ClipData, Int, StashDragShadowPayload?, Callback) -> Unit,
     private val grant: (ClipData, Int) -> Unit,
     private val revoke: () -> Unit,
 ) {
@@ -24,7 +24,8 @@ internal class EmbeddedStashDragBridge(
 
     val isBusy: Boolean get() = startPending || dragActive
 
-    fun start(clip: ClipData, flags: Int, onStarted: (Boolean) -> Unit, onEnded: (Boolean) -> Unit) {
+    fun start(clip: ClipData, flags: Int, shadow: StashDragShadowPayload?,
+              onStarted: (Boolean) -> Unit, onEnded: (Boolean) -> Unit) {
         if (isBusy) {
             onStarted(false)
             return
@@ -45,7 +46,7 @@ internal class EmbeddedStashDragBridge(
             override fun onEnded(accepted: Boolean) { main.post { finishDrag(session, accepted) } }
         }
         try {
-            startNativeDrag(clip, flags, callback)
+            startNativeDrag(clip, flags, shadow, callback)
         } catch (error: Exception) {
             finishStart(session, false)
         }

@@ -217,6 +217,7 @@ final class NativeSidebarHooks {
         IBinder.DeathRecipient contentDeath;
         SurfaceView surface;
         ISidebarDragCallback dragCallback;
+        StashDragShadowBuilder dragShadow;
         final ISidebarHost host = new ISidebarHost.Stub() {
             @Override public void requestClose() {
                 turbo.post(() -> {
@@ -230,7 +231,16 @@ final class NativeSidebarHooks {
             @Override public void startDrag(ClipData clip, int flags, ISidebarDragCallback callback) {
                 enforceModuleCaller();
                 if (callback == null) return;
-                turbo.post(() -> startEmbeddedDrag(clip, flags, callback));
+                turbo.post(() -> startEmbeddedDrag(clip, flags, null, 0, 0, 0, 0, 0, 0, false, callback));
+            }
+
+            @Override public void startDragWithShadow(ClipData clip, int flags, byte[] shadowPng,
+                    int bitmapWidthPx, int bitmapHeightPx, int shadowWidthPx, int shadowHeightPx,
+                    int scaledHotspotX, int scaledHotspotY, ISidebarDragCallback callback) {
+                enforceModuleCaller();
+                if (callback == null) return;
+                turbo.post(() -> startEmbeddedDrag(clip, flags, shadowPng, bitmapWidthPx, bitmapHeightPx,
+                        shadowWidthPx, shadowHeightPx, scaledHotspotX, scaledHotspotY, true, callback));
             }
         };
 
@@ -380,6 +390,7 @@ final class NativeSidebarHooks {
             input.putBinder("host_token", target.getHostToken()); input.putBinder("owner", host.asBinder());
             input.putInt("display_id", target.getDisplay().getDisplayId());
             input.putInt("width", target.getWidth()); input.putInt("height", target.getHeight());
+            input.putBoolean(StashSurfaceHost.SIDEBAR_SHADOW_V1_CAPABILITY, true);
             ipc.execute(() -> {
                 try (ContentProviderClient provider = context.getContentResolver().acquireUnstableContentProviderClient(ImageStagingClient.BASE_URI)) {
                     if (provider == null) throw new IllegalStateException("Module provider is unavailable");
@@ -435,7 +446,9 @@ final class NativeSidebarHooks {
             }
         }
 
-        void startEmbeddedDrag(ClipData clip, int flags, ISidebarDragCallback callback) {
+        void startEmbeddedDrag(ClipData clip, int flags, byte[] shadowPng,
+                int bitmapWidthPx, int bitmapHeightPx, int shadowWidthPx, int shadowHeightPx,
+                int scaledHotspotX, int scaledHotspotY, boolean shadowV1, ISidebarDragCallback callback) {
             SurfaceView source = surface;
             int allowedFlags = View.DRAG_FLAG_GLOBAL | View.DRAG_FLAG_GLOBAL_URI_READ;
             if (disposed || selected != Section.STASH || content == null || dragCallback != null
@@ -444,7 +457,12 @@ final class NativeSidebarHooks {
                 notifyDragStarted(callback, false);
                 return;
             }
+            StashDragShadowBuilder activeShadow = shadowV1 ? StashDragShadowBuilder.decode(shadowPng,
+                    bitmapWidthPx, bitmapHeightPx, shadowWidthPx, shadowHeightPx,
+                    scaledHotspotX, scaledHotspotY) : null;
+            if (shadowV1 && activeShadow == null) { notifyDragStarted(callback, false); return; }
             dragCallback = callback;
+            dragShadow = activeShadow;
             final ISidebarDragCallback session = callback;
             source.setOnDragListener((view, event) -> {
                 if (event.getAction() == android.view.DragEvent.ACTION_DRAG_ENDED) {
@@ -455,16 +473,21 @@ final class NativeSidebarHooks {
             });
             boolean started;
             try {
-                started = source.startDragAndDrop(clip, new View.DragShadowBuilder(source), null, flags);
+                started = source.startDragAndDrop(clip,
+                        activeShadow == null ? new View.DragShadowBuilder(source) : activeShadow, null, flags);
             } catch (RuntimeException error) {
                 DragShareLog.w(TAG, "Native sidebar could not start stash drag", error);
                 started = false;
             }
-            notifyDragStarted(session, started);
             if (!started) {
                 source.setOnDragListener(null);
-                dragCallback = null;
+                if (dragCallback == session) {
+                    dragCallback = null;
+                    if (dragShadow == activeShadow) dragShadow = null;
+                    if (activeShadow != null) activeShadow.recycle();
+                }
             }
+            notifyDragStarted(session, started);
         }
 
         void notifyDragStarted(ISidebarDragCallback callback, boolean started) {
@@ -490,6 +513,9 @@ final class NativeSidebarHooks {
             dragCallback = null;
             SurfaceView source = surface;
             if (source != null) source.setOnDragListener(null);
+            StashDragShadowBuilder shadow = dragShadow;
+            dragShadow = null;
+            if (shadow != null) shadow.recycle();
             if (callback == null) return;
             try { callback.onEnded(accepted); }
             catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before end result", error); }

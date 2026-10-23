@@ -256,7 +256,7 @@ object StashOverlayPanel {
                 overlay.observeDragHandoff({ active === this@Shelf },
                     onDropped = ::collapse,
                     onFinished = { draggingContent = false })
-                embedded.startDrag(clip, flags,
+                embedded.startDrag(clip, shadow, flags,
                     onStarted = { started ->
                         if (started) {
                             val density = context.resources.displayMetrics.density

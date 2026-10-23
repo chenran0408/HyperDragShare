@@ -27,6 +27,9 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 
+internal fun sidebarHostSupportsShadowV1(openRequest: Bundle): Boolean =
+    openRequest.getBoolean(StashSurfaceHost.SIDEBAR_SHADOW_V1_CAPABILITY, false)
+
 /** Only the module UID creates the content; SecurityCenter receives a surface, never stash records. */
 @android.annotation.SuppressLint("NewApi") // Provider only admits the measured Android 17 host.
 internal class StashSurfaceHost private constructor(
@@ -34,6 +37,7 @@ internal class StashSurfaceHost private constructor(
     token: IBinder,
     private val owner: ISidebarHost,
     private val uid: Int,
+    private val ownerSupportsShadowV1: Boolean,
     private var width: Int,
     private var height: Int,
 ) : LifecycleOwner, SavedStateRegistryOwner, OnBackPressedDispatcherOwner, IBinder.DeathRecipient {
@@ -50,15 +54,16 @@ internal class StashSurfaceHost private constructor(
     private val dragGrantedUris = linkedSetOf<Uri>()
     private var dragGrantPackage: String? = null
     private val dragBridge = EmbeddedStashDragBridge(main,
-        startNativeDrag = { clip, flags, result ->
+        startNativeDrag = { clip, flags, shadow, result ->
             if (!surface.transferTouchGestureToHost()) {
                 DragShareLog.w("DragShare/Sidebar", "Unable to transfer embedded drag gesture to host window")
                 result.onStarted(false)
             } else {
-                owner.startDrag(clip, flags, object : ISidebarDragCallback.Stub() {
+                val callback = object : ISidebarDragCallback.Stub() {
                     override fun onStarted(started: Boolean) = result.onStarted(started)
                     override fun onEnded(accepted: Boolean) = result.onEnded(accepted)
-                })
+                }
+                startSidebarDrag(owner, clip, flags, shadow, callback)
             }
         },
         grant = ::grantDragUris,
@@ -121,13 +126,21 @@ internal class StashSurfaceHost private constructor(
     }
 
     /** The windowless SCVH session cannot start system drags; ask its verified real-window host. */
-    fun startDrag(clip: ClipData, flags: Int, onStarted: (Boolean) -> Unit, onEnded: (Boolean) -> Unit) {
+    fun startDrag(clip: ClipData, shadow: View.DragShadowBuilder, flags: Int,
+                  onStarted: (Boolean) -> Unit, onEnded: (Boolean) -> Unit) {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (released || !ownerAlive || !owner.asBinder().isBinderAlive) {
             onStarted(false)
             return
         }
-        dragBridge.start(clip, flags, onStarted, onEnded)
+        val shadowSnapshot = if (ownerSupportsShadowV1) {
+            runCatching { StashDragShadowSnapshot.capture(shadow) }.getOrNull()
+        } else null
+        if (ownerSupportsShadowV1 && shadowSnapshot == null) {
+            onStarted(false)
+            return
+        }
+        dragBridge.start(clip, flags, shadowSnapshot, onStarted, onEnded)
     }
 
     private fun grantDragUris(clip: ClipData, flags: Int) {
@@ -215,6 +228,7 @@ internal class StashSurfaceHost private constructor(
 
     companion object {
         const val METHOD_OPEN = "open_sidebar_stash_surface"
+        const val SIDEBAR_SHADOW_V1_CAPABILITY = "supports_shadow_drag_v1"
         private const val SIDEBAR_PACKAGE = "com.miui.securitycenter"
         private val main = Handler(Looper.getMainLooper())
 
@@ -235,7 +249,8 @@ internal class StashSurfaceHost private constructor(
             val abandoned = java.util.concurrent.atomic.AtomicBoolean(false)
             val task = FutureTask {
                 check(!app.getSystemService(KeyguardManager::class.java).isKeyguardLocked) { "Unlock before opening stash" }
-                val host = StashSurfaceHost(context, token, owner, uid, width, height)
+                val host = StashSurfaceHost(context, token, owner, uid,
+                    sidebarHostSupportsShadowV1(input), width, height)
                 created.set(host)
                 try {
                     check(!abandoned.get()) { "Sidebar caller timed out" }
@@ -267,4 +282,17 @@ internal class StashSurfaceHost private constructor(
             }
         }
     }
+}
+
+/** Selects an AIDL method only when the host advertised the appended shadow method. */
+internal fun startSidebarDrag(
+    owner: ISidebarHost,
+    clip: ClipData,
+    flags: Int,
+    shadow: StashDragShadowPayload?,
+    callback: ISidebarDragCallback,
+) {
+    if (shadow == null) owner.startDrag(clip, flags, callback)
+    else owner.startDragWithShadow(clip, flags, shadow.png, shadow.bitmapWidthPx, shadow.bitmapHeightPx,
+        shadow.shadowWidthPx, shadow.shadowHeightPx, shadow.scaledHotspotX, shadow.scaledHotspotY, callback)
 }

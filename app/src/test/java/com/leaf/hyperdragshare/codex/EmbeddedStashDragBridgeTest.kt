@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -20,6 +21,7 @@ class EmbeddedStashDragBridgeTest {
     private lateinit var bridge: EmbeddedStashDragBridge
     private var grants = 0
     private var revokes = 0
+    private val shadowPayload = StashDragShadowPayload(byteArrayOf(1), 1, 1, 1, 1, 0, 0)
 
     @Before fun setUp() {
         host = FakeHost()
@@ -33,7 +35,7 @@ class EmbeddedStashDragBridgeTest {
 
     @Test fun hostStartRejectionReleasesGrantAndReportsFailure() {
         val starts = mutableListOf<Boolean>()
-        bridge.start(clip(), 1, starts::add) {}
+        bridge.start(clip(), 1, shadowPayload, starts::add) {}
 
         assertTrue(bridge.isBusy)
         host.callback!!.onStarted(false)
@@ -47,7 +49,7 @@ class EmbeddedStashDragBridgeTest {
 
     @Test fun endArrivingBeforeQueuedStartCompletesBothCallbacksInOrder() {
         val callbacks = mutableListOf<String>()
-        bridge.start(clip(), 1,
+        bridge.start(clip(), 1, shadowPayload,
             onStarted = { callbacks += "started:$it" },
             onEnded = { callbacks += "ended:$it" })
 
@@ -62,13 +64,13 @@ class EmbeddedStashDragBridgeTest {
     @Test fun revokeFailureDoesNotLeaveBridgeBusyOrSuppressStartFailure() {
         val failingBridge = EmbeddedStashDragBridge(
             Handler(Looper.getMainLooper()),
-            startNativeDrag = { _, _, _ -> },
+            startNativeDrag = { _, _, _, _ -> },
             grant = { _, _ -> throw IllegalStateException("partial grant") },
             revoke = { throw IllegalStateException("revoke unavailable") },
         )
         val starts = mutableListOf<Boolean>()
 
-        failingBridge.start(clip(), 1, starts::add) {}
+        failingBridge.start(clip(), 1, shadowPayload, starts::add) {}
 
         assertEquals(listOf(false), starts)
         assertFalse(failingBridge.isBusy)
@@ -77,7 +79,8 @@ class EmbeddedStashDragBridgeTest {
     @Test fun acceptedAndCancelledHostDragKeepsThenReleasesGrant() {
         val starts = mutableListOf<Boolean>()
         val ends = mutableListOf<Boolean>()
-        bridge.start(clip(), 1, starts::add, ends::add)
+        bridge.start(clip(), 1, shadowPayload, starts::add, ends::add)
+        assertSame(shadowPayload, host.shadow)
         host.callback!!.onStarted(true)
         idleMain()
 
@@ -95,7 +98,7 @@ class EmbeddedStashDragBridgeTest {
     @Test fun hostDeathWhileStartIsPendingIgnoresLateResult() {
         val starts = mutableListOf<Boolean>()
         val ends = mutableListOf<Boolean>()
-        bridge.start(clip(), 1, starts::add, ends::add)
+        bridge.start(clip(), 1, shadowPayload, starts::add, ends::add)
 
         bridge.abort()
         host.callback!!.onStarted(true)
@@ -109,7 +112,7 @@ class EmbeddedStashDragBridgeTest {
 
     @Test fun hostDeathDuringDragCancelsOnceAndIgnoresLateEnd() {
         val ends = mutableListOf<Boolean>()
-        bridge.start(clip(), 1, {}, ends::add)
+        bridge.start(clip(), 1, shadowPayload, {}, ends::add)
         host.callback!!.onStarted(true)
         idleMain()
 
@@ -125,7 +128,7 @@ class EmbeddedStashDragBridgeTest {
     @Test fun closeWaitsForCancelledDragAndRunsOnce() {
         var closes = 0
         val ends = mutableListOf<Boolean>()
-        bridge.start(clip(), 1, {}, ends::add)
+        bridge.start(clip(), 1, shadowPayload, {}, ends::add)
         host.callback!!.onStarted(true)
         idleMain()
         assertTrue(bridge.deferClose { closes++ })
@@ -143,8 +146,12 @@ class EmbeddedStashDragBridgeTest {
 
     private class FakeHost {
         var callback: EmbeddedStashDragBridge.Callback? = null
-        fun start(clip: ClipData, flags: Int, callback: EmbeddedStashDragBridge.Callback) {
+        var shadow: StashDragShadowPayload? = null
+        fun start(clip: ClipData, flags: Int, shadow: StashDragShadowPayload?,
+                  callback: EmbeddedStashDragBridge.Callback) {
             require(clip.itemCount == 1 && flags == 1)
+            require(shadow != null && shadow.png.isNotEmpty())
+            this.shadow = shadow
             this.callback = callback
         }
     }
