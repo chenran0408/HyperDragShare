@@ -1,5 +1,16 @@
 # 分支、工作树与独有改动清单
 
+## 2026-10-24 落实记录
+
+本轮在`f65de2e`继续落实上一轮结论；以下旧调查表仍是整理前快照，不再作为实时HEAD。
+
+- 已建立本地`backup/beta-before-settings-2026-10-24`→f65de2e、`backup/stable-before-settings-2026-10-24`→b40abaf；`delivered/mmgg-1.7.219-beta.19`→d6d1f3a。
+- 历史路线用`archive/kotlin-libxposed-102-2026-10-24`→a6ee01b及`archive/origin-main-2026-10-24`→1a04213标记，只保留研究证据，不整线合入；原分支/tag/worktree保留。
+- 本地完整bundle位于任务目录`D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation/outputs/backups/MMGG-before-settings-20261024.bundle`；bundle verify、隔离镜像读取上述引用和完整fsck均通过。SHA及大小见同目录MANIFEST.json，不含工作树未提交内容。
+- 稳定独有b40abaf中的ACKNOWLEDGEMENTS原文保留到Beta，USER_GUIDE按当前入口/选区/侧滑/签名边界适配；README和MMGG补对应链接并移除已失效承诺。没有把稳定README或旧交互方案覆盖回来。
+- origin账号与仓库owner均核对为chenran0408（repo ID1427928487），只向origin显式备份；远程备份的最终提交/CI结果统一见CURRENT_STATUS。默认分支继续保持hyperos4-adaptation，本轮不作选择或改动。
+- MediaStore公开副本/API102/指针监听未决候选保持原状，不为“独有”而合并。下一步配置更新职责另批推进。
+
 现场核对：2026-10-24，整理前beta=`d6d1f3a`。下表计数固定于这次调查快照；之后仅文档整理会使beta计数增加，不表示功能变化。当前工作入口始终见[CURRENT_STATUS](CURRENT_STATUS.md)。本轮不执行本页建议的分支/远程操作。
 
 ## 仓库与并发状态
