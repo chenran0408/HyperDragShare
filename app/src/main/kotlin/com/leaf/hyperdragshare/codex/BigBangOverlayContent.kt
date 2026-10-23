@@ -113,6 +113,12 @@ internal fun selectionToolbarTopY(
     return anchoredTop.coerceIn(0, (viewportHeightPx - toolbarHeightPx).coerceAtLeast(0))
 }
 
+internal fun selectionToolbarVisibleAfterGesture(
+    currentVisible: Boolean,
+    hasSelection: Boolean,
+    gestureActive: Boolean,
+): Boolean = if (gestureActive) currentVisible else hasSelection
+
 internal enum class BigBangMoreAction {
     Dictionary,
     Direct,
@@ -157,6 +163,7 @@ internal fun BigBangOverlayContent(
     totalCharacterCount: Int,
     selectedCharacterCount: Int,
     hasTextSelection: Boolean,
+    selectionToolbarVisible: Boolean,
     selectionActionAnchorY: Int,
     allTextSelected: Boolean,
     isSegmenting: Boolean,
@@ -186,7 +193,7 @@ internal fun BigBangOverlayContent(
         onDispose { words.removeOnLayoutChangeListener(listener) }
     }
     val actionReady = !isSegmenting && totalCharacterCount > 0
-    val hasSelectionToolbar = hasTextSelection && actionReady && selectionActionAnchorY >= 0
+    val hasSelectionToolbar = selectionToolbarVisible && actionReady && selectionActionAnchorY >= 0
     val selectionToolbarTopInset = if (hasSelectionToolbar) SELECTION_ACTION_TOP_RESERVE else 0.dp
     val naturalPanelHeight = (bodyHeightPx / density).dp +
         (if (hasSelectionToolbar) SELECTION_ACTION_TOOLBAR_HEIGHT + selectionToolbarTopInset else 187.dp) +

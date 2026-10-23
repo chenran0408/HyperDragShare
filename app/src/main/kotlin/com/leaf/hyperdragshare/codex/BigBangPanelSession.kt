@@ -69,6 +69,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var lastCountedOriginal: String? = null
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
+    private var selectionToolbarVisible by mutableStateOf(false)
     private var selectionActionAnchorY by mutableIntStateOf(-1)
     private var isSegmenting by mutableStateOf(true)
     private var isRecognizing by mutableStateOf(false)
@@ -88,9 +89,16 @@ internal class BigBangPanelSession(private val context: Context, private val act
             lastCountedOriginal = original
             totalCharacterCount = original?.codePointCount(0, original.length) ?: 0
         }
-        hasTextSelection = page.hasSelection()
+        val gestureActive = page.isSelectionGestureActive()
+        val selected = page.hasSelection()
+        selectionToolbarVisible = selectionToolbarVisibleAfterGesture(
+            selectionToolbarVisible,
+            selected,
+            gestureActive,
+        )
+        hasTextSelection = selected
         selectedCharacterCount = page.selectedCharacterCount()
-        selectionActionAnchorY = page.selectionActionAnchorY()
+        if (!gestureActive) selectionActionAnchorY = page.selectionActionAnchorY()
         directActionText = if (page.hasSelection()) page.selectedTextOrOriginal().orEmpty() else ""
     }
 
@@ -176,6 +184,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     totalCharacterCount = totalCharacterCount,
                     selectedCharacterCount = selectedCharacterCount,
                     hasTextSelection = hasTextSelection,
+                    selectionToolbarVisible = selectionToolbarVisible,
                     selectionActionAnchorY = selectionActionAnchorY,
                     allTextSelected = boomChipPage?.mBoomActionHandler?.isAllSelected() == true,
                     isSegmenting = isSegmenting,

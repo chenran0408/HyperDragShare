@@ -298,6 +298,11 @@ public class BoomChipPage {
         return mBoomActionHandler != null && mBoomActionHandler.hasSelection();
     }
 
+    boolean isSelectionGestureActive() {
+        return mBoomConent instanceof SwipeSelectView
+                && ((SwipeSelectView) mBoomConent).isSelectionGestureActive();
+    }
+
     public int selectedCharacterCount() {
         return mBoomActionHandler != null && mBoomActionHandler.hasSelection()
                 ? mBoomActionHandler.getSelectedTextCharacterCount() : 0;

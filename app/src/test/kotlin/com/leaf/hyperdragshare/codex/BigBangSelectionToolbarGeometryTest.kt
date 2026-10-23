@@ -5,6 +5,18 @@ import org.junit.Test
 
 class BigBangSelectionToolbarGeometryTest {
     @Test
+    fun toolbarVisibilityDoesNotChangeDuringAnActiveSelectionGesture() {
+        assertEquals(false, selectionToolbarVisibleAfterGesture(false, true, true))
+        assertEquals(true, selectionToolbarVisibleAfterGesture(true, false, true))
+    }
+
+    @Test
+    fun toolbarVisibilityFollowsFinalSelectionAfterGesture() {
+        assertEquals(true, selectionToolbarVisibleAfterGesture(false, true, false))
+        assertEquals(false, selectionToolbarVisibleAfterGesture(true, false, false))
+    }
+
+    @Test
     fun labeledSelectionActionsRemainClearOfTheFirstVisibleWordRow() {
         val toolbarHeight = SELECTION_ACTION_TOOLBAR_HEIGHT_DP
         val toolbarGap = 8
