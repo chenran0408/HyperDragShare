@@ -24,10 +24,10 @@ Beta交付保留源码提交/tag、versionName/versionCode、APK大小/SHA256、
 
 修复/功能/实验短分支仅在确需隔离/并行时建，基于明确开发或稳定提交；合入/停止后按授权收尾并更新决策。稳定紧急修复之后按实际差异回流Beta；不要把历史实验整线merge来补单个功能。
 
-## CI现状与后续修改建议（本轮未改）
+## CI规则
 
-`.github/workflows/android.yml`当前push/PR仅过滤`hyperos4-adaptation`，push忽略Markdown/docs；支持workflow_dispatch。JDK21/SDK37、`testDebugUnitTest lintDebug assembleDebug`、上传Debug APK与报告14天。它没有自动检查本地Beta/稳定新提交，没有Beta/R8交付任务，也没有发布签名/自动Release。
+`.github/workflows/android.yml`的push/PR覆盖`beta`与`repair-from-189`，push忽略Markdown/docs；支持workflow_dispatch。PR按base branch选任务，push/manual按ref_name选任务：两线均执行JDK21/SDK37下的`testDebugUnitTest lintDebug assembleDebug`，Beta额外执行`assembleBeta`（含R8）；稳定线没有beta buildType时不调用该任务。对应实际run结果只在CURRENT_STATUS记录。
 
-后续应在独立CI变更中把push/PR目标改为`beta`、`repair-from-189`，分别覆盖维护线；Beta增加`assembleBeta`并上传候选包、报告/映射/版本/哈希。文档-only提交可保持跳过构建，链接/空白检查另处理；不必为本轮补一次APK构建。
+验证产物名含实际APK版本与完整提交SHA，元数据记录ref/目标分支/版本码，附SHA256、Beta R8 mapping与测试/Lint报告，保留14天；普通失败仍尝试上传报告。文档-only提交可跳过构建，不把相同源码下的文档提交跳过记成“CI通过”。CI包明确标为验证用，不自动交付或发布正式版。
 
 CI未配置正式密钥时产生的Beta可能是debug签名，只可标验证产物，不能替换已交付签名包；正式密钥若未来接入，应独立授权、受保护环境/最小权限，密钥不入Git。云端通过必须核对该run对应提交；不以本地通过替代云端结果。CI不自动创建稳定Release或变更远程默认分支。
