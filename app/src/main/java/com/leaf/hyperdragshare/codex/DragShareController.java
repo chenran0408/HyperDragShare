@@ -1,7 +1,6 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Insets;
@@ -35,7 +34,6 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,6 +79,7 @@ final class DragShareController {
     private final LatestRequest targetQueryRequests = new LatestRequest();
     private final LatestTaskSlot targetQueryTask = new LatestTaskSlot(TARGET_QUERY_EXECUTOR);
     private final DragShareToast dragShareToast;
+    private final DragShareActions actions;
     private Runnable modernOverlayPrewarmTask;
     private Runnable staleInputWatchdog;
     private ModernPreviewOverlayView modernOverlayPrewarmView;
@@ -254,6 +253,11 @@ final class DragShareController {
         this.backgroundTouchBlocker = new BackgroundTouchBlocker(context);
         this.windowPolicy = windowPolicy == null ? OverlayWindowPolicy.portal() : windowPolicy;
         this.dragShareToast = new DragShareToast(context, this.windowPolicy);
+        this.actions = new DragShareActions(
+                context,
+                mainHandler,
+                dragShareToast,
+                "accessibility".equals(this.windowPolicy.sourceName));
         prewarmModernOverlay();
     }
 
@@ -1890,164 +1894,13 @@ final class DragShareController {
     }
 
     private void launchShare(Session shareSession, ShareTarget target) {
-        if (target.isImageOcr()) {
-            try {
-                launchImageOcrHost(shareSession.stagedUri, false);
-            } catch (RuntimeException error) {
-                log("image OCR window failed", error);
-                showToast("无法识别图片：" + error.getMessage());
-            }
-            shareSession.cancelled = true;
-            return;
-        }
-        if (target.isQrScan()) {
-            try {
-                launchImageOcrHost(shareSession.stagedUri, true);
-            } catch (RuntimeException error) {
-                log("image QR window failed", error);
-                showToast("无法扫描图片二维码：" + error.getMessage());
-            }
-            shareSession.cancelled = true;
-            return;
-        }
-        if (target.isStash()) {
-            stashContent(shareSession.payload, shareSession.stagedUri);
-            shareSession.cancelled = true;
-            return;
-        }
-        if (target.isSaveToLocal()) {
-            saveImageLocally(shareSession.payload.bitmap);
-            shareSession.cancelled = true;
-            return;
-        }
-        if (target.isCopyToClipboard()) {
-            copyToClipboard(shareSession.payload, shareSession.stagedUri);
-            shareSession.cancelled = true;
-            return;
-        }
-        if (target.isTextSegmentation()) {
-            openTextSegmentation(shareSession.payload);
-            shareSession.cancelled = true;
-            return;
-        }
-        try {
-            log("drop target=" + target.component.flattenToShortString());
-            ShareLauncher.launch(
-                    context,
-                    shareSession.payload,
-                    target,
-                    shareSession.stagedUri,
-                    dragShareToast);
-        } catch (Throwable error) {
-            log("share launch failed", error);
-        }
+        actions.execute(
+                shareSession.payload,
+                target,
+                shareSession.stagedUri,
+                lastX,
+                lastY);
         shareSession.cancelled = true;
-    }
-
-    private void launchImageOcrHost(Uri image, boolean qr) {
-        android.content.Intent intent = new android.content.Intent();
-        intent.setComponent(new android.content.ComponentName(BuildConfig.APPLICATION_ID,
-                ImageOcrActivity.class.getName()));
-        intent.putExtra(ImageOcrActivity.EXTRA_HOSTED_URI, image);
-        intent.putExtra(ImageOcrActivity.EXTRA_QR, qr);
-        intent.setDataAndType(image, "image/*");
-        intent.setClipData(android.content.ClipData.newRawUri("image", image));
-        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                | android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        context.startActivity(intent);
-        log("image window handed to Activity qr=" + qr);
-    }
-
-    private void stashContent(CapturedContent payload, Uri stagedImage) {
-        new Thread(() -> {
-            try {
-                StashClient.put(context, payload, stagedImage);
-                log("stored content in stash kind=" + (payload.isImage() ? "image" : "text"));
-                mainHandler.post(() -> showToast("已存入中转站"));
-            } catch (IOException | SecurityException | IllegalStateException error) {
-                log("stash save failed", error);
-                mainHandler.post(() -> showToast("存入中转站失败：" + error.getMessage(), Toast.LENGTH_LONG));
-            }
-        }, "drag-share-stash-save").start();
-    }
-
-    private void copyToClipboard(CapturedContent payload, Uri stagedImage) {
-        boolean image = payload != null && payload.isImage();
-        if (!image) {
-            String text = payload == null ? null : payload.text;
-            if (text == null || text.trim().isEmpty()) {
-                showToast("没有可复制的文字");
-                return;
-            }
-            ClipboardWriter.copy(context, text, error -> {
-                if (error == null) {
-                    log("copied text to clipboard");
-                    showToast("文字已复制到剪贴板");
-                } else {
-                    log("clipboard text copy failed", error);
-                    showToast("复制文字失败：" + error.getMessage(), Toast.LENGTH_LONG);
-                }
-            });
-            return;
-        }
-        if (stagedImage == null) {
-            showToast("图片尚未准备好，无法复制");
-            return;
-        }
-        ClipboardWriter.copyImage(context, stagedImage, error -> {
-            if (error == null) {
-                log("copied image to clipboard");
-                showToast("图片已复制到剪贴板");
-            } else {
-                log("clipboard image copy failed", error);
-                showToast("复制图片失败：" + error.getMessage(), Toast.LENGTH_LONG);
-            }
-        });
-    }
-
-    private void openTextSegmentation(CapturedContent payload) {
-        String text = payload.text;
-        if (text == null || text.trim().isEmpty()) {
-            showToast("没有可分词的文字");
-            return;
-        }
-        try {
-            android.os.Bundle input = new android.os.Bundle();
-            input.putString("text", text);
-            input.putString("before_text", payload.beforeText);
-            input.putString("after_text", payload.afterText);
-            input.putInt("x", Math.round(lastX));
-            input.putInt("y", Math.round(lastY));
-            android.os.Bundle result = context.getContentResolver().call(
-                    ImageStagingClient.BASE_URI, BigBangOverlayLauncher.METHOD_OPEN, null, input);
-            if (result == null || !result.getBoolean("accepted")) {
-                throw new IllegalStateException("分词窗口未接受请求");
-            }
-            log("requested text segmentation window");
-        } catch (RuntimeException error) {
-            log("open text segmentation failed", error);
-            showToast("无法打开分词窗口：" + error.getMessage());
-        }
-    }
-
-    private void saveImageLocally(Bitmap bitmap) {
-        if (bitmap == null || bitmap.isRecycled()) {
-            showToast("保存图片失败");
-            return;
-        }
-        Thread worker = new Thread(() -> {
-            try {
-                LocalImageSaver.save(context, bitmap);
-                log("saved image as PNG");
-                traceAccessibility("local save succeeded");
-                mainHandler.post(() -> showToast("已保存到本地", android.widget.Toast.LENGTH_LONG));
-            } catch (Throwable error) {
-                log("local image save failed", error);
-                traceAccessibility("local save failed=" + error.getClass().getSimpleName());
-                mainHandler.post(() -> showToast("保存图片失败", android.widget.Toast.LENGTH_LONG));
-            }
-        }, "drag-share-local-save");
-        worker.start();
     }
 
     private void updatePreviewPosition(float x, float y) {
