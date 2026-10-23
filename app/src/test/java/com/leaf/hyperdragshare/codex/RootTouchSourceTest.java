@@ -15,6 +15,56 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 public final class RootTouchSourceTest {
+    private static String input(String bus, String name, int event) {
+        return "I: Bus=" + bus + "\nN: Name=\"" + name + "\"\nH: Handlers=event" + event
+                + "\nB: PROP=2\nB: ABS=263800000000000\n\n";
+    }
+
+    private static String range(int event, int x, int y) {
+        return "add device " + event + ": /dev/input/event" + event
+                + "\n  ABS_MT_POSITION_X : value 0, min 0, max " + x
+                + "\n  ABS_MT_POSITION_Y : value 0, min 0, max " + y + "\n";
+    }
+
+    @Test public void multipleTouchPanelsUseTheOneMatchingTheCurrentDisplay() {
+        String devices = input("0000", "Xiaomi_Touch_Input_1", 7)
+                + input("0000", "Xiaomi_Touch_Input_0", 8);
+        String ranges = range(7, 97599, 59599) + range(8, 119999, 260799);
+        assertEquals("/dev/input/event8",
+                RootTouchSource.findTouchDevicePath(devices, ranges, 1200, 2608, 0));
+        assertEquals("/dev/input/event8",
+                RootTouchSource.findTouchDevicePath(devices, ranges, 2608, 1200, 1));
+        assertEquals("/dev/input/event7",
+                RootTouchSource.findTouchDevicePath(devices, ranges, 976, 596, 0));
+    }
+
+    @Test public void bluetoothDirectInputIsNotThePhonesTouchscreen() {
+        String devices = input("0005", "Bluetooth touch input", 12)
+                + input("0000", "Xiaomi_Touch_Input_0", 8);
+        String ranges = range(12, 1199, 2607) + range(8, 119999, 260799);
+        assertEquals("/dev/input/event8",
+                RootTouchSource.findTouchDevicePath(devices, ranges, 1200, 2608, 0));
+    }
+
+    @Test public void invalidCoordinateDeviceDoesNotHideTheWorkingTouchscreen() {
+        String devices = input("0000", "touchscreen", 7) + input("0000", "touchscreen", 8);
+        assertEquals("/dev/input/event8", RootTouchSource.findTouchDevicePath(
+                devices, range(7, 0, 0) + range(8, 1199, 2607), 1200, 2608, 0));
+    }
+
+    @Test public void equallyMatchingScreensAreNotSelectedByInventoryOrder() {
+        String devices = input("0000", "touchscreen", 7) + input("0000", "touchscreen", 8);
+        assertNull(RootTouchSource.findTouchDevicePath(devices,
+                range(7, 1199, 2607) + range(8, 11999, 26079), 1200, 2608, 0));
+    }
+
+    @Test public void bluetoothOnlyOrMissingDisplayCannotProvidePhoneTouchInput() {
+        String devices = input("0005", "Bluetooth touch input", 12);
+        assertNull(RootTouchSource.findTouchDevicePath(devices,
+                range(12, 1199, 2607), 1200, 2608, 0));
+        assertNull(RootTouchSource.findTouchDevicePath(devices, "", 0, 0, 0));
+    }
+
     @Test
     public void findsDirectTouchscreenEventHandler() {
         String devices = ""

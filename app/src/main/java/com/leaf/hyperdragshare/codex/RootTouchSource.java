@@ -41,6 +41,7 @@ final class RootTouchSource {
     private static final String INVENTORY_MARKER = "HDS_INPUT_INVENTORY";
     private static final String RANGES_MARKER = "HDS_INPUT_RANGES";
     private static final Pattern EVENT_HANDLER = Pattern.compile("\\b(event\\d+)\\b");
+    private static final Pattern BLUETOOTH_BUS = Pattern.compile("(?m)^I:.*\\bBus=0005\\b");
     private static final Pattern MAX_X = Pattern.compile("ABS_MT_POSITION_X\\s*:.*?max\\s+(\\d+)");
     private static final Pattern MAX_Y = Pattern.compile("ABS_MT_POSITION_Y\\s*:.*?max\\s+(\\d+)");
     private final Context context;
@@ -157,8 +158,13 @@ final class RootTouchSource {
             checkRunning(run);
             String devices = sectionBetween(probe, INVENTORY_MARKER, RANGES_MARKER);
             String allRanges = substringAfter(probe, RANGES_MARKER);
-            String devicePath = findTouchDevicePath(devices);
-            if (devicePath == null) throw new IOException("未找到直接触摸屏设备。");
+            WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+            DisplayMetrics display = new DisplayMetrics();
+            manager.getDefaultDisplay().getRealMetrics(display);
+            int rotation = manager.getDefaultDisplay().getRotation();
+            String devicePath = findTouchDevicePath(devices, allRanges,
+                    display.widthPixels, display.heightPixels, rotation);
+            if (devicePath == null) throw new IOException("无法确认当前屏幕的触摸设备，请查看诊断日志。");
             String ranges = deviceRanges(allRanges, devicePath);
             if (ranges == null) throw new IOException("无法读取触摸设备坐标范围。");
             run.rawMaxX = parseMaximum(MAX_X, ranges);
@@ -181,7 +187,8 @@ final class RootTouchSource {
             });
             logConnectionStage("time_to_ready", connectionStarted);
             DragShareLog.i(TAG, "ready device=" + devicePath + " raw="
-                    + run.rawMaxX + "x" + run.rawMaxY);
+                    + run.rawMaxX + "x" + run.rawMaxY + " display="
+                    + display.widthPixels + "x" + display.heightPixels + " rotation=" + rotation);
             readEvents(run, stream);
             if (!run.cancelled) {
                 throw new IOException("Root 触摸事件流已结束（" + processStatus(process) + "）：" + errorText(errors));
@@ -463,6 +470,39 @@ final class RootTouchSource {
             }
         }
         return null;
+    }
+
+    static String findTouchDevicePath(CharSequence devices, CharSequence ranges,
+                                     int width, int height, int rotation) {
+        if (devices == null || ranges == null || width <= 0 || height <= 0) return null;
+        boolean rotated = rotation == android.view.Surface.ROTATION_90
+                || rotation == android.view.Surface.ROTATION_270;
+        double displayRatio = rotated ? (double) height / width : (double) width / height;
+        String best = null;
+        double bestScore = Double.POSITIVE_INFINITY;
+        boolean ambiguous = false;
+        for (String block : devices.toString().split("(?:\\r?\\n){2,}")) {
+            // A Bluetooth watch can advertise DIRECT and MT axes too.
+            if (BLUETOOTH_BUS.matcher(block).find()) continue;
+            String path = findTouchDevicePath(block);
+            if (path == null) continue;
+            String deviceRange = deviceRanges(ranges, path);
+            if (deviceRange == null) continue;
+            int maxX = parseMaximum(MAX_X, deviceRange);
+            int maxY = parseMaximum(MAX_Y, deviceRange);
+            if (maxX <= 0 || maxY <= 0) continue;
+            // Multiple touch panels are independently exposed. Compare natural display
+            // coordinates, never their event-number order or a fixed device name.
+            double score = Math.abs(Math.log(((maxX + 1d) / (maxY + 1d)) / displayRatio));
+            if (score < bestScore - 0.000001d) {
+                best = path;
+                bestScore = score;
+                ambiguous = false;
+            } else if (Math.abs(score - bestScore) <= 0.000001d) {
+                ambiguous = true;
+            }
+        }
+        return ambiguous ? null : best;
     }
 
     private static int parseMaximum(Pattern pattern, CharSequence value) {
