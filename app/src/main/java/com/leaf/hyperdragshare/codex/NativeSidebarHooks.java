@@ -360,6 +360,7 @@ final class NativeSidebarHooks {
         void restoreVisibility() { hidden.forEach(View::setVisibility); hidden.clear(); }
 
         void openStash() {
+            if (surface != null) return;
             message("正在连接中转站…");
             int current = ++generation;
             surface = new SurfaceView(context);
@@ -415,6 +416,11 @@ final class NativeSidebarHooks {
                 contentDeath = death;
                 target.setChildSurfacePackage(pack);
                 transferred = true;
+                // Dragging makes the embedded content transparent. Do not expose an obsolete
+                // connection message underneath a successfully mounted surface.
+                for (int i = pane.getChildCount() - 1; i >= 0; i--) {
+                    if (pane.getChildAt(i) != target) pane.removeViewAt(i);
+                }
                 DragShareLog.i(TAG, "stash surface mounted scene=" + scene);
             } catch (RemoteException | RuntimeException error) { fail(error); }
             finally { if (!transferred) pack.release(); }
@@ -454,6 +460,10 @@ final class NativeSidebarHooks {
             if (disposed || selected != Section.STASH || content == null || dragCallback != null
                     || source == null || !source.isAttachedToWindow() || clip == null || clip.getItemCount() == 0
                     || (flags & View.DRAG_FLAG_GLOBAL) == 0 || (flags & ~allowedFlags) != 0) {
+                DragShareLog.w(TAG, "stash drag rejected disposed=" + disposed
+                        + " mounted=" + (content != null) + " active=" + (dragCallback != null)
+                        + " attached=" + (source != null && source.isAttachedToWindow())
+                        + " flags=" + flags);
                 notifyDragStarted(callback, false);
                 return;
             }
@@ -479,7 +489,9 @@ final class NativeSidebarHooks {
                 DragShareLog.w(TAG, "Native sidebar could not start stash drag", error);
                 started = false;
             }
+            DragShareLog.i(TAG, "stash host drag started=" + started + " shadow_v1=" + shadowV1);
             if (!started) {
+                DragShareLog.w(TAG, "Native sidebar window declined stash drag startup");
                 source.setOnDragListener(null);
                 if (dragCallback == session) {
                     dragCallback = null;
@@ -517,6 +529,7 @@ final class NativeSidebarHooks {
             dragShadow = null;
             if (shadow != null) shadow.recycle();
             if (callback == null) return;
+            DragShareLog.i(TAG, "stash host drag ended accepted=" + accepted);
             try { callback.onEnded(accepted); }
             catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before end result", error); }
         }
