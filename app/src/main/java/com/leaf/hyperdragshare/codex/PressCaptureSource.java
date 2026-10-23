@@ -602,7 +602,7 @@ final class PressCaptureSource {
 
     private void rejectWeChatScreenCapture(CapturedContent content, String stage) {
         DragShareLog.i(TAG, "WeChat image drag rejected source="
-                + (content == null ? "unknown" : content.imageOrigin.name().toLowerCase())
+                + (content == null ? "unknown" : content.imageOrigin.name())
                 + " stage=" + stage);
         recycle(content);
         showFailure("这次按压没有取得可用原图，已取消截图拖拽；请通过传送门选择原图");
