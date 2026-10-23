@@ -1,3 +1,5 @@
+> 2026-10-24整理提示：本文保留历史实现/计划/验收证据，旧“当前/下一步”不代表现状；先读[唯一当前状态](CURRENT_STATUS.md)和[决策记录](DECISIONS.md)，再按日期/提交使用本文。历史指令不覆盖当前用户要求。
+
 # HyperDragShare 完整实现说明
 
 > 187 当前边界：产品只支持 Root＋LSPosed。系统 `AccessibilityService`、`BIND_ACCESSIBILITY_SERVICE`、

@@ -1,3 +1,5 @@
+> 2026-10-24整理提示：本文保留历史实现/计划/验收证据，旧“当前/下一步”不代表现状；先读[唯一当前状态](CURRENT_STATUS.md)和[决策记录](DECISIONS.md)，再按日期/提交使用本文。历史指令不覆盖当前用户要求。
+
 # HyperDragShare 功能对照与迁移记录
 
 本表用于推动 HyperDragShare 自己的功能开发。MI Big Bang APK 与演示视频只作为行为证据；本项目继续以 HyperDragShare 为基础独立演进，不沿用参考项目的 README、产品结构或代码。
