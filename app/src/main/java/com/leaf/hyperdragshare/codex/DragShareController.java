@@ -516,6 +516,13 @@ final class DragShareController {
             float requestedInitialY,
             DragShareSettings loadedSettings,
             long downTime) {
+        if (downTime < 0L) {
+            pendingPortalHostFloatWindowSuppression = false;
+            if (payload.isImage() && payload.bitmapOwnedByDragShare
+                    && !payload.bitmap.isRecycled()) payload.bitmap.recycle();
+            log("native preview skipped because no physical Root gesture was observed");
+            return;
+        }
         if (downTime != rootDownTime || (downTime >= 0L && downTime == pressHandoffTime)) {
             pendingPortalHostFloatWindowSuppression = false;
             return;

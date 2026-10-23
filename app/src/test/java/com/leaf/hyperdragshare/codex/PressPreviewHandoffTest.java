@@ -27,6 +27,20 @@ import java.lang.reflect.Field;
 @Config(manifest = Config.NONE)
 @LooperMode(LooperMode.Mode.PAUSED)
 public final class PressPreviewHandoffTest {
+    @Test public void nativeImageWithoutPhysicalRootGestureDoesNotCreateAnOrphanPreview() throws Exception {
+        DragShareController controller = controller();
+        Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        controller.reservePortalHostFloatWindowSuppression();
+        controller.show(CapturedContent.portalMediaImage(bitmap, "test.app", null),
+                20f, 30f, DragShareSettings.defaults());
+        ShadowLooper.shadowMainLooper().idle();
+        assertNull(field(controller, "session").get(controller));
+        assertFalse(controller.isActive());
+        assertFalse(controller.shouldSuppressPortalHostFloatWindow());
+        assertTrue(bitmap.isRecycled());
+        controller.destroy();
+    }
+
     @Test public void nativePreviewDoesNotCancelItsOwnPendingPress() throws Exception {
         DragShareController controller = controller();
         nativeSession(controller, 100L);
