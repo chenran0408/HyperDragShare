@@ -1425,15 +1425,13 @@ internal fun ActivationDiagnosticsPage(
                         },
                         summary = if (monitor.checking) "正在更新状态，当前结果保留显示" else
                             "状态依据运行时报告和实际权限查询；未收到响应会标为待确认。",
-                        endActions = {
-                            SettingsNavigationPreference(
-                                title = "重新检查",
-                                summary = "重新读取权限和组件状态",
-                                icon = MiuixIcons.Update,
-                                onClick = monitor.refresh,
-                            )
-                        },
                         insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                    SettingsNavigationPreference(
+                        title = "重新检查",
+                        summary = "重新读取权限和组件状态",
+                        icon = MiuixIcons.Update,
+                        onClick = monitor.refresh,
                     )
                 }
             }
