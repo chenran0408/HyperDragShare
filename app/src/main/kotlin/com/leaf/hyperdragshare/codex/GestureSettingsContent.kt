@@ -270,6 +270,8 @@ internal fun gestureSettingEntries(
     bool("横屏底角手势", "启用横屏底部触发", C.KEY_BOTTOM_LANDSCAPE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_ENABLED)
     bool("竖屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED)
     bool("横屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED)
+    currentGroup = "侧边手势"
+    bool("侧滑停留打开列表", "从屏幕侧边滑入并停留打开模块列表。若与安全中心侧栏冲突，可关闭此项；不会更改系统侧栏开关。", C.KEY_SIDE_HOLD_ENABLED, C.DEFAULT_SIDE_HOLD_ENABLED)
     currentGroup = "动作与目标"
     bool("竖屏扇形全屏启动", "第一段手势启动应用", C.KEY_BOTTOM_PORTRAIT_FULLSCREEN, C.DEFAULT_BOTTOM_PORTRAIT_FULLSCREEN)
     bool("横屏扇形全屏启动", "第一段手势启动应用", C.KEY_BOTTOM_LANDSCAPE_FULLSCREEN, C.DEFAULT_BOTTOM_LANDSCAPE_FULLSCREEN)

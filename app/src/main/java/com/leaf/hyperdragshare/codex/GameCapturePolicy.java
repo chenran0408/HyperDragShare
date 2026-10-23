@@ -3,6 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -41,6 +42,12 @@ public final class GameCapturePolicy {
     private GameCapturePolicy() {}
 
     static boolean shouldPause(Context context, DragShareSettings settings, String sourcePackage) {
+        return shouldPause(context, settings, sourcePackage,
+                packageName -> classifySourceApp(context, packageName));
+    }
+
+    static boolean shouldPause(Context context, DragShareSettings settings, String sourcePackage,
+                               SourceAppClassifier classifier) {
         if (!settings.pauseAutomaticInGames) return false;
         try {
             if (sourcePackage == null || sourcePackage.isBlank()) {
@@ -50,16 +57,31 @@ public final class GameCapturePolicy {
                 DragShareLog.i("DragShare/GamePause", "automatic capture paused package=" + sourcePackage);
                 return true;
             }
-            ApplicationInfo app = context.getPackageManager().getApplicationInfo(
-                    sourcePackage, PackageManager.ApplicationInfoFlags.of(0));
-            boolean game = app.category == ApplicationInfo.CATEGORY_GAME;
+            int category = classifier.categoryFor(sourcePackage);
+            boolean game = category == ApplicationInfo.CATEGORY_GAME;
             if (game) DragShareLog.i("DragShare/GamePause", "automatic capture paused package=" + sourcePackage);
             return game;
-        } catch (PackageManager.NameNotFoundException | SecurityException error) {
+        } catch (PackageManager.NameNotFoundException | RuntimeException error) {
             DragShareLog.w("DragShare/GamePause", "Unable to classify source; preserving original gesture", error);
             new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context,
-                    "无法确认来源应用类型，本次保留原操作：" + error.getMessage(), Toast.LENGTH_LONG).show());
+                    "暂时无法确认此应用的类型，已保留原来的长按操作", Toast.LENGTH_LONG).show());
             return true;
         }
+    }
+
+    private static int classifySourceApp(Context context, String sourcePackage)
+            throws PackageManager.NameNotFoundException {
+        Bundle request = new Bundle();
+        request.putString(ShareImageProvider.EXTRA_SOURCE_PACKAGE, sourcePackage);
+        Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
+                ShareImageProvider.METHOD_CLASSIFY_SOURCE_APP, null, request);
+        if (result == null || !result.getBoolean("known", false)) {
+            throw new PackageManager.NameNotFoundException(sourcePackage);
+        }
+        return result.getInt("category", ApplicationInfo.CATEGORY_UNDEFINED);
+    }
+
+    interface SourceAppClassifier {
+        int categoryFor(String sourcePackage) throws PackageManager.NameNotFoundException;
     }
 }

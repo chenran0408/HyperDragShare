@@ -23,6 +23,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /** Explicit node lookups in app_process; serving mode never traverses nodes while idle. */
 @android.annotation.TargetApi(34)
@@ -36,6 +37,18 @@ public final class RootNodeCaptureMain {
 
     // WMS identity is used only for a node-less WeChat conversation capture.
     private static final int WINDOW_MANAGER_CAPTURE = -2;
+    private static final Set<String> HOLD_PROMPTS = Set.of(
+            "按住说话", "按住讲话", "长按说话", "长按讲话", "按住语音输入",
+            "长按语音输入", "按住语音说话", "按住开始说话", "按住开始录音",
+            "按住录音说话", "长按录音", "按住发语音", "长按发语音", "按住发送语音",
+            "按住录音", "按住发送", "松开发送", "松开结束录音", "松开取消",
+            "上滑取消", "手指上滑取消发送", "松开转文字", "holdtotalk", "presstotalk",
+            "holdtospeak", "pressandholdtospeak", "holdtorecord", "releasetosend",
+            "releasetocancel", "releasetostoprecording",
+            "slideuptocancel");
+    private static final Set<String> VIDEO_SPEED_HOLD_PROMPTS = Set.of(
+            "长按倍速播放", "按住倍速", "按住倍速播放", "长按快进", "按住快进",
+            "长按加速播放", "按住加速播放");
     private static PressWindowSnapshot pressWindow;
     private static Rect pressRegion;
     private static String pressVerificationError = "";
@@ -700,26 +713,62 @@ public final class RootNodeCaptureMain {
     static boolean holdControlAtPoint(List<AccessibilityNodeSnapshot> nodes, float x, float y, String source) {
         for (AccessibilityNodeSnapshot label : nodes) {
             if (!label.visible || !source.equals(label.packageName)
-                    || !label.bounds.contains((int) x, (int) y)
-                    || (!holdLabel(label.text) && !holdLabel(label.contentDescription))) continue;
+                    || !label.bounds.contains((int) x, (int) y)) continue;
+            String text = label.text;
+            String description = label.contentDescription;
+            boolean exactVoicePrompt = holdLabel(text) || holdLabel(description);
+            boolean embeddedVoicePrompt = !exactVoicePrompt
+                    && (containsHoldLabel(text) || containsHoldLabel(description));
+            boolean videoSpeedPrompt = videoSpeedHoldLabel(text) || videoSpeedHoldLabel(description);
+            if (!exactVoicePrompt && !embeddedVoicePrompt && !videoSpeedPrompt) continue;
             for (AccessibilityNodeSnapshot control : nodes) {
-                if (control.visible && source.equals(control.packageName)
-                        && (control.clickable || control.longClickable)
-                        && control.bounds.contains(label.bounds)) return true;
+                if (!control.visible || !source.equals(control.packageName)
+                        || !isScopedControl(control, label)) continue;
+                boolean interactive = control.editable || control.clickable || control.longClickable;
+                if (videoSpeedPrompt && !control.editable && interactive) return true;
+                boolean voiceControl = !embeddedVoicePrompt || control.editable
+                        || ((control.clickable || control.longClickable)
+                        && isVoiceButtonClass(control.className));
+                if (!videoSpeedPrompt && interactive && voiceControl) return true;
             }
         }
         return false;
     }
 
+    private static boolean isScopedControl(AccessibilityNodeSnapshot control,
+                                           AccessibilityNodeSnapshot label) {
+        if (control == label) return true;
+        if (control.depth + 1 != label.depth || !control.bounds.contains(label.bounds)) return false;
+        long controlArea = (long) control.bounds.width() * control.bounds.height();
+        long labelArea = (long) label.bounds.width() * label.bounds.height();
+        return labelArea > 0 && controlArea <= labelArea * 16L;
+    }
+
     private static boolean holdLabel(String text) {
         if (text == null) return false;
-        return switch (text.replaceAll("\\s+", "").toLowerCase(java.util.Locale.ROOT)) {
-            case "按住说话", "按住录音", "按住发送", "松开发送", "松开结束录音", "松开取消",
-                    "上滑取消", "手指上滑取消发送", "松开转文字", "holdtotalk",
-                    "presstotalk", "holdtorecord", "releasetosend", "releasetocancel",
-                    "releasetostoprecording", "slideuptocancel" -> true;
-            default -> false;
-        };
+        return HOLD_PROMPTS.contains(normalizeHoldText(text));
+    }
+
+    private static boolean containsHoldLabel(String text) {
+        if (text == null) return false;
+        String normalized = normalizeHoldText(text);
+        for (String phrase : HOLD_PROMPTS) {
+            if (normalized.contains(phrase)) return true;
+        }
+        return false;
+    }
+
+    private static String normalizeHoldText(String text) {
+        return text.replaceAll("\\s+", "").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static boolean isVoiceButtonClass(String className) {
+        return className != null && className.endsWith("Button");
+    }
+
+    private static boolean videoSpeedHoldLabel(String text) {
+        if (text == null) return false;
+        return VIDEO_SPEED_HOLD_PROMPTS.contains(normalizeHoldText(text));
     }
 
     private static JSONObject contentResult(AccessibilityCandidateSelector.Selection selection,

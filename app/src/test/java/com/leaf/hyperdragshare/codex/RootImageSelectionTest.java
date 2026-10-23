@@ -30,11 +30,54 @@ public final class RootImageSelectionTest {
 
     @Test public void recordingDescriptionAndClickableParentAreBothRecognized() {
         AccessibilityNodeSnapshot control = node("android.view.ViewGroup", "reader")
-                .clickable(true).leaf(false).build();
+                .clickable(true).leaf(false).depth(0).build();
         AccessibilityNodeSnapshot label = node("android.widget.TextView", "reader")
-                .bounds(new Rect(20, 20, 200, 100)).contentDescription("Hold to talk").build();
+                .bounds(new Rect(20, 20, 200, 100)).contentDescription("Hold to talk")
+                .depth(1).build();
         assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(control, label), 30, 30, "reader"));
         assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(control, label), 250, 150, "reader"));
+    }
+
+    @Test public void combinedVoicePromptOnEditableInputIsExcluded() {
+        AccessibilityNodeSnapshot input = node("android.widget.EditText", "reader")
+                .text("发消息或按住说话...").editable(true).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(input), 30, 30, "reader"));
+    }
+
+    @Test public void voicePromptChildOfEditableInputIsExcluded() {
+        AccessibilityNodeSnapshot input = node("android.view.ViewGroup", "reader")
+                .editable(true).leaf(false).depth(0).build();
+        AccessibilityNodeSnapshot hint = node("android.widget.TextView", "reader")
+                .bounds(new Rect(20, 20, 200, 100)).text("发消息或按住说话...")
+                .depth(1).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(input, hint), 30, 30, "reader"));
+    }
+
+    @Test public void explicitVideoSpeedHoldLabelsRequireAnInteractiveControl() {
+        AccessibilityNodeSnapshot speedControl = node("android.widget.TextView", "reader")
+                .text("长按倍速播放").longClickable(true).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(speedControl), 30, 30, "reader"));
+
+        AccessibilityNodeSnapshot label = node("android.widget.TextView", "reader")
+                .text("按住倍速").bounds(new Rect(20, 20, 200, 100)).depth(1).build();
+        AccessibilityNodeSnapshot parent = node("android.view.ViewGroup", "reader")
+                .clickable(true).leaf(false).depth(0).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(parent, label), 30, 30, "reader"));
+
+        AccessibilityNodeSnapshot inert = node("android.widget.TextView", "reader")
+                .text("按住倍速").build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(inert), 30, 30, "reader"));
+    }
+
+    @Test public void speedPhraseInOrdinaryTextDoesNotBlockCaptureAndImagesStillSelect() {
+        AccessibilityNodeSnapshot paragraph = node("android.widget.TextView", "reader")
+                .text("这个视频可以长按倍速播放，普通介绍文字仍可读取。")
+                .clickable(true).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(paragraph), 30, 30, "reader"));
+
+        AccessibilityNodeSnapshot image = node("android.widget.ImageView", "reader").build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(image), 30, 30, "reader"));
+        assertNotNull(select(image, List.of(), true, true));
     }
 
     @Test public void ordinaryTextAndUnrelatedRecordingControlsRemainReadable() {
@@ -49,6 +92,25 @@ public final class RootImageSelectionTest {
         AccessibilityNodeSnapshot hidden = node("android.widget.Button", "reader")
                 .text("按住说话").clickable(true).visible(false).build();
         assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(hidden), 30, 30, "reader"));
+    }
+
+    @Test public void voiceInputPromptsCoverDifferentAppsWithoutBlockingProse() {
+        AccessibilityNodeSnapshot editablePrompt = node("android.widget.EditText", "reader")
+                .text("按住语音输入以提问").editable(true).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(editablePrompt), 30, 30, "reader"));
+
+        AccessibilityNodeSnapshot buttonPrompt = node("android.widget.Button", "reader")
+                .text("语音输入，按住说话").clickable(true).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(buttonPrompt), 30, 30, "reader"));
+
+        AccessibilityNodeSnapshot largeClickablePage = node("android.view.ViewGroup", "reader")
+                .bounds(new Rect(0, 0, 1080, 2400)).clickable(true).depth(0).build();
+        AccessibilityNodeSnapshot ordinaryLabel = node("android.widget.TextView", "reader")
+                .bounds(new Rect(20, 20, 200, 100)).text("按住说话").depth(1).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(largeClickablePage, ordinaryLabel), 30, 30, "reader"));
     }
 
     @Test public void imageRequiresEnabledTypeAndExplicitImageNode() {

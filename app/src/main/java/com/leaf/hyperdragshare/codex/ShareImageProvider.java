@@ -28,6 +28,8 @@ import java.util.UUID;
 public final class ShareImageProvider extends ContentProvider {
     private static final String TAG = "DragShareProvider";
     private static final long MAX_FILE_BYTES = 32L * 1024L * 1024L;
+    static final String METHOD_CLASSIFY_SOURCE_APP = "classify_source_app";
+    static final String EXTRA_SOURCE_PACKAGE = "source_package";
 
     private File shareDirectory;
 
@@ -42,6 +44,9 @@ public final class ShareImageProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (METHOD_CLASSIFY_SOURCE_APP.equals(method)) {
+            return classifySourceApp(extras);
+        }
         if (NativeSidebarState.REPORT.equals(method)) {
             enforcePackageCaller("com.miui.securitycenter", "native sidebar region report");
             try {
@@ -123,6 +128,7 @@ public final class ShareImageProvider extends ContentProvider {
             enforcePortalCaller();
             return putInStash(extras);
         }
+
         if (ModuleActivation.METHOD_REPORT_INJECTED.equals(method)) {
             enforcePortalCaller();
             ModuleActivation.recordInjected(contextOrThrow(), extras);
@@ -186,6 +192,67 @@ public final class ShareImageProvider extends ContentProvider {
         }
         enforcePortalCaller();
         return stageImage(extras);
+    }
+
+    private Bundle classifySourceApp(Bundle extras) {
+        int callingUid = Binder.getCallingUid();
+        int providerUid = Process.myUid();
+        enforcePortalCaller();
+        if (!sameAndroidUser(callingUid, providerUid)) {
+            throw new SecurityException("Source app classification is limited to the caller's Android user");
+        }
+        String packageName = extras == null ? null : extras.getString(EXTRA_SOURCE_PACKAGE);
+        if (!isValidPackageName(packageName)) {
+            throw new IllegalArgumentException("Invalid source package name");
+        }
+
+        Bundle result = new Bundle();
+        long identity = Binder.clearCallingIdentity();
+        try {
+            android.content.pm.ApplicationInfo application = contextOrThrow().getPackageManager()
+                    .getApplicationInfo(packageName, 0);
+            result.putBoolean("known", true);
+            result.putInt("category", application.category);
+        } catch (PackageManager.NameNotFoundException | SecurityException error) {
+            // Return only an unknown result. Never expose an installed-app list or lookup details.
+            result.putBoolean("known", false);
+            result.putInt("category", android.content.pm.ApplicationInfo.CATEGORY_UNDEFINED);
+        } finally {
+            Binder.restoreCallingIdentity(identity);
+        }
+        return result;
+    }
+
+    static boolean isTrustedPortalCaller(int callingUid, int moduleUid, String[] packages) {
+        if (callingUid == moduleUid) return true;
+        if (packages == null) return false;
+        for (String packageName : packages) {
+            if (MainHook.TAPLUS_PACKAGE.equals(packageName)) return true;
+        }
+        return false;
+    }
+
+    static boolean sameAndroidUser(int firstUid, int secondUid) {
+        return androidUserId(firstUid) == androidUserId(secondUid);
+    }
+
+    private static int androidUserId(int uid) {
+        // Android allocates application UIDs in fixed 100,000-UID user ranges.
+        return uid / 100_000;
+    }
+
+    private static boolean isValidPackageName(String packageName) {
+        if (packageName == null || packageName.length() > 255 || packageName.trim().isEmpty()) return false;
+        String[] parts = packageName.split("\\.", -1);
+        if (parts.length < 2) return false;
+        for (String part : parts) {
+            if (part.isEmpty() || !Character.isJavaIdentifierStart(part.charAt(0))) return false;
+            for (int i = 1; i < part.length(); i++) {
+                char value = part.charAt(i);
+                if (!Character.isJavaIdentifierPart(value)) return false;
+            }
+        }
+        return true;
     }
 
     private Bundle putInStash(Bundle extras) {
@@ -451,12 +518,8 @@ public final class ShareImageProvider extends ContentProvider {
         }
         PackageManager packageManager = contextOrThrow().getPackageManager();
         String[] packages = packageManager.getPackagesForUid(callingUid);
-        if (packages != null) {
-            for (String packageName : packages) {
-                if (MainHook.TAPLUS_PACKAGE.equals(packageName)) {
-                    return;
-                }
-            }
+        if (isTrustedPortalCaller(callingUid, Process.myUid(), packages)) {
+            return;
         }
         throw new SecurityException("Only Taplus can stage share images");
     }

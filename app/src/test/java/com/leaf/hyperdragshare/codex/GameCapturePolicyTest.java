@@ -26,23 +26,37 @@ public final class GameCapturePolicyTest {
     @Test public void optInPausesDeclaredGamesAndLeavesOtherAppsAvailable() {
         install("test.game", ApplicationInfo.CATEGORY_GAME);
         install("test.video", ApplicationInfo.CATEGORY_VIDEO);
-        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.defaults(), "test.game"));
-        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "test.game"));
-        assertFalse(GameCapturePolicy.shouldPause(context, enabled(), "test.video"));
+        install("com.eg.android.AlipayGphone", ApplicationInfo.CATEGORY_UNDEFINED);
+        GameCapturePolicy.SourceAppClassifier classifier = name -> context.getPackageManager()
+                .getApplicationInfo(name, 0).category;
+        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.defaults(), "test.game", classifier));
+        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "test.game", classifier));
+        assertFalse(GameCapturePolicy.shouldPause(context, enabled(), "test.video", classifier));
+        assertFalse(GameCapturePolicy.shouldPause(context, enabled(), "com.eg.android.AlipayGphone", classifier));
     }
 
     @Test public void missingSourcePreservesOriginalGestureWithAnExplanation() {
-        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "test.missing"));
+        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "test.missing",
+                name -> { throw new android.content.pm.PackageManager.NameNotFoundException(name); }));
         ShadowLooper.shadowMainLooper().idle();
-        assertTrue(ShadowToast.getTextOfLatestToast().contains("本次保留原操作"));
+        assertTrue(ShadowToast.getTextOfLatestToast().contains("保留原来的长按操作"));
+    }
+
+    @Test public void categoryLookupFailurePreservesOriginalGesture() {
+        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "test.denied",
+                name -> { throw new SecurityException("test permission denial"); }));
+        ShadowLooper.shadowMainLooper().idle();
+        assertTrue(ShadowToast.getTextOfLatestToast().contains("保留原来的长按操作"));
     }
 
     @Test public void builtInGamesDoNotRequireGameCategoryAndMatchExactly() {
         install("com.tencent.tmgp.sgame", ApplicationInfo.CATEGORY_UNDEFINED);
         install("com.tencent.tmgp.sgame.tools", ApplicationInfo.CATEGORY_UNDEFINED);
-        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "com.tencent.tmgp.sgame"));
-        assertFalse(GameCapturePolicy.shouldPause(context, enabled(), "com.tencent.tmgp.sgame.tools"));
-        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.defaults(), "com.tencent.tmgp.sgame"));
+        GameCapturePolicy.SourceAppClassifier classifier = name -> context.getPackageManager()
+                .getApplicationInfo(name, 0).category;
+        assertTrue(GameCapturePolicy.shouldPause(context, enabled(), "com.tencent.tmgp.sgame", classifier));
+        assertFalse(GameCapturePolicy.shouldPause(context, enabled(), "com.tencent.tmgp.sgame.tools", classifier));
+        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.defaults(), "com.tencent.tmgp.sgame", classifier));
     }
 
     @Test public void manualGamesSurviveStorageAndProviderBundleAndRespectSwitch() {
@@ -53,9 +67,11 @@ public final class GameCapturePolicyTest {
         configured.saveLocal(context);
         DragShareSettings restored = DragShareSettings.readLocal(context);
         assertTrue(restored.manualGamePackages.contains("test.custom"));
-        assertTrue(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(restored.toBundle()), "test.custom"));
+        assertTrue(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(restored.toBundle()), "test.custom",
+                name -> context.getPackageManager().getApplicationInfo(name, 0).category));
         bundle.putBoolean("pause_automatic_in_games", false);
-        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(bundle), "test.custom"));
+        assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(bundle), "test.custom",
+                name -> context.getPackageManager().getApplicationInfo(name, 0).category));
         bundle.putBoolean("pause_automatic_in_games", true);
         bundle.putStringArrayList("manual_game_packages", new java.util.ArrayList<>());
         assertFalse(GameCapturePolicy.shouldPause(context, DragShareSettings.fromBundle(bundle), "test.custom"));
