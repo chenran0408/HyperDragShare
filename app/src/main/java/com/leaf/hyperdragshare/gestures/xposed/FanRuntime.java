@@ -1853,17 +1853,9 @@ final class FanRuntime {
     }
 
     private void refreshTriggerCapture() {
-        if (foregroundGestureExcluded) {
-            triggerCapture.update(false, config.bottomLeftEnabled, config.bottomRightEnabled,
-                    config.hotWidthPercent, config.hotHeightPercent, 0, 0);
-            return;
-        }
-        if (inputSources.usesNativeInput()) {
-            triggerCapture.update(false, config.bottomLeftEnabled, config.bottomRightEnabled,
-                    config.hotWidthPercent, config.hotHeightPercent, 0, 0);
-            return;
-        }
-        triggerCapture.update(canStartBottom(), config.bottomLeftEnabled,
+        // The corner window owns DOWN even when native input owns event dispatch.
+        boolean captureCornerDown = canStartBottom() && !foregroundGestureExcluded;
+        triggerCapture.update(captureCornerDown, config.bottomLeftEnabled,
                 config.bottomRightEnabled, config.hotWidthPercent,
                 config.hotHeightPercent, 0, 0);
     }
