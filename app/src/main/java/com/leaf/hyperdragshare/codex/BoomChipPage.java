@@ -148,6 +148,12 @@ public class BoomChipPage {
         mBoomConent.setOnClickListener(mDismissClickListener);
         mCancel.setOnClickListener(mDismissClickListener);
         mBoomActionHandler = new BoomActionHandler(this);
+        mScroller.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            @Override
+            public void onScrollChange(View view, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
+                if (hasSelection()) notifySelectionChanged();
+            }
+        });
         mBoomConent.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
             @Override
             public void onLayoutChange(View view, int left, int top, int right, int bottom,
@@ -220,6 +226,19 @@ public class BoomChipPage {
     public int selectedCharacterCount() {
         return mBoomActionHandler != null && mBoomActionHandler.hasSelection()
                 ? mBoomActionHandler.getSelectedTextCharacterCount() : 0;
+    }
+
+    /** Returns the selected first row's Y relative to this page, without copying selection state. */
+    public int selectionActionAnchorY() {
+        if (!hasSelection() || mBoomPage.getWidth() <= 0) return -1;
+        int rowIndex = mLayout.getRowForIndex(mBoomActionHandler.mSelectedId.first());
+        View row = mBoomConent.getChildAt(rowIndex);
+        if (row == null || row.getHeight() <= 0) return -1;
+        int[] rowLocation = new int[2];
+        int[] pageLocation = new int[2];
+        row.getLocationOnScreen(rowLocation);
+        mBoomPage.getLocationOnScreen(pageLocation);
+        return rowLocation[1] - pageLocation[1];
     }
 
     public void setOnChipsChangedListener(Runnable listener) {

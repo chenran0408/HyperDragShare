@@ -69,6 +69,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
     private var lastCountedOriginal: String? = null
     private var selectedCharacterCount by mutableIntStateOf(0)
     private var hasTextSelection by mutableStateOf(false)
+    private var selectionActionAnchorY by mutableIntStateOf(-1)
     private var isSegmenting by mutableStateOf(true)
     private var isRecognizing by mutableStateOf(false)
     private var copying by mutableStateOf(false)
@@ -89,6 +90,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
         }
         hasTextSelection = page.hasSelection()
         selectedCharacterCount = page.selectedCharacterCount()
+        selectionActionAnchorY = page.selectionActionAnchorY()
         directActionText = if (page.hasSelection()) page.selectedTextOrOriginal().orEmpty() else ""
     }
 
@@ -174,6 +176,7 @@ internal class BigBangPanelSession(private val context: Context, private val act
                     totalCharacterCount = totalCharacterCount,
                     selectedCharacterCount = selectedCharacterCount,
                     hasTextSelection = hasTextSelection,
+                    selectionActionAnchorY = selectionActionAnchorY,
                     allTextSelected = boomChipPage?.mBoomActionHandler?.isAllSelected() == true,
                     isSegmenting = isSegmenting,
                     isRecognizing = isRecognizing,

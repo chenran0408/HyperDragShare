@@ -18,10 +18,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.Composable
@@ -57,6 +61,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -85,6 +90,22 @@ import top.yukonga.miuix.kmp.icon.extended.Tasks
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
+
+private val SELECTION_ACTION_TOOLBAR_HEIGHT = 48.dp
+private val SELECTION_ACTION_TOOLBAR_GAP = 8.dp
+private val SELECTION_ACTION_TOP_RESERVE =
+    SELECTION_ACTION_TOOLBAR_HEIGHT + SELECTION_ACTION_TOOLBAR_GAP
+
+internal fun selectionToolbarTopY(
+    anchorYpx: Int,
+    pageTopInsetPx: Int,
+    toolbarHeightPx: Int,
+    gapPx: Int,
+    viewportHeightPx: Int,
+): Int {
+    val anchoredTop = anchorYpx + pageTopInsetPx - gapPx - toolbarHeightPx
+    return anchoredTop.coerceIn(0, (viewportHeightPx - toolbarHeightPx).coerceAtLeast(0))
+}
 
 internal enum class BigBangMoreAction {
     Dictionary,
@@ -129,6 +150,7 @@ internal fun BigBangOverlayContent(
     totalCharacterCount: Int,
     selectedCharacterCount: Int,
     hasTextSelection: Boolean,
+    selectionActionAnchorY: Int,
     allTextSelected: Boolean,
     isSegmenting: Boolean,
     isRecognizing: Boolean,
@@ -156,10 +178,13 @@ internal fun BigBangOverlayContent(
         words.addOnLayoutChangeListener(listener)
         onDispose { words.removeOnLayoutChangeListener(listener) }
     }
-    // 52dp header + two 44dp action rows, padding, spacing, and the native body's 8dp.
-    val naturalPanelHeight = (bodyHeightPx / density).dp + 162.dp +
-        (if (isRecognizing) 88.dp else 0.dp) +
-        (if (copyFeedback == null) 0.dp else 24.dp)
+    val actionReady = !isSegmenting && totalCharacterCount > 0
+    val hasSelectionToolbar = hasTextSelection && actionReady && selectionActionAnchorY >= 0
+    val selectionToolbarTopInset = if (hasSelectionToolbar) SELECTION_ACTION_TOP_RESERVE else 0.dp
+    // The full-text toolbar is present only without a selection; selected actions float by the selected words.
+    val naturalPanelHeight = (bodyHeightPx / density).dp +
+        (if (hasTextSelection) 60.dp + selectionToolbarTopInset else 187.dp) +
+        (if (isRecognizing) 88.dp else 0.dp)
     val panelMetrics = if (maximumMetrics.fullScreen) maximumMetrics else maximumMetrics.copy(
         height = minOf(maximumMetrics.height, naturalPanelHeight),
     )
@@ -311,16 +336,32 @@ internal fun BigBangOverlayContent(
                         leftInset = placedMetrics.leftSystemInset,
                         rightInset = placedMetrics.rightSystemInset,
                         leading = {
-                            Text(
-                                text = stringResource(R.string.bigbang_overlay_title),
-                                color = MiuixTheme.colorScheme.onSurface,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                BigBangIconAction(
+                                    icon = MiuixIcons.Edit,
+                                    label = "编辑原文",
+                                    enabled = actionReady,
+                                    onClick = { editorText = originalText(); showEditor = true },
+                                )
+                                BigBangIconAction(
+                                    icon = MiuixIcons.Tasks,
+                                    label = if (allTextSelected) "取消全选" else "全选",
+                                    enabled = actionReady,
+                                    onClick = onSelectAll,
+                                    toggled = allTextSelected,
+                                )
+                            }
                         },
                         center = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(R.string.bigbang_overlay_title),
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                                 Text(
                                     text = if (isRecognizing) "正在识别…"
                                         else if (isSegmenting) "正在分词…"
@@ -330,22 +371,30 @@ internal fun BigBangOverlayContent(
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     fontSize = 11.sp,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         },
                         trailing = {
-                            BigBangIconAction(
-                                icon = MiuixIcons.More,
-                                label = "窗口外观",
-                                enabled = !isSegmenting,
-                                onClick = { showMoreMenu = true },
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                BigBangIconAction(
+                                    icon = MiuixIcons.Undo,
+                                    label = "撤销上次拆分、合并或编辑",
+                                    enabled = actionReady && canUndoEdit,
+                                    onClick = { onMoreAction(BigBangMoreAction.UndoEdit) },
+                                )
+                                BigBangIconAction(
+                                    icon = MiuixIcons.More,
+                                    label = "窗口外观",
+                                    enabled = !isSegmenting,
+                                    onClick = { showMoreMenu = true },
+                                )
+                            }
                         },
                     )
                 },
                 bottomBar = {
-                    val ready = !isSegmenting && totalCharacterCount > 0
-                    Column(
+                    if (!hasTextSelection) Column(
                         modifier = Modifier.fillMaxWidth()
                             .background(bottomBarColor.copy(alpha = panelOpacity))
                             .padding(start = 8.dp + placedMetrics.leftSystemInset,
@@ -353,35 +402,41 @@ internal fun BigBangOverlayContent(
                                 top = 6.dp, bottom = 6.dp + placedMetrics.bottomSystemInset),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
+                        Box(
+                            Modifier.fillMaxWidth().height(1.dp)
+                                .background(panelBorder.copy(alpha = panelOpacity)),
+                        )
+                        Text(
+                            text = "全文操作",
+                            modifier = Modifier.fillMaxWidth().height(20.dp)
+                                .padding(start = 8.dp, top = 2.dp),
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                        )
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Tasks,
-                                if (allTextSelected) "取消全选" else "全选", onSelectAll, ready,
-                                toggled = allTextSelected)
-                            BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Cut,
-                                "拆分选中词语", { onMoreAction(BigBangMoreAction.Split) }, ready && canSplit)
-                            BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Merge,
-                                "合并选中词语", { onMoreAction(BigBangMoreAction.Merge) }, ready && canMerge)
                             BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Copy,
                                 if (copying) "正在复制" else "复制选中内容或原文", onCopy,
-                                ready && !copying, primary = true)
+                                actionReady && !copying, primary = true)
                             BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Search,
-                                "搜索选中内容或原文", onSearch, ready)
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Edit,
-                                "编辑原文", { editorText = originalText(); showEditor = true }, ready)
-                            BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Undo,
-                                "撤销上次拆分、合并或编辑", { onMoreAction(BigBangMoreAction.UndoEdit) }, ready && canUndoEdit)
+                                "搜索选中内容或原文", onSearch, actionReady)
                             BigBangToolbarAction(Modifier.weight(1f), DictionaryIcon,
-                                "用词典查询选中内容", { onMoreAction(BigBangMoreAction.Dictionary) }, ready)
+                                "用词典查询选中内容", { onMoreAction(BigBangMoreAction.Dictionary) }, actionReady)
                             BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Translate,
-                                "翻译选中内容或原文", { onMoreAction(BigBangMoreAction.Translate) }, ready)
-                            BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Link,
+                                "翻译选中内容或原文", { onMoreAction(BigBangMoreAction.Translate) }, actionReady)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BigBangToolbarAction(Modifier.width(56.dp), MiuixIcons.Link,
                                 "链接、邮箱与电话直达", {
                                     onMoreAction(BigBangMoreAction.Direct)
-                                }, ready, primary = directAction != null)
-                            BigBangToolbarAction(Modifier.weight(1f), MiuixIcons.Folder,
-                                if (stashing) "正在加入中转站" else "加入中转站", onStash, ready && !stashing)
+                                }, actionReady, primary = directAction != null)
+                            BigBangToolbarAction(Modifier.width(56.dp), MiuixIcons.Folder,
+                                if (stashing) "正在加入中转站" else "加入中转站", onStash,
+                                actionReady && !stashing)
                         }
                     }
                 },
@@ -400,13 +455,85 @@ internal fun BigBangOverlayContent(
                                 fontSize = 13.sp)
                         }
                     } else {
-                        AndroidView(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .padding(bottom = 4.dp),
-                            factory = { contentView },
-                        )
+                        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                            val reservedTop = minOf(selectionToolbarTopInset, maxHeight)
+                            AndroidView(
+                                modifier = Modifier.fillMaxSize().padding(
+                                    top = reservedTop,
+                                    bottom = 4.dp,
+                                ),
+                                factory = { contentView },
+                            )
+                            if (hasSelectionToolbar) {
+                                val toolbarHeight = SELECTION_ACTION_TOOLBAR_HEIGHT
+                                val toolbarY = with(LocalDensity.current) {
+                                    selectionToolbarTopY(
+                                        anchorYpx = selectionActionAnchorY,
+                                        pageTopInsetPx = reservedTop.roundToPx(),
+                                        toolbarHeightPx = toolbarHeight.roundToPx(),
+                                        gapPx = SELECTION_ACTION_TOOLBAR_GAP.roundToPx(),
+                                        viewportHeightPx = maxHeight.roundToPx(),
+                                    ).toDp()
+                                }
+                                Row(
+                                    modifier = Modifier.align(Alignment.TopCenter)
+                                        .offset(y = toolbarY)
+                                        .widthIn(max = maxWidth)
+                                        .horizontalScroll(rememberScrollState())
+                                        .background(
+                                            MiuixTheme.colorScheme.surfaceContainer.copy(alpha = panelOpacity),
+                                            RoundedCornerShape(16.dp),
+                                        )
+                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), MiuixIcons.Cut,
+                                        "拆分选中词语", { onMoreAction(BigBangMoreAction.Split) },
+                                        canSplit,
+                                    )
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), MiuixIcons.Merge,
+                                        "合并选中词语", { onMoreAction(BigBangMoreAction.Merge) },
+                                        canMerge,
+                                    )
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), MiuixIcons.Copy,
+                                        if (copying) "正在复制" else "复制选中内容", onCopy,
+                                        !copying, primary = true,
+                                    )
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), MiuixIcons.Search,
+                                        "搜索选中内容", onSearch, true,
+                                    )
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), DictionaryIcon,
+                                        "用词典查询选中内容",
+                                        { onMoreAction(BigBangMoreAction.Dictionary) }, true,
+                                    )
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), MiuixIcons.Translate,
+                                        "翻译选中内容",
+                                        { onMoreAction(BigBangMoreAction.Translate) }, true,
+                                    )
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), MiuixIcons.Link,
+                                        "链接、邮箱与电话直达",
+                                        { onMoreAction(BigBangMoreAction.Direct) },
+                                        true, primary = directAction != null,
+                                    )
+                                    BigBangToolbarAction(
+                                        Modifier.width(44.dp), MiuixIcons.Folder,
+                                        if (stashing) "正在加入中转站" else "加入中转站", onStash,
+                                        !stashing,
+                                    )
+                                }
+                            }
+                        }
+                        if (hasTextSelection && placedMetrics.bottomSystemInset > 0.dp) {
+                            Spacer(Modifier.height(placedMetrics.bottomSystemInset))
+                        }
                     }
                 }
             }
