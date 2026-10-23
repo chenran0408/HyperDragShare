@@ -280,8 +280,8 @@ object StashOverlayPanel {
                 onDropped = ::collapse,
                 onStarted = {
                     val density = context.resources.displayMetrics.density
-                    val width = if (embedded == null) overlay.window.attributes.width else overlay.composeView.width
-                    val height = if (embedded == null) overlay.window.attributes.height else overlay.composeView.height
+                    val width = overlay.window.attributes.width
+                    val height = overlay.window.attributes.height
                     dragContentWidthDp = width / density
                     dragContentHeightDp = height / density
                     draggingContent = true
