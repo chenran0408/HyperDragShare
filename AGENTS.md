@@ -58,5 +58,6 @@ git diff --check
 - 分支拓扑、tag和后续Git操作：[BRANCHES](docs/BRANCHES.md)。
 - 已替代方案、不能恢复的行为：[DECISIONS](docs/DECISIONS.md)。
 - 配置修改入口、字段增加步骤与兼容检查：[CONFIGURATION](docs/CONFIGURATION.md)。
+- 拖拽动作执行、线程与资源边界：[DRAG_ACTIONS](docs/DRAG_ACTIONS.md)。
 - 实现专题：[IMPLEMENTATION](docs/IMPLEMENTATION.md)、[STASH](docs/STASH.md)、[FANFREEFORM_INTEGRATION](docs/FANFREEFORM_INTEGRATION.md)、[DEVICE_VALIDATION](docs/DEVICE_VALIDATION.md)。这些包含历史阶段，先核对日期/提交，不把旧“下一步”当当前任务。
 - 整理前完整AGENTS与旧进展：[历史归档索引](docs/archive/2026-10-24/README.md)。

@@ -1,17 +1,17 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成配置复制和最新状态更新入口，沿用上一轮已完成的设置页拆分；没有操作手机、安装、推送或发布版本。
+核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮从DragShareController提取动作执行，沿用已完成的设置拆分和配置更新入口；没有操作手机、安装、推送或发布版本。
 
 ## 在哪里继续
 
 | 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
 |---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；当前配置整理源码 `a064f1794b315c4b1ea71dd01b34ed8b224f1420`，后续纯文档HEAD用git log核对 | 1.7.219-beta.19 / 261（验证构建，无新版交付） |
+| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；当前动作提取源码 `001942e32507ad0660c5330662d13cece906bfe7`，后续纯文档HEAD用git log核对 | 1.7.219-beta.19 / 261（验证构建，无新版交付） |
 | 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
 
-正式tag `v1.7.218^{}`=`c03e880cf67ce4c87e81bbcb45fa1fbcf0a2e247`；稳定HEAD比它多3个历史文档提交与上一轮CI提交，产品源码相同。上轮已确认origin默认为 `hyperos4-adaptation@3520884`，已建立两维护线并配置同名upstream；本轮未联网核对或修改远程，本地beta从origin/beta所指69828c4继续推进、尚未推送。历史路线的archive标签和原分支/tag/worktree保留。完整关系见[BRANCHES](BRANCHES.md)，不要从默认clone或`v1.9.3`实验tag直接开始。
+正式tag `v1.7.218^{}`=`c03e880cf67ce4c87e81bbcb45fa1fbcf0a2e247`；稳定HEAD比它多3个历史文档提交与设置拆分批次的CI提交，产品源码相同。此前确认origin默认为 `hyperos4-adaptation@3520884`，已建立两维护线并配置同名upstream；本轮未联网核对或修改远程，本地beta从origin/beta所指69828c4继续推进、尚未推送。历史路线的archive标签和原分支/tag/worktree保留。完整关系见[BRANCHES](BRANCHES.md)，不要从默认clone或`v1.9.3`实验tag直接开始。
 
 ## 交付身份与验证边界
 
@@ -19,12 +19,12 @@
 
 - 产品源码d6d1f3a；4,881,913 bytes；SHA256 `FB87509F1FCCDB6224CA6C1CA5CCD7A518A5CAC485EE9A8DC8BF127AEB1E06D5`。
 - 既有交付记录：572项JVM/Robolectric测试0失败/错误/跳过；Lint0错误、178警告、2提示；Beta/R8、版本与v2验签通过。签名证书与beta18一致，不能据此推定与正式发布密钥一致。
-- beta19没有安装或实机/完整Android模拟器交互证据。上一轮4597c7a完成设置职责移动，本轮a064f17完成配置更新；生成APK仅作编译/R8验证，保留旧元数据，不提供为新版交付，不替换上述安装包。
+- beta19没有安装或实机/完整Android模拟器交互证据。历史4597c7a完成设置职责移动，a064f17完成配置更新；本轮动作提取也仅生成编译/R8验证包，保留旧元数据，不提供为新版交付，不替换上述安装包。
 - 既有正式包1.7.218发布/设备证据保留于DEVICE_VALIDATION及归档。本轮没有重新查询GitHub Release资产/Latest状态、没有重新验签正式APK，不能用tag存在替代资产核验。
 
-原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；上轮备份/CI/拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；本轮完整要求、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`。
+原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；本轮完整要求、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`。
 
-## 设置页职责（上轮拆分已完成）
+## 设置页职责（已完成，不重复拆分）
 
 | 文件 | 当前职责 |
 |---|---|
@@ -37,15 +37,28 @@
 | `SettingsEffectNotice.kt` | 字段mutation更新与原保存/生效提示；不持有独立配置状态 |
 | `DragShareSettings.java` | 默认/校验/读写/Bundle及builder/toBuilder；具名setter替代调用方整组位置参数 |
 
-上轮40个声明移动的对照证据保留于settings-foundation交付。本轮在其上迁移28处配置更新调用：标量只设目标字段，集合增删使用mutation的current；不改变搜索/导航/滑条完成保存时机。`SettingsCatalog.kt`、`ActivationState.kt`、配置key/默认值/协议/迁移、DragShareController/手势/宿主适配均未改。开发说明和示例见[CONFIGURATION](CONFIGURATION.md)。
+设置拆分40个声明的对照证据保留于settings-foundation交付。配置批次迁移28处更新调用：标量只设目标字段，集合增删使用mutation的current；搜索/导航/滑条完成保存时机未改。本轮设置源码、配置key/默认值/协议/迁移、手势/宿主适配均未改。开发说明和示例见[CONFIGURATION](CONFIGURATION.md)。
 
-- **本轮实际逻辑验证**：模型新增7项，覆盖默认、非默认对象单字段复制、连续修改、prefs/Bundle往返、缺失字段、集合快照和原边界归一化；Kotlin新增1项，通过UI实际委托的更新函数连续修改标量、显隐/排序/黑名单/游戏集合，并检查读回和提示。沿用UI根回调最新状态的闭包行为经代码审阅；该测试没有挂载完整设置页面。
-- **本轮全量本地**：a064f17对应app树运行`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功，1m56s，113类583测试0失败/错误/跳过；Lint0错误/178警告/2提示；Debug和Beta实际R8完成，mapping存在。原ActivationMonitor的3项恢复/乱序测试也在全量中通过。结果见本轮outputs/verification/RESULTS.json、JUnit/Lint归档及work/full-regression.log。上轮575项只作历史，不冒充本轮结果。
+- **配置批次逻辑验证（历史）**：模型新增7项，覆盖默认、非默认对象单字段复制、连续修改、prefs/Bundle往返、缺失字段、集合快照和原边界归一化；Kotlin新增1项，通过UI实际委托的更新函数连续修改标量、显隐/排序/黑名单/游戏集合，并检查读回和提示。闭包行为经代码审阅，测试未挂载完整设置页。
+- **配置批次全量（历史）**：a064f17对应app树运行`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功，1m56s，113类583测试0失败/错误/跳过；Lint0错误/178警告/2提示。证据位于mmgg-config-updates/outputs/verification/RESULTS.json；本轮结果另列，不用旧报告代替。
 - **CI职责**：Beta提交36a1bb1，稳定e25c667，各自覆盖push/PR到两维护线；均执行单测/Lint/Debug，Beta额外实际assembleBeta/R8，稳定不调用不存在的Beta任务。产物标CI验证包，记录提交/版本/SHA；没有发布或使用本地密钥。
-- **历史云端两线**：稳定e25c667的[run 40012602021](https://github.com/chenran0408/HyperDragShare/actions/runs/40012602021)与Beta4597c7a的[run 40013175304](https://github.com/chenran0408/HyperDragShare/actions/runs/40013175304)均success，任务/元数据/产物和报告上传已在上一轮核对；Beta实际包含R8。本轮未推送、未触发或查询云端CI，不能称a064f17已云端通过。
+- **历史云端两线**：稳定e25c667的[run 40012602021](https://github.com/chenran0408/HyperDragShare/actions/runs/40012602021)与Beta4597c7a的[run 40013175304](https://github.com/chenran0408/HyperDragShare/actions/runs/40013175304)均success，任务/元数据/产物和报告上传已在设置拆分批次核对；Beta实际包含R8。配置和本轮动作提取均未推送/触发或查询云端CI，不能称新源码已云端通过。
 - **未覆盖**：完整NavDisplay搜索滚动/Back触摸、真实Miuix视觉/主题/字体/屏幕矩阵、真机跨进程功能。监测恢复测试不是完整页面交互验收。此前所有功能未完项如下保留。
 
 上轮本地备份bundle与5个tag在BRANCHES落实记录有入口；当时已显式推送两维护线/tag到用户origin。本轮只作本地提交，不新增或删除引用。
+
+## 动作执行职责与本轮验证
+
+源码001942e：`DragShareActions`承接外部文字/图片分享、复制、存图、中转站、分词、OCR/扫码。入口只接收payload/target/stagedUri/x/y，依赖同一Context/main Handler/DragShareToast及固定来源布尔；异步worker持有本次动作数据，不访问Controller/Session。Controller保留选目标、结束/取消、pending暂存与会话结束标记、全部预览/菜单/动画和清理；2653→2506行，新执行器202行，没有把会话模型搬进执行器。
+
+资源与线程地图见[DRAG_ACTIONS](DRAG_ACTIONS.md)。ShareLauncher、ClipboardWriter、StashClient、LocalImageSaver、Provider、设置和输入代码均未改；没有新增Bitmap recycle、URI提前撤销/删除、线程调度/超时/重试。成功提交的旧图片动作可在新手势期间继续使用原URI，完成回调只提示，不清新窗口。
+
+- **基线实际执行**：提取前79fbf72上的PreviewLifecycle/LocalImageSaver/StashStore/ShareImageProvider四类26项通过，18秒，旧断言完整保留。
+- **本轮全量本地**：`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功1m49s；115类597项0失败/错误/跳过，Lint0错误/178警告/2提示，Debug与实际minifyBetaWithR8完成、mapping存在。源码提交前受验工作树与001942e的app tree相同：`48de1d5a1c525aef7c2a2c2f02ae48872205fd65`。
+- **新增行为证据**：ActionsTest11项验证真实外部分享Intent/Provider授权调用与读图、ClipboardWriter系统边界替身、真实StashClient/Provider/Store、存图线程/Bitmap替身、分词Bundle和OCR/QR；ActionLifecycleTest3项使用真实Controller/Actions与可控stage/clipboard，覆盖重复回调、取消/销毁迟到、旧已接受动作在新手势中的数据与失败隔离/preview不变。旧输入/生命周期测试随全量通过。
+- **失败与修正记录**：新增测试先遇夹具编译问题，后定位框架自动补ClipData与模拟权限查询边界；仅修新夹具，未改旧断言/生产行为。专用诊断证明未grant前及revoke后查询均为允许，所以只对真实Context调用的包/URI/flags作断言，不声称系统权限撤销已验证。临时诊断输出未进入最终测试文件。
+- **证据位置**：mmgg-controller-actions/outputs/verification/RESULTS.json、baseline-junit.zip、junit-results.zip、lint-results-debug.xml与uri-permission-diagnostic.xml；原日志在work。未推送或运行云端CI、未操作手机/安装/发布；验证APK不作为新版交付。
+- **未覆盖**：真实接收端读取/发送、系统URI权限实际授予/撤销、Root剪贴板/AppOp、AICR/宿主启动限制及完整Miuix交互/视觉。Bitmap与暂存文件继续原所有权/GC和24小时清理策略，未新增运行中租约；没有声称本批修复原功能待办。
 
 ## 当前有效实现
 
@@ -55,6 +68,7 @@
 |---|---|---|
 | 首页分层诊断 | `ActivationMonitor.kt`、`ActivationDiagnosticsPage.kt`、`ActivationState.kt`、`ModuleActivation.java` | Root/存活注入/服务/Portal Root/输入/reader/悬浮权限分别取证；五态与按功能依赖；conflated请求＋代次检查；超时未知。不是API102框架binder方案 |
 | 按压取词/拖拽 | `RootTouchSource`→`EvdevTouchParser`→`PressTriggerDetector`/`PressCaptureSource`→`DragShareController` | 时长600ms默认、250–3000可调；Root UP/CANCEL收尾；无物理DOWN不接管被动预览；输入设备按自然显示比例选择且排除蓝牙，歧义失败 |
+| 已选目标执行 | `DragShareController.launchShare`→`DragShareActions`→既有ShareLauncher/ClipboardWriter/StashClient/LocalImageSaver及分词/OCR入口 | 明确动作参数，异步数据独立；控制器保留会话和窗口，线程/授权/资源策略不变。测试分层边界见上文 |
 | Root语义节点/局部识字/主动点取 | `SharedRootNodeCapture`、`RootNodeCaptureMain`、`RootScreenshotter`、`PointCapture*` | 按请求节点/安全窗口核验；图片节点/OCR区域用截图；不是微信私有原媒体获取，也不是系统无障碍服务 |
 | 传送门媒体适配 | `PortalHooks`、`PortalContentCaptureSource`、`CapturedContent.ImageOrigin` | 验证Taplus当前媒体载荷标PORTAL_MEDIA并交接同次按压；截图/未知来源不冒充原图。旧版成功来源是候选，需要现场证据 |
 | 分词及选中操作 | ICU `TextSegmenter`→`BigBangPanelSession`/`BigBangOverlayContent`→`BoomChipPage`/`SwipeSelectView` | 上游资源/左右动作排布已部分复用；按下至抬手冻结选区布局/旧动画/padding。完整Leaf样式、定位与真实体验仍未验收 |
@@ -84,11 +98,11 @@
 | N10-AICR-MISSING | 用户明确暂停 | 既有组件提示分析保留；不扩大为已解决或恢复排查 |
 | R01/R02/B01/B08及其余原清单 | 保留已有分块整理/替身证据与边界 | 无真实CPU/帧率基准、不量化性能提升；历史触控探针已隔离，不能恢复面积研究；原三图/应用图标卡没有统一根因证据 |
 
-## 下一批候选：DragShareController最小职责拆分
+## 下一批候选：预览退出生命周期最小范围
 
-配置入口本批已完成（8783de5模型/Java测试、a064f17调用方/Kotlin测试），不再将它列为待开发。未发现需要改变存储契约才能完成本批的阻碍；畸形显式null Bundle兼容不混入本批。
+配置入口（8783de5/a064f17）与动作执行（001942e）均已完成，不重复开发。上轮手势诊断跟踪提取只是建议，本轮用户选择动作边界，因此未混做跟踪提取；畸形显式null Bundle等无关兼容也未混入。
 
-下一轮可仅提取手势诊断跟踪：8个`gestureTrace*`字段和`recordGestureTrace/logGestureTrace`的记录/摘要逻辑，控制器保留调用与写日志时机。保持同源过滤、DOWN重置、MOVE计数/位移、Root650ms及活动/菜单摘要保留规则；不动输入分类、分享分发、目标异步查询、窗口退出和会话清理。已有DragShareDiagnostics负责环境诊断、DragShareLog负责输出；新对象只负责一次手势跟踪状态，并补该状态的行为测试。此处是范围建议，本批没有实施。
+下一轮可只处理退出中的预览：`previewExitGeneration`和三份exiting资源引用，以及`startPreviewExit/finishPreviewExit/isPreviewExitPending/removePendingPreviewExitImmediately`。先补退出完成、新手势强制移除、迟到动画回调、重复清理及destroy的行为测试，再考虑提取持有View/ModernView/ModernWindow的单一退出拥有者。保持160/220ms动画、代次/对象身份核对、先清引用再移除的顺序。暂不同时拆菜单fade/dispose、目标查询、动作、Root/宿主回放或手势Session。当前四项旧生命周期测试主要覆盖查询/watchdog，不等于该预览退出矩阵已验收。本批没有改这些窗口路径。
 
 ## 后续开始顺序
 
