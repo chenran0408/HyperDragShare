@@ -2,13 +2,17 @@ name: Android checks
 
 on:
   push:
-    branches: [hyperos4-adaptation]
+    branches:
+      - beta
+      - repair-from-189
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
       - 'LICENSE'
   pull_request:
-    branches: [hyperos4-adaptation]
+    branches:
+      - beta
+      - repair-from-189
   workflow_dispatch:
 
 permissions:
@@ -19,9 +23,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  debug:
+  android:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      CI_TARGET_BRANCH: ${{ github.event.pull_request.base.ref || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,24 +40,104 @@ jobs:
       - name: Install project SDK and native tools
         run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-      - name: Test, lint and build debug APK
+      - name: Test, lint and build APKs for the target branch
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --max-workers=2 testDebugUnitTest lintDebug assembleDebug
-      - name: Upload debug APK
+          build_tasks="testDebugUnitTest lintDebug assembleDebug"
+          if [[ "$CI_TARGET_BRANCH" == beta ]]; then
+            build_tasks="$build_tasks assembleBeta"
+          fi
+          ./gradlew --no-daemon --max-workers=2 $build_tasks
+      - name: Package APK metadata and checksums
+        id: package
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          output_dir="$RUNNER_TEMP/android-ci-artifacts"
+          mkdir -p "$output_dir"
+          analyzer="$(find "$ANDROID_HOME" -type f -name apkanalyzer -print -quit)"
+          if [[ -z "$analyzer" ]]; then
+            echo "apkanalyzer was not found in the installed Android SDK" >&2
+            exit 1
+          fi
+
+          metadata="$output_dir/BUILD-METADATA.txt"
+          {
+            echo "Purpose: CI verification package; not a release or distribution package."
+            echo "GitHub SHA: $GITHUB_SHA"
+            echo "GitHub ref: $GITHUB_REF"
+            echo "Target branch: $CI_TARGET_BRANCH"
+          } > "$metadata"
+
+          artifact_version="unknown"
+          for variant in debug; do
+            apk="app/build/outputs/apk/$variant/app-$variant.apk"
+            if [[ -f "$apk" ]]; then
+              cp "$apk" "$output_dir/app-$variant.apk"
+              version_name="$("$analyzer" manifest version-name "$apk")"
+              version_code="$("$analyzer" manifest version-code "$apk")"
+              {
+                echo "$variant APK: app-$variant.apk"
+                echo "$variant versionName: $version_name"
+                echo "$variant versionCode: $version_code"
+              } >> "$metadata"
+              artifact_version="$version_name"
+            else
+              echo "$variant APK: not produced" >> "$metadata"
+            fi
+          done
+
+          if [[ "$CI_TARGET_BRANCH" == beta ]]; then
+            beta_apk="app/build/outputs/apk/beta/app-beta.apk"
+            if [[ -f "$beta_apk" ]]; then
+              cp "$beta_apk" "$output_dir/app-beta.apk"
+              version_name="$("$analyzer" manifest version-name "$beta_apk")"
+              version_code="$("$analyzer" manifest version-code "$beta_apk")"
+              {
+                echo "beta APK: app-beta.apk"
+                echo "beta versionName: $version_name"
+                echo "beta versionCode: $version_code"
+                echo "Beta signing: debug (this workflow does not provide release signing secrets)."
+              } >> "$metadata"
+              artifact_version="$version_name"
+              mapping="app/build/outputs/mapping/beta/mapping.txt"
+              if [[ ! -f "$mapping" ]]; then
+                echo "R8 mapping file was not produced for the Beta APK" >&2
+                exit 1
+              fi
+              cp "$mapping" "$output_dir/mapping.txt"
+              echo "beta R8 mapping: mapping.txt" >> "$metadata"
+            else
+              echo "beta APK: not produced" >> "$metadata"
+            fi
+          fi
+
+          shopt -s nullglob
+          checksummed_files=("$output_dir"/*.apk)
+          if [[ -f "$output_dir/mapping.txt" ]]; then
+            checksummed_files+=("$output_dir/mapping.txt")
+          fi
+          if (( ${#checksummed_files[@]} > 0 )); then
+            (cd "$output_dir" && sha256sum "${checksummed_files[@]##*/}" > SHA256SUMS)
+          fi
+          echo "artifact_version=$artifact_version" >> "$GITHUB_OUTPUT"
+      - name: Upload CI verification APKs and metadata
+        if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: MMGG-debug-${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          name: MMGG-CI-verification-${{ steps.package.outputs.artifact_version || 'unknown' }}-${{ github.sha }}
+          path: ${{ runner.temp }}/android-ci-artifacts/
+          if-no-files-found: warn
           retention-days: 14
       - name: Upload check reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Android-reports-${{ github.run_number }}
+          name: Android-reports-${{ steps.package.outputs.artifact_version || 'unknown' }}-${{ github.sha }}
           path: |
             app/build/reports/tests/testDebugUnitTest/
             app/build/test-results/testDebugUnitTest/*.xml
             app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
           retention-days: 14
