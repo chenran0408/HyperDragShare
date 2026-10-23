@@ -87,10 +87,10 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
         ThemeController(if (dark) ColorSchemeMode.Dark else ColorSchemeMode.Light)
     }
 
-    val persist: (DragShareSettings) -> Unit = { next ->
-        val previous = settings
-        saveDragShareSettingsWithNotice(context, previous, next)
+    val persist: (DragShareSettingsMutation) -> DragShareSettings = { mutation ->
+        val next = updateDragShareSettingsWithNotice(context, settings, mutation)
         settings = next
+        next
     }
     MiuixTheme(controller = themeController) {
         var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -243,7 +243,7 @@ private fun portalSettingEntries(
     onOpenBlacklist: () -> Unit,
     onOpenGames: () -> Unit,
     onOpenAbout: () -> Unit,
-    persist: (DragShareSettings) -> Unit,
+    persist: (DragShareSettingsMutation) -> DragShareSettings,
 ): List<SettingEntry> {
     val coroutineScope = rememberCoroutineScope()
     var copyDirectEnabled by remember(context) {
@@ -375,7 +375,9 @@ private fun portalSettingEntries(
         }
     }
     entries += thumbTriggerEntries(context, settings) { timeout ->
-        persist(copySettings(settings, accessibilityLongPressTimeoutMillis = timeout))
+        persist { _ ->
+            setAccessibilityLongPressTimeoutMillis(timeout)
+        }
     }
     row("ocr.system", "系统 AICR 识字", SettingModule.PORTAL, "触发与识别",
         summary = "图片与屏幕识字使用系统 AICR V2",
@@ -487,7 +489,9 @@ private fun portalSettingEntries(
             summary = summary,
             checked = settings.pauseAutomaticInGames,
             onCheckedChange = { enabled ->
-                persist(copySettings(settings, pauseAutomaticInGames = enabled))
+                persist { _ ->
+                    setPauseAutomaticInGames(enabled)
+                }
             },
             enabled = enabled,
         )
@@ -546,7 +550,9 @@ private fun portalSettingEntries(
             summary = summary,
             checked = settings.textSharingEnabled,
             onCheckedChange = { checked ->
-                persist(copySettings(settings, textSharingEnabled = checked))
+                persist { _ ->
+                    setTextSharingEnabled(checked)
+                }
             },
             enabled = enabled,
         )
@@ -561,7 +567,9 @@ private fun portalSettingEntries(
             summary = summary,
             checked = settings.imageSharingEnabled,
             onCheckedChange = { checked ->
-                persist(copySettings(settings, imageSharingEnabled = checked))
+                persist { _ ->
+                    setImageSharingEnabled(checked)
+                }
             },
             enabled = enabled,
         )
@@ -600,7 +608,9 @@ private fun portalSettingEntries(
             items = listOf("简洁", "流光", "环形", "现代"),
             selectedIndex = settings.uiStyle.coerceIn(0, 3),
             onSelectedIndexChange = { selected ->
-                persist(copySettings(settings, uiStyle = selected.coerceIn(0, 3)))
+                persist { _ ->
+                    setUiStyle(selected.coerceIn(0, 3))
+                }
             },
             enabled = enabled,
         )
@@ -625,12 +635,9 @@ private fun portalSettingEntries(
             items = listOf("顶部", "底部", "左侧", "右侧", "靠近手", "跟随拖拽边"),
             selectedIndex = settings.simpleMenuPosition.coerceIn(0, positions.lastIndex),
             onSelectedIndexChange = { selected ->
-                persist(
-                    copySettings(
-                        settings,
-                        simpleMenuPosition = positions[selected.coerceIn(0, positions.lastIndex)],
-                    ),
-                )
+                persist { _ ->
+                    setSimpleMenuPosition(positions[selected.coerceIn(0, positions.lastIndex)])
+                }
             },
             enabled = enabled,
         )
@@ -653,12 +660,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(20f, 40f, 60f, 80f, 100f),
             onValueChange = { simpleOpacity = it },
             onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        simpleMenuOpacityPercent = simpleOpacity.roundToInt(),
-                    ),
-                )
+                persist { _ ->
+                    setSimpleMenuOpacityPercent(simpleOpacity.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -681,12 +685,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(0f, 8f, 16f, 24f, 32f),
             onValueChange = { simpleCornerRadius = it },
             onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        simpleMenuCornerRadiusDp = simpleCornerRadius.roundToInt(),
-                    ),
-                )
+                persist { _ ->
+                    setSimpleMenuCornerRadiusDp(simpleCornerRadius.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -709,12 +710,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(0f, 8f, 16f, 32f, 64f),
             onValueChange = { simpleEdgeDistance = it },
             onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        simpleMenuEdgeDistanceDp = simpleEdgeDistance.roundToInt(),
-                    ),
-                )
+                persist { _ ->
+                    setSimpleMenuEdgeDistanceDp(simpleEdgeDistance.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -738,12 +736,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(0f, 20f, 40f, 60f, 100f, 150f),
             onValueChange = { modernBlurRadius = it },
             onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        modernBlurRadiusDp = modernBlurRadius.roundToInt(),
-                    ),
-                )
+                persist { _ ->
+                    setModernBlurRadiusDp(modernBlurRadius.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -766,12 +761,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(68f, 76f, 84f, 92f, 100f),
             onValueChange = { modernGlassOpacity = it },
             onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        modernGlassOpacityPercent = modernGlassOpacity.roundToInt(),
-                    ),
-                )
+                persist { _ ->
+                    setModernGlassOpacityPercent(modernGlassOpacity.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -794,12 +786,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(0f, 25f, 50f, 75f, 100f),
             onValueChange = { iconOpacity = it },
             onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        iconOpacityPercent = iconOpacity.roundToInt(),
-                    ),
-                )
+                persist { _ ->
+                    setIconOpacityPercent(iconOpacity.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -815,7 +804,9 @@ private fun portalSettingEntries(
             summary = summary,
             checked = settings.blockBackgroundScroll,
             onCheckedChange = { checked ->
-                persist(copySettings(settings, blockBackgroundScroll = checked))
+                persist { _ ->
+                    setBlockBackgroundScroll(checked)
+                }
             },
             enabled = enabled,
         )
@@ -831,12 +822,9 @@ private fun portalSettingEntries(
             summary = summary,
             checked = settings.closeMenuWhenPointerLeaves,
             onCheckedChange = { checked ->
-                persist(
-                    copySettings(
-                        settings,
-                        closeMenuWhenPointerLeaves = checked,
-                    ),
-                )
+                persist { _ ->
+                    setCloseMenuWhenPointerLeaves(checked)
+                }
             },
             enabled = enabled,
         )
@@ -859,7 +847,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(24f, 56f, 100f, 150f, 200f),
             onValueChange = { edgeTriggerDp = it },
             onValueChangeFinished = {
-                persist(copySettings(settings, edgeTriggerDp = edgeTriggerDp.roundToInt()))
+                persist { _ ->
+                    setEdgeTriggerDp(edgeTriggerDp.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -882,12 +872,9 @@ private fun portalSettingEntries(
             keyPoints = listOf(120f, 320f, 560f, 800f, 1200f),
             onValueChange = { scrollSpeed = it },
             onValueChangeFinished = {
-                persist(
-                    copySettings(
-                        settings,
-                        scrollSpeedDp = scrollSpeed.roundToInt(),
-                    ),
-                )
+                persist { _ ->
+                    setScrollSpeedDpPerSecond(scrollSpeed.roundToInt())
+                }
             },
             enabled = enabled,
         )
@@ -1002,12 +989,9 @@ private fun portalSettingEntries(
             items = listOf("浅色", "深色", "跟随系统"),
             selectedIndex = settings.colorMode,
             onSelectedIndexChange = { selected ->
-                persist(
-                    copySettings(
-                        settings,
-                        colorMode = selected,
-                    ),
-                )
+                persist { _ ->
+                    setColorMode(selected)
+                }
             },
             enabled = enabled,
         )
@@ -1042,8 +1026,7 @@ private fun portalSettingEntries(
                 DragShareSettings.LOG_LEVEL_DEBUG,
             ),
             onSelectedIndexChange = { selected ->
-                val next = copySettings(settings, logLevel = selected)
-                persist(next)
+                persist { _ -> setLogLevel(selected) }
                 DragShareDiagnostics.captureRuntimeOnce(
                     context,
                     "logging level changed",
@@ -1077,8 +1060,7 @@ private fun portalSettingEntries(
                 DragShareSettings.LOG_DESTINATION_FILE,
             ),
             onSelectedIndexChange = { selected ->
-                val next = copySettings(settings, logDestination = selected)
-                persist(next)
+                persist { _ -> setLogDestination(selected) }
                 DragShareDiagnostics.captureRuntimeOnce(
                     context,
                     "logging destination changed",
@@ -1134,65 +1116,6 @@ private fun portalSettingEntries(
     return entries
 }
 
-
-internal fun copySettings(
-    current: DragShareSettings,
-    colorMode: Int = current.colorMode,
-    uiStyle: Int = current.uiStyle,
-    edgeTriggerDp: Int = current.edgeTriggerDp,
-    scrollSpeedDp: Int = current.scrollSpeedDpPerSecond,
-    blockBackgroundScroll: Boolean = current.blockBackgroundScroll,
-    contentCaptureMode: Int = current.contentCaptureMode,
-    textSharingEnabled: Boolean = current.textSharingEnabled,
-    imageSharingEnabled: Boolean = current.imageSharingEnabled,
-    simpleMenuPosition: Int = current.simpleMenuPosition,
-    simpleMenuOpacityPercent: Int = current.simpleMenuOpacityPercent,
-    simpleMenuCornerRadiusDp: Int = current.simpleMenuCornerRadiusDp,
-    simpleMenuEdgeDistanceDp: Int = current.simpleMenuEdgeDistanceDp,
-    iconOpacityPercent: Int = current.iconOpacityPercent,
-    modernBlurRadiusDp: Int = current.modernBlurRadiusDp,
-    modernGlassOpacityPercent: Int = current.modernGlassOpacityPercent,
-    closeMenuWhenPointerLeaves: Boolean = current.closeMenuWhenPointerLeaves,
-    hiddenTargetKeys: Set<String> = current.hiddenTargetKeys,
-    targetOrder: List<String> = current.targetOrder,
-    accessibilityLandscapeRecognitionEnabled: Boolean =
-        current.accessibilityLandscapeRecognitionEnabled,
-    accessibilityBlacklistedPackages: Set<String> = current.accessibilityBlacklistedPackages,
-    accessibilityLongPressTimeoutMillis: Int = current.accessibilityLongPressTimeoutMillis,
-    accessibilityRecognitionSensitivityPercent: Int =
-        current.accessibilityRecognitionSensitivityPercent,
-    logLevel: Int = current.logLevel,
-    logDestination: Int = current.logDestination,
-    pauseAutomaticInGames: Boolean = current.pauseAutomaticInGames,
-    manualGamePackages: Set<String> = current.manualGamePackages,
-): DragShareSettings = DragShareSettings(
-    colorMode,
-    uiStyle,
-    edgeTriggerDp,
-    scrollSpeedDp,
-    blockBackgroundScroll,
-    textSharingEnabled,
-    imageSharingEnabled,
-    simpleMenuPosition,
-    simpleMenuOpacityPercent,
-    simpleMenuCornerRadiusDp,
-    simpleMenuEdgeDistanceDp,
-    iconOpacityPercent,
-    closeMenuWhenPointerLeaves,
-    hiddenTargetKeys,
-    targetOrder,
-    contentCaptureMode,
-    accessibilityLandscapeRecognitionEnabled,
-    accessibilityBlacklistedPackages,
-    accessibilityLongPressTimeoutMillis,
-    accessibilityRecognitionSensitivityPercent,
-    modernBlurRadiusDp,
-    modernGlassOpacityPercent,
-    logLevel,
-    logDestination,
-    pauseAutomaticInGames,
-    manualGamePackages,
-)
 
 @Suppress("DEPRECATION")
 @Composable

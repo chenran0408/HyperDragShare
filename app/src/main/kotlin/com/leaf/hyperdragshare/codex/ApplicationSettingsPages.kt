@@ -58,7 +58,7 @@ internal fun AccessibilityBlacklistPage(
     context: Context,
     settings: DragShareSettings,
     onBack: () -> Unit,
-    persist: (DragShareSettings) -> Unit,
+    persist: (DragShareSettingsMutation) -> DragShareSettings,
 ) {
     var apps by remember(context) { mutableStateOf<List<AccessibilityBlacklistApp>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
@@ -145,20 +145,14 @@ internal fun AccessibilityBlacklistPage(
                                 blacklisted = true,
                                 onCheckedChange = { checked ->
                                     if (app.builtInReason == null) {
-                                        val packages = LinkedHashSet(
-                                            settings.accessibilityBlacklistedPackages,
-                                        )
-                                        if (checked) {
-                                            packages.add(app.packageName)
-                                        } else {
-                                            packages.remove(app.packageName)
+                                        persist { current ->
+                                            val packages = LinkedHashSet(
+                                                current.accessibilityBlacklistedPackages,
+                                            )
+                                            if (checked) packages.add(app.packageName)
+                                            else packages.remove(app.packageName)
+                                            setAccessibilityBlacklistedPackages(packages)
                                         }
-                                        persist(
-                                            copySettings(
-                                                settings,
-                                                accessibilityBlacklistedPackages = packages,
-                                            ),
-                                        )
                                     }
                                 },
                             )
@@ -176,20 +170,14 @@ internal fun AccessibilityBlacklistPage(
                                 app = app,
                                 blacklisted = false,
                                 onCheckedChange = { checked ->
-                                    val packages = LinkedHashSet(
-                                        settings.accessibilityBlacklistedPackages,
-                                    )
-                                    if (checked) {
-                                        packages.add(app.packageName)
-                                    } else {
-                                        packages.remove(app.packageName)
+                                    persist { current ->
+                                        val packages = LinkedHashSet(
+                                            current.accessibilityBlacklistedPackages,
+                                        )
+                                        if (checked) packages.add(app.packageName)
+                                        else packages.remove(app.packageName)
+                                        setAccessibilityBlacklistedPackages(packages)
                                     }
-                                    persist(
-                                        copySettings(
-                                            settings,
-                                            accessibilityBlacklistedPackages = packages,
-                                        ),
-                                    )
                                 },
                             )
                         }
@@ -208,7 +196,7 @@ internal fun GameAppsPage(
     context: Context,
     settings: DragShareSettings,
     onBack: () -> Unit,
-    persist: (DragShareSettings) -> Unit,
+    persist: (DragShareSettingsMutation) -> DragShareSettings,
 ) {
     var apps by remember(context) { mutableStateOf<List<AccessibilityBlacklistApp>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
@@ -292,10 +280,12 @@ internal fun GameAppsPage(
                         }
                         items(recognizedGames, key = { "game:${it.packageName}" }) { app ->
                             GamePickerAppRow(app, settings.manualGamePackages) { checked ->
-                                val packages = LinkedHashSet(settings.manualGamePackages)
-                                if (checked) packages.add(app.packageName)
-                                else packages.remove(app.packageName)
-                                persist(copySettings(settings, manualGamePackages = packages))
+                                persist { current ->
+                                    val packages = LinkedHashSet(current.manualGamePackages)
+                                    if (checked) packages.add(app.packageName)
+                                    else packages.remove(app.packageName)
+                                    setManualGamePackages(packages)
+                                }
                             }
                         }
                     }
@@ -305,10 +295,12 @@ internal fun GameAppsPage(
                         }
                         items(otherApps, key = { "game:${it.packageName}" }) { app ->
                             GamePickerAppRow(app, settings.manualGamePackages) { checked ->
-                                val packages = LinkedHashSet(settings.manualGamePackages)
-                                if (checked) packages.add(app.packageName)
-                                else packages.remove(app.packageName)
-                                persist(copySettings(settings, manualGamePackages = packages))
+                                persist { current ->
+                                    val packages = LinkedHashSet(current.manualGamePackages)
+                                    if (checked) packages.add(app.packageName)
+                                    else packages.remove(app.packageName)
+                                    setManualGamePackages(packages)
+                                }
                             }
                         }
                     }

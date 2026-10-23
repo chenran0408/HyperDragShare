@@ -4,6 +4,21 @@ import android.content.Context
 import android.widget.Toast
 import com.leaf.hyperdragshare.gestures.config.ConfigStore
 
+internal typealias DragShareSettingsMutation =
+    DragShareSettings.Builder.(current: DragShareSettings) -> Unit
+
+internal fun updateDragShareSettingsWithNotice(
+    context: Context,
+    current: DragShareSettings,
+    mutation: DragShareSettingsMutation,
+): DragShareSettings {
+    val builder = current.toBuilder()
+    builder.mutation(current)
+    val next = builder.build()
+    saveDragShareSettingsWithNotice(context, current, next)
+    return next
+}
+
 /** Saves portal settings and tells the user when the real consumers will read them. */
 internal fun saveDragShareSettingsWithNotice(
     context: Context,

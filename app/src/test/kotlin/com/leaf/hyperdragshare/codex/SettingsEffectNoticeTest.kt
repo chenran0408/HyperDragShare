@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import com.leaf.hyperdragshare.gestures.config.ConfigContract
 import com.leaf.hyperdragshare.gestures.config.ConfigStore
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -13,6 +14,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLooper
 import org.robolectric.shadows.ShadowToast
 import java.time.Duration
+import java.util.LinkedHashSet
 
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE, sdk = [33])
@@ -91,6 +93,73 @@ class SettingsEffectNoticeTest {
         assertToastContains("无需重启")
         assertToastDoesNotContain("已生效")
         assertToastDoesNotContain("已收到")
+    }
+
+    @Test
+    fun consecutiveUiMutationsPreserveScalarCollectionsAndNotices() {
+        val original = DragShareSettings.defaults().toBuilder()
+            .setHiddenTargetKeys(linkedSetOf("target.initial-hidden"))
+            .setTargetOrder(listOf("target.first", "target.second"))
+            .setAccessibilityBlacklistedPackages(linkedSetOf("app.initial-blocked"))
+            .setManualGamePackages(linkedSetOf("app.initial-game"))
+            .build()
+        val previous = DragShareSettings.readLocal(context)
+        try {
+            original.saveLocal(context)
+            var current = DragShareSettings.readLocal(context)
+            val persist: (DragShareSettingsMutation) -> DragShareSettings = { mutation ->
+                updateDragShareSettingsWithNotice(context, current, mutation).also {
+                    current = it
+                }
+            }
+
+            // Separate calls model callbacks from the settings pages.
+            persist { setColorMode(DragShareSettings.COLOR_DARK) }
+            assertToastContains("应用主题立即更新")
+            persist { setEdgeTriggerDp(123) }
+
+            persist { settings ->
+                val hidden = LinkedHashSet(settings.hiddenTargetKeys)
+                hidden.add("target.added-hidden")
+                setHiddenTargetKeys(hidden)
+            }
+            persist { settings ->
+                val hidden = LinkedHashSet(settings.hiddenTargetKeys)
+                hidden.remove("target.initial-hidden")
+                setHiddenTargetKeys(hidden)
+            }
+            persist { setTargetOrder(listOf("target.second", "target.first")) }
+
+            persist { settings ->
+                val packages = LinkedHashSet(settings.accessibilityBlacklistedPackages)
+                packages.add("app.added-blocked")
+                setAccessibilityBlacklistedPackages(packages)
+            }
+            assertToastContains("系统界面（SystemUI）")
+            persist { settings ->
+                val packages = LinkedHashSet(settings.accessibilityBlacklistedPackages)
+                packages.remove("app.initial-blocked")
+                setAccessibilityBlacklistedPackages(packages)
+            }
+            persist { settings ->
+                val packages = LinkedHashSet(settings.manualGamePackages)
+                packages.add("app.added-game")
+                setManualGamePackages(packages)
+            }
+            assertToastContains("系统界面（SystemUI）")
+
+            val saved = DragShareSettings.readLocal(context)
+            assertEquals(DragShareSettings.COLOR_DARK, current.colorMode)
+            assertEquals(DragShareSettings.COLOR_DARK, saved.colorMode)
+            assertEquals(123, saved.edgeTriggerDp)
+            assertEquals(setOf("target.added-hidden"), saved.hiddenTargetKeys)
+            assertEquals(listOf("target.second", "target.first"), saved.targetOrder)
+            assertEquals(setOf("app.added-blocked"), saved.accessibilityBlacklistedPackages)
+            assertEquals(setOf("app.initial-game", "app.added-game"), saved.manualGamePackages)
+            assertToastContains("后续手势读取更新后的名单")
+        } finally {
+            previous.saveLocal(context)
+        }
     }
 
     private fun changedSettings(mutate: Bundle.() -> Unit): DragShareSettings {

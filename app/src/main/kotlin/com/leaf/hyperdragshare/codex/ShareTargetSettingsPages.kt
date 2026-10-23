@@ -76,7 +76,7 @@ internal fun VisibilityPage(
     context: Context,
     settings: DragShareSettings,
     onBack: () -> Unit,
-    persist: (DragShareSettings) -> Unit,
+    persist: (DragShareSettingsMutation) -> DragShareSettings,
 ) {
     var pageData by remember(context) { mutableStateOf<VisibilityPageData?>(null) }
     var expandedGroupKeys by remember { mutableStateOf(emptySet<String>()) }
@@ -87,12 +87,18 @@ internal fun VisibilityPage(
         items = listOf(
             DropdownItem(
                 text = "全选",
-                onClick = { persist(copySettings(settings, hiddenTargetKeys = emptySet())) },
+                onClick = {
+                    persist { _ ->
+                        setHiddenTargetKeys(emptySet())
+                    }
+                },
             ),
             DropdownItem(
                 text = "全不选",
                 onClick = {
-                    persist(copySettings(settings, hiddenTargetKeys = LinkedHashSet(allKeys)))
+                    persist { _ ->
+                        setHiddenTargetKeys(LinkedHashSet(allKeys))
+                    }
                 },
             ),
             DropdownItem(
@@ -173,16 +179,22 @@ internal fun VisibilityPage(
                                     }
                                 },
                                 onGroupCheckedChange = { checked ->
-                                    val hidden = LinkedHashSet(settings.hiddenTargetKeys)
-                                    group.targets.forEach { target ->
-                                        if (checked) hidden.remove(target.key()) else hidden.add(target.key())
+                                    persist { current ->
+                                        val hidden = LinkedHashSet(current.hiddenTargetKeys)
+                                        group.targets.forEach { target ->
+                                            if (checked) hidden.remove(target.key())
+                                            else hidden.add(target.key())
+                                        }
+                                        setHiddenTargetKeys(hidden)
                                     }
-                                    persist(copySettings(settings, hiddenTargetKeys = hidden))
                                 },
                                 onTargetCheckedChange = { target, checked ->
-                                    val hidden = LinkedHashSet(settings.hiddenTargetKeys)
-                                    if (checked) hidden.remove(target.key()) else hidden.add(target.key())
-                                    persist(copySettings(settings, hiddenTargetKeys = hidden))
+                                    persist { current ->
+                                        val hidden = LinkedHashSet(current.hiddenTargetKeys)
+                                        if (checked) hidden.remove(target.key())
+                                        else hidden.add(target.key())
+                                        setHiddenTargetKeys(hidden)
+                                    }
                                 },
                             )
                         }
@@ -338,13 +350,12 @@ internal fun OrderPage(
     context: Context,
     settings: DragShareSettings,
     onBack: () -> Unit,
-    persist: (DragShareSettings) -> Unit,
+    persist: (DragShareSettingsMutation) -> DragShareSettings,
 ) {
     val items = remember { mutableStateListOf<ShareTarget>() }
     var loading by remember { mutableStateOf(true) }
     var iconBitmaps by remember { mutableStateOf<Map<String, Bitmap>>(emptyMap()) }
     val listState = rememberLazyListState()
-    val currentSettings = rememberUpdatedState(settings)
     val currentPersist = rememberUpdatedState(persist)
     val dragDropState = rememberDragDropState(
         lazyListState = listState,
@@ -356,12 +367,9 @@ internal fun OrderPage(
             }
         },
         onDragFinished = {
-            currentPersist.value(
-                copySettings(
-                    currentSettings.value,
-                    targetOrder = items.map { it.key() },
-                ),
-            )
+            currentPersist.value { _ ->
+                setTargetOrder(items.map { it.key() })
+            }
         },
     )
     val scrollBehavior = MiuixScrollBehavior()
