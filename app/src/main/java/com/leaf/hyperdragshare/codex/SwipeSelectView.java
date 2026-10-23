@@ -104,6 +104,7 @@ public class SwipeSelectView extends LinearLayout {
                 BoomChip touchedChip = findChip(x, y, false);
                 initSelection(touchedChip == null ? -1 : touchedChip.index);
                 if (touchedChip != null) {
+                    mBoomPage.freezeSelectionRows();
                     mIsSelected = !touchedChip.word.isSelected();
                     postDelayed(mStartDrag, ViewConfiguration.getLongPressTimeout());
                 }
@@ -204,7 +205,7 @@ public class SwipeSelectView extends LinearLayout {
     }
 
     private void finishTouch() {
-        boolean wasSelecting = mGesture == Gesture.SELECTING;
+        boolean wasSelecting = isSelectionGestureActive();
         mGesture = Gesture.IDLE;
         requestDisallowInterceptTouchEvent(false);
         mAutoScrollVelocity = 0;
@@ -214,7 +215,7 @@ public class SwipeSelectView extends LinearLayout {
     }
 
     boolean isSelectionGestureActive() {
-        return mGesture == Gesture.SELECTING;
+        return mStartIndex >= 0 && (mGesture == Gesture.PENDING || mGesture == Gesture.SELECTING);
     }
 
     @Override protected void onDetachedFromWindow() {

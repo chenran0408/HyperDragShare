@@ -261,7 +261,8 @@ public class BoomChipPage {
 
         int targetBottomPadding = mContentBaseBottomPadding
                 + (hasSelection ? mSelectionRowMoveDownOffset : 0);
-        if (mBoomConent.getPaddingBottom() != targetBottomPadding) {
+        if (!mBoomConent.isSelectionGestureActive()
+                && mBoomConent.getPaddingBottom() != targetBottomPadding) {
             mBoomConent.setPadding(
                     mBoomConent.getPaddingLeft(),
                     mBoomConent.getPaddingTop(),
@@ -420,6 +421,16 @@ public class BoomChipPage {
                 }
             }
         }
+    }
+
+    void freezeSelectionRows() {
+        // Stop the previous selection's animation before hit targets can move
+        // underneath the next touch. Reconcile final positions after release.
+        for (int i = 0; i < mBoomConent.getChildCount(); i++) {
+            mBoomConent.getChildAt(i).animate().cancel();
+        }
+        mPresentedTopRow = Integer.MIN_VALUE;
+        mPresentedBottomRow = Integer.MIN_VALUE;
     }
 
     public void moveChipRow(int row, float to) {

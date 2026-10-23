@@ -197,12 +197,18 @@ public class SwipeSelectViewTest {
         LinearLayout rowBelowSelection = (LinearLayout) words.getChildAt(2);
 
         event(MotionEvent.ACTION_DOWN, startX, startY);
+        int paddingBeforeSelection = words.getPaddingBottom();
+        assertTrue(words.isSelectionGestureActive());
         event(MotionEvent.ACTION_MOVE, endX, endY);
         assertTrue(words.isSelectionGestureActive());
         assertEquals(0f, rowBelowSelection.getTranslationY(), 0f);
+        assertEquals(paddingBeforeSelection, words.getPaddingBottom());
 
         event(MotionEvent.ACTION_UP, endX, endY);
         assertFalse(words.isSelectionGestureActive());
+        assertEquals(paddingBeforeSelection
+                + context.getResources().getDimensionPixelSize(R.dimen.chip_row_move_down_offset),
+                words.getPaddingBottom());
         ShadowLooper.shadowMainLooper().idleFor(Duration.ofMillis(500));
         assertEquals(context.getResources().getDimensionPixelSize(R.dimen.chip_row_move_down_offset),
                 rowBelowSelection.getTranslationY(), 0.1f);

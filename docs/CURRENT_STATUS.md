@@ -1,5 +1,9 @@
 # 当前功能与验证状态
 
+## 2026-10-24 分词面板连续触摸模拟
+
+在前次滑选防跳动基础上补充按下即进入布局冻结：取消旧选区仍在运行的行动画，待抬手/取消后按最终选区重新排布；滑选中不再增加/移除词区底部padding，避免滚动范围随选区变化。待长按拖出、拖出失败恢复、多指取消均继续沿原路径结束。模拟检查通过SwipeSelectView、BigBangMeasuredLayoutMatrix、BigBangSelectionToolbarGeometry；修前连续触摸/滚动范围断言失败，修后通过。证据在任务work/panel-press-before.log/.xml和panel-press-after.log/.xml。此为Robolectric触控/视图测量验证，未执行Compose可见界面或真机手势，不代表完整上游样式已经验收。
+
 ## 2026-10-24 beta12 至 beta17 长按控件避让回退调查
 
 用户明确对照 beta12（9b32ae8）与 beta17（5210611）。历史提交 db41204 在新增滑条/拍摄避让时，将 enabled 检查同时应用到已有语音/倍速规则：有明确交互标签且仍保留 clickable/longClickable/editable 元数据的可见控件，只要 enabled=false 就失去原有避让。这是代码覆盖范围缩小；并无证据证明用户现场控件的实际 enabled 状态。
