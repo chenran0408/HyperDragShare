@@ -20,6 +20,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -218,6 +219,8 @@ final class NativeSidebarHooks {
         SurfaceView surface;
         ISidebarDragCallback dragCallback;
         StashDragShadowBuilder dragShadow;
+        View dragWindowRoot;
+        boolean dragWindowWasNotTouchable;
         final ISidebarHost host = new ISidebarHost.Stub() {
             @Override public void requestClose() {
                 turbo.post(() -> {
@@ -475,6 +478,10 @@ final class NativeSidebarHooks {
             dragShadow = activeShadow;
             final ISidebarDragCallback session = callback;
             source.setOnDragListener((view, event) -> {
+                if (event.getAction() == android.view.DragEvent.ACTION_DRAG_STARTED) {
+                    setDragWindowPassThrough(true);
+                    return true;
+                }
                 if (event.getAction() == android.view.DragEvent.ACTION_DRAG_ENDED) {
                     if (dragCallback == session) finishEmbeddedDrag(event.getResult());
                     return true;
@@ -498,8 +505,44 @@ final class NativeSidebarHooks {
                     if (dragShadow == activeShadow) dragShadow = null;
                     if (activeShadow != null) activeShadow.recycle();
                 }
+                setDragWindowPassThrough(false);
             }
             notifyDragStarted(session, started);
+        }
+
+        /** Let the target app under the SecurityCenter sidebar receive the global drop. */
+        void setDragWindowPassThrough(boolean active) {
+            if (active) {
+                if (dragWindowRoot != null) return;
+                View root = turbo.getRootView();
+                if (root == null || !(root.getLayoutParams() instanceof WindowManager.LayoutParams)) {
+                    DragShareLog.w(TAG, "Cannot make sidebar window pass through during stash drag");
+                    return;
+                }
+                WindowManager.LayoutParams params = (WindowManager.LayoutParams) root.getLayoutParams();
+                dragWindowRoot = root;
+                dragWindowWasNotTouchable = (params.flags & WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) != 0;
+                params.flags = SidebarDragWindowFlags.allowDropThrough(params.flags);
+                try {
+                    context.getSystemService(WindowManager.class).updateViewLayout(root, params);
+                    DragShareLog.i(TAG, "sidebar window allows drag drop to underlying target");
+                } catch (RuntimeException error) {
+                    dragWindowRoot = null;
+                    DragShareLog.w(TAG, "Unable to pass through sidebar window during stash drag", error);
+                }
+                return;
+            }
+            View root = dragWindowRoot;
+            dragWindowRoot = null;
+            if (root == null || !(root.getLayoutParams() instanceof WindowManager.LayoutParams)) return;
+            WindowManager.LayoutParams params = (WindowManager.LayoutParams) root.getLayoutParams();
+            params.flags = SidebarDragWindowFlags.restoreTouchability(params.flags, dragWindowWasNotTouchable);
+            try {
+                context.getSystemService(WindowManager.class).updateViewLayout(root, params);
+                DragShareLog.i(TAG, "sidebar window drag pass-through restored");
+            } catch (RuntimeException error) {
+                DragShareLog.w(TAG, "Unable to restore sidebar window after stash drag", error);
+            }
         }
 
         void notifyDragStarted(ISidebarDragCallback callback, boolean started) {
@@ -523,6 +566,7 @@ final class NativeSidebarHooks {
         void finishEmbeddedDrag(boolean accepted) {
             ISidebarDragCallback callback = dragCallback;
             dragCallback = null;
+            setDragWindowPassThrough(false);
             SurfaceView source = surface;
             if (source != null) source.setOnDragListener(null);
             StashDragShadowBuilder shadow = dragShadow;

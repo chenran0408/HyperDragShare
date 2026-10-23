@@ -269,11 +269,7 @@ object StashOverlayPanel {
                             Toast.makeText(context, "系统未能开始拖拽，请重试", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    onEnded = { accepted ->
-                        embeddedDragRequestPending = false
-                        overlay.cancelTextDragObservation()
-                        if (accepted) collapse()
-                    })
+                    onEnded = ::finishEmbeddedDrag)
                 return true
             }
             overlay.observeDragHandoff({ active === this@Shelf },
@@ -296,6 +292,14 @@ object StashOverlayPanel {
                 // Failed startup has no ENDED event; leave the original content and selection visible.
                 if (!started) overlay.cancelTextDragObservation()
             }
+        }
+
+        private fun finishEmbeddedDrag(accepted: Boolean) {
+            embeddedDragRequestPending = false
+            overlay.cancelTextDragObservation()
+            if (accepted) collapse()
+            else Toast.makeText(context,
+                "目标应用未确认接收，内容仍保留在中转站", Toast.LENGTH_SHORT).show()
         }
 
         private fun back() {

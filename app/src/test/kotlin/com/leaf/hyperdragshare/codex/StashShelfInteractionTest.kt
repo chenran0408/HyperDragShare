@@ -19,6 +19,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.util.ReflectionHelpers
 import org.robolectric.util.ReflectionHelpers.ClassParameter
+import org.robolectric.shadows.ShadowToast
 
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE, sdk = [35])
@@ -48,6 +49,16 @@ class StashShelfInteractionTest {
     @Test fun collapseDismissesTheShelfWindow() = withShelf { shelf ->
         call(shelf, "collapse")
         assertTrue(field(field(shelf, "overlay")!!, "disposed") as Boolean)
+    }
+
+    @Test fun rejectedEmbeddedDropExplainsThatTheStashItemWasKept() = withShelf { shelf ->
+        val overlay = field(shelf, "overlay") as InteractiveOverlayWindow
+
+        call(shelf, "finishEmbeddedDrag", false)
+
+        assertFalse(field(overlay, "disposed") as Boolean)
+        assertEquals("目标应用未确认接收，内容仍保留在中转站",
+            ShadowToast.getTextOfLatestToast().toString())
     }
 
     @Test fun savingContentDoesNotCreateAnInactiveCollapsedOverlay() {
