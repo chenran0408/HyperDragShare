@@ -585,3 +585,13 @@ build341完整通过381项测试（0失败/错误/跳过），Lint0错误180警�
 179最终收尾：build377 lintDebug/assembleRelease成功（1m39s，Lint0错误185警告2提示），明确执行minifyReleaseWithR8。最终APK仍7,429,983 bytes/7.09MiB，比178同条件Release/R8/arm64减少65.4%；SHA256 `88a293ee4adf49d90b2c07dd052fbd8c298963a3de0a201bd35cfae255af29bb`，签名不变，设备base.apk哈希相同。首包后发现真实更新API403，修复并追加Root用户精简后同版本第二次覆盖安装；不伪称整批仅安装一次。最终重载Portal PID25488，注入/Root输入/reader203且ready=true；重载SystemUI PID25885，持久诊断明确Merged gesture hook version=203，输入注册/小窗Hook安装。只结束安全服务:ui旧PID12373，下次打开才加载新侧栏代码，未称其已加载203；框架/桌面/AICR未重载。手机锁屏，不唤醒、不发消息、不再跑截图矩阵。
 
 已确认：首包四模块首页、OCR/release搜索直达高亮及Back保留查询；最终包构建/安装/Portal与SystemUI加载。未确认：最终Root精简页面与更新弹窗实际显示、下载/系统安装新版本、微信各页面真实按住与新中转站拖放、OCR删除分支后的完整设备识别、长结果列表滚动恢复。7.09MiB包已交付outputs/HyperDragShare-1.7.179-arm64-v8a.apk；正式Latest仍176，179尚未发布Release。旧178心跳保持暂停。
+
+## 2026-10-23 beta.10：诊断卡闪退修复
+
+- beta.7 基线 f526ba5；仅 beta 线修改，正式线 repair-from-189 不动。用户已提供设备并授权持续实测，解除额外等待确认；System Framework hook 未改时优先热重载，不默认整机重启。
+- 点击首页状态卡后回到桌面，exit-info 确认为 APP CRASH(EXCEPTION)。两次初步标题栏修正无效并已撤回。R8 合并类须按实际方法行号解析：beta.9 `t7.g:757` 对应 Miuix BasicComponent.measure:220，不能因合并类也含 TopAppBar 而归因 TopAppBar。
+- 诊断摘要的 endActions 内嵌了整行 SettingsNavigationPreference，造成文本的宽度约束非法。bfc6bcb 将重新检查独立成卡内一行，保留原 Miuix 标题栏与行为；c4dc7a0 设置 1.7.219-beta.10/versionCode252。
+- 真实 Xiaomi 2410DPN6CC / Android17 / HyperOS4 覆盖安装成功，firstInstallTime 不变；诊断入口、3次刷新、5轮往返和列表滚动通过，PID20297未变，crash buffer无该PID异常。未再设备重启，未执行系统框架热重载，不宣称当前版本各宿主已载入。
+- 实际运行 :app:testDebugUnitTest 474/474，0失败/错误/跳过；lintDebug 0错误187警告2提示（纠正旧任务报告“0 issues”，不能作为零警告声明）；assembleBeta成功并执行R8。包v2签名与beta.7一致。
+- 包及完整报告位于 D:\CODEX\Tasks\2026-10-23\mmgg-1-7-219-beta-4\outputs。SHA256 8821098FC2CCB4EB2D93AF5727488ADAEF1882BF1BDADD8E75BA0EB92854FAF8。
+- 本轮只确认诊断入口闪退修复；三张历史悬浮截图根因、真实取词拖拽全链路、宿主热重载后的会话恢复、主题/大字体/尺寸矩阵仍待验证。
