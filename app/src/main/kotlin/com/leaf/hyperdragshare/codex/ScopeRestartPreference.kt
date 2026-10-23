@@ -27,8 +27,8 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 
 private enum class ReloadMode(val label: String, val detail: String) {
-    Apps("热重载", "重启系统界面、侧边栏、传送门和AICR，屏幕会短暂闪动。系统框架或桌面代码更新仍需软重启；手势设置保存后自动生效。"),
-    Android("软重启", "重新加载全部作用域。当前应用会关闭并回到锁屏；请先保存正在编辑的内容。"),
+    Apps("热重载", "重新加载系统界面、侧栏、传送门和 AICR，屏幕会短暂闪动。适用于这些作用域的模块代码更新；普通设置会按页面提示热更新或在下次操作读取。Android、桌面或系统框架代码更新不由此入口加载。"),
+    Android("软重启", "重新启动 Android 运行环境以加载 Android、桌面和系统框架代码更新。当前应用会关闭并回到锁屏；请先保存正在编辑的内容。"),
     Device("整机重启", "手机将重新启动，全部作用域重新加载；请先保存正在编辑的内容。"),
 }
 

@@ -192,7 +192,9 @@ private fun HoneycombEditorContent(
 
     fun swapSlots(first: Int, second: Int) {
         if (first == second || first < 0 || second < 0) return
-        refreshPositions("位置已保存") { configStore.swapHoneycombSlots(first, second) }
+        refreshPositions("已保存；系统界面（SystemUI）会在后续手势读取新布局，无需重启。") {
+            configStore.swapHoneycombSlots(first, second)
+        }
     }
 
     val current = layout
@@ -326,7 +328,9 @@ private fun HoneycombEditorContent(
                     onClick = {
                         showCompactConfirmation = false
                         selectedSlot = null
-                        refreshPositions("蜂巢位置已重新排列") { configStore.compactHoneycombPositions() }
+                        refreshPositions("已保存；系统界面（SystemUI）会在后续手势读取新布局，无需重启。") {
+                            configStore.compactHoneycombPositions()
+                        }
                     },
                 )
             }

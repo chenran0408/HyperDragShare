@@ -312,7 +312,8 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
     }
 
     val persist: (DragShareSettings) -> Unit = { next ->
-        next.saveLocal(context)
+        val previous = settings
+        saveDragShareSettingsWithNotice(context, previous, next)
         settings = next
     }
     MiuixTheme(controller = themeController) {
@@ -676,6 +677,12 @@ private fun portalSettingEntries(
                             "写入系统设置失败，请确认 Root 已授权",
                             Toast.LENGTH_LONG,
                         ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "已应用到系统背部轻敲设置；下次轻敲生效，无需重启框架。",
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     }
                 }
             },
@@ -725,6 +732,7 @@ private fun portalSettingEntries(
             onCheckedChange = { enabled ->
                 BigBangSettings.setSelectionHapticEnabled(context, enabled)
                 selectionHapticEnabled = enabled
+                Toast.makeText(context, "已保存：下次分词选词时生效，无需重启。", Toast.LENGTH_SHORT).show()
             },
             enabled = enabled,
         )
@@ -741,6 +749,7 @@ private fun portalSettingEntries(
             onCheckedChange = { enabled ->
                 BigBangSettings.setExitAfterCopyEnabled(context, enabled)
                 exitAfterCopyEnabled = enabled
+                Toast.makeText(context, "已保存：下次分词复制时生效，无需重启。", Toast.LENGTH_SHORT).show()
             },
             enabled = enabled,
         )
@@ -1117,7 +1126,21 @@ private fun portalSettingEntries(
                     val ready = withContext(Dispatchers.IO) {
                         ModuleActivation.ensureCopyDirectCardReady(context)
                     }
-                    if (!ready) Toast.makeText(context, "系统复制直达卡片准备失败，请查看诊断日志", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        context,
+                        if (ready) {
+                            "已保存：传送门卡片和 AICR 在下次识别/点击时读取；无需重启。"
+                        } else {
+                            "设置已保存，但系统复制直达卡片准备失败，请查看诊断日志。"
+                        },
+                        if (ready) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        "已保存：传送门卡片和 AICR 在下次识别/点击时读取；无需重启。",
+                        Toast.LENGTH_SHORT,
+                    ).show()
                 }
             },
             enabled = enabled,
@@ -1144,6 +1167,11 @@ private fun portalSettingEntries(
                 copyDirectBrowserChoices.getOrNull(choiceIndex)?.let { choice ->
                     IntegrationSettings.setCopyDirectBrowserPackage(context, choice.packageName)
                     copyDirectBrowserPackage = choice.packageName
+                    Toast.makeText(
+                        context,
+                        "已保存：下次复制直达打开链接时使用新浏览器，无需重启。",
+                        Toast.LENGTH_SHORT,
+                    ).show()
                 }
             },
             enabled = enabled,

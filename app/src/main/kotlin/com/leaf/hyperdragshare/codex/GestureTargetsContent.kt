@@ -253,7 +253,7 @@ fun GestureTargetsContent(
                                                     onClick = {
                                                         val moved = targets.removeAt(index)
                                                         targets.add(index - 1, moved)
-                                                        saveTargets(store, group, targets, pageData) { pageData = it }
+                                                        saveTargets(appContext, store, group, targets, pageData) { pageData = it }
                                                     },
                                                 )
                                                 TargetIconAction(
@@ -263,7 +263,7 @@ fun GestureTargetsContent(
                                                     onClick = {
                                                         val moved = targets.removeAt(index)
                                                         targets.add(index + 1, moved)
-                                                        saveTargets(store, group, targets, pageData) { pageData = it }
+                                                        saveTargets(appContext, store, group, targets, pageData) { pageData = it }
                                                     },
                                                 )
                                             }
@@ -273,7 +273,7 @@ fun GestureTargetsContent(
                                                 enabled = group != "bottom" || targets.size > ConfigContract.MIN_FAN_MAX_TARGETS,
                                                 onClick = {
                                                     targets.remove(target)
-                                                    saveTargets(store, group, targets, pageData) { pageData = it }
+                                                    saveTargets(appContext, store, group, targets, pageData) { pageData = it }
                                                 },
                                             )
                                         }
@@ -305,7 +305,7 @@ fun GestureTargetsContent(
                         targets.clear()
                         val selected = selectedRows.map { it.target }.take(pageData!!.maximum)
                         targets.addAll(selected)
-                        saveTargets(store, group, targets, pageData) { pageData = it }
+                        saveTargets(appContext, store, group, targets, pageData) { pageData = it }
                         pageData = pageData?.let {
                             it.copy(rows = mergeRows(it.rows + selectedRows, targets))
                         }
@@ -804,6 +804,7 @@ private fun maximumFor(store: ConfigStore, group: String): Int {
 }
 
 private fun saveTargets(
+    context: Context,
     store: ConfigStore?,
     group: String,
     targets: List<AppTarget>,
@@ -816,6 +817,7 @@ private fun saveTargets(
         else -> configStore.setTargets(targets)
     }
     onDataChanged(pageData?.copy(rows = mergeRows(pageData.rows, targets)))
+    showGestureConfigSaved(context)
 }
 
 private fun mergeRows(rows: List<GestureTargetRow>, targets: List<AppTarget>): List<GestureTargetRow> {

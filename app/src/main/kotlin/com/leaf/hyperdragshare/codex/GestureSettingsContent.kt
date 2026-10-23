@@ -191,7 +191,7 @@ internal fun gestureSettingEntries(
 
     fun bool(title: String, summary: String, key: String, default: Boolean) {
         register(key, title, summary) { enabled ->
-            GestureBooleanPreference(store, prefs, localValues, revision, key, title, summary, default, enabled)
+            GestureBooleanPreference(context, store, prefs, localValues, revision, key, title, summary, default, enabled)
         }
     }
 
@@ -204,13 +204,13 @@ internal fun gestureSettingEntries(
         values: List<Int> = options.indices.toList(),
     ) {
         register(key, title, options.joinToString("、")) { enabled ->
-            GestureChooserPreference(store, prefs, localValues, key, title, options, default, booleanValue, values, enabled)
+            GestureChooserPreference(context, store, prefs, localValues, key, title, options, default, booleanValue, values, enabled)
         }
     }
 
     fun slider(title: String, key: String, min: Int, max: Int, suffix: String, speedMultiplier: Boolean = false) {
         register(key, title, if (speedMultiplier) "调整任务拖动速度" else "范围 $min–$max$suffix") { enabled ->
-            GestureSliderPreference(store, prefs, localValues, revision, key, title, min, max, suffix, speedMultiplier, enabled)
+            GestureSliderPreference(context, store, prefs, localValues, revision, key, title, min, max, suffix, speedMultiplier, enabled)
         }
     }
 
@@ -361,6 +361,7 @@ internal fun gestureSettingEntries(
 
 @Composable
 private fun GestureBooleanPreference(
+    context: Context,
     store: ConfigStore,
     prefs: android.content.SharedPreferences,
     localValues: MutableMap<String, Any>,
@@ -382,13 +383,14 @@ private fun GestureBooleanPreference(
         onCheckedChange = { value ->
             checked = value
             localValues[key] = value
-            store.putBoolean(key, value)
+            saveGestureBooleanSetting(context, store, key, value)
         },
     )
 }
 
 @Composable
 private fun GestureChooserPreference(
+    context: Context,
     store: ConfigStore,
     prefs: android.content.SharedPreferences,
     localValues: MutableMap<String, Any>,
@@ -413,10 +415,10 @@ private fun GestureChooserPreference(
             val value = values[index]
             if (booleanValue) {
                 localValues[key] = value != 0
-                store.putBoolean(key, value != 0)
+                saveGestureBooleanSetting(context, store, key, value != 0)
             } else {
                 localValues[key] = value
-                store.putInt(key, value)
+                saveGestureIntegerSetting(context, store, key, value)
             }
         },
     )
@@ -424,6 +426,7 @@ private fun GestureChooserPreference(
 
 @Composable
 private fun GestureSliderPreference(
+    context: Context,
     store: ConfigStore,
     prefs: android.content.SharedPreferences,
     localValues: MutableMap<String, Any>,
@@ -451,7 +454,7 @@ private fun GestureSliderPreference(
         onValueChange = { value = it },
         onValueChangeFinished = {
             localValues[key] = value.toInt()
-            store.putInt(key, value.toInt())
+            saveGestureIntegerSetting(context, store, key, value.toInt())
         },
     )
 }
@@ -524,7 +527,11 @@ private fun GestureResetPreference(
                 localValues.clear()
                 revision.intValue++
                 showConfirmation = false
-                Toast.makeText(context, "手势与小窗参数已恢复默认；目标和快捷方式未更改", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    "已恢复默认；系统界面（SystemUI）会在后续手势读取，无需重启。目标和快捷方式未更改。",
+                    Toast.LENGTH_SHORT,
+                ).show()
             })
         }
     }

@@ -74,6 +74,11 @@ internal fun thumbTriggerEntries(context: Context,
                         } else {
                             ThumbTriggerSettings.setEnabled(context, checked)
                             thumb = ThumbTriggerSettings.read(context)
+                            Toast.makeText(
+                                context,
+                                "已保存；传送门会在下一次按住取词/识字时读取，无需重启。",
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
                     },
                 )
