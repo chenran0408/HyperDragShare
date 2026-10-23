@@ -107,6 +107,40 @@ public final class ConfigStore {
         notifyChanged();
     }
 
+    public List<AppTarget> getSideTargets() {
+        ArrayList<AppTarget> result = new ArrayList<>();
+        String raw = preferences.getString(ConfigContract.KEY_SIDE_COMPONENTS, "[]");
+        try {
+            JSONArray array = new JSONArray(raw);
+            for (int i = 0; i < Math.min(ConfigContract.MAX_SIDE_MAX_TARGETS,
+                    array.length()); i++) {
+                Object value = array.opt(i);
+                AppTarget target = value instanceof JSONObject
+                        ? AppTarget.fromJson((JSONObject) value)
+                        : new AppTarget(array.optString(i, ""));
+                if (target != null && (target.isShortcut() || target.componentName() != null)
+                        && !result.contains(target)) {
+                    result.add(target);
+                }
+            }
+        } catch (Exception ignored) {
+            // A malformed list is treated as empty; the settings UI can repair it.
+        }
+        return result;
+    }
+
+    public void setSideTargets(List<AppTarget> targets) {
+        JSONArray array = new JSONArray();
+        for (AppTarget target : targets) {
+            if (array.length() >= ConfigContract.MAX_SIDE_MAX_TARGETS) break;
+            if (target != null && (target.isShortcut() || target.componentName() != null)) {
+                array.put(target.toJson());
+            }
+        }
+        preferences.edit().putString(ConfigContract.KEY_SIDE_COMPONENTS, array.toString()).apply();
+        notifyChanged();
+    }
+
     public List<AppTarget> getHoneycombTargets() {
         ArrayList<AppTarget> result = new ArrayList<>();
         String raw = preferences.getString(ConfigContract.KEY_HONEYCOMB_COMPONENTS, "[]");

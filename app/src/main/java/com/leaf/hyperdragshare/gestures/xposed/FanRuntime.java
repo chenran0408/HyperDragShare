@@ -301,6 +301,7 @@ final class FanRuntime {
     private long outsideCaptureWindowTransitionGeneration;
 
     private long systemRecentsWatchVersion;
+    private boolean sideSystemRecentsWatchActive;
 
     private int taskLoadGeneration;
 
@@ -946,6 +947,14 @@ final class FanRuntime {
                     && config.bottomCornerEnabled(cornerAtDown) ? cornerAtDown : null;
             GestureGeometry.Corner systemEdgeSide = downCorner == null
                     ? GestureGeometry.sideAt(x, width, systemSides.left, systemSides.right) : null;
+            GestureGeometry.Corner sideEntryAtDown = null;
+            if (cornerAtDown == null && canStartSide()) {
+                float sideTop = sideSafeTop(height);
+                float sideBottom = sideSafeBottom(height, hotHeight);
+                sideEntryAtDown = GestureGeometry.sideAt(x, y, width,
+                        systemSides.left, systemSides.right, sideTop, sideBottom,
+                        96 * density);
+            }
             if (!inputSources.usesNativeInput() && !triggerCapture.isCapturing() && canStartBottom()) {
                 triggerCapture.update(true, config.bottomLeftEnabled, config.bottomRightEnabled,
                         config.hotWidthPercent, config.hotHeightPercent, 0, 0);
@@ -995,6 +1004,14 @@ final class FanRuntime {
                 if (outsideGestures.onDown(x, y, tracked, width, reserves.left, reserves.right, event.getEventTime())) {
                     pilfer(inputMonitor);
                 }
+                return;
+            }
+            if (sideEntryAtDown != null && !imeActive && !freeformActive) {
+                sideListAllowed = true;
+                outsideGestures.onCancel();
+                armSide(sideEntryAtDown, x, y, event.getDownTime(), event.getEventTime());
+                Log.i("Side-distance gesture armed on down side=" + sideEntryAtDown
+                        + " threshold=" + config.sideTriggerPercent + "%");
                 return;
             }
             if (downCorner != null && canStartBottom()) {
@@ -1417,6 +1434,7 @@ final class FanRuntime {
         if (config.haptic)
             vibrateTick();
         long version = ++systemRecentsWatchVersion;
+        sideSystemRecentsWatchActive = true;
         long startedAt = android.os.SystemClock.uptimeMillis();
         mainHandler.postDelayed(() -> watchSystemRecents(version, 0, false, startedAt), 100L);
     }
@@ -1427,6 +1445,7 @@ final class FanRuntime {
         long elapsed = android.os.SystemClock.uptimeMillis() - startedAt;
         boolean visible = systemRecentsLauncher.isVisible();
         if (elapsed > SYSTEM_RECENTS_MAX_WATCH_MS) {
+            sideSystemRecentsWatchActive = false;
             refreshOutsideCapture();
             Log.i("System recents watch reached hard timeout; polling stopped");
             return;
@@ -1440,6 +1459,7 @@ final class FanRuntime {
             mainHandler.postDelayed(() -> watchSystemRecents(version, attempts + 1, false, startedAt), 100L);
             return;
         }
+        sideSystemRecentsWatchActive = false;
         refreshOutsideCapture();
         Log.i("Outside capture refreshed after HyperOS system recents closed");
     }
@@ -1841,6 +1861,11 @@ final class FanRuntime {
         return runtimeReady() && !imeVisible && targets.size() >= 3
                 && config.bottomEnabledFor(isLandscape())
                 && (config.bottomLeftEnabled || config.bottomRightEnabled);
+    }
+
+    private boolean canStartSide() {
+        return runtimeReady() && config.sideHasTargetsFor(isLandscape(),
+                sideTargets.size(), honeycombTargets.size());
     }
 
     private int currentSideLayoutMode() {
@@ -2299,6 +2324,7 @@ final class FanRuntime {
             GestureConfig next = GestureConfig.from(bundle);
             ArrayList<RuntimeTarget> resolved = new ArrayList<>();
             ArrayList<RuntimeTarget> resolvedHoneycomb = new ArrayList<>();
+            ArrayList<RuntimeTarget> resolvedSide = new ArrayList<>();
             PackageManager packageManager = context.getPackageManager();
             Map<String, RuntimeTarget> targetCache = new HashMap<>();
             for (GestureConfig.TargetSpec target : next.targets) {
@@ -2319,14 +2345,27 @@ final class FanRuntime {
                     Log.e("Configured honeycomb target is unavailable", error);
                 }
             }
+            for (GestureConfig.TargetSpec target : next.sideTargets) {
+                try {
+                    RuntimeTarget runtimeTarget = resolveTarget(packageManager, target, targetCache);
+                    if (runtimeTarget != null)
+                        resolvedSide.add(runtimeTarget);
+                } catch (Throwable error) {
+                    Log.e("Configured side target is unavailable", error);
+                }
+            }
             if (resolved.size() > next.fanMaxTargets) {
                 resolved.subList(next.fanMaxTargets, resolved.size()).clear();
             }
             if (resolvedHoneycomb.size() > next.honeycombMaxTargets) {
                 resolvedHoneycomb.subList(next.honeycombMaxTargets, resolvedHoneycomb.size()).clear();
             }
+            if (resolvedSide.size() > next.sideMaxTargets) {
+                resolvedSide.subList(next.sideMaxTargets, resolvedSide.size()).clear();
+            }
             List<RuntimeTarget> nextTargets = Collections.unmodifiableList(resolved);
             List<RuntimeTarget> nextHoneycombTargets = Collections.unmodifiableList(resolvedHoneycomb);
+            List<RuntimeTarget> nextSideTargets = Collections.unmodifiableList(resolvedSide);
             configRetryCount = 0;
             configRetryScheduled = false;
             mainHandler.post(() -> {
@@ -2341,17 +2380,26 @@ final class FanRuntime {
                 outsideGestures.setDoubleTapTimeout(next.outsideTapWindowMs);
                 targets = nextTargets;
                 honeycombTargets = nextHoneycombTargets;
+                sideTargets = nextSideTargets;
                 if (activeTargets.isEmpty())
                     activeTargets = nextTargets;
                 freeform.updateConfig(next);
                 if (!next.honeycombEnabled && honeycombOverlay.isVisible()) {
                     honeycombOverlay.dismiss();
                 }
-                if (!next.enabled || nextTargets.size() < 3)
+                boolean sideGestureActive = state == State.SIDE_ARMED
+                        || activeSideList || sideSystemRecentsWatchActive;
+                boolean bottomGestureActive = !sideGestureActive
+                        && (state == State.ARMED || state == State.CLAIMED
+                        || (state == State.ACTIVE && !activeSideList)
+                        || (state == State.HONEYCOMB && !activeSideList));
+                if (next.shouldResetGestureForConfig(sideGestureActive,
+                        bottomGestureActive, isLandscape(), nextTargets.size(),
+                        nextSideTargets.size(), nextHoneycombTargets.size()))
                     resetFan();
                 refreshTriggerCapture();
                 refreshOutsideCapture();
-                Log.i("Configuration loaded targets=" + nextTargets.size() + " trigger=" + next.triggerPercent + "% selection=" + next.selectionRadiusPercent + "% hot=" + next.hotWidthPercent + "x" + next.hotHeightPercent + "% icon=" + next.iconSizeDp + "dp animation=" + next.fanAnimationsEnabled + "@" + next.fanAnimationSpeed + "% reveal=" + next.fanRevealAmount + "% rotation=" + next.fanRotationDegrees + "deg ring=" + next.fanSelectionRing + " circularIcons=" + next.forceCircularIcons + " honeycomb=" + next.honeycombEnabled + "/" + nextHoneycombTargets.size() + " mode=" + next.honeycombMode + " bottomFullscreen=" + next.bottomPortraitFullscreen + "/" + next.bottomLandscapeFullscreen + " bottomFreeform=" + next.bottomPortraitHoneycombFreeform + "/" + next.bottomLandscapeHoneycombFreeform + " blankSettle=" + next.bottomHoneycombSettleMs + "ms returnToFan=" + next.triggerPercent + "% outsideTap=" + next.outsideTapWindowMs + "ms outside=" + next.outsidePortraitEnabled + "/" + next.outsideLandscapeEnabled + " honeycombFollow=" + next.honeycombFollowFinger);
+                Log.i("Configuration loaded targets=" + nextTargets.size() + " sideTargets=" + nextSideTargets.size() + " trigger=" + next.triggerPercent + "% selection=" + next.selectionRadiusPercent + "% hot=" + next.hotWidthPercent + "x" + next.hotHeightPercent + "% icon=" + next.iconSizeDp + "dp animation=" + next.fanAnimationsEnabled + "@" + next.fanAnimationSpeed + "% reveal=" + next.fanRevealAmount + "% rotation=" + next.fanRotationDegrees + "deg ring=" + next.fanSelectionRing + " circularIcons=" + next.forceCircularIcons + " honeycomb=" + next.honeycombEnabled + "/" + nextHoneycombTargets.size() + " mode=" + next.honeycombMode + " bottomFullscreen=" + next.bottomPortraitFullscreen + "/" + next.bottomLandscapeFullscreen + " bottomFreeform=" + next.bottomPortraitHoneycombFreeform + "/" + next.bottomLandscapeHoneycombFreeform + " blankSettle=" + next.bottomHoneycombSettleMs + "ms returnToFan=" + next.triggerPercent + "% outsideTap=" + next.outsideTapWindowMs + "ms outsideEnabled=" + next.outsideEnabled + "/" + next.outsidePortraitEnabled + "/" + next.outsideLandscapeEnabled + " honeycombFollow=" + next.honeycombFollowFinger);
             });
         } catch (Throwable error) {
             Log.e("Cannot read module configuration", error);

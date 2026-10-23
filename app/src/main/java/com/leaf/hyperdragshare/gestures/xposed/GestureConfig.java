@@ -159,6 +159,7 @@ final class GestureConfig {
     int honeycombDiscSizePercent = ConfigContract.DEFAULT_HONEYCOMB_DISC_SIZE_PERCENT;
     boolean honeycombShowSelectedName = ConfigContract.DEFAULT_HONEYCOMB_SHOW_SELECTED_NAME;
     int outsideTapWindowMs = ConfigContract.DEFAULT_OUTSIDE_TAP_WINDOW_MS;
+    boolean outsideEnabled = ConfigContract.DEFAULT_OUTSIDE_ENABLED;
     boolean outsidePortraitEnabled = ConfigContract.DEFAULT_OUTSIDE_PORTRAIT_ENABLED;
     boolean outsideLandscapeEnabled = ConfigContract.DEFAULT_OUTSIDE_LANDSCAPE_ENABLED;
     List<TargetSpec> sideTargets = Collections.emptyList();
@@ -752,10 +753,11 @@ final class GestureConfig {
                 ConfigContract.DEFAULT_OUTSIDE_TAP_WINDOW_MS),
                 ConfigContract.MIN_OUTSIDE_TAP_WINDOW_MS,
                 ConfigContract.MAX_OUTSIDE_TAP_WINDOW_MS);
+        result.outsideEnabled = bundle.getBoolean(ConfigContract.KEY_OUTSIDE_ENABLED,
+                ConfigContract.DEFAULT_OUTSIDE_ENABLED);
         result.outsidePortraitEnabled = bundle.getBoolean(
                 ConfigContract.KEY_OUTSIDE_PORTRAIT_ENABLED,
-                bundle.getBoolean(ConfigContract.KEY_OUTSIDE_ENABLED,
-                        ConfigContract.DEFAULT_OUTSIDE_PORTRAIT_ENABLED));
+                ConfigContract.DEFAULT_OUTSIDE_PORTRAIT_ENABLED);
         result.outsideLandscapeEnabled = bundle.getBoolean(
                 ConfigContract.KEY_OUTSIDE_LANDSCAPE_ENABLED,
                 ConfigContract.DEFAULT_OUTSIDE_LANDSCAPE_ENABLED);
@@ -813,6 +815,34 @@ final class GestureConfig {
         return landscape ? sideLandscapeLayoutMode : sidePortraitLayoutMode;
     }
 
+    boolean sideHasTargetsFor(boolean landscape, int sideTargetCount,
+                              int honeycombTargetCount) {
+        if (!sideEnabledFor(landscape)) return false;
+        int mode = sideLayoutModeFor(landscape);
+        if (mode == ConfigContract.SIDE_LAYOUT_TASKS
+                || mode == ConfigContract.SIDE_LAYOUT_SYSTEM_RECENTS) {
+            return true;
+        }
+        if (mode == ConfigContract.SIDE_LAYOUT_HONEYCOMB) {
+            return honeycombEnabledFor(landscape) && honeycombTargetCount > 0;
+        }
+        return sideTargetCount > 0;
+    }
+
+    boolean shouldResetGestureForConfig(boolean sideGestureActive,
+                                        boolean bottomGestureActive,
+                                        boolean landscape,
+                                        int bottomTargetCount,
+                                        int sideTargetCount,
+                                        int honeycombTargetCount) {
+        if (!enabled) return true;
+        if (sideGestureActive) {
+            return !sideHasTargetsFor(landscape, sideTargetCount,
+                    honeycombTargetCount);
+        }
+        return bottomGestureActive && bottomTargetCount < 3;
+    }
+
     boolean sideFullscreenFor(boolean landscape) {
         return landscape ? sideLandscapeFullscreen : sidePortraitFullscreen;
     }
@@ -826,7 +856,8 @@ final class GestureConfig {
     }
 
     boolean outsideEnabledFor(boolean landscape) {
-        return landscape ? outsideLandscapeEnabled : outsidePortraitEnabled;
+        return outsideEnabled
+                && (landscape ? outsideLandscapeEnabled : outsidePortraitEnabled);
     }
 
     int windowWidthPercent(boolean landscape) {

@@ -65,6 +65,9 @@ internal fun gestureSettingEntries(
         if (currentModule == SettingModule.GENERAL || key == C.KEY_ENABLED) return emptyList()
         val result = mutableListOf<String>()
         if (currentModule == SettingModule.GESTURES) result += C.KEY_ENABLED
+        if (key.startsWith("side_") && key != C.KEY_SIDE_GESTURE_ENABLED) {
+            result += C.KEY_SIDE_GESTURE_ENABLED
+        }
         when {
             key.startsWith("honeycomb_") && key != C.KEY_HONEYCOMB_ENABLED -> result += C.KEY_HONEYCOMB_ENABLED
             key == C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED -> {
@@ -83,6 +86,11 @@ internal fun gestureSettingEntries(
                 result += C.KEY_BOTTOM_LANDSCAPE_ENABLED
                 result += C.KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED
             }
+            key == C.KEY_SIDE_HOLD_DELAY_MS -> result += C.KEY_SIDE_HOLD_ENABLED
+            key == C.KEY_SIDE_PORTRAIT_LAYOUT_MODE ||
+                    key == C.KEY_SIDE_PORTRAIT_FULLSCREEN -> result += C.KEY_SIDE_PORTRAIT_ENABLED
+            key == C.KEY_SIDE_LANDSCAPE_LAYOUT_MODE ||
+                    key == C.KEY_SIDE_LANDSCAPE_FULLSCREEN -> result += C.KEY_SIDE_LANDSCAPE_ENABLED
         }
         if (currentModule == SettingModule.FREEFORM) {
             when (key) {
@@ -120,6 +128,10 @@ internal fun gestureSettingEntries(
 
     fun dependencyDefault(key: String): Boolean = when (key) {
         C.KEY_ENABLED -> C.DEFAULT_ENABLED
+        C.KEY_SIDE_GESTURE_ENABLED -> C.DEFAULT_SIDE_GESTURE_ENABLED
+        C.KEY_SIDE_PORTRAIT_ENABLED -> C.DEFAULT_SIDE_PORTRAIT_ENABLED
+        C.KEY_SIDE_LANDSCAPE_ENABLED -> C.DEFAULT_SIDE_LANDSCAPE_ENABLED
+        C.KEY_SIDE_HOLD_ENABLED -> C.DEFAULT_SIDE_HOLD_ENABLED
         C.KEY_HONEYCOMB_ENABLED -> C.DEFAULT_HONEYCOMB_ENABLED
         C.KEY_BOTTOM_PORTRAIT_ENABLED -> C.DEFAULT_BOTTOM_PORTRAIT_ENABLED
         C.KEY_BOTTOM_LANDSCAPE_ENABLED -> C.DEFAULT_BOTTOM_LANDSCAPE_ENABLED
@@ -137,6 +149,10 @@ internal fun gestureSettingEntries(
         ?.joinToString("、") { key ->
             when (key) {
                 C.KEY_ENABLED -> "启用手势总开关"
+                C.KEY_SIDE_GESTURE_ENABLED -> "启用侧滑手势"
+                C.KEY_SIDE_PORTRAIT_ENABLED -> "竖屏侧滑手势"
+                C.KEY_SIDE_LANDSCAPE_ENABLED -> "横屏侧滑手势"
+                C.KEY_SIDE_HOLD_ENABLED -> "侧滑停留打开列表"
                 C.KEY_HONEYCOMB_ENABLED -> "启用蜂巢"
                 C.KEY_BOTTOM_PORTRAIT_ENABLED -> "竖屏底角手势"
                 C.KEY_BOTTOM_LANDSCAPE_ENABLED -> "横屏底角手势"
@@ -271,7 +287,17 @@ internal fun gestureSettingEntries(
     bool("竖屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_PORTRAIT_SECOND_STAGE_ENABLED)
     bool("横屏二段蜂巢", "底角扇形外继续上滑打开蜂巢", C.KEY_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED, C.DEFAULT_BOTTOM_LANDSCAPE_SECOND_STAGE_ENABLED)
     currentGroup = "侧边手势"
-    bool("侧滑停留打开列表", "从屏幕侧边滑入并停留打开模块列表。若与安全中心侧栏冲突，可关闭此项；不会更改系统侧栏开关。", C.KEY_SIDE_HOLD_ENABLED, C.DEFAULT_SIDE_HOLD_ENABLED)
+    bool("启用侧滑列表", "从屏幕侧边滑动打开所选布局；不会更改安全中心的侧栏开关。", C.KEY_SIDE_GESTURE_ENABLED, C.DEFAULT_SIDE_GESTURE_ENABLED)
+    bool("竖屏侧滑", "允许竖屏时从屏幕左右边缘触发", C.KEY_SIDE_PORTRAIT_ENABLED, C.DEFAULT_SIDE_PORTRAIT_ENABLED)
+    bool("横屏侧滑", "允许横屏时从屏幕左右边缘触发", C.KEY_SIDE_LANDSCAPE_ENABLED, C.DEFAULT_SIDE_LANDSCAPE_ENABLED)
+    bool("侧滑停留打开列表", "滑入后达到触发距离并停留；可关闭以只使用侧滑。不会更改安全中心侧栏开关。", C.KEY_SIDE_HOLD_ENABLED, C.DEFAULT_SIDE_HOLD_ENABLED)
+    slider("侧滑停留时间", C.KEY_SIDE_HOLD_DELAY_MS, C.MIN_SIDE_HOLD_DELAY_MS, C.MAX_SIDE_HOLD_DELAY_MS, " ms")
+    slider("侧滑触发距离", C.KEY_SIDE_TRIGGER_PERCENT, C.MIN_SIDE_TRIGGER_PERCENT, C.MAX_SIDE_TRIGGER_PERCENT, "%")
+    chooser("竖屏侧滑布局", listOf("列表", "圆环", "扇形", "蜂巢", "任务切换", "系统最近任务"), C.KEY_SIDE_PORTRAIT_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
+    chooser("横屏侧滑布局", listOf("列表", "圆环", "扇形", "蜂巢", "任务切换", "系统最近任务"), C.KEY_SIDE_LANDSCAPE_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
+    bool("竖屏侧滑全屏启动", "关闭时以小窗启动", C.KEY_SIDE_PORTRAIT_FULLSCREEN, C.DEFAULT_SIDE_PORTRAIT_FULLSCREEN)
+    bool("横屏侧滑全屏启动", "关闭时以小窗启动", C.KEY_SIDE_LANDSCAPE_FULLSCREEN, C.DEFAULT_SIDE_LANDSCAPE_FULLSCREEN)
+    slider("侧滑目标上限", C.KEY_SIDE_MAX_TARGETS, C.MIN_SIDE_MAX_TARGETS, C.MAX_SIDE_MAX_TARGETS, " 个")
     currentGroup = "动作与目标"
     bool("竖屏扇形全屏启动", "第一段手势启动应用", C.KEY_BOTTOM_PORTRAIT_FULLSCREEN, C.DEFAULT_BOTTOM_PORTRAIT_FULLSCREEN)
     bool("横屏扇形全屏启动", "第一段手势启动应用", C.KEY_BOTTOM_LANDSCAPE_FULLSCREEN, C.DEFAULT_BOTTOM_LANDSCAPE_FULLSCREEN)
@@ -355,6 +381,7 @@ internal fun gestureSettingEntries(
     currentGroup = "动作与目标"
     targetAction("bottom_targets", "底角应用与快捷方式", "选择底角扇形可打开的应用和快捷方式", "bottom")
     targetAction("honeycomb_targets", "蜂巢应用与快捷方式", "选择蜂巢可打开的应用和快捷方式", "honeycomb")
+    targetAction("side_targets", "侧滑应用与快捷方式", "选择侧滑列表可打开的应用和快捷方式", "side")
     addUtilityEntries()
     return entries
 }

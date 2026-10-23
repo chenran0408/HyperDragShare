@@ -144,6 +144,7 @@ private sealed interface SettingsRoute : NavKey {
     data object Diagnostics : SettingsRoute
     data class Module(val module: SettingModule, val focusId: String? = null) : SettingsRoute
     data object BottomTargets : SettingsRoute
+    data object SideTargets : SettingsRoute
     data object HoneycombLayout : SettingsRoute
     data object HoneycombTargets : SettingsRoute
     data object Licenses : SettingsRoute
@@ -324,6 +325,7 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
         val openTargets: (String) -> Unit = { group ->
             backStack.add(when (group) {
                 "bottom" -> SettingsRoute.BottomTargets
+                "side" -> SettingsRoute.SideTargets
                 "honeycomb" -> SettingsRoute.HoneycombTargets
                 else -> error("Unknown gesture target group: $group")
             })
@@ -364,6 +366,11 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                 }
                 entry(SettingsRoute.BottomTargets) {
                     GestureTargetsContent(context, "bottom", onBack = {
+                        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                    })
+                }
+                entry(SettingsRoute.SideTargets) {
+                    GestureTargetsContent(context, "side", onBack = {
                         if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
                     })
                 }
@@ -808,8 +815,8 @@ private fun portalSettingEntries(
     }
 
     row("drag.style", "拖拽样式", SettingModule.PORTAL, "拖拽菜单外观",
-        summary = "仅影响拖拽时的悬浮菜单",
-        keywords = "简洁 流光 环形 现代",
+        summary = "现代样式含选中弹起、发光与柔光玻璃；系统不支持时使用普通模糊",
+        keywords = "简洁 流光 环形 现代 选中目标 弹起 动画 发亮 柔光 玻璃",
         enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
     ) { title, summary, enabled ->
         OverlayDropdownPreference(
@@ -825,7 +832,7 @@ private fun portalSettingEntries(
     }
 
     row("drag.position", "菜单出现位置", SettingModule.PORTAL, "拖拽菜单外观",
-        summary = "靠近手按压起点所在屏幕侧；跟随拖拽边会随手指切换",
+        summary = "靠近手：向左拖在左侧、向右拖在右侧；跟随拖拽边可切换四边",
         keywords = "菜单 顶部 底部 左侧 右侧 靠近手 跟随拖拽边 位置",
         enabled = dragSharingEnabled, prerequisite = dragSharingPrerequisite,
     ) { title, summary, enabled ->
@@ -939,8 +946,8 @@ private fun portalSettingEntries(
     }
 
     row("drag.modern.blur", "模糊半径", SettingModule.PORTAL, "拖拽菜单外观",
-        summary = "HyperOS 局部背景模糊强度",
-        keywords = "现代 模糊",
+        summary = "现代样式柔光玻璃的背景模糊强度",
+        keywords = "现代 柔光 玻璃 背景 模糊",
         enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_MODERN,
         prerequisite = dragSharingPrerequisite ?: "选择现代拖拽样式后可调整",
     ) { title, summary, enabled ->
@@ -968,8 +975,8 @@ private fun portalSettingEntries(
     }
 
     row("drag.modern.opacity", "底板不透明度", SettingModule.PORTAL, "拖拽菜单外观",
-        summary = "",
-        keywords = "现代 底板 透明",
+        summary = "现代样式柔光玻璃底板的不透明度",
+        keywords = "现代 柔光 玻璃 底板 透明 不透明度",
         enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_MODERN,
         prerequisite = dragSharingPrerequisite ?: "选择现代拖拽样式后可调整",
     ) { title, summary, enabled ->
