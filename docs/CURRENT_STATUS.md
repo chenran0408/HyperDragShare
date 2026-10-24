@@ -1,12 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成长按菜单冲突的第一阶段调查/受控日志，交付beta22诊断候选，未改核心手势规则。已逻辑复现32ms旧宿主取消回调结束新拖拽的竞态，但没有现场归因，暂不修。beta21缩略图兼容仍保留；原图、微信单消息载荷及中转站接收待办未取消。没有操作手机、安装、推送或发布版本。
+核对日期：2026-10-25。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮交付beta23：手势设置分类与浏览位置保留、明确控件的局部避让、复制直达浏览器筛选兼容及跟随系统说明。用户明确将评论/消息正文与原生长按菜单的意图冲突延期，待触摸面积适配完成后再评估；本轮没有恢复面积研究或改核心手势。Alook现场无响应仍未确认根因。32ms旧宿主取消竞态、微信原媒体/单消息载荷、中转站接收和参考面板待办均保留。没有操作手机、安装、推送或发布版本。
 
 ## 在哪里继续
 
 | 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
 |---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；beta22交付源码 `f0464e6ac8463b13b00495adaa35b8377b05ca7e`，后续纯文档HEAD用git log核对 | 1.7.219-beta.22 / 264 |
+| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；beta23交付源码 `fb55167932e5b83d7fabd576e44be0ae4d113ca0`，后续纯文档HEAD用git log核对 | 1.7.219-beta.23 / 265 |
 | 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
@@ -15,7 +15,20 @@
 
 ## 交付身份与验证边界
 
-最新候选：`D:/CODEX/Tasks/2026-10-24/mmgg-touch-stream-diagnostics/outputs/beta22/MMGG-1.7.219-beta.22.apk`，beta22/264，4,931,109 bytes；SHA256 `080551B689323EC365A2434056CF3D016964A7EA0321F4D03EF697A2DC3E0F03`。
+最新候选：`D:/CODEX/Tasks/2026-10-24/mmgg-usability-controls-alook/outputs/beta23/MMGG-1.7.219-beta.23.apk`，beta23/265，4,947,489 bytes；SHA256 `3A764D859C4A4FC9FB85DDFF0FDF66F959F111E4562633933D3591669C7B853C`。
+
+- 源码fb55167，app tree `5ec6e6d1676b391ea4284fb0c0524f07a39d13e1`，main tree `5f10f2c9a83447b3f01a7e7b6c1708f50f4806a2`；本地tag `delivered/mmgg-1.7.219-beta.23`固定源码。aapt核对包名、265/beta23；v2验签通过，与留存beta22重新验签同Android Debug证书（SHA256 b86a4a1d…7c2c89c0），不推定正式包同签。
+- 本轮实际`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功2m14s，131类702项测试0失败/错误/跳过，Lint0错180警告2提示，Debug和实际Beta/R8完成。先前针对性9类100项通过20s。首次两次失败均为新测试夹具编译：SaverScope调用receiver和SDK37移除FingerprintManager导致Shadows重载解析；修夹具而不改依赖、生产逻辑或旧断言。完整日志、JUnit、Lint、mapping、签名、hash和源码身份见本任务`outputs/verification`。
+- 085d2a3：手势页分通用、底角斜滑、侧边滑动、蜂巢、启动方式、外观布局。稳定目录ID、配置key/default和更新路径不变；分类目标分别归入对应触发方式，搜索类别名可定位。根层按模块/类别保存列表index/offset，退出再保存最后位置，搜索仅首次定位；分类返回先回目录，隐藏模块不拦截子页返回。测试实际生成生产目录、验证唯一归类和Saver往返；没有真实NavDisplay/大字体/深浅色页面交互验收。
+- 246abe5：简短倍速标签补入原局部交互规则；精确复制/回复/转发等动作词只在明确Button/MenuItemView角色和局部边界下避让。裸TextView即使clickable+longClickable且正文恰为“转发”也不当菜单；“图片”ImageButton保留图片候选。原enabled=false语音/倍速兼容与滑杆/拍摄规则保留，Root权威、时长/slop、intercept/CANCEL、会话和资源释放不改。不代表无节点自绘倍速区或正文原生菜单冲突已解决。
+- d5584b7：允许无限制通配host的通用浏览器进入选择列表，继续排除限定站点/路径/端口的处理器；路由仍沿用原implicit或selected package，不猜Alook内部组件。设置文案说明“跟随系统默认”会随系统变化，手动选择则固定；不重置用户选择。原生卡片PendingIntent和MIUI Intent URI的目标/数据/flags一致有替身测试；新增受控copy_direct_prepare记录，只证明准备，不能证明点击、打开或发送。Alook现场故障缺复制内容/选择模式/实际点击证据，仍待用户回归。
+- e1d70bc独立保留上一轮迟到的诊断测试：idle host cancel不误取消、STATE保留输入间隔并区分event age；fb55167增版。主Agent review收窄了全Button/纯关键词避让、两个站点试探浏览器、准备过早记成功等中间方案，最终没有引入这些泛化。
+- 最新用户决定：先做简单控件避让。长按评论/消息正文与宿主菜单共用输入，当前没有意图位；用户明确延期，未来在触摸面积适配完成后再评估，本轮不接回probe或启动研究。32ms竞态仍按beta22第一阶段记录保留；微信、中转站、436面板旧任务没有被此决定取消。
+- 未覆盖：实机/完整模拟器UI、抖音和聊天实际节点、系统默认/Alook真实启动、跨UID/ROM作用域加载。没有本轮云端CI、Release构建、手机操作、安装、push或发布。后续先按本任务`outputs/DELIVERY.md`的小清单验收。
+
+### 上一份beta22交付（历史证据）
+
+历史候选：`D:/CODEX/Tasks/2026-10-24/mmgg-touch-stream-diagnostics/outputs/beta22/MMGG-1.7.219-beta.22.apk`，beta22/264，4,931,109 bytes；SHA256 `080551B689323EC365A2434056CF3D016964A7EA0321F4D03EF697A2DC3E0F03`。
 
 - 源码f0464e6，app tree `a8852e090057d4303a5a939d22a3421cb3510b9a`，main tree `fa9960dfa9f1b6af662de8ceb6c7fecc95bcd22c`；本地交付tag固定该源码。aapt核对264/beta22与既有包名；v2验签通过，与留存beta21重新验签同Android Debug证书（SHA256 b86a4a1d…7c2c89c0），不能据此推定正式包同签。
 - 最终`testDebugUnitTest lintDebug assembleDebug assembleBeta`通过1m56s，129类690项测试0失败/错误/跳过，Lint0错180警告2提示，Debug与实际Beta/R8完成。较早7类68项针对性通过33s；首次1失败为新focus日志断言错误要求字段相邻，修为同事件行匹配，active断言未弱化。之后补缺DOWN、重复cleanup日志边界并纳入最终690项；早期中间态构建不当最终结果。
@@ -104,7 +117,8 @@
 
 | 文件 | 当前职责 |
 |---|---|
-| `SettingsScreen.kt` | 导航/页面组装、设置目录、搜索定位路由；根回调在执行时读取最新配置并同步内存状态；已移除copySettings |
+| `SettingsScreen.kt` | 导航/页面组装、设置目录、搜索定位路由和模块/类别滚动存档；根回调在执行时读取最新配置并同步内存状态；已移除copySettings |
+| `SettingsCatalog.kt` / `SettingsCatalogPage.kt` | 目录元数据/搜索、手势用途分类和UI位置Saver；Miuix模块/分类页面、首次搜索定位与分类内返回；不持有独立配置副本 |
 | `ActivationMonitor.kt` | 激活快照、CONFLATED刷新/代次、首次启动有限等待、偏好监听、生命周期恢复与注销 |
 | `ActivationDiagnosticsPage.kt` | 首页状态卡、诊断页面、证据说明与处理入口 |
 | `ShareTargetSettingsPages.kt` | 分享目标可见性/批量切换、排序、目标查询/图标和分组 |
