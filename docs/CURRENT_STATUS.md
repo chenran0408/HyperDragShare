@@ -1,21 +1,30 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-25。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮交付beta23：手势设置分类与浏览位置保留、明确控件的局部避让、复制直达浏览器筛选兼容及跟随系统说明。用户明确将评论/消息正文与原生长按菜单的意图冲突延期，待触摸面积适配完成后再评估；本轮没有恢复面积研究或改核心手势。Alook现场无响应仍未确认根因。32ms旧宿主取消竞态、微信原媒体/单消息载荷、中转站接收和参考面板待办均保留。没有操作手机、安装、推送或发布版本。
+核对日期：2026-10-25。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。最新Beta候选为1.7.219-beta.24 / versionCode 266，源码由`delivered/mmgg-1.7.219-beta.24`固定；APK已完成本地Beta/R8构建与签名核对，未做单测、完整Lint、模拟器/实机验收或安装。Beta24已推送到origin并设为候选tag，详见下方交付身份和[分支复核](BRANCHES.md)。GitHub现只保留beta与repair-from-189两远程分支，默认分支为repair-from-189。用户此前决定将评论/消息正文与原生长按菜单意图冲突延期，待触摸面积适配完成后再评估；本轮没有恢复面积研究或改核心手势。Alook现场无响应仍未确认根因；32ms旧宿主取消竞态、微信原媒体/单消息载荷、中转站接收和参考面板待办均保留。
 
 ## 在哪里继续
 
 | 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
 |---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；beta23交付源码 `fb55167932e5b83d7fabd576e44be0ae4d113ca0`，后续纯文档HEAD用git log核对 | 1.7.219-beta.23 / 265 |
+| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；Beta24源码 `bdd6bdf5901b6dafc24f667e287069f90f39ab56`，tag固定；后续文档HEAD用git log核对 | 1.7.219-beta.24 / 266 |
 | 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
 
-正式tag `v1.7.218^{}`=`c03e880cf67ce4c87e81bbcb45fa1fbcf0a2e247`；稳定HEAD比它多3个历史文档提交与设置拆分批次的CI提交，产品源码相同。此前确认origin默认为 `hyperos4-adaptation@3520884`，已建立两维护线并配置同名upstream；本轮未联网核对或修改远程，本地beta从origin/beta所指69828c4继续推进、尚未推送。历史路线的archive标签和原分支/tag/worktree保留。完整关系见[BRANCHES](BRANCHES.md)，不要从默认clone或`v1.9.3`实验tag直接开始。
+正式tag `v1.7.218^{}`=`c03e880cf67ce4c87e81bbcb45fa1fbcf0a2e247`；稳定HEAD比它多3个历史文档提交与设置拆分批次的CI提交，产品源码相同。origin默认分支现为`repair-from-189@e25c667`，Beta24推送至`beta@bdd6bdf`；远程旧默认`hyperos4-adaptation`、`main`、`kotlin-libxposed-102`已删除，归档tag保留，完整关系和复核SHA见[BRANCHES](BRANCHES.md)。upstream仍为Leaf-lsgtky原作者仓库，不向其推送本fork提交；不要从`v1.9.3`实验tag直接开始。
 
 ## 交付身份与验证边界
 
-最新候选：`D:/CODEX/Tasks/2026-10-24/mmgg-usability-controls-alook/outputs/beta23/MMGG-1.7.219-beta.23.apk`，beta23/265，4,947,489 bytes；SHA256 `3A764D859C4A4FC9FB85DDFF0FDF66F959F111E4562633933D3591669C7B853C`。
+最新候选：`D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24/MMGG-1.7.219-beta.24.apk`，beta24/266，4,947,493 bytes；SHA256 `B932D60E7CB3C2329AFD911BF099DC8418381C0FAE732412872BAFE67BC4A5B6`。
+
+- 源码提交/tag：`bdd6bdf5901b6dafc24f667e287069f90f39ab56` / `delivered/mmgg-1.7.219-beta.24`；版本提交只改`app/build.gradle`，将beta23/265改为beta24/266。Beta源线现已推至origin；后续文档提交不改变APK所对应源码/tag。
+- 实际构建：`.\gradlew.bat --no-daemon assembleBeta`成功，1m14s；包括`minifyBetaWithR8`、资源收缩、打包及`lintVitalBeta`。`aapt`核对包名`com.leaf.hyperdragshare.codex`、versionName/code、compile SDK37；APK为4,947,493 bytes。
+- `apksigner verify`通过v2；实际证书是Android Debug，SHA-256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`。当前环境未配置正式release密钥，不代表和正式包同签。
+- 未运行单元测试、完整Lint、模拟器/实机安装或UI验收；没有手机操作/正式发布。Beta24 push后GitHub Actions Android checks run `40112982633`（commit `bdd6bdf`）在核对时为`in_progress`，不写成通过。构建日志、mapping、metadata和签名证据见本任务`D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24`。
+
+### beta23交付（历史证据）
+
+历史候选：`D:/CODEX/Tasks/2026-10-24/mmgg-usability-controls-alook/outputs/beta23/MMGG-1.7.219-beta.23.apk`，beta23/265，4,947,489 bytes；SHA256 `3A764D859C4A4FC9FB85DDFF0FDF66F959F111E4562633933D3591669C7B853C`。
 
 - 源码fb55167，app tree `5ec6e6d1676b391ea4284fb0c0524f07a39d13e1`，main tree `5f10f2c9a83447b3f01a7e7b6c1708f50f4806a2`；本地tag `delivered/mmgg-1.7.219-beta.23`固定源码。aapt核对包名、265/beta23；v2验签通过，与留存beta22重新验签同Android Debug证书（SHA256 b86a4a1d…7c2c89c0），不推定正式包同签。
 - 本轮实际`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功2m14s，131类702项测试0失败/错误/跳过，Lint0错180警告2提示，Debug和实际Beta/R8完成。先前针对性9类100项通过20s。首次两次失败均为新测试夹具编译：SaverScope调用receiver和SDK37移除FingerprintManager导致Shadows重载解析；修夹具而不改依赖、生产逻辑或旧断言。完整日志、JUnit、Lint、mapping、签名、hash和源码身份见本任务`outputs/verification`。
@@ -26,7 +35,7 @@
 - 最新用户决定：先做简单控件避让。长按评论/消息正文与宿主菜单共用输入，当前没有意图位；用户明确延期，未来在触摸面积适配完成后再评估，本轮不接回probe或启动研究。32ms竞态仍按beta22第一阶段记录保留；微信、中转站、436面板旧任务没有被此决定取消。
 - 未覆盖：实机/完整模拟器UI、抖音和聊天实际节点、系统默认/Alook真实启动、跨UID/ROM作用域加载。没有本轮云端CI、Release构建、手机操作、安装、push或发布。后续先按本任务`outputs/DELIVERY.md`的小清单验收。
 
-### 上一份beta22交付（历史证据）
+### beta22交付（历史证据）
 
 历史候选：`D:/CODEX/Tasks/2026-10-24/mmgg-touch-stream-diagnostics/outputs/beta22/MMGG-1.7.219-beta.22.apk`，beta22/264，4,931,109 bytes；SHA256 `080551B689323EC365A2434056CF3D016964A7EA0321F4D03EF697A2DC3E0F03`。
 

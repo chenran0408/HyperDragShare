@@ -1,6 +1,23 @@
 # 分支、工作树与独有改动清单
 
-## 2026-10-24 落实记录
+## 2026-10-25 Beta24 推送与远程清理（当前状态）
+
+核对日期：2026-10-25。GitHub 仓库 `chenran0408/HyperDragShare` 为公开仓库；默认分支已从`hyperos4-adaptation`改为`repair-from-189`。origin 仅保留两条长期远程分支；上文旧调查表和命令是2026-10-24历史快照，不是当前远程状态或待执行步骤。
+
+| origin ref | HEAD | 状态 |
+|---|---|---|
+| `beta` | `bdd6bdf5901b6dafc24f667e287069f90f39ab56` | Beta24候选源提交，快进推送完成；`delivered/mmgg-1.7.219-beta.24` 指向同一源码 |
+| `repair-from-189` | `e25c66725cda51f23bdb8d95de036f7811eba017` | 稳定维护线及 GitHub 默认分支，未改动 |
+
+- Beta24 APK `D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24/MMGG-1.7.219-beta.24.apk`，versionCode 266，4,947,493 bytes，SHA256 `B932D60E7CB3C2329AFD911BF099DC8418381C0FAE732412872BAFE67BC4A5B6`。源码提交只将`app/build.gradle`从beta23/265增至beta24/266。实际`assembleBeta`成功（R8、资源收缩、lintVitalBeta；1m14s），APK v2签名通过，证书为Android Debug（SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`），不是正式签名证明。单测、完整Lint、模拟器/实机验收、设备安装未运行。
+- Beta24 push触发GitHub Actions Android checks run `40112982633`（SHA `bdd6bdf`）；查询时为`in_progress`，不可写成通过，后续结果以对应run为准。
+- 已逐条删除远程`hyperos4-adaptation`（原HEAD `3520884f8296f4b2215ad79ca822d3e0f1864ffd`）、`kotlin-libxposed-102`（`a6ee01b615ca5bec32aa3a6914b43ccb92734b89`）、`main`（`1a042132194643d470fa58163abf7504c8963f88`）。删除前重新核对了各ref、默认分支和归档tag；当时open PR为0。两条维护线都包含共同基线`3520884`；历史main/Kotlin实验分别由远程tag `archive/origin-main-2026-10-24`、`archive/kotlin-libxposed-102-2026-10-24`保留。Kotlin archive tag peel仍为`a6ee01b`。未删除或移动任何tag、upstream分支、稳定/开发本地分支或工作树。
+- 已`fetch --prune origin`并更新`origin/HEAD -> origin/repair-from-189`。远程复核恰有beta和repair-from-189两heads，default/HEAD为repair-from-189。远程tag ref共18个；本地共48个。保留所有历史tag，不批量推送其他本地tag。
+- 当次分支检查显示没有受保护分支或仓库rulesets；移除前无open PR。origin公开、非归档。upstream仍指向`Leaf-lsgtky/HyperDragShare`，没有对upstream执行写入。
+- 清理文件检查仍未发现可确认的无用tracked文件。历史文档和诊断源码有产品边界、复现材料及明确链接；`.gradle/`、`.kotlin/`、`build/`、`local.properties`、`.learnings/`是ignored本地项，不会随Git push上传。本阶段没有删除tracked文件或清理忽略缓存。
+- `docs/CURRENT_STATUS.md`是当前产品/交付状态；本次 Beta24 APK/build 证据及 task checklist/handoff 在 `D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24` 与其任务目录。若 Actions run 后续完成，更新该run结论，不以本地构建代替云端结果。
+
+## 2026-10-24 落实记录（历史快照；当前执行状态见上节）
 
 本轮在`f65de2e`继续落实上一轮结论；以下旧调查表仍是整理前快照，不再作为实时HEAD。
 
@@ -88,7 +105,7 @@ Beta独有58提交均在当前开发线上；不是应反向整并稳定线的�
 
 长期只维护现有`beta`（开发/候选验收）与`repair-from-189`（已发布稳定维护），不新增第三条长期线。普通独立修复可直接分块提交Beta；需要并行隔离或有风险实验时，从准确维护线建短期`fix/<问题>`、`feat/<目标>`、`experiment/<假设>`，完成审查/验证后合入一次并收尾；放弃时tag保留证据后停止，不因更换Agent新建分支。稳定紧急修复从稳定线出发，之后只移植必要差异回Beta；Beta晋升正式版必须先验收，不能今天整线合入。
 
-以下命令保留上一轮提案供理解顺序，不可整段重复执行。本轮已完成备份tag/bundle、两维护线及必要引用推送和CI；默认修改、分支删除不在本轮授权范围。遇refs变化先重算关系，不force-push、不覆盖已有tag。
+以下命令仅为2026-10-24历史提案，已被上面的2026-10-25操作覆盖；不要重复执行。Beta24源和tag已推送、默认分支已迁移、三个历史远程头已删除。保留此处只为追溯当时决策顺序，当前远程只以本节列表为准。
 
 1. 在Beta工作树核对现场并审查本次文档提交；列出本地/远程，确认没有同名tag：
 
