@@ -25,6 +25,28 @@ import java.util.concurrent.TimeUnit;
 @Config(manifest = Config.NONE, sdk = 35)
 @LooperMode(LooperMode.Mode.PAUSED)
 public final class DragShareTouchDiagnosticsTest {
+    @Test public void repeatedInactivePressCleanupDoesNotBypassMoveSamplingWithStateSpam() throws Exception {
+        DragShareController controller = controller();
+        controller.acceptPointerEvent(MotionEvent.ACTION_DOWN, 500f, 1000f, 100L, "root");
+        ShadowLooper.shadowMainLooper().idle();
+        PressCaptureSource source = new PressCaptureSource(RuntimeEnvironment.getApplication(), null,
+                controller, DragShareSettings.defaults());
+        set(source, "downTime", 100L);
+        set(source, "pointerDown", true);
+        ShadowLog.clear();
+        try {
+            source.cancelGesture();
+            for (int i = 0; i < 100; i++) source.cancelGesture();
+            ShadowLooper.shadowMainLooper().idle();
+            long cleanups = ShadowLog.getLogsForTag("DragShare/TouchStream").stream()
+                    .filter(item -> item.msg.contains("reason=press_detector_cleanup ")).count();
+            org.junit.Assert.assertEquals(1L, cleanups);
+        } finally {
+            source.stop();
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
     private static final String TAG = "DragShare/TouchStream";
 
     @Before public void setUp() {

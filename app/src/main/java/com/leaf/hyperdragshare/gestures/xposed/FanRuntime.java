@@ -1810,8 +1810,10 @@ final class FanRuntime {
     }
 
     private void resetFan(boolean hideOverlay) {
-        touchDiagnostics.mark("RESET", foregroundPackageForGesture, state.name(),
-                state == State.ACTIVE || state == State.HONEYCOMB, null, null, "existing_reset_fan");
+        if (state != State.IDLE) {
+            touchDiagnostics.mark("RESET", foregroundPackageForGesture, state.name(),
+                    state == State.ACTIVE || state == State.HONEYCOMB, null, null, "existing_reset_fan");
+        }
         nativeEventInterceptActive = false;
         cancelSideHold();
         cancelBottomHoneycombSettle();

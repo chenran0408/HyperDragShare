@@ -705,7 +705,9 @@ final class PressCaptureSource {
     }
 
     void cancelGesture() {
-        controller.notePressDiagnostics(downTime, null, null, "press_detector_cleanup");
+        if (pointerDown || detector.isActive() || cached != null || pendingWeChat != null || lookupRunning) {
+            controller.notePressDiagnostics(downTime, null, null, "press_detector_cleanup");
+        }
         controller.endPressPipeline(downTime);
         generation++;
         pointerDown = false;
