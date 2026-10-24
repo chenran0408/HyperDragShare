@@ -1,13 +1,7 @@
 package com.leaf.hyperdragshare.codex
 
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.util.Log
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,31 +14,22 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.leaf.hyperdragshare.gestures.config.ConfigContract as C
 import com.leaf.hyperdragshare.gestures.config.ConfigStore
-import com.leaf.hyperdragshare.gestures.diagnostics.CompatibilityReport
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.GridView
-import top.yukonga.miuix.kmp.icon.extended.Help
 import top.yukonga.miuix.kmp.icon.extended.Refresh
-import top.yukonga.miuix.kmp.icon.extended.Report
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.basic.TextButton
-import java.io.IOException
-import java.nio.charset.StandardCharsets
 import java.util.Locale
 
 /** Register Hyper gesture/freeform settings for the shared searchable settings catalog. */
@@ -240,16 +225,6 @@ internal fun gestureSettingEntries(
     fun addUtilityEntries() {
     currentModule = SettingModule.GENERAL
     currentGroup = "工具与诊断"
-        val reportTitle = "导出兼容性报告"
-        val reportSummary = "生成设备与模块运行环境信息，不含已选应用"
-        entries += SettingEntry(
-            id = "gesture_compatibility_report", title = reportTitle,
-            module = currentModule, group = currentGroup,
-            summary = reportSummary,
-            keywords = "诊断 日志 报告 导出",
-            icon = MiuixIcons.Report,
-            content = { enabled -> GestureReportPreference(context, store, reportTitle, reportSummary, enabled) },
-        )
         val resetTitle = "恢复手势与小窗参数"
         val resetSummary = "恢复手势和小窗参数；保留已选应用、排序与快捷方式"
         entries += SettingEntry(
@@ -259,16 +234,6 @@ internal fun gestureSettingEntries(
             keywords = "重置 默认 恢复",
             icon = MiuixIcons.Refresh,
             content = { enabled -> GestureResetPreference(context, store, localValues, revision, resetTitle, resetSummary, enabled) },
-        )
-        val feedbackTitle = "问题反馈"
-        val feedbackSummary = "打开 GitHub 新问题页面，附上报告供你检查"
-        entries += SettingEntry(
-            id = "gesture_feedback", title = feedbackTitle,
-            module = currentModule, group = currentGroup,
-            summary = feedbackSummary,
-            keywords = "帮助 兼容 故障 bug",
-            icon = MiuixIcons.Help,
-            content = { enabled -> GestureFeedbackPreference(context, store, feedbackTitle, feedbackSummary, enabled) },
         )
     }
 
@@ -497,37 +462,6 @@ private fun GestureActionPreference(
 }
 
 @Composable
-private fun GestureReportPreference(
-    context: Context,
-    store: ConfigStore,
-    title: String,
-    summary: String,
-    enabled: Boolean,
-) {
-    val scope = rememberCoroutineScope()
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { destination ->
-        if (destination != null) scope.launch {
-            val failure = withContext(Dispatchers.IO) {
-                try {
-                    val output = context.contentResolver.openOutputStream(destination, "w")
-                        ?: throw IOException("无法打开所选文件")
-                    output.bufferedWriter(StandardCharsets.UTF_8).use { it.write(CompatibilityReport.build(context, store)) }
-                    null
-                } catch (error: IOException) { error }
-                catch (error: SecurityException) { error }
-            }
-            Toast.makeText(context,
-                if (failure == null) "兼容性报告已导出" else "导出兼容性报告失败：${failure.message ?: failure.javaClass.simpleName}",
-                Toast.LENGTH_LONG).show()
-            if (failure != null) Log.w("HyperDragShare/GestureSettings", "Compatibility report export failed", failure)
-        }
-    }
-    GestureActionPreference(title, summary, enabled) {
-        launcher.launch(CompatibilityReport.FILE_NAME)
-    }
-}
-
-@Composable
 private fun GestureResetPreference(
     context: Context,
     store: ConfigStore,
@@ -560,34 +494,6 @@ private fun GestureResetPreference(
                     Toast.LENGTH_SHORT,
                 ).show()
             })
-        }
-    }
-}
-
-@Composable
-private fun GestureFeedbackPreference(
-    context: Context,
-    store: ConfigStore,
-    title: String,
-    summary: String,
-    enabled: Boolean,
-) {
-    val scope = rememberCoroutineScope()
-    GestureActionPreference(title, summary, enabled) {
-        scope.launch {
-            try {
-                val report = withContext(Dispatchers.IO) { CompatibilityReport.build(context, store) }
-                val issueUri = Uri.parse("https://github.com/chenran0408/HyperDragShare/issues/new")
-                    .buildUpon().appendQueryParameter("title", "Hyper 手势兼容性反馈")
-                    .appendQueryParameter("body", report).build()
-                context.startActivity(Intent(Intent.ACTION_VIEW, issueUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (error: ActivityNotFoundException) {
-                Log.w("HyperDragShare/GestureSettings", "No feedback handler", error)
-                Toast.makeText(context, "无法打开浏览器或 GitHub 客户端", Toast.LENGTH_LONG).show()
-            } catch (error: SecurityException) {
-                Log.w("HyperDragShare/GestureSettings", "Feedback access denied", error)
-                Toast.makeText(context, "打开问题反馈页面失败：${error.message ?: "系统拒绝启动"}", Toast.LENGTH_LONG).show()
-            }
         }
     }
 }

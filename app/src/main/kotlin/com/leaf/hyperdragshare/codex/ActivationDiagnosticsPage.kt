@@ -23,6 +23,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Update
+import top.yukonga.miuix.kmp.icon.extended.Report
 
 @Composable
 internal fun ActivationStatusCard(
@@ -72,6 +73,7 @@ internal fun ActivationDiagnosticsPage(
     monitor: ActivationMonitorState,
     onBack: () -> Unit,
     onOpenGeneralSettings: () -> Unit,
+    onOpenProblemDiagnostics: () -> Unit,
 ) {
     val snapshot = monitor.snapshot
     val rows = listOf(
@@ -172,6 +174,12 @@ internal fun ActivationDiagnosticsPage(
             item("diagnostics-actions") {
                 SmallTitle("处理入口")
                 Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+                    SettingsNavigationPreference(
+                        title = "问题反馈与诊断",
+                        summary = "导出诊断 ZIP、运行触控专项检查或提交问题",
+                        icon = MiuixIcons.Report,
+                        onClick = onOpenProblemDiagnostics,
+                    )
                     SettingsNavigationPreference(
                         title = "打开通用设置",
                         summary = "检查模块作用域、Root 授权或重载运行服务",

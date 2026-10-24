@@ -6,8 +6,6 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
@@ -64,6 +62,7 @@ private sealed interface SettingsRoute : NavKey {
     data object Games : SettingsRoute
     data object About : SettingsRoute
     data object Diagnostics : SettingsRoute
+    data object ProblemDiagnostics : SettingsRoute
     data class Module(val module: SettingModule, val focusId: String? = null) : SettingsRoute
     data object BottomTargets : SettingsRoute
     data object SideTargets : SettingsRoute
@@ -111,6 +110,7 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
             onOpenBlacklist = { backStack.add(SettingsRoute.Blacklist) },
             onOpenGames = { backStack.add(SettingsRoute.Games) },
             onOpenAbout = { backStack.add(SettingsRoute.About) }, persist = persist,
+            onOpenProblemDiagnostics = { backStack.add(SettingsRoute.ProblemDiagnostics) },
         ) + gestureSettingEntries(context, onManageTargets = openTargets)).sortedWith(
             compareBy({ it.module.ordinal }, { it.module.groups.indexOf(it.group) }))
         val currentDirectory = rememberUpdatedState(directory)
@@ -130,7 +130,8 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                         onOpenDiagnostics = { backStack.add(SettingsRoute.Diagnostics) },
                         onOpenModule = { backStack.add(SettingsRoute.Module(it)) },
                         onOpenResult = { entry ->
-                            if (entry.enabled && entry.open != null) entry.open.invoke()
+                            if (isUnifiedDiagnosticsEntryId(entry.id)) backStack.add(SettingsRoute.ProblemDiagnostics)
+                            else if (entry.enabled && entry.open != null) entry.open.invoke()
                             else backStack.add(SettingsRoute.Module(entry.module, entry.id))
                         },
                     )
@@ -216,6 +217,24 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                         onOpenGeneralSettings = {
                             backStack.add(SettingsRoute.Module(SettingModule.GENERAL, "runtime.reload"))
                         },
+                        onOpenProblemDiagnostics = { backStack.add(SettingsRoute.ProblemDiagnostics) },
+                    )
+                }
+                entry(SettingsRoute.ProblemDiagnostics) {
+                    ProblemDiagnosticsPage(
+                        context = context,
+                        settings = currentSettings.value,
+                        monitor = currentActivationMonitor.value,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                        onOpenLogSettings = {
+                            backStack.add(SettingsRoute.Module(SettingModule.GENERAL, "log.level"))
+                        },
+                        onOpenTouchDiagnostics = {
+                            context.startActivity(
+                                Intent(context, TouchProbeActivity::class.java)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
                     )
                 }
             }
@@ -243,6 +262,7 @@ private fun portalSettingEntries(
     onOpenBlacklist: () -> Unit,
     onOpenGames: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenProblemDiagnostics: () -> Unit,
     persist: (DragShareSettingsMutation) -> DragShareSettings,
 ): List<SettingEntry> {
     val coroutineScope = rememberCoroutineScope()
@@ -281,29 +301,6 @@ private fun portalSettingEntries(
     }
     var launcherIconEnabled by remember(context) {
         mutableStateOf(LauncherIconSettings.isEnabled(context))
-    }
-    val exportLogLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/plain"),
-    ) { destination ->
-        if (destination != null) {
-            coroutineScope.launch {
-                val failure = withContext(Dispatchers.IO) {
-                    try {
-                        DragShareLog.exportTo(context, destination)
-                        null
-                    } catch (error: java.io.IOException) {
-                        error.message ?: error.javaClass.simpleName
-                    } catch (error: SecurityException) {
-                        error.message ?: error.javaClass.simpleName
-                    }
-                }
-                Toast.makeText(
-                    context,
-                    if (failure == null) "日志已导出" else "导出日志失败：$failure",
-                    Toast.LENGTH_SHORT,
-                ).show()
-            }
-        }
     }
     var edgeTriggerDp by remember(settings.edgeTriggerDp) {
         mutableFloatStateOf(settings.edgeTriggerDp.toFloat())
@@ -1077,31 +1074,7 @@ private fun portalSettingEntries(
         )
     }
 
-    val openLogExport = { exportLogLauncher.launch(DragShareLog.exportFileName()); Unit }
-    navigationRow("log.export", "导出日志", SettingModule.GENERAL, "工具与诊断",
-        summary = "将当前日志保存到所选位置",
-        keywords = "保存 导出 日志",
-        enabled = settings.logDestination == DragShareSettings.LOG_DESTINATION_FILE,
-        prerequisite = "先将日志保存位置设为文件",
-        onClick = openLogExport,
-    )
-
-    if (BuildConfig.UPDATE_CHANNEL == "beta") {
-        navigationRow(
-            "touch.probe",
-            "触控报告内测",
-            SettingModule.GENERAL,
-            "工具与诊断",
-            summary = "4 步引导，检查手机能否分辨指尖和拇指指腹按压",
-            keywords = "触控 面积 拇指 测试 适配 报告 touch probe",
-            onClick = {
-                context.startActivity(
-                    Intent(context, TouchProbeActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-            },
-        )
-    }
+    entries += unifiedDiagnosticsEntry(onOpenProblemDiagnostics)
 
     row("app.update", "检查更新", SettingModule.GENERAL, "关于",
         summary = "查看正式版更新说明，下载并安装新版本",

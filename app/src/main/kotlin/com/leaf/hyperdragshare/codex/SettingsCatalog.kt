@@ -59,3 +59,38 @@ internal data class SettingEntry(
         return query.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).all(haystack::contains)
     }
 }
+
+/** Existing searchable IDs that now lead to the single feedback and diagnostics page. */
+internal val UNIFIED_DIAGNOSTICS_ENTRY_IDS = setOf(
+    "problem.diagnostics",
+    "log.export",
+    "gesture_compatibility_report",
+    "gesture_feedback",
+    "touch.probe",
+)
+
+internal fun isUnifiedDiagnosticsEntryId(id: String): Boolean =
+    id in UNIFIED_DIAGNOSTICS_ENTRY_IDS
+
+internal fun unifiedDiagnosticsEntry(onOpen: () -> Unit): SettingEntry {
+    val title = "问题反馈与诊断"
+    val summary = "导出诊断 ZIP、触控诊断或提交问题反馈"
+    return SettingEntry(
+        id = "problem.diagnostics",
+        title = title,
+        module = SettingModule.GENERAL,
+        group = "工具与诊断",
+        summary = summary,
+        keywords = "日志 报告 反馈 触控 touch probe export diagnostic compatibility",
+        icon = MiuixIcons.Report,
+        open = onOpen,
+        content = { enabled ->
+            top.yukonga.miuix.kmp.preference.ArrowPreference(
+                title = title,
+                summary = summary,
+                enabled = enabled,
+                onClick = onOpen,
+            )
+        },
+    )
+}
