@@ -1,12 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成退出/销毁资源与异步回调审计及最小修复；设置拆分、配置更新和动作提取已完成，不重复执行。没有操作手机、安装、推送或发布版本。
+核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成跨进程/异步操作关联与完成证据核验；上一轮退出/销毁修复已独立提交并纳入本轮回归。设置拆分、配置更新和动作提取已完成，不重复执行。没有操作手机、安装、推送或发布版本。
 
 ## 在哪里继续
 
 | 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
 |---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；当前生命周期源码 `9e7bf9a130ffcca22735be82b2f7eb5b4b3bd870`，后续纯文档HEAD用git log核对 | 1.7.219-beta.19 / 261（验证构建，无新版交付） |
+| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；当前追踪源码 `895d17983d5c7d25c3ce94a225d7a6839b60e757`，后续纯文档HEAD用git log核对 | 1.7.219-beta.19 / 261（验证构建，无新版交付） |
 | 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
@@ -22,9 +22,24 @@
 - beta19没有安装或实机/完整Android模拟器交互证据。历史4597c7a完成设置职责移动，a064f17完成配置更新；动作提取批次与本轮生命周期均只生成编译/R8验证包，保留旧元数据，不提供为新版交付，不替换上述安装包。
 - 既有正式包1.7.218发布/设备证据保留于DEVICE_VALIDATION及归档。本轮没有重新查询GitHub Release资产/Latest状态、没有重新验签正式APK，不能用tag存在替代资产核验。
 
-原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；动作批次记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`；本轮完整要求、清单、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-exit-lifecycle`。
+原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；动作批次记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`；退出生命周期记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-exit-lifecycle`；本轮完整要求、清单、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-operation-tracing`。
 
-## 退出/销毁生命周期（本轮）
+## 跨进程/异步操作追踪（本轮）
+
+从ce857e2继续，三组Luna high分别负责取词/动作、Provider/识别窗口、中转站边界，主Agent审查和集中验证。前轮生命周期四个提交保持独立，不重做；稳定e25c667未改。未操作手机、安装、push、发布或触发云端CI。
+
+- **实现与证据修正**：沿用Root downTime、已有请求代次和logger进程实例，在会话/异步动作、Bundle/Intent/ClipDescription边界传递可选op；stage/asset、窗口请求/显示、动作本地结果、native拖放和Provider访问可关联。`startActivity succeeded`改为activity_launch_returned；PFD创建后才记descriptor_opened，明确read/delivery未知；主动host释放不同于实际观察到END。没有发现“已发送”成功Toast的代码依据，没有把历史用户现象直接认定同源或已修复。
+- **保留兼容**：中转站仍使用MediaStore Downloads兼容副本，目标访问通常不经MMGG Provider；缺少MMGG读取日志不代表失败。原Root权威/取消回放、手势状态、配置/协议、URI权限校验/grant/revoke、Bitmap/文件释放/TTL、线程/超时/重试均未改。diagnostics缺失/关闭不阻断操作；未新增全局状态机、外部依赖或逐MOVE日志。
+- **本地提交**：93e7560可选追踪基础与隐私测试；a07e5c8取词/识图/动作交接及生命周期关联；895d179中转站跨进程阶段证据。受验app tree=`420c8ef45fb060ad7f7560f73c104ecb3e674048`，后续文档提交不改变它。代码地图、责任/资源表、迟到/取消/超时判读及无私人内容合成示例见[OPERATION_TRACING](OPERATION_TRACING.md)。
+- **本轮实际验证**：针对性12类82项通过；随后`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功2m9s，121类631项0失败/错误/跳过（比前轮新增13项）。Lint0错误/180警告/2提示；Debug及实际minifyBetaWithR8、Beta APK/mapping完成。Release不是本轮命令，不用前轮Release结果充作本轮通过。
+- **行为覆盖**：默认旧动作/Bundle入口和追踪缺失、metadata/ClipData/extras内容保留、关闭日志、隐私过滤；拒绝/启动异常不误报launch返回；原授权调用/内置动作；取消迟到、新旧操作乱序/重复回调、旧动作失败不清新窗口、已进入执行器的动作在Controller销毁后仍完成；既有退出/输入/Provider/资源测试全部纳入全量。
+- **review与失败处理**：修复捕获/拖拽ID前缀不一致；适配旧反射/Shadow夹具而不改原行为断言；恢复原失败回调测试，另增成功关窗测试。首次针对性81项中2项失败分别为新PNG夹具缺平台MIME映射、新Bridge阶段断言虚构START；补正确映射，并在END先到时记录resolved_from_end_unknown，保留原callback顺序。失败XML保留，不作通过证据。
+- **验证包身份**：元数据仍为beta.19/261，只作本地编译/R8验证，不提供为新安装版本、不替换原beta19交付。APK/mapping哈希、JUnit、Lint、日志、app tree和命令保存在本任务`outputs/verification`。没有本轮实机、完整Android模拟器或云端CI证据。
+- **未覆盖/无法确认**：系统真实权限授予/撤销，SecurityCenter/Surface/Binder及ROM窗口时序，目标应用真正展示、读取完整字节及最终发送。独立/嵌入Shelf UI回调主要源码审阅，Bridge逻辑有替身测试。同asset可被多次操作复用，缺op时访问归因存在歧义；日志关闭/采集缺口不直接判失败。没有新增接收端回执，读取/发送仍保留未知。
+
+本批完成诊断边界整理，不等于修复此前微信原图、分词面板、避让或中转站发送等全部功能待办；下方原任务列表继续保留。下一轮最小范围仍可按EXIT_LIFECYCLE记录，仅对BigBangPanelSession.close与BoomChipPage布局/动画退出补可控证据，不扩到输入框架；若优先修中转站发送，先用本轮阶段记录区分native交接与接收端处理，再决定必要局部适配。
+
+## 退出/销毁生命周期（上一轮历史）
 
 从3af1c4a继续，Luna high分组审计/实施，主Agent运行修复前测试、审查最小实现与集中验证。稳定e25c667保持不动。未改DragShareActions、Root权威/UP/CANCEL、宿主取消回放、配置/UI或Bitmap/文件/URI授权释放策略。
 

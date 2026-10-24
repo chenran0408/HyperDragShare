@@ -1,5 +1,7 @@
 # 退出/销毁资源生命周期
 
+跨进程回调的op关联和完成证据见 [OPERATION_TRACING](OPERATION_TRACING.md)。追踪只借用ID和资源地址生成指纹，不持有Window/View/Context或新增释放点；既有generation/owner guard、资源释放和授权时机继续决定功能行为。
+
 本页维护退出边界与资源约定；当前提交、实际测试结果和功能待办只在 [CURRENT_STATUS](CURRENT_STATUS.md) 维护。动作执行约定见 [DRAG_ACTIONS](DRAG_ACTIONS.md)。正常动作、Bitmap/临时文件/URI授权的释放策略保持原样。
 
 ## Exit / Destroy Resource Ownership

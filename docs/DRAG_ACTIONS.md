@@ -20,7 +20,7 @@ flowchart TD
 ```
 
 - `DragShareController`：输入协调、手势状态、目标查询与选择、等待图片暂存、是否执行动作、当前 Session 的结束标记、预览/菜单/动画/清理。`launchPendingShare`仍先取走旧 Session 的 pendingTarget 再执行；原 staging 回调检查 destroyed/cancelled，不因新会话替换就丢掉已接受的旧动作。
-- `DragShareActions`：只分派已选动作并执行原动作代码；构造参数是 Context、控制器原 main Handler、同一 DragShareToast、固定的 accessibility 来源标记。入口接收 `CapturedContent payload, ShareTarget target, Uri stagedUri, float x, float y`，不持有控制器、Session、当前设置或访问内部字段的回调。
+- `DragShareActions`：只分派已选动作并执行原动作代码；构造参数是 Context、控制器原 main Handler、同一 DragShareToast、固定的 accessibility 来源标记。入口接收 `CapturedContent payload, ShareTarget target, Uri stagedUri, float x, float y, String operation`，旧签名兼容包装保留；不持有控制器、Session、当前设置或访问内部字段的回调。operation是可选日志关联，不决定是否执行。
 - `ShareLauncher`：文字/图片分享 Intent、按目标包授权和启动失败撤销授权/提示；调用启动成功只表示提交成功，不表示目标已经接收或发送。
 - `ClipboardWriter`、`LocalImageSaver`、`StashClient`：继续处理已有平台调用、线程/流和跨进程存储职责，没有新增重复的执行端体系。
 
@@ -35,7 +35,7 @@ flowchart TD
 | 分词 | text/before/after及x/y数值；主线程Provider call | Bundle保存调用数据；仍检查accepted，拒绝/异常提示沿原路径 |
 | OCR/扫码 | URI、qr标记；主线程startActivity | 维持显式Activity、hosted_uri、qr、image/*、ClipData与read flag；Activity与overlay接续原输入处理 |
 
-执行器不复制/回收Bitmap，不在完成回调删除文件或撤销成功授权。worker闭包持有本次payload/Bitmap/URI的强引用，不回读后来替换的Session。正常手势结束和新手势开始没有新增recycle；原拒绝无物理Root/按压接管分支保持原样。
+执行器不复制/回收Bitmap，不在完成回调删除文件或撤销成功授权。worker闭包持有本次payload/Bitmap/URI及operation的快照，不回读后来替换的Session。正常手势结束和新手势开始没有新增recycle；原拒绝无物理Root/按压接管分支保持原样。两条链路与阶段上限见 [操作追踪](OPERATION_TRACING.md)，launch返回不等于目标已打开或发送。
 
 暂存文件由模块Provider拥有；导入失败清理tmp，原SharedImageCleanupJob按24小时阈值、12小时任务和导入前清理回收过期文件/授权。该策略不是永久授权或活动动作租约；本批不改变它。中转站持久文件和用户保存的图库图片不属于暂存清理范围。不要为了窗口整理在下一次手势或动作完成时提前删除/撤销已提交动作的数据。
 
