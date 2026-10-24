@@ -106,6 +106,10 @@ proc=module-example op=stash-example-3 stage=bridge_drop_result outcome=accepted
 
 ## 验证入口与后续实机清单
 
+微信来源判断另记录固定枚举：`capture_kind`区分wechat/other、文字/图片及PORTAL_MEDIA/SCREEN_CAPTURE/UNKNOWN；`image_drag rejected_*`保留拒绝阶段与来源，`portal_capture`保留缺少载荷、位图引用不符、读取失败或接管结果。事件只在捕获/动作边界产生，不逐MOVE记录。Portal适配器无现有操作ID时使用`op=-`，不能仅凭时间相近强行归到某次按压。缺少Portal事件也不能证明宿主没有返回；需核对日志是否覆盖该进程及完整操作。
+
+这些固定字段可进入诊断ZIP；原始自由日志仍过滤，不为排查微信导出正文、图片或URI。参考源码和原图/裁剪图边界见[微信图片参考对照](WECHAT_IMAGE_REFERENCE.md)。
+
 `OperationTraceTest`验证可选metadata、内容/extras不变、日志关闭、隐私过滤、进程/操作分离与描述符证据上限。Actions、ActionLifecycle、Bridge、Provider及前轮退出测试覆盖原功能与失败、重复、乱序、取消迟到、关窗后的已接受动作。完整命令和本轮结果见CURRENT_STATUS；Robolectric不证明系统URI权限真的授予/撤销。
 
 本轮不操作设备；后续用户实机回归最小清单：

@@ -1,12 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成A方案统一反馈与诊断、触控报告导出修复并交付beta20；此前生命周期和跨进程追踪已纳入交付及回归。设置拆分、配置更新和动作提取已完成，不重复执行。没有操作手机、安装、推送或发布版本。
+核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮对比用户参考源码，按最新授权加入明确标注的微信图片节点缩略图兼容拖拽，交付beta21；原图获取与中转站接收仍未闭环。此前诊断、生命周期、配置和动作整理已保留，不重复执行。没有操作手机、安装、推送或发布版本。
 
 ## 在哪里继续
 
 | 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
 |---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；beta20交付源码 `118835ba16157d79b1311ddb5b4756c8b57dbab7`，后续纯文档HEAD用git log核对 | 1.7.219-beta.20 / 262 |
+| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；beta21交付源码 `6669d1739921c396ea54258e4b12712619fd1862`，后续纯文档HEAD用git log核对 | 1.7.219-beta.21 / 263 |
 | 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
@@ -15,7 +15,17 @@
 
 ## 交付身份与验证边界
 
-最新可安装候选：`D:/CODEX/Tasks/2026-10-24/mmgg-unified-diagnostics/outputs/beta20/MMGG-1.7.219-beta.20.apk`，beta20/262，4,914,725 bytes；SHA256 `1FC0D43850FDEF6453D82018CF185B9385FDECFE9EC6569C226A92FEE4D4F90A`。
+最新可安装候选：`D:/CODEX/Tasks/2026-10-24/mmgg-beta20-wechat-image/outputs/beta21/MMGG-1.7.219-beta.21.apk`，beta21/263，4,914,721 bytes；SHA256 `E8825825E88120C8C07DF27A258374A1C117DDE437D1FFFFB83E9B03C5CB0F54`。
+
+- 源码6669d17，app tree `0448ebda42368122f857bf23d341f86753e2aac2`，main tree `7433ff25ecbab027e1d882aa6e3cf16f39e5d0d8`；交付tag固定该源码，不以之后文档HEAD代替APK身份。aapt实际核对包名/版本，apksigner v2通过，证书SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，与留存beta20重新验签一致（Android Debug，不推定与正式包同签）。
+- 本轮最终`testDebugUnitTest lintDebug assembleDebug assembleBeta`通过1m56s，127类678项JVM/Robolectric测试0失败/错误/跳过，Lint0错误180警告2提示，Debug与实际minifyBetaWithR8完成。受影响7类77项先通过43s。早期诊断测试夹具4失败及编译失败有记录，修夹具不改旧断言；ef76f85中间态整链不充作最终源码结果。
+- f651f89补固定图片来源/Portal/拒绝原因进入诊断ZIP，避免原自由日志过滤后无法分辨；ef76f85增版；6669d17按用户后续决定新增NODE_THUMBNAIL，只接收现有校验的微信图片节点裁剪，所有预览持续标“缩略图”。没有修改Root权威、RPC、配置、授权、释放、窗口触摸和动画策略；Portal媒体仍优先，泛OCR/普通截图/UNKNOWN继续拒绝。
+- 没有实机、完整模拟器交互、现代Compose渲染或接收方读/发送证据。节点被微信隐藏时仍可能不可拖；缩略图不是原文件。独立中转站→微信失败暂无本次stash阶段，未宣称已修；旧MediaStore兼容副本保持。
+- 参考与后续面板地图见[WECHAT_IMAGE_REFERENCE](WECHAT_IMAGE_REFERENCE.md)。用户参考App本身没有中转站，不能把残留源码视为实际运行入口。436面板移植/交互验收仍待做。完整任务、清单、恢复、构建/测试/签名/哈希及用户回归说明在`D:/CODEX/Tasks/2026-10-24/mmgg-beta20-wechat-image`。
+
+### 上一份beta20交付（历史证据）
+
+`D:/CODEX/Tasks/2026-10-24/mmgg-unified-diagnostics/outputs/beta20/MMGG-1.7.219-beta.20.apk`，beta20/262，4,914,725 bytes；SHA256 `1FC0D43850FDEF6453D82018CF185B9385FDECFE9EC6569C226A92FEE4D4F90A`。
 
 - 源码118835b，交付app tree `c2dd5527224bb4e52d1750e06fa02255368dae8f`；本地tag `delivered/mmgg-1.7.219-beta.20`固定该提交。后续文档或单独测试不改变此已交付APK，源码身份以tag/清单为准。
 - 实际aapt核对包名com.leaf.hyperdragshare.codex、版本beta20/262；apksigner v2通过，证书SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，Android Debug，与留存beta19实际证书一致。未推定与正式包同签，未安装手机。
@@ -31,7 +41,7 @@
 
 原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；动作批次记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`；退出生命周期记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-exit-lifecycle`；操作追踪记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-operation-tracing`；本轮完整要求、清单、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-unified-diagnostics`。
 
-## 统一反馈与诊断、触控导出（本轮）
+## 统一反馈与诊断、触控导出（beta20历史）
 
 从ed97696干净Beta线继续，三组Luna high按后端、导航页面、触控专项分工，主Agent review和集中验证；稳定e25c667未改。无手机操作、安装、push或发布；本地交付tag只保存源码身份。
 
@@ -142,8 +152,8 @@
 |---|---|---|
 | H02-IMAGE-FROZEN-1024 | beta19两处代码缺陷修复、逻辑通过；用户现场待验 | 59fd022修触摸源选择、5e5a4e3阻止show(-1)。beta17日志缺启动选中源，event7错误选择是强候选而非实机证实；复测同页面拖动/松手、ready源/显示/旋转。运行中切屏、同形屏/异常坐标比例未覆盖 |
 | N03/B06及PANEL/FLICKER/PRESS-STABILITY | 部分实现，未验收 | fd80f87部分上游资源/排布；4dcd4d5/1bcabc6防跳动逻辑通过。继续按用户角度模拟滑选/取消/拖出/恢复、工具栏位置/边缘/滚动；不能宣称完整移植 |
-| N05/B04/WX-ORIGIN/HISTORY | 微信分词用户确认有效，原媒体能力未完成 | edbb9d9只拒绝截图/未知来源。对照旧Portal原生Bitmap及同手势交接条件；缺现场payload来源/接受时序；不伪装系统朗读服务、不把截图改名原图 |
-| N06/END2END | 用户已能拖出，但微信/QQ松手无变化 | 51e8d08宿主穿透候选已实施，须分清start/transfer/drop/accepted、目标内容读取与最终发送；独立中转站曾成功是历史对照，不等于嵌入式已成功 |
+| N05/B04/WX-ORIGIN/HISTORY | 微信分词用户确认有效；原媒体未完成；新增已授权缩略图兼容候选 | 6669d17只开放校验后的图片节点裁剪并持续标缩略图，泛OCR/普通截图/UNKNOWN仍拒绝。用户现场与节点可读性待验证；不把截图改名原图，不恢复系统朗读服务 |
+| N06/END2END | 用户明确独立中转站拖进微信无变化，接收端仍未修复确认 | beta20包未观察到stash阶段，不能归因安全中心。旧版独立入口单图成功是历史对照；现版准备/native/drop/read/display/send仍须分阶段核对，MediaStore读不经过MMGG Provider |
 | N07、B04接收/原图比对 | 受N06影响待验 | 底边几何修复不替代目标接收；待中转站闭环后比对 |
 | B03/N02/B07/REGRESSION | beta18恢复beta12旧语音/倍速disabled态避让，逻辑证实 | db41204收紧enabled导致代码回退，585c162修复。实际应用节点状态未取得；音视频拖条、录音/拍摄、无元数据自绘控件仍需实测；不要按关键词屏蔽普通正文 |
 | F03/N09 | 侧滑/窗外点击开关源码和逻辑已修 | 83048f8；单/双击、方向、横竖屏、系统侧栏冲突与真实手感未覆盖 |

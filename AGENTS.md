@@ -23,7 +23,7 @@
 8. 配置由模块UID私有SharedPreferences保存，Provider受限读取；不改world-readable、不清用户数据/重置配置掩盖问题。边缘距离按dp，速度按dp/s；数据库schema2不能直接搭配schema1旧包降级，先保留对应数据备份。
 9. 分享图片保留 `data`、`EXTRA_STREAM`、`ClipData`、MIME与read grant组合。ShareImageProvider的UUID能力URI＋显式grant及允许系统代理二次转发的openFile语义不能随意收紧；stage/grant/revoke仍限制模块/Portal UID。勿把公开图库副本默认开启。
 10. 用户目标是内容直接拖放至当前聊天，接收方决定处理；不恢复StashTextDropWindow填框透明层或ShareImgUI联系人选择器替代。drop accepted/startActivity成功不等于接收或发送成功。取消/拒绝保留内容和选区；图文混选未支持时明确拒绝。
-11. 不把截图/OCR区域冒充微信原媒体。当前只信任验证过的Portal媒体来源；无节点时局部OCR仍核验WMS包名、可见范围、安全遮挡、锁屏和黑名单。节点只在明确请求、按压分类/确认或主动点取时读取，不空闲遍历或截图。
+11. 不把截图/OCR区域冒充微信原媒体。原媒体只信任验证过的Portal来源；用户2026-10-24明确允许准确图片节点边界的兼容裁剪，必须保留NODE_THUMBNAIL来源并持续标注“缩略图”，不得开放泛OCR区域或UNKNOWN图片拖拽。无节点时局部OCR仍核验WMS包名、可见范围、安全遮挡、锁屏和黑名单。节点只在明确请求、按压分类/确认或主动点取时读取，不空闲遍历或截图。
 12. UiAutomation只有一个注册位；Root取词租约存在时不运行 `uiautomator dump`、不抢断其他会话。点取和普通按压分别验收。剪贴板文字/URI仅经stdin，不改AppOps掩盖失败，不清理用户暂存或照片。
 13. 采用现有Miuix主题和组件，保留功能/配置及返回、编辑、取消选择语义。近手菜单依据左右拖向选边；固定边及跟随边模式保留。动作栏当前实现不代表完整上游交互已验收，详见CURRENT_STATUS。
 14. 原生复制提醒/复制直达沿用系统入口；不恢复旧自绘全局气泡或全局剪贴板Hook。不绕过小米翻译CTA，不把Root UID0当system UID1000。现代玻璃有支持限制与回退，不能承诺所有ROM。
@@ -61,6 +61,7 @@ git diff --check
 - 拖拽动作执行、线程与资源边界：[DRAG_ACTIONS](docs/DRAG_ACTIONS.md)。
 - 两条跨进程链路、操作关联与完成证据：[OPERATION_TRACING](docs/OPERATION_TRACING.md)。
 - 统一反馈页、诊断ZIP和触控报告导出：[DIAGNOSTICS](docs/DIAGNOSTICS.md)。
+- 微信图片参考源码、原图与裁剪图区别、后续分词面板来源：[WECHAT_IMAGE_REFERENCE](docs/WECHAT_IMAGE_REFERENCE.md)。
 - 窗口退出、异步回调与资源归属：[EXIT_LIFECYCLE](docs/EXIT_LIFECYCLE.md)。
 - 实现专题：[IMPLEMENTATION](docs/IMPLEMENTATION.md)、[STASH](docs/STASH.md)、[FANFREEFORM_INTEGRATION](docs/FANFREEFORM_INTEGRATION.md)、[DEVICE_VALIDATION](docs/DEVICE_VALIDATION.md)。这些包含历史阶段，先核对日期/提交，不把旧“下一步”当当前任务。
 - 整理前完整AGENTS与旧进展：[历史归档索引](docs/archive/2026-10-24/README.md)。
