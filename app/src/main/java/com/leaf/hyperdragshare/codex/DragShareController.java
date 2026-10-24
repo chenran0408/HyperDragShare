@@ -507,6 +507,7 @@ final class DragShareController {
             if (session != null) {
                 session.cancelled = true;
             }
+            disposeModernOverlayPrewarm();
             stopEdgeScroll();
             backgroundTouchBlocker.stop();
             removeGestureViews();
@@ -669,6 +670,10 @@ final class DragShareController {
 
                             @Override
                             public void onDraw() {
+                                if (destroyed || modernOverlayPrewarmView != warmupView
+                                        || modernOverlayPrewarmWindow != warmupWindow) {
+                                    return;
+                                }
                                 if (finishPosted) {
                                     return;
                                 }
@@ -697,10 +702,10 @@ final class DragShareController {
             ModernOverlayWindow warmupWindow,
             ViewTreeObserver.OnDrawListener drawListener,
             long started) {
+        if (destroyed || modernOverlayPrewarmView != warmupView
+                || modernOverlayPrewarmWindow != warmupWindow) return;
         ViewTreeObserver observer = warmupView.getViewTreeObserver();
         if (observer.isAlive()) observer.removeOnDrawListener(drawListener);
-        if (modernOverlayPrewarmView != warmupView
-                || modernOverlayPrewarmWindow != warmupWindow) return;
         modernOverlayPrewarmDrawListener = null;
         modernOverlayPrewarmView = null;
         modernOverlayPrewarmWindow = null;

@@ -6,9 +6,11 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.view.DragEvent
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
@@ -41,9 +43,23 @@ internal class InteractiveOverlayWindow(
     private var dismissAfterDrag = false
     private val dragView get() = if (embeddedHost == null) window.decorView else composeView
     private val touchRegionId = OverlayTouchRegions.newWindowId()
+    private var observedView: View? = null
     private var observedTree: android.view.ViewTreeObserver? = null
+    private var pressConfirmedView: View? = null
+    private var pressConfirmedObserver: ViewTreeObserver? = null
+    private var pressConfirmedDrawListener: ViewTreeObserver.OnDrawListener? = null
+    private var pressConfirmedPostedCallback: Runnable? = null
     private val touchRegionListener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
         publishTouchRegion()
+    }
+    private val viewAttachStateListener = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) {
+            if (!disposed && view === observedView) updateObserverOwners(view)
+        }
+
+        override fun onViewDetachedFromWindow(view: View) {
+            if (view === observedView) unbindViewTreeListeners(view)
+        }
     }
 
     init {
@@ -74,8 +90,10 @@ internal class InteractiveOverlayWindow(
         check(!disposed) { "Create a new interactive window after dismissal" }
         if (embeddedHost != null) return embeddedHost.show(composeView)
         return try {
-            dialog.show()
             val decor = window.decorView
+            observedView = decor
+            decor.addOnAttachStateChangeListener(viewAttachStateListener)
+            dialog.show()
             val nextTree = decor.viewTreeObserver
             if (observedTree !== nextTree) {
                 observedTree?.let { if (it.isAlive) it.removeOnGlobalLayoutListener(touchRegionListener) }
@@ -85,22 +103,40 @@ internal class InteractiveOverlayWindow(
             if (pressConfirmedAt > 0L) {
                 val view = window.decorView
                 val observer = view.viewTreeObserver
-                observer.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+                val listener = object : ViewTreeObserver.OnDrawListener {
                     private var delivered = false
+
                     override fun onDraw() {
-                        if (delivered) return
+                        if (disposed || pressConfirmedDrawListener !== this || delivered) return
                         delivered = true
                         // Queue after drawing; never announce success before a window exists.
-                        view.post {
-                            if (observer.isAlive) observer.removeOnDrawListener(this)
-                            if (!disposed && view.isShown) {
+                        lateinit var callback: Runnable
+                        callback = Runnable {
+                            if (disposed || pressConfirmedDrawListener !== this ||
+                                pressConfirmedPostedCallback !== callback) return@Runnable
+                            removePressConfirmedDrawListener(
+                                view,
+                                pressConfirmedObserver ?: observer,
+                                this,
+                            )
+                            pressConfirmedView = null
+                            pressConfirmedObserver = null
+                            pressConfirmedDrawListener = null
+                            pressConfirmedPostedCallback = null
+                            if (view.isShown) {
                                 view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                                 DragShareLog.i("DragShare/Press", "window first draw confirmedToFrameMs=" +
                                     (android.os.SystemClock.uptimeMillis() - pressConfirmedAt))
                             }
                         }
+                        pressConfirmedPostedCallback = callback
+                        view.post(callback)
                     }
-                })
+                }
+                pressConfirmedView = view
+                pressConfirmedObserver = observer
+                pressConfirmedDrawListener = listener
+                observer.addOnDrawListener(listener)
             }
             true
         } catch (error: WindowManager.BadTokenException) {
@@ -205,8 +241,16 @@ internal class InteractiveOverlayWindow(
     private fun dispose() {
         if (disposed) return
         disposed = true
-        observedTree?.let { if (it.isAlive) it.removeOnGlobalLayoutListener(touchRegionListener) }
-        observedTree = null
+        val view = observedView ?: pressConfirmedView
+        if (view != null) {
+            unbindViewTreeListeners(view)
+            view.removeOnAttachStateChangeListener(viewAttachStateListener)
+        }
+        observedView = null
+        pressConfirmedView = null
+        pressConfirmedObserver = null
+        pressConfirmedDrawListener = null
+        pressConfirmedPostedCallback = null
         if (embeddedHost == null) OverlayTouchRegions.update(dialog.context, touchRegionId, null)
         dragView.setOnDragListener(null)
         dragWindowAttributes = null
@@ -215,6 +259,49 @@ internal class InteractiveOverlayWindow(
         viewModelStore.clear()
         embeddedHost?.release()
         onDismissed()
+    }
+
+    private fun updateObserverOwners(view: View) {
+        val currentObserver = view.viewTreeObserver
+        if (observedTree != null) observedTree = currentObserver
+        if (pressConfirmedObserver != null) pressConfirmedObserver = currentObserver
+    }
+
+    private fun unbindViewTreeListeners(view: View) {
+        val globalObserver = observedTree
+        if (globalObserver != null) {
+            if (globalObserver.isAlive) globalObserver.removeOnGlobalLayoutListener(touchRegionListener)
+            val currentObserver = view.viewTreeObserver
+            if (currentObserver !== globalObserver && currentObserver.isAlive) {
+                currentObserver.removeOnGlobalLayoutListener(touchRegionListener)
+            }
+        }
+        observedTree = null
+
+        val drawListener = pressConfirmedDrawListener
+        val drawObserver = pressConfirmedObserver
+        if (drawListener != null && drawObserver != null) {
+            removePressConfirmedDrawListener(view, drawObserver, drawListener)
+        }
+        pressConfirmedObserver = null
+
+        val callback = pressConfirmedPostedCallback
+        if (callback != null) view.removeCallbacks(callback)
+        pressConfirmedPostedCallback = null
+        pressConfirmedDrawListener = null
+        pressConfirmedView = null
+    }
+
+    private fun removePressConfirmedDrawListener(
+        view: View,
+        registeredObserver: ViewTreeObserver,
+        listener: ViewTreeObserver.OnDrawListener,
+    ) {
+        if (registeredObserver.isAlive) registeredObserver.removeOnDrawListener(listener)
+        val currentObserver = view.viewTreeObserver
+        if (currentObserver !== registeredObserver && currentObserver.isAlive) {
+            currentObserver.removeOnDrawListener(listener)
+        }
     }
 
     private fun publishTouchRegion() {
