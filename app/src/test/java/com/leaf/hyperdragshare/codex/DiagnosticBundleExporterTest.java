@@ -152,6 +152,28 @@ public final class DiagnosticBundleExporterTest {
         assertFalse(safe.contains("xxxxxxxx"));
     }
 
+    @Test public void imageSourceAndRejectionRemainVisibleInExportWithoutRawContent() throws Exception {
+        File raw = new File(directory, "image-decision.log");
+        String prefix = "2026-10-24 18:10:00.123 I pid=44 uid=0 thread=main ";
+        Files.write(raw.toPath(), (prefix + "DragShare/Operation: proc=mod-44 op=press-44-2 "
+                + "stage=capture_kind outcome=wechat_image_screen_capture asset=-\n"
+                + prefix + "DragShare/Operation: proc=mod-44 op=press-44-2 "
+                + "stage=image_drag outcome=rejected_ocr_region_drag_screen_capture asset=-\n"
+                + prefix + "DragShare/Press: source=com.tencent.mm body=private-chat "
+                + "image=content://private/image\n").getBytes(StandardCharsets.UTF_8));
+
+        String filtered = DiagnosticBundleExporter.filterRuntimeLog(raw);
+        DiagnosticBundleExporter.Result result = DiagnosticBundleExporter.writeBundle(
+                directory, validStateSummary(), validCompatibility(), null, filtered, null);
+        String exported = readZip(result.file).get("runtime-log.txt");
+
+        assertTrue(exported.contains("stage=capture_kind outcome=wechat_image_screen_capture"));
+        assertTrue(exported.contains("stage=image_drag outcome=rejected_ocr_region_drag_screen_capture"));
+        assertFalse(exported.contains("com.tencent.mm"));
+        assertFalse(exported.contains("private-chat"));
+        assertFalse(exported.contains("content://"));
+    }
+
     @Test public void runtimeFilterRetainsLatestTracesWhenStructuredDataExceedsBudget() throws Exception {
         File raw = new File(directory, "many-traces.log");
         StringBuilder content = new StringBuilder(2_000_000);

@@ -19,9 +19,13 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
 import org.robolectric.shadows.ShadowContentResolver;
+import org.robolectric.shadows.ShadowLog;
 import org.robolectric.shadows.ShadowLooper;
 
 import java.lang.reflect.Field;
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
@@ -185,8 +189,8 @@ public final class PressPreviewHandoffTest {
         field(source, "downTime").setLong(source, 100L);
         ((PressTriggerDetector) field(source, "detector").get(source)).start(20f, 30f, 100L, 500L);
         Bitmap bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
-        CapturedContent content = CapturedContent.image(
-                bitmap, "com.tencent.mm", new Rect(0, 0, 2, 2), true);
+        CapturedContent content = CapturedContent.portalMediaImage(
+                bitmap, "com.tencent.mm", new Rect(0, 0, 2, 2));
 
         try {
             assertTrue(source.acceptWeChatPortalContent(content));
@@ -256,8 +260,8 @@ public final class PressPreviewHandoffTest {
         field(source, "pendingWeChat").set(source, pending);
         ((PressTriggerDetector) field(source, "detector").get(source))
                 .start(20f, 30f, 100L, 500L);
-        CapturedContent actualPortalImage = CapturedContent.image(
-                portalImage, "com.tencent.mm", new Rect(10, 20, 200, 220), true);
+        CapturedContent actualPortalImage = CapturedContent.portalMediaImage(
+                portalImage, "com.tencent.mm", new Rect(10, 20, 200, 220));
 
         try {
             assertTrue(source.acceptWeChatPortalContent(actualPortalImage));
@@ -313,6 +317,8 @@ public final class PressPreviewHandoffTest {
 
     @Test public void completedWeChatOcrDoesNotDragTheFallbackScreenshot() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
+        DragShareLog.configure(DragShareSettings.defaults());
+        ShadowLog.clear();
         DragShareController controller = controller();
         down(controller, 100L);
         PressCaptureSource source = new PressCaptureSource(
@@ -334,6 +340,8 @@ public final class PressPreviewHandoffTest {
             assertNull(field(controller, "session").get(controller));
             assertTrue(screenshot.isRecycled());
             assertNull(field(source, "pendingWeChat").get(source));
+            assertTrue(filteredOperationMessages().contains(
+                    "stage=image_drag outcome=rejected_ocr_region_drag_screen_capture"));
         } finally {
             source.stop();
             controller.destroy();
@@ -343,6 +351,8 @@ public final class PressPreviewHandoffTest {
     }
 
     @Test public void accessibilityImageScreenshotIsNotPresentedAsAWeChatOriginal() throws Exception {
+        DragShareLog.configure(DragShareSettings.defaults());
+        ShadowLog.clear();
         DragShareController controller = controller();
         down(controller, 100L);
         PressCaptureSource source = new PressCaptureSource(
@@ -360,6 +370,9 @@ public final class PressPreviewHandoffTest {
 
             assertNull(field(controller, "session").get(controller));
             assertTrue(screenshot.isRecycled());
+            assertTrue(operationMessages().contains(
+                    "stage=image_drag outcome=rejected_image_candidate_screen_capture"));
+            assertFalse(operationMessages().contains("com.tencent.mm"));
         } finally {
             source.stop();
             controller.destroy();
@@ -493,5 +506,28 @@ public final class PressPreviewHandoffTest {
         Field field = object.getClass().getDeclaredField(name);
         field.setAccessible(true);
         return field;
+    }
+
+    private static String operationMessages() {
+        StringBuilder messages = new StringBuilder();
+        for (ShadowLog.LogItem item : ShadowLog.getLogsForTag("DragShare/Operation")) {
+            messages.append(item.msg).append('\n');
+        }
+        return messages.toString();
+    }
+
+    private static String filteredOperationMessages() throws Exception {
+        File raw = File.createTempFile("wechat-image-rejection", ".log");
+        try {
+            StringBuilder log = new StringBuilder();
+            for (ShadowLog.LogItem item : ShadowLog.getLogsForTag("DragShare/Operation")) {
+                log.append("2026-10-24 12:30:01.123 I pid=44 uid=0 thread=main DragShare/Operation: ")
+                        .append(item.msg).append('\n');
+            }
+            Files.write(raw.toPath(), log.toString().getBytes(StandardCharsets.UTF_8));
+            return DiagnosticBundleExporter.filterRuntimeLog(raw);
+        } finally {
+            Files.deleteIfExists(raw.toPath());
+        }
     }
 }

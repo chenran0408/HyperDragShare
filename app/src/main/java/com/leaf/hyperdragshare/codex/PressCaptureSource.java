@@ -207,8 +207,18 @@ final class PressCaptureSource {
                 && controller.canContinuePress(downTime);
         boolean isWeChatSource = content != null
                 && "com.tencent.mm".equals(content.sourcePackage);
-        if (!ownsCurrentPress || !isWeChatSource
-                || !settings.isSharingEnabled(content.isImage())) return false;
+        if (!ownsCurrentPress) {
+            OperationTrace.event(operationId(), "portal_capture", "rejected_press_not_owned");
+            return false;
+        }
+        if (!isWeChatSource) {
+            OperationTrace.event(operationId(), "portal_capture", "rejected_other_source");
+            return false;
+        }
+        if (!settings.isSharingEnabled(content.isImage())) {
+            OperationTrace.event(operationId(), "portal_capture", "rejected_sharing_disabled");
+            return false;
+        }
         OperationTrace.event(operationId(), "portal_capture", "accepted");
         PendingWeChat pending = pendingWeChat;
         if (!content.isImage() && pending != null && pending.textWindowAccepted) {
@@ -311,6 +321,8 @@ final class PressCaptureSource {
                 CapturedContent content = result.content;
                 OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture",
                         content == null ? "empty" : "returned");
+                OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture_kind",
+                        captureKindOutcome(content));
                 DragShareLog.i(TAG, "press capture returned elapsed_ms="
                         + (SystemClock.elapsedRealtime() - lookupStarted)
                         + " kind=" + (content == null ? "none" : content.isImage() ? "image" : "text"));
@@ -438,6 +450,7 @@ final class PressCaptureSource {
 
     private void openImage(long request, CapturedContent content) {
         if (content.pressOcrRegion && "com.tencent.mm".equals(content.sourcePackage)) {
+            OperationTrace.event(operationId(), "image_decision", "wechat_ocr_region");
             openWeChatOcrDirect(request, content);
             return;
         }
@@ -446,11 +459,13 @@ final class PressCaptureSource {
             return;
         }
         if (!pointerDown) {
+            OperationTrace.event(operationId(), "image_decision", "pointer_released");
             DragShareLog.i(TAG, "image press ended before drag preview was ready");
             recycle(content);
             controller.endPressPipeline(downTime);
             return;
         }
+        OperationTrace.event(operationId(), "image_decision", "menu_" + captureKindOutcome(content));
         DragShareLog.i(TAG, "image press handed to drag menu source=" + content.sourcePackage);
         controller.show(content, controller.latestPointerX(), controller.latestPointerY(), settings);
     }
@@ -460,6 +475,7 @@ final class PressCaptureSource {
             rejectWeChatScreenCapture(content, "drag_before_ocr");
             return;
         }
+        OperationTrace.event(operationId(), "wechat_ocr", "started");
         PendingWeChat pending = new PendingWeChat(content, request, operationId());
         pendingWeChat = pending;
         startTouchBlocker(request);
@@ -488,6 +504,7 @@ final class PressCaptureSource {
                 && settings.isSharingEnabled(false)
                 && pending.text != null && !pending.text.isBlank()) {
             if (pending.textWindowAccepted && !dismissWeChatTextWindow()) {
+                OperationTrace.event(pending.operation, "wechat_drag", "rejected_window_not_dismissed");
                 showFailure("无法收起本次分词窗口，文字拖拽未接管");
                 return;
             }
@@ -500,12 +517,14 @@ final class PressCaptureSource {
             recycle(pending.content);
             DragShareLog.i(TAG, "WeChat OCR text moved to drag menu elapsedFromConfirmMs="
                     + (SystemClock.uptimeMillis() - confirmedAt));
+            OperationTrace.event(pending.operation, "wechat_drag", "ocr_text_takeover");
             // The takeover API accepts either payload kind; it restores this Root press
             // after the BigBang text window handed it off.
             controller.showContentForPressTakeover(text, x, y, settings, downTime);
             return;
         }
         if (pending.textWindowAccepted && !dismissWeChatTextWindow()) {
+            OperationTrace.event(pending.operation, "wechat_drag", "rejected_window_not_dismissed");
             showFailure("无法收起本次分词窗口，图片拖拽未接管");
             return;
         }
@@ -534,6 +553,7 @@ final class PressCaptureSource {
         }
         blocker.stopAsync();
         if (bitmap == null) {
+            OperationTrace.event(pending.operation, "wechat_drag", "image_copy_failed");
             if (pending.ocrComplete) recycle(source);
             controller.endPressPipeline(downTime);
             showFailure("无法准备拖拽图片");
@@ -629,7 +649,20 @@ final class PressCaptureSource {
                 && content.imageOrigin != CapturedContent.ImageOrigin.PORTAL_MEDIA;
     }
 
+    private static String captureKindOutcome(CapturedContent content) {
+        if (content == null) return "unknown";
+        String source = "com.tencent.mm".equals(content.sourcePackage) ? "wechat" : "other";
+        if (!content.isImage()) return source + "_text";
+        switch (content.imageOrigin) {
+            case PORTAL_MEDIA: return source + "_image_portal_media";
+            case SCREEN_CAPTURE: return source + "_image_screen_capture";
+            default: return source + "_image_unknown";
+        }
+    }
+
     private void rejectWeChatScreenCapture(CapturedContent content, String stage) {
+        OperationTrace.event(operationId(), "image_drag", "rejected_" + stage + "_"
+                + (content == null ? "unknown" : content.imageOrigin.name().toLowerCase(java.util.Locale.ROOT)));
         DragShareLog.i(TAG, "WeChat image drag rejected source="
                 + (content == null ? "unknown" : content.imageOrigin.name())
                 + " stage=" + stage);

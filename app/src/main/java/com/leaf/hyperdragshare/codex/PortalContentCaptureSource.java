@@ -29,15 +29,18 @@ final class PortalContentCaptureSource {
 
     static CapturedContent capture(Object taplusService, DragShareSettings settings) {
         if (taplusService == null) {
+            traceCaptureOutcome(null, "missing_payload");
             return null;
         }
         Class<?> serviceClass = taplusService.getClass();
+        String sourcePackage = null;
         try {
-            String sourcePackage = (String) XposedHelpers.callStaticMethod(serviceClass, "getInjectorPackage");
+            sourcePackage = (String) XposedHelpers.callStaticMethod(serviceClass, "getInjectorPackage");
             if (BuildConfig.APPLICATION_ID.equals(sourcePackage)) return null;
             android.content.Context context = (android.content.Context) taplusService;
             if (AccessibilityBlacklist.isBlocked(context, settings, sourcePackage)
                     || GameCapturePolicy.shouldPause(context, settings, sourcePackage)) {
+                traceCaptureOutcome(sourcePackage, "ignored_by_policy");
                 DragShareLog.i("DragShare/PortalCapture",
                         "portal content ignored source=" + sourcePackage + " reason=excluded_source");
                 return null;
@@ -46,17 +49,21 @@ final class PortalContentCaptureSource {
             Object textMode = XposedHelpers.getStaticObjectField(serviceClass, "sIsTextMode");
             if (Boolean.TRUE.equals(textMode)) {
                 String value = (String) XposedHelpers.getStaticObjectField(serviceClass, "sContent");
-                return CapturedContent.text(value, sourcePackage, sourceBounds);
+                CapturedContent content = CapturedContent.text(value, sourcePackage, sourceBounds);
+                traceCaptureOutcome(sourcePackage, content == null ? "missing_payload" : "accepted_text");
+                return content;
             }
             Object result = XposedHelpers.getStaticObjectField(serviceClass, "mCatcherResult");
             Bundle imageMode = imagePickMode(result);
             if (!hasCurrentImagePayload(imageMode)) {
+                traceCaptureOutcome(sourcePackage, "missing_payload");
                 DragShareLog.i("DragShare/PortalCapture",
                         "portal image ignored source=" + sourcePackage + " reason=missing_image_payload");
                 return null;
             }
             Bitmap value = (Bitmap) XposedHelpers.callStaticMethod(serviceClass, "getBitmap");
             if (!matchesCurrentImageBitmap(imageMode, value)) {
+                traceCaptureOutcome(sourcePackage, "stale_bitmap");
                 DragShareLog.i("DragShare/PortalCapture",
                         "portal image ignored source=" + sourcePackage + " reason=stale_bitmap");
                 return null;
@@ -69,15 +76,26 @@ final class PortalContentCaptureSource {
                             + " origin=" + imageOrigin(imageMode)
                             + " bounds=" + sourceBounds
                             + " bitmap=" + snapshot.getWidth() + "x" + snapshot.getHeight());
-            return CapturedContent.portalMediaImage(snapshot, sourcePackage, sourceBounds);
+            CapturedContent content = CapturedContent.portalMediaImage(snapshot, sourcePackage, sourceBounds);
+            if (content != null) {
+                traceCaptureOutcome(sourcePackage, "accepted_image_" + imageOrigin(imageMode));
+            }
+            return content;
         } catch (NoSuchFieldError | NoSuchMethodError | XposedHelpers.InvocationTargetError | RuntimeException error) {
-            DragShareLog.w("DragShare/PortalCapture", "Unable to read portal 5.1.5 content; keeping host behavior", error);
+            traceCaptureOutcome(sourcePackage, "read_error");
+            DragShareLog.w("DragShare/PortalCapture", "Unable to read portal 5.1.5 content error="
+                    + error.getClass().getSimpleName() + "; keeping host behavior");
             if (taplusService instanceof android.content.Context) {
                 android.widget.Toast.makeText((android.content.Context) taplusService,
                         "无法读取传送门内容，请查看模块日志", android.widget.Toast.LENGTH_LONG).show();
             }
             return null;
         }
+    }
+
+    private static void traceCaptureOutcome(String sourcePackage, String outcome) {
+        String source = "com.tencent.mm".equals(sourcePackage) ? "wechat" : "other";
+        OperationTrace.event("-", "portal_capture", source + "_" + outcome);
     }
 
     private static Bundle imagePickMode(Object result) {
