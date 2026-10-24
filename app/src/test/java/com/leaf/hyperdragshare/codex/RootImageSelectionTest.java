@@ -112,6 +112,103 @@ public final class RootImageSelectionTest {
         assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(inert), 30, 30, "reader"));
     }
 
+    @Test public void compactVideoSpeedLabelsBlockOnlyTheirScopedInteractiveControl() {
+        for (String labelText : List.of("倍速", "2x", "2.0x", "2倍速", "长按快进2x")) {
+            AccessibilityNodeSnapshot label = node("android.widget.TextView", "reader")
+                    .bounds(new Rect(20, 20, 200, 100)).text(labelText).depth(1).build();
+            AccessibilityNodeSnapshot control = node("android.view.ViewGroup", "reader")
+                    .clickable(true).leaf(false).depth(0).build();
+            assertTrue(labelText, RootNodeCaptureMain.holdControlAtPoint(
+                    List.of(control, label), 30, 30, "reader"));
+        }
+
+        AccessibilityNodeSnapshot explanatoryText = node("android.widget.TextView", "reader")
+                .text("本段介绍视频可用2x倍速播放。普通正文仍可选取。")
+                .clickable(true).build();
+        AccessibilityNodeSnapshot oversizedParent = node("android.view.ViewGroup", "reader")
+                .bounds(new Rect(0, 0, 1080, 2400)).clickable(true).leaf(false).depth(0).build();
+        AccessibilityNodeSnapshot compactLabel = node("android.widget.TextView", "reader")
+                .bounds(new Rect(20, 20, 200, 100)).text("2x").depth(1).build();
+        AccessibilityNodeSnapshot foreignControl = node("android.widget.Button", "other")
+                .text("2x").clickable(true).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(explanatoryText), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(oversizedParent, compactLabel), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(foreignControl), 30, 30, "reader"));
+    }
+
+    @Test public void actionButtonsAndExactMenuActionsAreAvoidedButMessageTextIsNot() {
+        for (String action : List.of("复制", "回复", "转发", "评论", "收藏")) {
+            AccessibilityNodeSnapshot button = node("android.widget.Button", "reader")
+                    .text(action).clickable(true).build();
+            assertTrue(action, RootNodeCaptureMain.holdControlAtPoint(
+                    List.of(button), 30, 30, "reader"));
+
+            AccessibilityNodeSnapshot customMenuItem = node("android.widget.TextView", "reader")
+                    .text(action).clickable(true).build();
+            assertFalse("bare TextView must not be treated as a menu item: " + action,
+                    RootNodeCaptureMain.holdControlAtPoint(
+                    List.of(customMenuItem), 30, 30, "reader"));
+        }
+
+        AccessibilityNodeSnapshot menuItem = node(
+                "androidx.appcompat.view.menu.ListMenuItemView", "reader")
+                .clickable(true).leaf(false).depth(0).build();
+        AccessibilityNodeSnapshot menuLabel = node("android.widget.TextView", "reader")
+                .bounds(new Rect(20, 20, 200, 100)).text("转发").depth(1).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(menuItem, menuLabel), 30, 30, "reader"));
+
+        AccessibilityNodeSnapshot message = node("android.widget.TextView", "reader")
+                .text("这条评论提到可以转发，也可以回复，但这是正常消息正文。")
+                .longClickable(true).build();
+        AccessibilityNodeSnapshot nonInteractiveActionWord = node("android.widget.TextView", "reader")
+                .text("转发").build();
+        AccessibilityNodeSnapshot longClickableMessageWithActionWord = node("android.widget.TextView", "reader")
+                .text("转发").clickable(true).longClickable(true).build();
+        AccessibilityNodeSnapshot ordinaryButtonText = node("android.widget.TextView", "reader")
+                .text("这里是普通评论内容").clickable(true).build();
+        AccessibilityNodeSnapshot disabledAction = node("android.widget.Button", "reader")
+                .text("转发").clickable(true).enabled(false).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(message), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(nonInteractiveActionWord), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(longClickableMessageWithActionWord), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(ordinaryButtonText), 30, 30, "reader"));
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(
+                List.of(disabledAction), 30, 30, "reader"));
+
+        AccessibilityNodeSnapshot imageButton = node("android.widget.ImageButton", "reader")
+                .text(null).contentDescription("图片").clickable(true).build();
+        assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(imageButton), 30, 30, "reader"));
+        assertNotNull(select(imageButton, List.of(), true, true));
+        AccessibilityNodeSnapshot forwardImageButton = node("android.widget.ImageButton", "reader")
+                .text(null).contentDescription("转发").clickable(true).build();
+        assertTrue(RootNodeCaptureMain.holdControlAtPoint(List.of(forwardImageButton), 30, 30, "reader"));
+    }
+
+    @Test public void actionButtonPressIsRejectedWhileLongPressingMessageTextStillCaptures() throws Exception {
+        AccessibilityNodeInfo forwardButton = pressRoot("android.widget.Button", "转发");
+        forwardButton.setClickable(true);
+        try {
+            JSONObject result = capturePress(forwardButton);
+            assertFalse(result.getBoolean("found"));
+            assertEquals("excluded_hold_control", result.getString("reason"));
+        } finally { recyclePressRoot(forwardButton); }
+
+        AccessibilityNodeInfo message = pressRoot("android.widget.TextView", "我会把这条内容转发给朋友。普通消息正文。");
+        message.setLongClickable(true);
+        try {
+            JSONObject result = capturePress(message);
+            assertTrue(result.getBoolean("found"));
+            assertEquals("text", result.getString("kind"));
+        } finally { recyclePressRoot(message); }
+    }
+
     @Test public void disabledExplicitHoldControlsStillYieldAtPressEntry() throws Exception {
         for (String prompt : List.of("长按倍速播放", "按住说话", "松开发送")) {
             AccessibilityNodeInfo control = pressRoot("android.widget.Button", prompt);

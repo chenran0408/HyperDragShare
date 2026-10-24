@@ -50,12 +50,20 @@ public final class RootNodeCaptureMain {
             "slideuptocancel");
     private static final Set<String> VIDEO_SPEED_HOLD_PROMPTS = Set.of(
             "长按倍速播放", "按住倍速", "按住倍速播放", "长按快进", "按住快进",
-            "长按加速播放", "按住加速播放");
+            "长按加速播放", "按住加速播放",
+            // Compact accessibility labels used by inline/overlay playback speed controls.
+            "倍速", "2x", "2.0x", "2倍", "2倍速", "1.5x", "1.5倍", "1.5倍速",
+            "长按快进2x", "长按快进2倍", "按住快进2x", "长按加速播放2x");
     private static final Set<String> CAMERA_CAPTURE_PROMPTS = Set.of(
             "拍照", "拍照按钮", "拍摄", "拍摄按钮", "拍摄照片", "开始拍照", "开始拍摄",
             "按住拍摄", "长按拍摄", "拍摄视频", "开始录像", "录像", "录制视频",
             "录制", "录制按钮", "开始录制", "停止录制", "按住录制", "长按录制", "快门",
             "takephoto", "takepicture", "shutter", "record", "recordvideo", "startrecording", "stoprecording");
+    private static final Set<String> ACTION_MENU_PROMPTS = Set.of(
+            "复制", "复制文本", "复制链接", "回复", "回复评论", "转发", "转发给朋友",
+            "评论", "发表评论", "点赞", "赞", "点踩", "收藏", "引用", "更多", "多选",
+            "删除", "撤回", "翻译", "copy", "copylink", "reply", "forward", "comment",
+            "like", "quote", "more", "delete", "translate");
     private static PressWindowSnapshot pressWindow;
     private static Rect pressRegion;
     private static String pressVerificationError = "";
@@ -731,8 +739,12 @@ public final class RootNodeCaptureMain {
                     || VIDEO_SPEED_HOLD_PROMPTS.contains(description);
             boolean cameraCapturePrompt = CAMERA_CAPTURE_PROMPTS.contains(text)
                     || CAMERA_CAPTURE_PROMPTS.contains(description);
+            boolean actionMenuPrompt = ACTION_MENU_PROMPTS.contains(text)
+                    || ACTION_MENU_PROMPTS.contains(description);
             if (!exactVoicePrompt && !embeddedVoicePrompt && !videoSpeedPrompt
-                    && !cameraCapturePrompt) continue;
+                    && !cameraCapturePrompt && !actionMenuPrompt) continue;
+            if (actionMenuPrompt && label.enabled && isActionMenuControlClass(label.className)
+                    && label.clickable) return true;
             for (AccessibilityNodeSnapshot control : nodes) {
                 if (!control.visible || !source.equals(control.packageName)
                         || !isScopedControl(control, label)) continue;
@@ -742,10 +754,15 @@ public final class RootNodeCaptureMain {
                 if (videoSpeedPrompt && !control.editable && interactive) return true;
                 if (cameraCapturePrompt && label.enabled && control.enabled
                         && !control.editable && interactive) return true;
+                if (actionMenuPrompt && label.enabled && control.enabled
+                        && !control.editable && control.clickable
+                        && isActionMenuControlClass(control.className)) return true;
                 boolean voiceControl = !embeddedVoicePrompt || control.editable
                         || ((control.clickable || control.longClickable)
                         && (isVoiceButtonClass(control.className) || control != label));
-                if (!videoSpeedPrompt && !cameraCapturePrompt && interactive && voiceControl) return true;
+                boolean voicePrompt = exactVoicePrompt || embeddedVoicePrompt;
+                if (voicePrompt && !videoSpeedPrompt && !cameraCapturePrompt
+                        && interactive && voiceControl) return true;
             }
         }
         return false;
@@ -774,6 +791,13 @@ public final class RootNodeCaptureMain {
 
     private static boolean isVoiceButtonClass(String className) {
         return className != null && className.endsWith("Button");
+    }
+
+    private static boolean isActionMenuControlClass(String className) {
+        if (className == null) return false;
+        return className.endsWith("Button") || className.endsWith("button")
+                || className.endsWith("MenuItemView")
+                || "android.view.MenuItem".equals(className);
     }
 
     private static JSONObject contentResult(AccessibilityCandidateSelector.Selection selection,

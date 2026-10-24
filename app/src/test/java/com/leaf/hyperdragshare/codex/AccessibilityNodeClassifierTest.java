@@ -52,6 +52,22 @@ public final class AccessibilityNodeClassifierTest {
     }
 
     @Test
+    public void buttonAndMessageTextRemainClassifiableOutsidePressControlAvoidance() {
+        AccessibilityNodeSnapshot button = snapshot(new Rect(0, 0, 120, 60))
+                .className("android.widget.Button").text("转发").clickable(true).build();
+        AccessibilityNodeSnapshot message = snapshot(new Rect(0, 80, 400, 160))
+                .className("android.widget.TextView").text("这条评论可以转发，也可以回复。")
+                .longClickable(true).build();
+        AccessibilityNodeClassifier.Buckets buckets = new AccessibilityNodeClassifier(1f, 1080, 2400)
+                .classify(Arrays.asList(button, message));
+
+        assertEquals(2, buckets.nativeText.size());
+        assertEquals("转发", AccessibilityCandidateSelector.select(buckets, 30, 30).candidate.text);
+        assertEquals("这条评论可以转发，也可以回复。",
+                AccessibilityCandidateSelector.select(buckets, 30, 100).candidate.text);
+    }
+
+    @Test
     public void genericImageRoleWithoutTextIsAnImageRegion() {
         AccessibilityNodeSnapshot image = snapshot(new Rect(0, 0, 100, 100))
                 .className("android.view.View")
