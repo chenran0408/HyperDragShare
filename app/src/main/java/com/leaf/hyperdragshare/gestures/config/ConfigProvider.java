@@ -539,6 +539,7 @@ public final class ConfigProvider extends ContentProvider {
                     ConfigContract.MAX_HONEYCOMB_DISC_SIZE_PERCENT));
             out.putStringArrayList(ConfigContract.KEY_GESTURE_EXCLUDED_PACKAGES,
                     gestureExcludedPackages(context));
+            com.leaf.hyperdragshare.codex.GestureDiagnostics.appendConfiguration(context, out);
             return out;
         }
 

@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
  */
 final class BackgroundTouchBlocker {
     private static final String TAG = "DragShare/InputBlocker";
+    private final GestureDiagnostics.Stream diagnostics = new GestureDiagnostics.Stream("background_blocker");
     private static final String MONITOR_NAME = "DragShare background lock";
     private static final long ROOT_COMMAND_TIMEOUT_MILLIS = 1_000L;
     private static final long ROOT_TRANSACTION_WAIT_MILLIS = 50L;
@@ -95,6 +96,7 @@ final class BackgroundTouchBlocker {
     }
 
     synchronized boolean start() {
+        diagnostics.mark("BLOCK_REQUEST", null, "OBSERVATION", null, null, null, "existing_background_block_start");
         if (started) {
             return true;
         }
@@ -116,6 +118,8 @@ final class BackgroundTouchBlocker {
                 // alive. Prefer it when the ROM makes it available.
                 try {
                     methodInvoker.invoke(inputManager, "cancelCurrentTouch");
+                    diagnostics.mark("BLOCK_RETURN", null, "OBSERVATION", null, null, null,
+                            "hidden_cancel_call_returned");
                     started = true;
                     log("foreground touch stream cancelled");
                     return true;
@@ -137,6 +141,8 @@ final class BackgroundTouchBlocker {
                     // This sends ACTION_CANCEL to the previous touch target and makes
                     // the monitor the target for the remainder of the pointer stream.
                     methodInvoker.invoke(monitor, "pilferPointers");
+                    diagnostics.mark("BLOCK_RETURN", null, "OBSERVATION", null, null, null,
+                            "pilfer_call_returned");
                     inputMonitor = monitor;
                     started = true;
                     log("foreground touch stream pilfered");
@@ -158,6 +164,8 @@ final class BackgroundTouchBlocker {
 
         try {
             if (rootTouchCanceller.cancelCurrentTouch()) {
+                diagnostics.mark("BLOCK_RETURN", null, "OBSERVATION", null, null, null,
+                        "root_cancel_command_reported_success");
                 started = true;
                 log("foreground touch stream cancelled through root");
                 return true;

@@ -244,6 +244,36 @@ final class DragShareController {
     private volatile Session session;
     private DragShareSettings settings = DragShareSettings.defaults();
     private OverlayColors palette = OverlayColors.light();
+    private final GestureDiagnostics.Stream diagnostics = new GestureDiagnostics.Stream("drag_controller");
+    private String diagnosticSourcePackage;
+
+    private String diagnosticState() {
+        return active ? "DRAGGING" : pressHandoffTime >= 0L ? "HANDOFF"
+                : pressPipelineDownTime >= 0L ? "ARMED" : rootDownTime >= 0L ? "PENDING" : "IDLE";
+    }
+
+    String diagnosticPackage() {
+        return active && session != null ? session.payload.sourcePackage : diagnosticSourcePackage;
+    }
+
+    void notePressDiagnostics(long expectedDown, String pkg, String phase, String reason) {
+        if (!GestureDiagnostics.enabled()) return;
+        runOnMain(() -> {
+            if (expectedDown != rootDownTime) return;
+            if (pkg != null) diagnosticSourcePackage = pkg;
+            traceDiagnostic("STATE", reason, phase);
+        });
+    }
+
+    void traceDiagnostic(String action, String reason, String phase) {
+        if (!GestureDiagnostics.enabled()) return;
+        try {
+            Boolean wf = previewView != null && previewView.isAttachedToWindow() ? previewView.hasWindowFocus() : null;
+            Boolean vf = previewView != null && previewView.isAttachedToWindow() ? previewView.hasFocus() : null;
+            diagnostics.mark(action, diagnosticPackage(), phase == null ? diagnosticState() : phase,
+                    active, wf, vf, reason);
+        } catch (RuntimeException ignored) { /* Observe without influencing gesture handling. */ }
+    }
 
     DragShareController(Context context) {
         this(context, OverlayWindowPolicy.portal());
@@ -345,14 +375,14 @@ final class DragShareController {
             pressHandoffTime = -1L;
             pressPipelineDownTime = -1L;
             if (active && session != null && session.rootDownTime == downTime) {
-                cancelGestureOnMain();
+                cancelGestureOnMain("same_press_takeover");
             }
             showOnMain(content, initialX, initialY, loadedSettings, downTime);
         });
     }
 
     void cancelActiveSession() {
-        runOnMain(this::cancelGestureOnMain);
+        runOnMain(() -> cancelGestureOnMain("explicit_cancel_active_session"));
     }
 
     float latestPointerX() {
@@ -380,6 +410,7 @@ final class DragShareController {
             String source,
             Runnable beforeFinish) {
         if ("root".equals(source) && action == MotionEvent.ACTION_DOWN) {
+            diagnosticSourcePackage = null;
             rootDownTime = eventTime;
             pressHandoffTime = -1L;
             pressPipelineDownTime = -1L;
@@ -397,6 +428,15 @@ final class DragShareController {
         lastObservedY = y;
         lastObservedEventTime = eventTime;
         mainHandler.post(() -> {
+            if (GestureDiagnostics.enabled()) {
+                try {
+                    diagnostics.root(action, x, y, Float.NaN, Float.NaN, downTime, eventTime,
+                            diagnosticPackage(), diagnosticState(), active,
+                            previewView != null && previewView.isAttachedToWindow() ? previewView.hasWindowFocus() : null,
+                            previewView != null && previewView.isAttachedToWindow() ? previewView.hasFocus() : null,
+                            "input_" + source);
+                } catch (RuntimeException ignored) { /* Diagnostics remain optional. */ }
+            }
             boolean traceWasActive = active;
             recordGestureTrace(action, x, y, eventTime, source);
             if (active && !inputSourceLogged) {
@@ -480,16 +520,18 @@ final class DragShareController {
             }
             handlePointerOnMain(lastObservedX, lastObservedY);
             // The fallback path does not have a physical root ACTION_UP callback.
-            finishGestureOnMain(true);
+            finishGestureOnMain(true, null, "host_control_257");
         });
     }
 
     void onHostTaskCancelled() {
+        traceDiagnostic("HOST_CANCEL_SCHEDULED", "host_cancel_delay_32ms", null);
         // Give the queued 257/control callback a chance to finish the drag first.
         mainHandler.postDelayed(() -> {
             if (active) {
-                cancelGestureOnMain();
+                cancelGestureOnMain("delayed_host_cancel_task");
             } else {
+                traceDiagnostic("HOST_CANCEL_RESOLVED", "inactive_at_delayed_callback", null);
                 backgroundTouchBlocker.stop();
                 if (!isPreviewExitPending()) {
                     removeGestureViews();
@@ -499,13 +541,16 @@ final class DragShareController {
     }
 
     void destroy() {
+        traceDiagnostic("DESTROY", "controller_destroy", null);
         destroyed = true;
         rootDownTime = -1L;
         pressHandoffTime = -1L;
         pressPipelineDownTime = -1L;
         pendingPortalHostFloatWindowSuppression = false;
         runOnMain(() -> {
+            boolean diagnosticWasActive = active;
             active = false;
+            if (diagnosticWasActive) traceDiagnostic("DRAG_STOP", "controller_destroy", "CANCELLED");
             if (session != null) {
                 session.cancelled = true;
             }
@@ -563,6 +608,7 @@ final class DragShareController {
         lastHandledEventTime = Long.MIN_VALUE;
         lastHandledAction = -1;
         settings = loadedSettings == null ? DragShareSettings.defaults() : loadedSettings;
+        if (GestureDiagnostics.enabled()) diagnosticSourcePackage = payload.sourcePackage;
 
         configuredSimpleMenuPosition = settings.simpleMenuPosition;
 
@@ -588,6 +634,7 @@ final class DragShareController {
             }
             showPreviewOverlay();
             active = true;
+            traceDiagnostic("DRAG_START", "preview_attached", "DRAGGING");
             OperationTrace.event(operation, "show", "accepted");
             OperationTrace.event(operation, "preview", "attached");
             refreshStaleInputWatchdog();
@@ -1262,7 +1309,7 @@ final class DragShareController {
             Runnable beforeFinish) {
         if (!active) {
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                finishGestureOnMain(false, beforeFinish);
+                finishGestureOnMain(false, beforeFinish, source + "_terminal_while_inactive");
             }
             return;
         }
@@ -1286,7 +1333,7 @@ final class DragShareController {
 
         if (action == MotionEvent.ACTION_CANCEL) {
             log("gesture cancelled source=" + source);
-            finishGestureOnMain(false, beforeFinish);
+            finishGestureOnMain(false, beforeFinish, source + "_cancel");
             return;
         }
         if (action == MotionEvent.ACTION_UP) {
@@ -1296,7 +1343,7 @@ final class DragShareController {
                 log("gesture finished source=" + source
                         + " point=" + Math.round(x) + "," + Math.round(y)
                         + " menu=" + menuShown);
-                finishGestureOnMain(true, beforeFinish);
+                finishGestureOnMain(true, beforeFinish, source + "_up");
             }
         } else handlePointerOnMain(x, y);
     }
@@ -1615,6 +1662,7 @@ final class DragShareController {
                 return;
             }
             menuShown = true;
+            traceDiagnostic("MMGG_MENU_SHOW", "own_menu_only", null);
 
             circleEdge = circlePendingEdge;
             circleScrollDirection = 0;
@@ -1646,6 +1694,7 @@ final class DragShareController {
             cancelLinearMenuFadeOut(menuView);
             menuView.animate().cancel();
             menuShown = true;
+            traceDiagnostic("MMGG_MENU_SHOW", "own_menu_only", null);
             menuView.animate()
                     .alpha(1f)
                     .translationX(0f)
@@ -1666,6 +1715,7 @@ final class DragShareController {
         if (isModernStyle() && modernMenuView != null
                 && modernMenuWindow.isShowing()) {
             menuShown = true;
+            traceDiagnostic("MMGG_MENU_SHOW", "own_menu_only", null);
             modernMenuWindow.showAnimated();
             updatePreviewPosition(lastX, lastY);
             log("modern menu shown pointerY=" + Math.round(lastY) + " menuTop=" + menuTop);
@@ -1678,6 +1728,7 @@ final class DragShareController {
             windowManager.addView(menuView, menuParams);
         }
         menuShown = true;
+        traceDiagnostic("MMGG_MENU_SHOW", "own_menu_only", null);
         updatePreviewPosition(lastX, lastY);
         log("menu shown style=" + settings.uiStyle + " anchoredAtCenter=true"
                 + " effectivePosition=" + simpleMenuPosition + " bounds=" + menuLeft + "," + menuTop
@@ -1835,11 +1886,16 @@ final class DragShareController {
     }
 
     private void finishGestureOnMain(boolean allowShare) {
-        finishGestureOnMain(allowShare, null);
+        finishGestureOnMain(allowShare, null, "legacy_finish");
     }
 
     private void finishGestureOnMain(boolean allowShare, Runnable afterDeactivate) {
+        finishGestureOnMain(allowShare, afterDeactivate, "finish_request");
+    }
+
+    private void finishGestureOnMain(boolean allowShare, Runnable afterDeactivate, String reason) {
         if (!active) {
+            traceDiagnostic("TERMINAL_WITHOUT_DRAG", reason, null);
             if (afterDeactivate != null) afterDeactivate.run();
             return;
         }
@@ -1854,6 +1910,7 @@ final class DragShareController {
             log("background scroll lock skipped because root input was not active");
         }
         active = false;
+        traceDiagnostic("DRAG_STOP", reason, allowShare ? "FINISHED" : "CANCELLED");
         cancelStaleInputWatchdog();
         stopEdgeScroll();
         backgroundTouchBlocker.stop();
@@ -1882,10 +1939,15 @@ final class DragShareController {
     }
 
     private void cancelGestureOnMain() {
+        cancelGestureOnMain("cancel_request");
+    }
+
+    private void cancelGestureOnMain(String reason) {
         if (!active) {
             return;
         }
         active = false;
+        traceDiagnostic("DRAG_STOP", reason, "CANCELLED");
         if (session != null) OperationTrace.event(session.operationId, "gesture", "cancelled");
         cancelStaleInputWatchdog();
         stopEdgeScroll();
@@ -1901,7 +1963,7 @@ final class DragShareController {
         traceAccessibility("overlay failed=" + error.getClass().getSimpleName() + ":" + error.getMessage());
         pendingPortalHostFloatWindowSuppression = false;
         if (session != null) session.cancelled = true;
-        if (active) cancelGestureOnMain();
+        if (active) cancelGestureOnMain("overlay_failure_" + error.getClass().getSimpleName());
         else removeGestureViews();
         showToast(message + "，已取消本次拖拽；详情见诊断日志", Toast.LENGTH_LONG);
     }
@@ -1917,7 +1979,7 @@ final class DragShareController {
                 staleInputWatchdog = null;
                 if (!active || destroyed || session != observedSession) return;
                 log("gesture cancelled after root input became stale");
-                cancelGestureOnMain();
+                cancelGestureOnMain("stale_input_watchdog_30000ms");
             }
         };
         staleInputWatchdog = watchdog;
@@ -2113,6 +2175,8 @@ final class DragShareController {
     }
 
     private void removeGestureViews(boolean animatePreviewExit) {
+        traceDiagnostic("WINDOW_CLEANUP", animatePreviewExit ? "preview_exit_animation" : "remove_views",
+                active ? "DRAGGING" : "CLEANUP");
         cancelStaleInputWatchdog();
         cancelTargetQuery();
         cancelPreviewTargetLoad();
@@ -2421,6 +2485,7 @@ final class DragShareController {
             return;
         }
         backgroundBlockAttempted = true;
+        traceDiagnostic("BACKGROUND_BLOCK_REQUEST", "existing_block_background_scroll_enabled", null);
         if (!backgroundTouchBlocker.start()) {
             log("background scroll lock unavailable; continuing without it");
         }

@@ -285,6 +285,8 @@ final class PressCaptureSource {
         long now = SystemClock.uptimeMillis();
         if (!detector.fire(now)) return;
         confirmedAt = now;
+        controller.notePressDiagnostics(downTime, cached == null ? null : cached.sourcePackage,
+                "ARMED", "press_duration_confirmed");
         controller.notePressPipeline(downTime);
         DragShareLog.i(TAG, "press confirmed by duration/movement elapsedMs=" + (now - detector.downTime()));
         if (cached != null) display();
@@ -351,6 +353,8 @@ final class PressCaptureSource {
                         return;
                     }
                     cached = content;
+                    controller.notePressDiagnostics(requestDownTime, content.sourcePackage,
+                            detector.isFired() ? "ARMED" : "PENDING", "capture_result_available");
                     if (detector.isFired()) display();
                     else schedule();
                 });
@@ -691,6 +695,7 @@ final class PressCaptureSource {
 
     private void startTouchBlocker(long request) {
         if (pointerDown) {
+            controller.notePressDiagnostics(downTime, null, null, "press_background_block_requested");
             blocker.startAsync(() -> !stopped && request == generation && pointerDown);
         }
     }
@@ -700,6 +705,7 @@ final class PressCaptureSource {
     }
 
     void cancelGesture() {
+        controller.notePressDiagnostics(downTime, null, null, "press_detector_cleanup");
         controller.endPressPipeline(downTime);
         generation++;
         pointerDown = false;

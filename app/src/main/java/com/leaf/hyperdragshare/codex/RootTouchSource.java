@@ -55,6 +55,7 @@ final class RootTouchSource {
 
     /** Resources are transferred under this lock; no I/O or listener runs with it held. */
     static final class Run {
+        final GestureDiagnostics.Stream diagnostics = new GestureDiagnostics.Stream("root_evdev");
         volatile boolean cancelled;
         private Process process;
         EvdevTouchParser parser;
@@ -115,6 +116,8 @@ final class RootTouchSource {
                     run.pointerDown = false;
                     run.ignoredGesture = false;
                     if (deliverCancel) {
+                        run.diagnostics.mark("ACTION_CANCEL", null, "INPUT_CANCELLED", null,
+                                null, null, "root_source_stop_synthetic_cancel");
                         listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
                                 SystemClock.uptimeMillis(), 0, 0, 0);
                     }
@@ -215,6 +218,8 @@ final class RootTouchSource {
                     run.pointerDown = false;
                     run.ignoredGesture = false;
                     if (deliverCancel) {
+                        run.diagnostics.mark("ACTION_CANCEL", null, "INPUT_CANCELLED", null,
+                                null, null, "root_reader_closed_synthetic_cancel");
                         listener.onPointerEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
                                 SystemClock.uptimeMillis(), 0, 0, 0);
                     }
@@ -430,6 +435,8 @@ final class RootTouchSource {
     private void onRawFrame(Run run, int action, float rawX, float rawY,
                             int major, int minor, int width) {
         long eventTime = SystemClock.uptimeMillis();
+        int contacts = GestureDiagnostics.enabled() && run.parser != null
+                ? run.parser.diagnosticPointerCount() : -1;
         mainHandler.post(() -> {
             if (currentRun != run || run.cancelled) return;
             WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
@@ -445,6 +452,10 @@ final class RootTouchSource {
                 }
             }
             else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) run.pointerDown = false;
+            run.diagnostics.root(action, point[0], point[1], rawX, rawY, -1, eventTime, contacts,
+                    null, run.ignoredGesture ? "IGNORED" : "PHYSICAL_INPUT", null, null, null,
+                    run.ignoredGesture ? "module_overlay_exclusion"
+                            : action == MotionEvent.ACTION_CANCEL ? "evdev_multiple_contacts" : "evdev_frame");
             if (run.ignoredGesture) {
                 if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                     run.ignoredGesture = false;

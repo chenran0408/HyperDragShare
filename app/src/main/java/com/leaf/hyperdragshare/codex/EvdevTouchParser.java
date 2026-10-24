@@ -269,6 +269,12 @@ final class EvdevTouchParser {
         lastWidthMajor = slotWidthMajor[slot];
     }
 
+    /** Snapshot at the frame callback; tracking IDs are deliberately not Android pointer IDs. */
+    int diagnosticPointerCount() {
+        int count = trackedPointerCount();
+        return count == 0 && buttonTouchSeen && buttonTouchDown ? 1 : count;
+    }
+
     private int trackedPointerCount() {
         int count = 0;
         for (int id : trackingId) {

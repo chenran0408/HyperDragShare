@@ -146,6 +146,8 @@ final class FanRuntime {
     private List<RuntimeTarget> activeTargets = Collections.emptyList();
 
     private State state = State.IDLE;
+    private final com.leaf.hyperdragshare.codex.GestureDiagnostics.Stream touchDiagnostics =
+            new com.leaf.hyperdragshare.codex.GestureDiagnostics.Stream("systemui_fan_input");
 
     private volatile int configRetryCount;
 
@@ -581,6 +583,9 @@ final class FanRuntime {
     }
 
     void onImeVisibilityChanged(boolean visible, int height) {
+        touchDiagnostics.mark("IME_VISIBILITY", foregroundPackageForGesture, state.name(),
+                state == State.ACTIVE || state == State.HONEYCOMB, null, null,
+                visible ? "ime_visible_observed" : "ime_hidden_observed");
         imeVisible = visible;
         imeHeight = visible ? Math.max(0, height) : 0;
         if (visible && (state == State.ARMED || state == State.CLAIMED || (state == State.ACTIVE && !activeSideList) || state == State.HONEYCOMB)) {
@@ -747,12 +752,19 @@ final class FanRuntime {
     }
 
     void onMotion(MotionEvent event, Object inputMonitor) {
+        State before = state;
+        touchDiagnostics.motion(event, foregroundPackageForGesture, state.name(),
+                state == State.ACTIVE || state == State.HONEYCOMB, null, null, "systemui_input_receiver");
         try {
             handleMotion(event, inputMonitor);
         } catch (Throwable error) {
             resetFan();
             outsideGestures.onCancel();
             Log.e("Gesture event failed safely", error);
+        } finally {
+            if (before != state) touchDiagnostics.mark("STATE", foregroundPackageForGesture,
+                    state.name(), state == State.ACTIVE || state == State.HONEYCOMB,
+                    null, null, "event_transition_from_" + before.name());
         }
     }
 
@@ -1798,6 +1810,8 @@ final class FanRuntime {
     }
 
     private void resetFan(boolean hideOverlay) {
+        touchDiagnostics.mark("RESET", foregroundPackageForGesture, state.name(),
+                state == State.ACTIVE || state == State.HONEYCOMB, null, null, "existing_reset_fan");
         nativeEventInterceptActive = false;
         cancelSideHold();
         cancelBottomHoneycombSettle();
@@ -2321,6 +2335,7 @@ final class FanRuntime {
         configReloadPending = false;
         try {
             Bundle bundle = context.getContentResolver().call(ConfigContract.URI, "get", null, null);
+            com.leaf.hyperdragshare.codex.GestureDiagnostics.configure(bundle);
             GestureConfig next = GestureConfig.from(bundle);
             ArrayList<RuntimeTarget> resolved = new ArrayList<>();
             ArrayList<RuntimeTarget> resolvedHoneycomb = new ArrayList<>();

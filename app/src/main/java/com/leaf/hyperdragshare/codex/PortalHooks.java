@@ -32,6 +32,8 @@ final class PortalHooks {
     private static final String BASE_FLOAT_CLASS =
             "com.miui.contentextension.text.floatview.BaseFloatView";
     private static final String MOTION_KEY = "MotionEvent";
+    private static final GestureDiagnostics.Stream callbackDiagnostics =
+            new GestureDiagnostics.Stream("portal_callback_observed");
     private static final String CONTROL_KEY = "observe_control_event";
     private static final Object DEFERRED_HOST_LOCK = new Object();
     private static final ArrayDeque<DeferredHostCall> DEFERRED_HOST_CALLS = new ArrayDeque<>();
@@ -254,6 +256,7 @@ final class PortalHooks {
                 DragShareController current = controller;
                 if (current != null) {
                     if (deferHostCallIfRootDragActive(param, "cancelTask")) {
+                        current.traceDiagnostic("HOST_CANCEL_DEFERRED", "root_owns_release", null);
                         // Let the root ACTION_UP replay the original method after the
                         // physical gesture has ended. Running it now poisons Taplus'
                         // task state and prevents the next long press in the same app.
@@ -390,6 +393,8 @@ final class PortalHooks {
                                 + " control=" + String.valueOf(control));
             }
             if (motion instanceof MotionEvent) {
+                callbackDiagnostics.motion((MotionEvent) motion, current.diagnosticPackage(),
+                        "HOST_CALLBACK_OBSERVED", null, null, null, "existing_motion_callback_suppression");
                 // A motion-only result is not valid Taplus pick content.
                 param.setResult(null);
                 return;
@@ -397,12 +402,16 @@ final class PortalHooks {
 
             Object control = properties.get(CONTROL_KEY);
             if ("258".equals(control)) {
+                current.traceDiagnostic("HOST_CONTROL_258", "portal_control_received", null);
                 // A confirmed press owns this same root gesture through release too.
                 if (current.isAwaitingRootRelease()) {
+                    current.traceDiagnostic("HOST_CONTROL_258_IGNORED", "root_owns_release", null);
                     param.setResult(null);
                 }
             } else if ("257".equals(control)) {
+                current.traceDiagnostic("HOST_CONTROL_257", "portal_control_received", null);
                 if (deferHostCallIfRootDragActive(param, "control-257")) {
+                    current.traceDiagnostic("HOST_CONTROL_257_DEFERRED", "root_owns_release", null);
                     if (!controlIgnoredLogged) {
                         controlIgnoredLogged = true;
                         log("ignoring host finish; waiting for root ACTION_UP");

@@ -167,6 +167,8 @@ final class DiagnosticBundleExporter {
     }
 
     private static String filterRuntimeLine(String line) {
+        String touch = GestureDiagnostics.filterLine(line);
+        if (touch != null) return touch;
         // Only OperationTrace events use a controlled grammar. Raw messages, throwable text,
         // arbitrary tags and all URI/capability values are dropped at this boundary.
         java.util.regex.Matcher normalizedEvent = java.util.regex.Pattern.compile(
