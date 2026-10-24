@@ -64,6 +64,9 @@ final class DragShareLog {
 
     private DragShareLog() {}
 
+    /** Identifies this logger/process lifetime; operation IDs are separate. */
+    static String processInstance() { return SESSION_ID; }
+
     static void configure(DragShareSettings settings) {
         if (settings == null) {
             return;
