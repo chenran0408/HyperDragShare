@@ -79,6 +79,9 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
     val backStack = remember { mutableStateListOf<NavKey>(SettingsRoute.Main).apply {
         if (openGestures) add(SettingsRoute.Module(SettingModule.GESTURES))
     } }
+    val settingsScrollPositions = rememberSaveable(saver = SettingsScrollPositionStore.Saver) {
+        SettingsScrollPositionStore()
+    }
     val mainListState = rememberLazyListState()
     val mainTopAppBarState = rememberTopAppBarState()
     val dark = settings.isDarkThemeInComposition()
@@ -138,7 +141,8 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                 }
                 entry<SettingsRoute.Module> { route ->
                     SettingsModulePage(route.module, currentDirectory.value.filter { it.module == route.module },
-                        route.focusId, onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) })
+                        route.focusId, settingsScrollPositions, backStack.lastOrNull() == route,
+                        onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) })
                 }
                 entry(SettingsRoute.BottomTargets) {
                     GestureTargetsContent(context, "bottom", onBack = {

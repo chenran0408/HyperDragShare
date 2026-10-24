@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex
 
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.graphics.vector.ImageVector
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.*
@@ -15,10 +16,101 @@ internal enum class SettingModule(val title: String, val icon: ImageVector, val 
 
     val groups: List<String> get() = when (this) {
         PORTAL -> listOf("触发与识别", "应用避让", "分词与取用", "拖拽分享", "中转站", "拖拽菜单外观", "拖拽触摸与滚动")
-        GESTURES -> listOf("总开关与通用", "底角触发", "动作与目标", "蜂巢布局", "布局动效", "高级设置")
+        GESTURES -> listOf("总开关与通用", "底角触发", "侧边手势", "动作与目标", "蜂巢布局", "布局动效", "高级设置")
         FREEFORM -> listOf("启动行为", "窗体布局", "窗外操作")
         COPY_DIRECT -> listOf("启用与触发", "目标应用")
         GENERAL -> listOf("运行与权限", "主题与显示", "工具与诊断", "关于")
+    }
+}
+
+/** User-facing categories for the long gesture settings list. Membership is UI-only. */
+internal data class SettingGroupCategory(
+    val id: String,
+    val title: String,
+    val summary: String,
+    val groups: Set<String> = emptySet(),
+    val entryIds: Set<String> = emptySet(),
+)
+
+internal val GESTURE_SETTING_CATEGORIES = listOf(
+    SettingGroupCategory(
+        id = "general", title = "通用设置", summary = "总开关、反馈和图标显示",
+        groups = setOf("总开关与通用"),
+    ),
+    SettingGroupCategory(
+        id = "bottom", title = "底角斜滑", summary = "屏幕底角触发、上滑和扇形动作",
+        groups = setOf("底角触发"), entryIds = setOf("bottom_targets"),
+    ),
+    SettingGroupCategory(
+        id = "side", title = "侧边滑动", summary = "左右边缘滑入、停留和列表布局",
+        groups = setOf("侧边手势"), entryIds = setOf("side_targets"),
+    ),
+    SettingGroupCategory(
+        id = "honeycomb", title = "蜂巢布局", summary = "二段蜂巢、滑选方式和应用排列",
+        groups = setOf("蜂巢布局"), entryIds = setOf("honeycomb_targets"),
+    ),
+    SettingGroupCategory(
+        id = "launch", title = "启动方式", summary = "全屏或小窗启动及关联目标",
+        groups = setOf("动作与目标"),
+    ),
+    SettingGroupCategory(
+        id = "appearance", title = "外观与布局", summary = "图标尺寸、扇形排布和动画",
+        groups = setOf("布局动效", "高级设置"),
+    ),
+)
+
+internal fun gestureCategoryFor(entry: SettingEntry): SettingGroupCategory? =
+    GESTURE_SETTING_CATEGORIES.firstOrNull { category ->
+        entry.id in category.entryIds || entry.group in category.groups
+    }
+
+internal fun entriesForGestureCategory(
+    entries: List<SettingEntry>,
+    category: SettingGroupCategory,
+): List<SettingEntry> = entries.filter { gestureCategoryFor(it)?.id == category.id }
+
+/** LazyColumn index including one group header before each contiguous group. */
+internal fun settingEntryListIndex(entries: List<SettingEntry>, entryId: String): Int? {
+    var index = 0
+    entries.groupBy { it.group }.forEach { (_, rows) ->
+        index++
+        val rowIndex = rows.indexOfFirst { it.id == entryId }
+        if (rowIndex >= 0) return index + rowIndex
+        index += rows.size
+    }
+    return null
+}
+
+internal data class SettingsListPosition(val index: Int, val offset: Int)
+
+/** Remembers UI scroll coordinates independently of dynamic settings content and route instances. */
+internal class SettingsScrollPositionStore(
+    private val positions: MutableMap<String, SettingsListPosition> = mutableMapOf(),
+) {
+    fun get(key: String): SettingsListPosition = positions[key] ?: SettingsListPosition(0, 0)
+
+    fun createListState(key: String): LazyListState = get(key).let { LazyListState(it.index, it.offset) }
+
+    fun save(key: String, index: Int, offset: Int) {
+        positions[key] = SettingsListPosition(index.coerceAtLeast(0), offset.coerceAtLeast(0))
+    }
+
+    fun save(key: String, state: LazyListState) {
+        save(key, state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
+    }
+
+    fun snapshot(): Map<String, SettingsListPosition> = positions.toMap()
+
+    companion object {
+        val Saver = androidx.compose.runtime.saveable.mapSaver<SettingsScrollPositionStore>(
+            save = { store -> store.snapshot().mapValues { (_, position) -> listOf(position.index, position.offset) } },
+            restore = { saved ->
+                SettingsScrollPositionStore(saved.mapValues { (_, value) ->
+                    val pair = value as List<*>
+                    SettingsListPosition((pair.getOrNull(0) as Number).toInt(), (pair.getOrNull(1) as Number).toInt())
+                }.toMutableMap())
+            },
+        )
     }
 }
 
@@ -55,7 +147,8 @@ internal data class SettingEntry(
 ) {
     val path: String get() = "${module.title} › $group › $title"
     fun matches(query: String): Boolean {
-        val haystack = "$path ${module.aliases} $summary $keywords".lowercase(Locale.ROOT)
+        val category = if (module == SettingModule.GESTURES) gestureCategoryFor(this)?.title.orEmpty() else ""
+        val haystack = "$path $category ${module.aliases} $summary $keywords".lowercase(Locale.ROOT)
         return query.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).all(haystack::contains)
     }
 }
