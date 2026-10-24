@@ -68,9 +68,9 @@ flowchart TD
 |---|---|---|
 | drag_prepare / asset_ready：StashDragHandle、StashDragImageCache | 模块Compose scope及IO；StashStore仍拥有原图；兼容Downloads副本与缩略图沿用原清理策略 | prepared资源可用才派发；松手、detach或scope取消抑制交接；abandoned不删除持久原图 |
 | drag_dispatch：Shelf独立/嵌入入口 | 主线程，ClipData借用URI和shadow；不新增资源owner | accepted_dispatch只说明入口接受派发；嵌入路径尚需host回调，不能当native已开始 |
-| module_host_drag_request / uri_grant / host_drag_request | 模块StashSurfaceHost/Bridge → 原Binder请求；维持已核对SecurityCenter UID/包、shadow能力回退 | forwarded/granted不是drop；拒绝、host异常、abort独立记录，原grant/revoke不变 |
+| module_host_drag_request / uri_grant / host_drag_request | 模块StashSurfaceHost/Bridge → 原Binder请求；维持已核对SecurityCenter UID/包、shadow能力回退 | requested/granted不是drop；拒绝、host异常、abort独立记录，原grant/revoke不变 |
 | native_drag_start / native_drag_end | SecurityCenter `:ui`主线程；host持有shadow和本次callback | native start返回与实际END分别记录；drop_accepted只是Android结果；主动release是end_not_observed_abort |
-| source_drag_* / module_drag_* / bridge_drop_result | 原独立observer或Binder回调 → 模块main Handler | false可能是拒绝/取消/abort；不能强行归因；END先于START时只记resolved_from_end_unknown，保留既有callback顺序，不虚构启动证据 |
+| source_drag_* / module_drag_* / bridge_drop_result | 原独立observer或Binder回调 → 模块main Handler | false可能是拒绝/取消/abort；不能强行归因；END先于START时只记resolved_from_end_unknown，保留既有callback顺序。Shelf的reported_true/false只表示回调值，可能来自上述补发，不能替代host的native_drag_start证据 |
 | image_access：ShareImageProvider / StashImageProvider | 模块Binder；PFD交由调用方关闭；原权限检查保留 | descriptor_opened在PFD成功创建后才记录；metadata_query和mime_query不是读取。`read=unknown delivery=unknown`明确边界 |
 
 **兼容性事实**：实际中转站拖图使用 `StashDragImageCache.uri()` 创建/复用的 MediaStore Downloads副本。目标读取通常由系统MediaProvider处理，MMGG自己的Provider没有openFile事件完全可能是正常路径。StashImageProvider主要服务预览/OCR旁路；不能为了多收日志把兼容副本改回私有Provider，也不能据此收紧显式grant/系统转发。
