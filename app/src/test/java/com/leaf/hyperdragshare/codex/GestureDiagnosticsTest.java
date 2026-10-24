@@ -104,6 +104,7 @@ public final class GestureDiagnosticsTest {
         assertTrue(joined.contains("gapMs=60"));
         assertTrue(joined.contains("ACTION_UP") && joined.contains("lastEventAge=0"));
         assertTrue(stateAge(joined) > 0);
+        assertTrue(stateGap(joined) == 10L);
     }
 
     @Test public void motionEventAndRootInputUseDifferentPointerAndCoordinateLabels() {
@@ -196,6 +197,16 @@ public final class GestureDiagnosticsTest {
             if (!line.contains("action=STATE")) continue;
             java.util.regex.Matcher match = java.util.regex.Pattern
                     .compile("lastEventAge=([0-9]+)").matcher(line);
+            if (match.find()) return Long.parseLong(match.group(1));
+        }
+        return -1;
+    }
+
+    private static long stateGap(String joined) {
+        for (String line : joined.split("\n")) {
+            if (!line.contains("action=STATE")) continue;
+            java.util.regex.Matcher match = java.util.regex.Pattern
+                    .compile("gapMs=([0-9]+)").matcher(line);
             if (match.find()) return Long.parseLong(match.group(1));
         }
         return -1;

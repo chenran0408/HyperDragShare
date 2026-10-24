@@ -159,6 +159,26 @@ public final class DragShareTouchDiagnosticsTest {
         }
     }
 
+    @Test public void delayedHostCancelRecordsInactiveResolutionWithoutCancelling() throws Exception {
+        DragShareController controller = controller();
+        try {
+            assertFalse(controller.isActive());
+            controller.onHostTaskCancelled();
+            ShadowLooper.shadowMainLooper().idleFor(32, TimeUnit.MILLISECONDS);
+
+            assertFalse(controller.isActive());
+            String log = messages();
+            assertTrue(log.contains("action=HOST_CANCEL_SCHEDULED"));
+            assertTrue(log.contains("action=HOST_CANCEL_RESOLVED"));
+            assertTrue(log.contains("state=IDLE dragging=false"));
+            assertTrue(log.contains("reason=inactive_at_delayed_callback"));
+            assertFalse(log.contains("reason=delayed_host_cancel_task"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
     @Test public void focusObservationAloneDoesNotCancelController() throws Exception {
         DragShareController controller = controller();
         Object activeSession = session("focus", 400L);
