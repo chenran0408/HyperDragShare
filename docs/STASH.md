@@ -2,6 +2,8 @@
 
 本文主要保留历史实现/验收材料，旧“当前已安装/当前代码”不作为现状。当前事实见 [CURRENT_STATUS](CURRENT_STATUS.md)，独立/嵌入拖放、MediaStore兼容副本及接收证据边界见 [OPERATION_TRACING](OPERATION_TRACING.md)。不可从drop接受或缺少MMGG Provider日志推断最终发送结果。
 
+排查时保留已验证用途：`StashDragImageCache`将私有持久图片复制为具体MIME的MediaStore Downloads URI，pending结束后才交付；它用于兼容不认识模块私有Provider的目标。独立浮窗直接startDragAndDrop，嵌入侧栏通过已核验的SecurityCenter宿主授权和真实SurfaceView发起，两者共享原ClipData/图片准备。不要为得到Provider日志而更换这条URI路径，或将历史单图微信接收证据扩大为当前所有目标已发送。统一导出步骤见 [DIAGNOSTICS](DIAGNOSTICS.md)。
+
 目标是连续收集、快速确认和取用文字/图片。基于本仓库独立实现；参考资料只用于研究交互。
 
 当前已安装1.7.146（170）。中转站是原页灰条与展开面积≤16%的临时托盘；标题/灰条可移动，正常松手就近贴边，内容本身可直接拖出。系统小窗、左右按钮、搜索和复制已删除。146两项文字跨UID接收与收起/返回后保留选区已验，图片和物理移动仍待验；原有条目保留。下述各版本历史不代表当前仍有对应旧入口。

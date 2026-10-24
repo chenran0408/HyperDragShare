@@ -1,12 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成跨进程/异步操作关联与完成证据核验；上一轮退出/销毁修复已独立提交并纳入本轮回归。设置拆分、配置更新和动作提取已完成，不重复执行。没有操作手机、安装、推送或发布版本。
+核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成A方案统一反馈与诊断、触控报告导出修复并交付beta20；此前生命周期和跨进程追踪已纳入交付及回归。设置拆分、配置更新和动作提取已完成，不重复执行。没有操作手机、安装、推送或发布版本。
 
 ## 在哪里继续
 
 | 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
 |---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；当前追踪源码 `ec038f58f438ff57033517dd15491a6bb5f9c923`，后续纯文档HEAD用git log核对 | 1.7.219-beta.19 / 261（验证构建，无新版交付） |
+| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；beta20交付源码 `118835ba16157d79b1311ddb5b4756c8b57dbab7`，后续纯文档HEAD用git log核对 | 1.7.219-beta.20 / 262 |
 | 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
@@ -15,16 +15,43 @@
 
 ## 交付身份与验证边界
 
-最近可安装交付仍是（本轮没有替换该文件）：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/outputs/beta19/MMGG-1.7.219-beta.19.apk`。
+最新可安装候选：`D:/CODEX/Tasks/2026-10-24/mmgg-unified-diagnostics/outputs/beta20/MMGG-1.7.219-beta.20.apk`，beta20/262，4,914,725 bytes；SHA256 `1FC0D43850FDEF6453D82018CF185B9385FDECFE9EC6569C226A92FEE4D4F90A`。
+
+- 源码118835b，交付app tree `c2dd5527224bb4e52d1750e06fa02255368dae8f`；本地tag `delivered/mmgg-1.7.219-beta.20`固定该提交。后续文档或单独测试不改变此已交付APK，源码身份以tag/清单为准。
+- 实际aapt核对包名com.leaf.hyperdragshare.codex、版本beta20/262；apksigner v2通过，证书SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，Android Debug，与留存beta19实际证书一致。未推定与正式包同签，未安装手机。
+- 本轮125类660项JVM/Robolectric测试0失败/错误/跳过；Lint0错误180警告2提示，Debug与实际Beta/R8构建成功2m28s。没有本轮完整模拟器交互、实机、Release构建或云端CI结果。
+- 普通用户更新说明/安装指导、构建清单、哈希在同目录；机器结果、JUnit、Lint、命令、aapt、签名在本任务outputs/verification。报告格式合成示例在outputs/diagnostic-bundle-format-example.zip，明确不是设备证据。
+
+上一份beta19历史交付（保留原文件）：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/outputs/beta19/MMGG-1.7.219-beta.19.apk`。
 
 - 产品源码d6d1f3a；4,881,913 bytes；SHA256 `FB87509F1FCCDB6224CA6C1CA5CCD7A518A5CAC485EE9A8DC8BF127AEB1E06D5`。
 - 既有交付记录：572项JVM/Robolectric测试0失败/错误/跳过；Lint0错误、178警告、2提示；Beta/R8、版本与v2验签通过。签名证书与beta18一致，不能据此推定与正式发布密钥一致。
 - beta19没有安装或实机/完整Android模拟器交互证据。历史4597c7a完成设置职责移动，a064f17完成配置更新；动作提取批次与本轮生命周期均只生成编译/R8验证包，保留旧元数据，不提供为新版交付，不替换上述安装包。
 - 既有正式包1.7.218发布/设备证据保留于DEVICE_VALIDATION及归档。本轮没有重新查询GitHub Release资产/Latest状态、没有重新验签正式APK，不能用tag存在替代资产核验。
 
-原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；动作批次记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`；退出生命周期记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-exit-lifecycle`；本轮完整要求、清单、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-operation-tracing`。
+原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；动作批次记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`；退出生命周期记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-exit-lifecycle`；操作追踪记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-operation-tracing`；本轮完整要求、清单、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-unified-diagnostics`。
 
-## 跨进程/异步操作追踪（本轮）
+## 统一反馈与诊断、触控导出（本轮）
+
+从ed97696干净Beta线继续，三组Luna high按后端、导航页面、触控专项分工，主Agent review和集中验证；稳定e25c667未改。无手机操作、安装、push或发布；本地交付tag只保存源码身份。
+
+- **入口**：通用设置只有一条“问题反馈与诊断”，旧日志/兼容性报告/反馈/触控入口统一，搜索日志/报告/反馈/触控均使用生产目录元数据；状态诊断页有进入链接。保留原日志配置，未自动开启或切换日志目的地。
+- **ZIP**：独立收集版本/环境、已有ActivationSnapshot枚举状态、兼容报告的受控字段和过滤运行日志/操作追踪。日志关闭、系统目的地、不可读或无可用记录时仍输出已有资料，manifest注明缺失原因和手动开启后复现步骤。自由正文、异常详情、图片、敏感URI/令牌不进入包；大小预算内保留最新受控日志，避免历史前缀挤掉最近操作。
+- **触控确定缺陷**：旧UI在初始/查找状态隐藏导出，动作位于长列表后，非精确但有代码签名候选时适配选项也未显示。本轮固定底部按钮，只有实际按压采集和导出中暂不可点；无样本/连接失败/未知库/哈希不匹配/中断仍可导出已有基础报告。哈希不匹配用户现场本轮没有设备复现，不能把旧文案条件认作唯一原因。安全采样与导出分开，原校验、算法库选项/智能默认、机型适配和报告内容契约保持，没有重启算法研究。
+- **一致操作/生命周期**：统一ZIP与专项报告均生成一次→SAF保存→打开分享面板，复用同一个文件和原read grant/ClipData/EXTRA_STREAM。重复点击与Picker结果只消费一次，取消可重来，退出后迟到结果不更新UI。保存与chooser打开失败分别简短提示；chooser打开不等于发送完成。使用应用Context与原有限worker，不修改图片拖拽资源/权限策略。
+- **提交**：42e815e后端/隐私过滤/新窄报告路径，aecb3d5页面/旧入口/真实目录搜索，6c32691触控固定出口/状态和保存分享，118835b增版beta20/262。代码/报告地图见[DIAGNOSTICS](DIAGNOSTICS.md)，此前生命周期与追踪包含在这条源码祖先中。
+- **测试与失败证据**：先抽取原显示条件，真实运行2项1失败，确认初始入口缺失；更早新导航测试缺图标import导致编译失败单独修正。首轮修复后8类36项通过，最终扩展后完整125类660项通过。复用既有测试，增加完整/缺失ZIP、配置不变、真实header/PFD未知字段、隐私过滤、大旧日志前缀/受控记录超预算保留最新、真实入口搜索、重复/取消/退出/迟到/save/chooser失败及触控各失败状态实际报告数据。原断言未改弱；失败日志/XML保存，不混作通过。
+- **未覆盖**：真实Miuix布局/大字体底部Insets、系统保存选择器/分享面板、跨UID授予实际效果、真实算法库读取/特殊ROM生命周期；没有实机或完整Android模拟器交互结果。当前特殊机型适配仍保留，用户哈希不匹配现场和微信/QQ最终接收/发送需按交付清单自行回归。
+
+## 中转站无变化调查（本轮，尚未确认为已修复）
+
+新版已先交付。已对比独立入口与安全中心嵌入入口、旧成功版本与当前的真实差异，未找到可确认的图片准备/MIME/条目/flags回归，因此未凭猜测修改生产拖放代码。46b36db引入的MediaStore Downloads兼容副本与当前cache代码一致，docs/DEVICE_VALIDATION的1.7.166/190曾记录单图微信当前聊天接收；本轮没有新设备证据。b2f306e主要改文字原生拖放，270925e刷新长按时选区，895d179/ec038f5以追踪/证据措辞为主。嵌入入口确有来源UID/真实窗口变为SecurityCenter、module→host临时授权和透传的差异，但仍只是需要区分的现场假设。
+
+交付后独立test-only提交e7c8d25补StashDragImageCacheTest，使用真实StashStore源文件与Robolectric假Downloads Provider，验证MIME、pending→ready、字节复制、复用、失效row重建、ready失败清理。新测试最初使用当前SDK不存在的android.test.mock，主review改为现有ShadowContentResolver注册，无依赖或生产变更；中转站5类37项针对性通过。随后testDebugUnitTest/lintDebug补跑54s成功，126类664项0失败/错误/跳过，Lint仍0错误180警告2提示，见outputs/verification/POST_DELIVERY_RESULTS.json。Beta20的生产main tree与补测试后相同：`d2be8b6a942c0b2fd4e427e4b8d7a9db8d71ea7b`，原APK/tag/哈希不变；实际Beta/R8证据沿用交付源码的2m28s完整链，不把本次test-only补跑写成再次R8构建。
+
+后续按用户导出的beta20 ZIP对照drag_prepare/asset_ready、source/native start、bridge/native END和目标实际变化；需要区分图片未准备、未启动、drop未接受、已接受但后继不可观察。保留全部原功能待办，本轮不恢复旧填框透明窗或联系人选择器。
+
+## 跨进程/异步操作追踪（上一轮历史）
 
 从ce857e2继续，三组Luna high分别负责取词/动作、Provider/识别窗口、中转站边界，主Agent审查和集中验证。前轮生命周期四个提交保持独立，不重做；稳定e25c667未改。未操作手机、安装、push、发布或触发云端CI。
 
