@@ -250,6 +250,7 @@ object StashOverlayPanel {
 
         private fun startContentDrag(source: View, clip: ClipData,
             shadow: View.DragShadowBuilder, flags: Int): Boolean {
+            val operation = OperationTrace.read(clip)
             if (embedded != null) {
                 if (embeddedDragRequestPending) return false
                 embeddedDragRequestPending = true
@@ -258,6 +259,8 @@ object StashOverlayPanel {
                     onFinished = { draggingContent = false })
                 embedded.startDrag(clip, shadow, flags,
                     onStarted = { started ->
+                        OperationTrace.event(operation, "module_drag_start_callback",
+                            if (started) "native_started" else "native_start_rejected")
                         if (started) {
                             val density = context.resources.displayMetrics.density
                             dragContentWidthDp = overlay.composeView.width / density
@@ -269,12 +272,18 @@ object StashOverlayPanel {
                             Toast.makeText(context, "系统未能开始拖拽，请重试", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    onEnded = ::finishEmbeddedDrag)
+                    onEnded = { result ->
+                        OperationTrace.event(operation, "module_drag_end_callback",
+                            if (result) "drop_accepted" else "not_accepted_or_aborted")
+                        finishEmbeddedDrag(result)
+                    })
                 return true
             }
+            var started = false
             overlay.observeDragHandoff({ active === this@Shelf },
                 onDropped = ::collapse,
                 onStarted = {
+                    OperationTrace.event(operation, "source_drag_start", "observed")
                     val density = context.resources.displayMetrics.density
                     val width = overlay.window.attributes.width
                     val height = overlay.window.attributes.height
@@ -283,10 +292,15 @@ object StashOverlayPanel {
                     draggingContent = true
                     resize(allowDuringDrag = true)
                 },
-                onFinished = { draggingContent = false })
-            var started = false
+                onFinished = {
+                    OperationTrace.event(operation, "source_drag_finish_callback",
+                        if (it) "drop_accepted" else "not_accepted_or_observation_cancelled")
+                    draggingContent = false
+                })
             try {
                 started = source.startDragAndDrop(clip, shadow, null, flags)
+                OperationTrace.event(operation, "source_drag_dispatch",
+                    if (started) "native_start_returned_true" else "native_start_returned_false")
                 return started
             } finally {
                 // Failed startup has no ENDED event; leave the original content and selection visible.

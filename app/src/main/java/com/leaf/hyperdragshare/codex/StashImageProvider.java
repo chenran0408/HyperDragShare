@@ -38,28 +38,40 @@ public final class StashImageProvider extends ContentProvider {
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-        DragShareLog.i("DragShare/Stash", "image open callerUid=" + Binder.getCallingUid());
-        if (!"r".equals(mode)) throw new FileNotFoundException("Stash images are read-only");
+        int callerUid = Binder.getCallingUid();
+        if (!"r".equals(mode)) {
+            OperationTrace.imageAccess(uri, "mode_rejected", callerUid);
+            throw new FileNotFoundException("Stash images are read-only");
+        }
         try {
-            return ParcelFileDescriptor.open(store.openImage(id(uri)), ParcelFileDescriptor.MODE_READ_ONLY);
+            ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(
+                    store.openImage(id(uri)), ParcelFileDescriptor.MODE_READ_ONLY);
+            OperationTrace.imageAccess(uri, "descriptor_opened", callerUid);
+            return descriptor;
         } catch (IOException | IllegalArgumentException error) {
-            DragShareLog.w("DragShare/Stash", "unable to open shared stash image", error);
+            OperationTrace.imageAccess(uri, "open_failed", callerUid);
+            DragShareLog.w("DragShare/Stash", "unable to open shared stash image error=" + error.getClass().getSimpleName());
             FileNotFoundException failure = new FileNotFoundException("中转站图片不可用");
             failure.initCause(error);
             throw failure;
+        } catch (SecurityException error) {
+            OperationTrace.imageAccess(uri, "open_failed", callerUid);
+            DragShareLog.w("DragShare/Stash", "unable to open shared stash image error=" + error.getClass().getSimpleName());
+            throw error;
         }
     }
 
     @Override
     public String getType(Uri uri) {
-        DragShareLog.i("DragShare/Stash", "image type callerUid=" + Binder.getCallingUid());
+        OperationTrace.imageAccess(uri, "mime_query", Binder.getCallingUid());
         StashStore.Entry entry = entry(uri);
         return entry == null ? null : entry.mime;
     }
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) {
-        DragShareLog.i("DragShare/Stash", "image query callerUid=" + Binder.getCallingUid());
+        int callerUid = Binder.getCallingUid();
+        OperationTrace.imageAccess(uri, "metadata_query", callerUid);
         String[] columns = projection == null
                 ? new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE} : projection;
         MatrixCursor cursor = new MatrixCursor(columns);
@@ -76,9 +88,10 @@ public final class StashImageProvider extends ContentProvider {
             return cursor;
         } catch (IOException | SecurityException | IllegalArgumentException error) {
             cursor.close();
-            DragShareLog.w("DragShare/Stash", "image drop metadata failed", error);
+            OperationTrace.imageAccess(uri, "metadata_query_failed", callerUid);
+            DragShareLog.w("DragShare/Stash", "image drop metadata failed error=" + error.getClass().getSimpleName());
             new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(getContext(),
-                    "图片未能交给目标应用，原图仍保留：" + error.getMessage(), Toast.LENGTH_LONG).show());
+                    "无法读取图片信息，原图仍保留", Toast.LENGTH_LONG).show());
             throw new IllegalStateException("无法读取中转站图片信息", error);
         } finally { Binder.restoreCallingIdentity(identity); }
     }

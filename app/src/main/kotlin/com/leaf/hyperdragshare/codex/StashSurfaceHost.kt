@@ -53,6 +53,7 @@ internal class StashSurfaceHost private constructor(
     private var closeRequestInFlight = false
     private val dragGrantedUris = linkedSetOf<Uri>()
     private var dragGrantPackage: String? = null
+    private var dragOperation = "-"
     private val dragBridge = EmbeddedStashDragBridge(main,
         startNativeDrag = { clip, flags, shadow, result ->
             if (!surface.transferTouchGestureToHost()) {
@@ -130,13 +131,16 @@ internal class StashSurfaceHost private constructor(
                   onStarted: (Boolean) -> Unit, onEnded: (Boolean) -> Unit) {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (released || !ownerAlive || !owner.asBinder().isBinderAlive) {
+            OperationTrace.event(OperationTrace.read(clip), "module_host_drag_request", "rejected_unavailable")
             onStarted(false)
             return
         }
+        OperationTrace.event(OperationTrace.read(clip), "module_host_drag_request", "forwarded")
         val shadowSnapshot = if (ownerSupportsShadowV1) {
             runCatching { StashDragShadowSnapshot.capture(shadow) }.getOrNull()
         } else null
         if (ownerSupportsShadowV1 && shadowSnapshot == null) {
+            OperationTrace.event(OperationTrace.read(clip), "shadow_payload", "capture_failed")
             onStarted(false)
             return
         }
@@ -151,6 +155,7 @@ internal class StashSurfaceHost private constructor(
         val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }.distinct()
         if (uris.isEmpty()) return
         require(flags and View.DRAG_FLAG_GLOBAL_URI_READ != 0) { "Image drag is missing read permission" }
+        dragOperation = OperationTrace.read(clip)
         val hostPackage = context.packageManager.getPackagesForUid(uid)
             ?.firstOrNull { it == SIDEBAR_PACKAGE }
             ?: throw SecurityException("Sidebar caller UID no longer owns $SIDEBAR_PACKAGE")
@@ -160,21 +165,26 @@ internal class StashSurfaceHost private constructor(
             context.grantUriPermission(hostPackage, uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             dragGrantedUris += uri
         }
+        OperationTrace.event(dragOperation, "sidebar_uri_grant", "granted")
     }
 
     private fun revokeDragUris() {
         val hostPackage = dragGrantPackage
+        var failed = false
         dragGrantedUris.forEach { uri ->
             try {
                 if (hostPackage != null) context.revokeUriPermission(
                     hostPackage, uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             catch (error: RuntimeException) {
-                DragShareLog.w("DragShare/Sidebar", "Unable to revoke embedded drag grant", error)
+                failed = true
+                DragShareLog.w("DragShare/Sidebar", "Unable to revoke embedded drag grant error=" + error.javaClass.simpleName)
             }
         }
         dragGrantedUris.clear()
         dragGrantPackage = null
+        if (dragOperation != "-") OperationTrace.event(dragOperation, "sidebar_uri_grant", if (failed) "revoke_failed" else "revoked")
+        dragOperation = "-"
     }
 
     fun release() {

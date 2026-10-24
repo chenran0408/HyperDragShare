@@ -219,6 +219,7 @@ final class NativeSidebarHooks {
         SurfaceView surface;
         ISidebarDragCallback dragCallback;
         StashDragShadowBuilder dragShadow;
+        String dragOperation = "-";
         View dragWindowRoot;
         boolean dragWindowWasNotTouchable;
         final ISidebarHost host = new ISidebarHost.Stub() {
@@ -432,7 +433,7 @@ final class NativeSidebarHooks {
         void releaseContent() {
             ++generation;
             cancelEmbeddedDrag();
-            finishEmbeddedDrag(false);
+            finishEmbeddedDrag(false, false);
             ISidebarContent lease = content; content = null;
             if (lease != null) {
                 if (contentDeath != null) lease.asBinder().unlinkToDeath(contentDeath, 0);
@@ -459,6 +460,7 @@ final class NativeSidebarHooks {
                 int bitmapWidthPx, int bitmapHeightPx, int shadowWidthPx, int shadowHeightPx,
                 int scaledHotspotX, int scaledHotspotY, boolean shadowV1, ISidebarDragCallback callback) {
             SurfaceView source = surface;
+            String operation = OperationTrace.read(clip);
             int allowedFlags = View.DRAG_FLAG_GLOBAL | View.DRAG_FLAG_GLOBAL_URI_READ;
             if (disposed || selected != Section.STASH || content == null || dragCallback != null
                     || source == null || !source.isAttachedToWindow() || clip == null || clip.getItemCount() == 0
@@ -467,15 +469,21 @@ final class NativeSidebarHooks {
                         + " mounted=" + (content != null) + " active=" + (dragCallback != null)
                         + " attached=" + (source != null && source.isAttachedToWindow())
                         + " flags=" + flags);
+                OperationTrace.event(operation, "native_drag_start", "rejected_validation");
                 notifyDragStarted(callback, false);
                 return;
             }
             StashDragShadowBuilder activeShadow = shadowV1 ? StashDragShadowBuilder.decode(shadowPng,
                     bitmapWidthPx, bitmapHeightPx, shadowWidthPx, shadowHeightPx,
                     scaledHotspotX, scaledHotspotY) : null;
-            if (shadowV1 && activeShadow == null) { notifyDragStarted(callback, false); return; }
+            if (shadowV1 && activeShadow == null) {
+                OperationTrace.event(operation, "native_drag_start", "rejected_shadow");
+                notifyDragStarted(callback, false);
+                return;
+            }
             dragCallback = callback;
             dragShadow = activeShadow;
+            dragOperation = operation;
             final ISidebarDragCallback session = callback;
             source.setOnDragListener((view, event) -> {
                 if (event.getAction() == android.view.DragEvent.ACTION_DRAG_STARTED) {
@@ -493,15 +501,16 @@ final class NativeSidebarHooks {
                 started = source.startDragAndDrop(clip,
                         activeShadow == null ? new View.DragShadowBuilder(source) : activeShadow, null, flags);
             } catch (RuntimeException error) {
-                DragShareLog.w(TAG, "Native sidebar could not start stash drag", error);
+                DragShareLog.w(TAG, "Native sidebar could not start stash drag error=" + error.getClass().getSimpleName());
                 started = false;
             }
-            DragShareLog.i(TAG, "stash host drag started=" + started + " shadow_v1=" + shadowV1);
+            OperationTrace.event(operation, "native_drag_start", started ? "started" : "rejected");
             if (!started) {
                 DragShareLog.w(TAG, "Native sidebar window declined stash drag startup");
                 source.setOnDragListener(null);
                 if (dragCallback == session) {
                     dragCallback = null;
+                    dragOperation = "-";
                     if (dragShadow == activeShadow) dragShadow = null;
                     if (activeShadow != null) activeShadow.recycle();
                 }
@@ -547,7 +556,7 @@ final class NativeSidebarHooks {
 
         void notifyDragStarted(ISidebarDragCallback callback, boolean started) {
             try { callback.onStarted(started); }
-            catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before start result", error); }
+            catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before start result error=" + error.getClass().getSimpleName()); }
         }
 
         void enforceModuleCaller() {
@@ -563,9 +572,13 @@ final class NativeSidebarHooks {
                 throw new SecurityException("Sidebar drag request came from an untrusted UID");
         }
 
-        void finishEmbeddedDrag(boolean accepted) {
+        void finishEmbeddedDrag(boolean accepted) { finishEmbeddedDrag(accepted, true); }
+
+        void finishEmbeddedDrag(boolean accepted, boolean observedEnd) {
             ISidebarDragCallback callback = dragCallback;
             dragCallback = null;
+            String operation = dragOperation;
+            dragOperation = "-";
             setDragWindowPassThrough(false);
             SurfaceView source = surface;
             if (source != null) source.setOnDragListener(null);
@@ -573,9 +586,11 @@ final class NativeSidebarHooks {
             dragShadow = null;
             if (shadow != null) shadow.recycle();
             if (callback == null) return;
-            DragShareLog.i(TAG, "stash host drag ended accepted=" + accepted);
+            OperationTrace.event(operation, "native_drag_end", observedEnd
+                    ? accepted ? "drop_accepted" : "drop_not_accepted"
+                    : "end_not_observed_abort");
             try { callback.onEnded(accepted); }
-            catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before end result", error); }
+            catch (RemoteException error) { DragShareLog.w(TAG, "Stash drag requester exited before end result error=" + error.getClass().getSimpleName()); }
         }
 
         void message(String message) {
@@ -586,9 +601,9 @@ final class NativeSidebarHooks {
         }
 
         void fail(Exception error) {
-            if (disposed) { DragShareLog.w(TAG, "Previous sidebar session failed after closing", error); return; }
+            if (disposed) { DragShareLog.w(TAG, "Previous sidebar session failed after closing error=" + error.getClass().getSimpleName()); return; }
             extensionFailed = true;
-            DragShareLog.w(TAG, "Sidebar integration failed; restoring native UI", error);
+            DragShareLog.w(TAG, "Sidebar integration failed; restoring native UI error=" + error.getClass().getSimpleName());
             panels.remove(owner); dispose();
             Toast.makeText(context, "侧边栏扩展暂不可用，已保留原生功能", Toast.LENGTH_LONG).show();
         }

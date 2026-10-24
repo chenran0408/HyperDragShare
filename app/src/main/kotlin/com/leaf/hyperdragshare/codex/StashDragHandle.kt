@@ -64,12 +64,13 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
     background: Int, startDrag: (View, ClipData, View.DragShadowBuilder, Int) -> Boolean,
     isHeld: () -> Boolean) {
     if (entries.isEmpty()) return
-    DragShareLog.i("DragShare/Stash", "drag entries=" + entries.joinToString(",") { it.kind + ":" + it.id.take(8) })
     val hasImages = entries.any { it.kind == StashStore.KIND_IMAGE }
     if (hasImages && entries.any { it.kind == StashStore.KIND_TEXT }) {
         Toast.makeText(view.context, "文字和图片请分别选取后拖出", Toast.LENGTH_LONG).show()
         return
     }
+    val operation = OperationTrace.fresh("stash")
+    OperationTrace.event(operation, "drag_prepare", "started")
     val density = view.resources.displayMetrics.density
     fun textPreview(label: String): View = TextView(view.context).apply {
         text = label
@@ -97,19 +98,25 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
                     val thumbnail = try {
                         decodeDragThumbnail(files.first())
                     } catch (error: IOException) {
-                        DragShareLog.w("DragShare/Stash", "Unable to decode optional drag thumbnail", error)
+                        DragShareLog.w("DragShare/Stash", "Unable to decode optional drag thumbnail error=" + error.javaClass.simpleName)
                         null
                     } catch (error: SecurityException) {
-                        DragShareLog.w("DragShare/Stash", "Permission denied decoding optional drag thumbnail", error)
+                        DragShareLog.w("DragShare/Stash", "Permission denied decoding optional drag thumbnail error=" + error.javaClass.simpleName)
                         null
                     }
                     uris to thumbnail
                 }
             }
             thumbnail = prepared.second
-            clipForStash(entries, prepared.first)
+            val clip = clipForStash(entries, prepared.first)
+            prepared.first.forEach { uri -> OperationTrace.event(operation, "asset_ready", "available", uri) }
+            clip
         }
-        if (!isHeld() || !view.isAttachedToWindow) return
+        OperationTrace.put(clip, operation)
+        if (!isHeld() || !view.isAttachedToWindow) {
+            OperationTrace.event(operation, "drag_prepare", "abandoned")
+            return
+        }
         val preview = when {
             hasImages -> thumbnail?.let {
                 imagePreview(view.context, it, entries.size, density, foreground, background)
@@ -126,12 +133,16 @@ private suspend fun startStashDrag(view: View, entries: List<StashStore.Entry>, 
         }
         val started = startDrag(view, clip, shadow,
             View.DRAG_FLAG_GLOBAL or if (hasImages) View.DRAG_FLAG_GLOBAL_URI_READ else 0)
+        OperationTrace.event(operation, "drag_dispatch",
+            if (started) "accepted_dispatch" else "rejected_dispatch")
         if (!started) Toast.makeText(view.context, "系统未能开始拖拽，请重试", Toast.LENGTH_SHORT).show()
     } catch (error: IOException) {
-        DragShareLog.w("DragShare/Stash", "Unable to prepare drag image", error)
+        OperationTrace.event(operation, "drag_prepare", "failed")
+        DragShareLog.w("DragShare/Stash", "Unable to prepare drag image error=" + error.javaClass.simpleName)
         Toast.makeText(view.context, "无法准备拖放图片：${error.message}", Toast.LENGTH_LONG).show()
     } catch (error: SecurityException) {
-        DragShareLog.w("DragShare/Stash", "drag permission denied", error)
+        OperationTrace.event(operation, "drag_prepare", "failed")
+        DragShareLog.w("DragShare/Stash", "drag permission denied error=" + error.javaClass.simpleName)
         Toast.makeText(view.context, "系统拒绝拖出内容：${error.message}", Toast.LENGTH_LONG).show()
     }
 }
