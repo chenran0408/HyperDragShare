@@ -217,7 +217,7 @@ final class HoneycombOverlayController {
     void externalCancel() {
         HoneycombOverlayView current = view;
         cancelPendingMove(current);
-        runOnViewThread(current, current::onExternalCancel);
+        runOnViewThread(current, () -> current.onExternalCancel());
     }
 
     void setPaused(boolean paused) {
@@ -227,7 +227,7 @@ final class HoneycombOverlayController {
 
     void dismiss() {
         HoneycombOverlayView current = view;
-        runOnViewThread(current, current::playDismissal);
+        runOnViewThread(current, () -> current.playDismissal());
     }
 
     private void setLiveBlurSuppressed(boolean suppressed) {

@@ -116,12 +116,12 @@ final class TaskSwitcherOverlayController {
     void externalCancel() {
         TaskSwitcherOverlayView current = view;
         cancelPendingMove(current);
-        runOnViewThread(current, current::onExternalCancel);
+        runOnViewThread(current, () -> current.onExternalCancel());
     }
 
     void dismiss() {
         TaskSwitcherOverlayView current = view;
-        runOnViewThread(current, current::playDismissal);
+        runOnViewThread(current, () -> current.playDismissal());
     }
 
     void removeNow() {

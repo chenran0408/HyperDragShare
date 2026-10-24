@@ -140,8 +140,8 @@ final class SideWheelOverlayView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
-        handler.removeCallbacks(timeout);
         stopMotion();
+        handler.removeCallbacks(timeout);
         recycleVelocityTracker();
         super.onDetachedFromWindow();
     }
