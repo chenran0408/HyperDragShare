@@ -29,6 +29,7 @@ class ImageOcrActivity : ComponentActivity() {
 
     private fun receiveImage() {
         worker?.interrupt()
+        val request = requests.begin()
         val bigBang = intent.getBundleExtra(EXTRA_BIGBANG_ARGS)
         if (bigBang != null) {
             if (!BigBangOverlayLauncher.requestHosted(this, bigBang)) finish()
@@ -39,7 +40,6 @@ class ImageOcrActivity : ComponentActivity() {
             if (!ImageOcrOverlay.startHosted(this, hosted, intent.getBooleanExtra(EXTRA_QR, false))) finish()
             return
         }
-        val request = requests.begin()
         val source = resolveImageUri(intent)
         if (source == null) {
             Toast.makeText(this, "没有收到可读取的图片", Toast.LENGTH_LONG).show()
