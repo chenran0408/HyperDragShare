@@ -41,6 +41,7 @@ public final class ShareImageProviderTest {
         // Robolectric's MIME shadow starts empty; Android supplies this platform mapping.
         ShadowMimeTypeMap mapping = Shadow.extract(MimeTypeMap.getSingleton());
         mapping.addExtensionMimeTypeMapping("jpg", "image/jpeg");
+        mapping.addExtensionMimeTypeMapping("png", "image/png");
     }
 
     @Test public void sourceClassificationReturnsOnlyKnownCategoryOrUnknown() {
@@ -168,6 +169,8 @@ public final class ShareImageProviderTest {
                 result = provider.call(ImageStagingClient.METHOD_STAGE, null, extras);
             }
             assertNotNull(result);
+            assertFalse("staging keeps diagnostics optional and does not return a capability as trace metadata",
+                    result.containsKey(OperationTrace.EXTRA));
             Uri staged = Uri.parse(result.getString(ImageStagingClient.RESULT_URI));
             assertEquals("image/jpeg", provider.getType(staged));
             assertFalse(staged.getLastPathSegment().endsWith(".png"));
@@ -177,6 +180,31 @@ public final class ShareImageProviderTest {
             }
         } finally {
             source.delete();
+        }
+    }
+
+    @Test public void legacyByteArrayStageWithoutTraceStillReturnsReadableImage() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        ShareImageProvider provider = newProvider(context);
+        Bitmap bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
+        bitmap.eraseColor(Color.rgb(29, 91, 173));
+        byte[] png;
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output));
+            png = output.toByteArray();
+        } finally {
+            bitmap.recycle();
+        }
+
+        Bundle legacyRequest = new Bundle();
+        legacyRequest.putByteArray(ImageStagingClient.EXTRA_BYTES, png);
+        Bundle result = provider.call(ImageStagingClient.METHOD_STAGE, null, legacyRequest);
+
+        assertNotNull(result);
+        Uri staged = Uri.parse(result.getString(ImageStagingClient.RESULT_URI));
+        try (ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(
+                provider.openFile(staged, "r"))) {
+            assertArrayEquals(png, input.readAllBytes());
         }
     }
 }

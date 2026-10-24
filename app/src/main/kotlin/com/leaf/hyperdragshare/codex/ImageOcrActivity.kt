@@ -31,17 +31,29 @@ class ImageOcrActivity : ComponentActivity() {
         worker?.interrupt()
         val request = requests.begin()
         val bigBang = intent.getBundleExtra(EXTRA_BIGBANG_ARGS)
+        val nestedOperation = bigBang?.let { OperationTrace.read(it) } ?: "-"
+        val outerOperation = OperationTrace.read(intent.extras).let {
+            if (it == "-") OperationTrace.read(intent.clipData) else it
+        }
+        val operation = when {
+            nestedOperation != "-" -> nestedOperation
+            outerOperation != "-" -> outerOperation
+            else -> OperationTrace.fresh("image_receive")
+        }
+        if (bigBang != null) OperationTrace.put(bigBang, operation)
+        OperationTrace.event(operation, "image_activity", "received")
         if (bigBang != null) {
             if (!BigBangOverlayLauncher.requestHosted(this, bigBang)) finish()
             return
         }
         val hosted = intent.getParcelableExtra(EXTRA_HOSTED_URI, Uri::class.java)
         if (hosted != null) {
-            if (!ImageOcrOverlay.startHosted(this, hosted, intent.getBooleanExtra(EXTRA_QR, false))) finish()
+            if (!ImageOcrOverlay.startHosted(this, hosted, intent.getBooleanExtra(EXTRA_QR, false), operation)) finish()
             return
         }
         val source = resolveImageUri(intent)
         if (source == null) {
+            OperationTrace.event(operation, "image_receive", "rejected_missing_uri")
             Toast.makeText(this, "没有收到可读取的图片", Toast.LENGTH_LONG).show()
             finish()
             return
@@ -49,21 +61,27 @@ class ImageOcrActivity : ComponentActivity() {
         worker = Thread({
             try {
                 val owned = IncomingImageCache.copy(this, source)
+                OperationTrace.event(operation, "image_receive", "copy_completed", source)
                 runOnUiThread {
                     if (requests.accepts(request) && !isFinishing && !isDestroyed) {
-                        if (!ImageOcrOverlay.startHosted(this, Uri.fromFile(owned), false)) finish()
-                    } else if (!owned.delete()) DragShareLog.w(TAG, "unable to remove cancelled OCR input")
+                        if (!ImageOcrOverlay.startHosted(this, Uri.fromFile(owned), false, operation)) finish()
+                    } else {
+                        OperationTrace.event(operation, "image_receive", "late_ignored", source)
+                        if (!owned.delete()) DragShareLog.w(TAG, "unable to remove cancelled OCR input")
+                    }
                 }
             } catch (error: IOException) {
+                OperationTrace.event(operation, "image_receive", "failed_IOException", source)
                 fail(request, error)
             } catch (error: SecurityException) {
+                OperationTrace.event(operation, "image_receive", "failed_SecurityException", source)
                 fail(request, error)
             }
         }, "receive-ocr-image").also { it.start() }
     }
 
     private fun fail(request: Long, error: Exception) {
-        DragShareLog.w(TAG, "unable to receive shared image", error)
+        DragShareLog.w(TAG, "unable to receive shared image type=${error.javaClass.simpleName}")
         runOnUiThread {
             if (requests.accepts(request) && !isFinishing && !isDestroyed) {
                 Toast.makeText(this, "接收图片失败：${error.message}", Toast.LENGTH_LONG).show()

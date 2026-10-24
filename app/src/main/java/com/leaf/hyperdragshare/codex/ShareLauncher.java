@@ -4,6 +4,7 @@ import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+
 final class ShareLauncher {
     private ShareLauncher() {}
 
@@ -13,6 +14,16 @@ final class ShareLauncher {
             ShareTarget target,
             Uri stagedImage,
             DragShareToast toast) {
+        launch(context, payload, target, stagedImage, toast, OperationTrace.fresh("share"));
+    }
+
+    static void launch(
+            Context context,
+            CapturedContent payload,
+            ShareTarget target,
+            Uri stagedImage,
+            DragShareToast toast,
+            String operation) {
         try {
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType(payload.mimeType());
@@ -34,24 +45,29 @@ final class ShareLauncher {
                 intent.setDataAndType(stagedImage, payload.mimeType());
                 intent.putExtra(Intent.EXTRA_STREAM, stagedImage);
                 intent.putExtra(Intent.EXTRA_TITLE, "drag-share.png");
-                intent.setClipData(ClipData.newUri(
-                        context.getContentResolver(), "drag-share-image", stagedImage));
+                ClipData clip = ClipData.newUri(
+                        context.getContentResolver(), "drag-share-image", stagedImage);
+                OperationTrace.put(clip, operation);
+                intent.setClipData(clip);
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 ImageStagingClient.grantReadAccess(
                         context,
                         stagedImage,
                         target.component.getPackageName());
-                DragShareLog.i("DragShare/Share", "intent image data="
-                        + describeUri(stagedImage)
-                        + " flags=0x" + Integer.toHexString(intent.getFlags())
-                        + " clip=true stream=true grant=true");
             }
+            android.os.Bundle trace = new android.os.Bundle();
+            OperationTrace.put(trace, operation);
+            intent.putExtras(trace);
+            OperationTrace.event(operation, "share", "activity_requested", stagedImage);
             context.startActivity(intent);
-            DragShareLog.i("DragShare/Share", "startActivity succeeded target="
+            OperationTrace.event(operation, "share", "activity_launch_returned", stagedImage);
+            DragShareLog.i("DragShare/Share", "activity launch returned target="
                     + target.component.flattenToShortString());
         } catch (Throwable error) {
+            String errorType = error.getClass().getSimpleName();
+            OperationTrace.event(operation, "share", "failed_" + errorType, stagedImage);
             DragShareLog.w("DragShare/Share", "launch failed target="
-                    + target.component.flattenToShortString(), error);
+                    + target.component.flattenToShortString() + " error=" + errorType);
             if (stagedImage != null) {
                 try {
                     ImageStagingClient.revokeReadAccess(
@@ -66,14 +82,5 @@ final class ShareLauncher {
                 toast.show("无法打开 " + target.label);
             }
         }
-    }
-
-    private static String describeUri(Uri uri) {
-        if (uri == null) {
-            return "null";
-        }
-        return uri.getScheme() + "://" + uri.getAuthority()
-                + "/" + (uri.getPathSegments().isEmpty()
-                ? "" : uri.getPathSegments().get(0)) + "/<redacted>";
     }
 }

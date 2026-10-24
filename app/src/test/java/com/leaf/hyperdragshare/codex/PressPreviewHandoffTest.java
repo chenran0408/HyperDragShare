@@ -453,9 +453,9 @@ public final class PressPreviewHandoffTest {
     // Establish the passive native preview state without attaching real overlay windows.
     private static Object nativeSession(DragShareController controller, long downTime) throws Exception {
         Class<?> type = Class.forName(DragShareController.class.getName() + "$Session");
-        var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class);
+        var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class, String.class);
         constructor.setAccessible(true);
-        Object session = constructor.newInstance(CapturedContent.text("test", "test.app", null), downTime);
+        Object session = constructor.newInstance(CapturedContent.text("test", "test.app", null), downTime, OperationTrace.id("press", downTime));
         field(controller, "session").set(controller, session);
         field(controller, "active").set(controller, true);
         return session;
@@ -464,9 +464,9 @@ public final class PressPreviewHandoffTest {
     private static Object pendingWeChat(CapturedContent content, long request, boolean textWindowAccepted,
                                         String text) throws Exception {
         Class<?> type = Class.forName(PressCaptureSource.class.getName() + "$PendingWeChat");
-        var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class);
+        var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class, String.class);
         constructor.setAccessible(true);
-        Object pending = constructor.newInstance(content, request);
+        Object pending = constructor.newInstance(content, request, OperationTrace.id("press", request));
         field(pending, "ocrComplete").setBoolean(pending, true);
         field(pending, "text").set(pending, text);
         field(pending, "textDelivered").setBoolean(pending, textWindowAccepted);

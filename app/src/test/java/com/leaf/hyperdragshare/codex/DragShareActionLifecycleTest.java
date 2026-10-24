@@ -22,6 +22,7 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.LooperMode;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowLooper;
+import org.robolectric.shadows.ShadowLog;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -40,6 +41,7 @@ public final class DragShareActionLifecycleTest {
     private DragShareController controller;
 
     @Before public void resetShadows() {
+        ShadowLog.clear();
         ImageStagingShadow.callbacks.clear();
         ImageStagingShadow.revokedUris.clear();
         ClipboardWriterShadow.requests.clear();
@@ -84,6 +86,8 @@ public final class DragShareActionLifecycleTest {
         Bitmap oldBitmap = bitmap();
         CapturedContent oldPayload = CapturedContent.image(oldBitmap, "old.app", null, true);
         Object oldSession = startImageGesture(oldPayload, 201L);
+        String oldOperation = (String) get(oldSession, "operationId");
+        assertEquals(OperationTrace.id("press", 201L), oldOperation);
         ImageStagingClient.Callback oldCallback = onlyStagingCallback();
         ShareTarget oldTarget = ShareTarget.copyImageToClipboard(null);
         set(controller, "selectedTarget", oldTarget);
@@ -93,6 +97,7 @@ public final class DragShareActionLifecycleTest {
         Bitmap newBitmap = bitmap();
         CapturedContent newPayload = CapturedContent.image(newBitmap, "new.app", null, true);
         Object newSession = startImageGesture(newPayload, 202L);
+        String newOperation = (String) get(newSession, "operationId");
         assertFalse(newSession == oldSession);
         View newPreview = (View) get(controller, "previewView");
         Uri oldUri = Uri.parse("content://com.leaf.hyperdragshare.codex.share/images/captured-old");
@@ -113,6 +118,10 @@ public final class DragShareActionLifecycleTest {
         assertFalse(newBitmap.isRecycled());
         request.callback.onComplete(new IOException("clipboard denied"));
         idleMain();
+        String clipboardEvents = operationEvents("stage=clipboard");
+        assertTrue(clipboardEvents.contains("op=" + oldOperation + " stage=clipboard outcome=failed_IOException"));
+        assertFalse(clipboardEvents.contains("op=" + newOperation + " stage=clipboard outcome=failed_IOException"));
+        assertFalse(clipboardEvents.contains(oldUri.toString()));
         assertFalse((boolean) get(newSession, "cancelled"));
         assertSame(newSession, get(controller, "session"));
         assertSame(newPreview, get(controller, "previewView"));
@@ -122,6 +131,27 @@ public final class DragShareActionLifecycleTest {
         idleMain();
     }
 
+    @Test public void acceptedActionCanCompleteAfterControllerWindowDestroyed() throws Exception {
+        Bitmap image = bitmap();
+        Object session = startImageGesture(CapturedContent.image(image, "old.app", null, true), 211L);
+        ImageStagingClient.Callback stage = onlyStagingCallback();
+        set(controller, "selectedTarget", ShareTarget.copyImageToClipboard(null));
+        invoke(controller, "finishGestureOnMain", new Class<?>[]{boolean.class}, true);
+        Uri uri = Uri.parse("content://com.leaf.hyperdragshare.codex.share/shared/accepted-image");
+        stage.onStaged(uri);
+        idleMain();
+        assertEquals(1, ClipboardWriterShadow.requests.size());
+        controller.destroy();
+        idleMain();
+        ClipboardWriterShadow.requests.get(0).callback.onComplete(null);
+        idleMain();
+        assertTrue(operationEvents("stage=clipboard").contains("op=" + get(session, "operationId")
+                + " stage=clipboard outcome=completed"));
+        assertFalse(image.isRecycled());
+        assertTrue(ImageStagingShadow.revokedUris.isEmpty());
+        assertFalse(controller.isActive());
+    }
+
     @Test public void cancelledOrDestroyedSessionIgnoresLateStagingResult() throws Exception {
         CapturedContent cancelledPayload = CapturedContent.image(
                 bitmap(), "cancelled.app", null, true);
@@ -129,10 +159,13 @@ public final class DragShareActionLifecycleTest {
         ImageStagingClient.Callback cancelledCallback = onlyStagingCallback();
         invoke(controller, "cancelGestureOnMain", new Class<?>[0]);
         cancelledCallback.onStaged(Uri.parse(
-                "content://com.leaf.hyperdragshare.codex.share/images/cancelled"));
+                "content://com.leaf.hyperdragshare.codex.share/images/private-cancelled-token"));
         idleMain();
         assertTrue((boolean) get(cancelledSession, "cancelled"));
         assertTrue(ClipboardWriterShadow.requests.isEmpty());
+        String lateEvents = operationEvents("stage=stage outcome=late_ignored");
+        assertTrue(lateEvents.contains("op=" + get(cancelledSession, "operationId")));
+        assertFalse(lateEvents.contains("private-cancelled-token"));
 
         CapturedContent destroyedPayload = CapturedContent.image(
                 bitmap(), "destroyed.app", null, true);
@@ -159,6 +192,10 @@ public final class DragShareActionLifecycleTest {
         Object session = get(controller, "session");
         assertNotNull(session);
         assertTrue(controller.isActive());
+        String operation = (String) get(session, "operationId");
+        String showEvents = operationEvents("op=" + operation);
+        assertTrue(showEvents.contains("stage=show outcome=accepted"));
+        assertTrue(showEvents.contains("stage=preview outcome=attached"));
         return session;
     }
 
@@ -173,6 +210,14 @@ public final class DragShareActionLifecycleTest {
 
     private static void idleMain() {
         ShadowLooper.shadowMainLooper().idle();
+    }
+
+    private static String operationEvents(String contains) {
+        StringBuilder result = new StringBuilder();
+        for (ShadowLog.LogItem item : ShadowLog.getLogsForTag("DragShare/Operation")) {
+            if (item.msg.contains(contains)) result.append(item.msg).append('\n');
+        }
+        return result.toString();
     }
 
     private static Object get(Object object, String name) throws Exception {

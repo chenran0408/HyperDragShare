@@ -111,6 +111,7 @@ class ImageOcrActivityExitTest {
     @Test
     fun lateSuccessfulCopyCannotReplaceBigBangIntentAndDeletesItsOwnedFile() {
         val args = Bundle().apply { putString("text", "new text request") }
+        assertFalse("legacy Bundle has no trace marker", args.containsKey(OperationTrace.EXTRA))
         controller.newIntent(Intent().putExtra(ImageOcrActivity.EXTRA_BIGBANG_ARGS, args))
         assertEquals(1, BigBangOverlayLauncherShadow.requestCount)
 
@@ -260,6 +261,13 @@ class ImageOcrActivityExitTest {
             @Implementation
             @JvmStatic
             fun startHosted(activity: Activity, uri: Uri, qr: Boolean): Boolean {
+                synchronized(uris) { uris.add(uri) }
+                return true
+            }
+
+            @Implementation
+            @JvmStatic
+            fun startHosted(activity: Activity, uri: Uri, qr: Boolean, operation: String): Boolean {
                 synchronized(uris) { uris.add(uri) }
                 return true
             }

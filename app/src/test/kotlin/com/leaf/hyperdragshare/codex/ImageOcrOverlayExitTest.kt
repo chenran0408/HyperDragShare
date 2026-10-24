@@ -112,10 +112,11 @@ class ImageOcrOverlayExitTest {
         onResult: (String?) -> Unit,
     ): Pair<Any, Any> {
         val jobClass = Class.forName("${ImageOcrOverlay::class.java.name}\$Job")
-        val constructor = jobClass.declaredConstructors.single { it.parameterCount == 7 }
+        val constructor = jobClass.declaredConstructors.single { it.parameterCount == 8 }
         constructor.isAccessible = true
         val uri = Uri.fromFile(File(context.cacheDir, "pending-image.png"))
-        val job = constructor.newInstance(context, uri, qr, null as View?, onResult, null as Activity?, null)
+        val job = constructor.newInstance(context, uri, qr, null as View?, onResult,
+            null as Activity?, null, "-")
         val window = jobClass.getDeclaredMethod("getWindow").apply { isAccessible = true }.invoke(job)
         currentWindow = requireNotNull(window)
         return job to requireNotNull(window)

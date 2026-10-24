@@ -31,10 +31,12 @@ object BigBangOverlayLauncher {
     @JvmStatic fun dismissPressWindow(input: Bundle?): Bundle {
         val confirmedAt = input?.getLong("press_confirmed_at") ?: 0L
         require(confirmedAt > 0L) { "缺少按压窗口标识" }
+        val operation = OperationTrace.read(input)
         cancelledPressAt = confirmedAt
         main.post {
             if (activePressAt == confirmedAt) active?.dismiss()
         }
+        OperationTrace.event(operation, "text_window_dismiss", "accepted")
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
@@ -49,8 +51,12 @@ object BigBangOverlayLauncher {
         val after = args.getString("after_text")
         val pressConfirmedAt = args.getLong("press_confirmed_at")
         val copyDirect = args.getBoolean("copy_direct_source")
+        val operation = OperationTrace.read(args).let {
+            if (it == "-") OperationTrace.fresh("bigbang") else it
+        }
+        OperationTrace.event(operation, "text_window", "accepted")
         main.post { open(context.applicationContext, text, x, y, before = before, after = after,
-            pressConfirmedAt = pressConfirmedAt, copyDirect = copyDirect) }
+            pressConfirmedAt = pressConfirmedAt, copyDirect = copyDirect, operation = operation) }
         return Bundle().apply { putBoolean("accepted", true) }
     }
 
@@ -59,12 +65,19 @@ object BigBangOverlayLauncher {
         val args = input ?: return false
         val text = args.getString("text").orEmpty()
         if (text.isBlank() || activity.isFinishing || activity.isDestroyed) return false
+        val operation = OperationTrace.read(args).let {
+            if (it == "-") OperationTrace.fresh("bigbang") else it
+        }
+        OperationTrace.event(operation, "text_window", "accepted")
         main.post {
-            if (activity.isFinishing || activity.isDestroyed) return@post
+            if (activity.isFinishing || activity.isDestroyed) {
+                OperationTrace.event(operation, "text_window", "late_ignored")
+                return@post
+            }
             open(activity, text, args.getInt("x", -1), args.getInt("y", -1),
                 before = args.getString("before_text"), after = args.getString("after_text"),
                 pressConfirmedAt = args.getLong("press_confirmed_at"),
-                copyDirect = args.getBoolean("copy_direct_source"), host = activity)
+                copyDirect = args.getBoolean("copy_direct_source"), host = activity, operation = operation)
         }
         return true
     }
@@ -90,9 +103,13 @@ object BigBangOverlayLauncher {
 
     private fun open(app: Context, text: String, x: Int, y: Int, savedState: Bundle? = null,
         before: String? = null, after: String? = null, pressConfirmedAt: Long = 0L, copyDirect: Boolean = false,
-        host: android.app.Activity? = null) {
-        if (host == null && pressConfirmedAt > 0L && pressConfirmedAt == cancelledPressAt) return
+        host: android.app.Activity? = null, operation: String = "-") {
+        if (host == null && pressConfirmedAt > 0L && pressConfirmedAt == cancelledPressAt) {
+            OperationTrace.event(operation, "text_window", "ignored_cancelled")
+            return
+        }
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
+            OperationTrace.event(operation, "text_window", "rejected_locked")
             Toast.makeText(app, "请解锁后打开分词窗口", Toast.LENGTH_SHORT).show()
             host?.finish()
             return
@@ -188,7 +205,9 @@ object BigBangOverlayLauncher {
         active = overlay
         activePressAt = pressConfirmedAt
         activeHost = host
-        if (overlay.show(pressConfirmedAt)) {
+        val shown = overlay.show(pressConfirmedAt)
+        OperationTrace.event(operation, "text_window", if (shown) "shown" else "show_failed")
+        if (shown) {
             session.open(text, x, y, savedState, before, after)
             if (copyDirect) session.showDirectActions(text)
         }

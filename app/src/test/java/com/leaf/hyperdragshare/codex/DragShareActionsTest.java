@@ -40,6 +40,7 @@ import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowContentResolver;
 import org.robolectric.shadows.ShadowMimeTypeMap;
 import org.robolectric.shadows.ShadowApplication;
+import org.robolectric.shadows.ShadowLog;
 import org.robolectric.shadows.ShadowLooper;
 
 import java.io.File;
@@ -76,6 +77,7 @@ public final class DragShareActionsTest {
     private StartSnapshotContext startContext;
 
     @Before public void setUp() throws Exception {
+        ShadowLog.clear();
         context = RuntimeEnvironment.getApplication();
         ShadowMimeTypeMap mapping = Shadow.extract(MimeTypeMap.getSingleton());
         mapping.addExtensionMimeTypeMapping("png", "image/png");
@@ -123,7 +125,8 @@ public final class DragShareActionsTest {
         Uri image = stagedImage("share-contract");
 
         actions.execute(CapturedContent.image(bitmap(), "source.app", null, true),
-                new ShareTarget(RECEIVER, "Receiver", null), image, 10f, 20f);
+                new ShareTarget(RECEIVER, "Receiver", null), image, 10f, 20f,
+                "image-share-operation");
 
         Intent intent = nextStartedActivity();
         assertEquals(Intent.ACTION_SEND, intent.getAction());
@@ -133,6 +136,8 @@ public final class DragShareActionsTest {
         assertEquals(image, intent.getParcelableExtra(Intent.EXTRA_STREAM));
         assertNotNull(intent.getClipData());
         assertEquals(image, intent.getClipData().getItemAt(0).getUri());
+        assertEquals("image-share-operation", OperationTrace.read(intent.getExtras()));
+        assertEquals("image-share-operation", OperationTrace.read(intent.getClipData()));
         assertTrue((intent.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0);
         assertEquals(image, grantContext.grantedUri);
         assertEquals(RECEIVER_PACKAGE, grantContext.grantedPackage);
@@ -172,6 +177,35 @@ public final class DragShareActionsTest {
         assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION, grantContext.grantedFlags);
         assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION, grantContext.revokedFlags);
         assertTrue(DragShareToastShadow.messages.contains("无法打开 Receiver"));
+        String events = operationEvents();
+        assertTrue(events.contains("stage=share outcome=failed_IllegalStateException"));
+        assertFalse(events.contains("stage=share outcome=activity_launch_returned"));
+        assertFalse(events.contains(image.toString()));
+        assertFalse(events.contains("start rejected"));
+    }
+
+    @Test public void shareLaunchReturnedIsRecordedWithoutClaimingDelivery() {
+        actions.execute(CapturedContent.text("trace text", "source.app", null),
+                new ShareTarget(RECEIVER, "Receiver", null), null, 0f, 0f, "test-operation-1");
+
+        Intent intent = nextStartedActivity();
+        assertEquals("test-operation-1", OperationTrace.read(intent.getExtras()));
+        String events = operationEvents();
+        assertTrue(events.contains("op=test-operation-1 stage=action outcome=started"));
+        assertTrue(events.contains("op=test-operation-1 stage=share outcome=activity_requested"));
+        assertTrue(events.contains("op=test-operation-1 stage=share outcome=activity_launch_returned"));
+        assertFalse(events.contains("delivered"));
+        assertFalse(events.contains("opened"));
+    }
+
+    @Test public void missingOperationIdDoesNotBlockShareLaunch() {
+        actions.execute(CapturedContent.text("untraced text", "source.app", null),
+                new ShareTarget(RECEIVER, "Receiver", null), null, 0f, 0f, "-");
+
+        Intent intent = nextStartedActivity();
+        assertEquals(Intent.ACTION_SEND, intent.getAction());
+        assertEquals("untraced text", intent.getStringExtra(Intent.EXTRA_TEXT));
+        assertEquals("-", OperationTrace.read(intent.getExtras()));
     }
 
     @Test public void copyTextAndImageUseClipboardWriterAndDeliverSuccessCallbacks() throws Exception {
@@ -193,6 +227,7 @@ public final class DragShareActionsTest {
         awaitClipboardWorkerAndDrain();
         awaitMainToast("图片已复制到剪贴板");
         assertEquals(image, ClipboardManagerShadow.lastClip.getItemAt(0).getUri());
+        assertTrue(operationEvents().contains("stage=clipboard outcome=completed"));
     }
 
     @Test public void clipboardWriteFailureIsDeliveredThroughExistingFailureFeedback() throws Exception {
@@ -242,6 +277,7 @@ public final class DragShareActionsTest {
             assertEquals(StashStore.KIND_IMAGE, entries.get(0).kind);
             assertEquals(StashStore.KIND_TEXT, entries.get(1).kind);
         }
+        assertTrue(operationEvents().contains("stage=stash outcome=completed"));
     }
 
     @Test public void stashFailureReportsFailureWithoutCreatingAnEntry() throws Exception {
@@ -277,6 +313,7 @@ public final class DragShareActionsTest {
         assertFalse(image.isRecycled());
         assertEquals("drag-share-local-save", LocalImageSaverShadow.threadName);
         awaitMainToast("已保存到本地");
+        assertTrue(operationEvents().contains("stage=local_save outcome=completed"));
 
         LocalImageSaverShadow.failure = new IOException("disk full");
         LocalImageSaverShadow.saved = new CountDownLatch(1);
@@ -294,7 +331,8 @@ public final class DragShareActionsTest {
     @Test public void segmentationPassesTextContextCoordinatesAndChecksAcceptance() {
         CapturedContent content = CapturedContent.text(
                 "selected words", "source.app", null, "before words", "after words");
-        actions.execute(content, ShareTarget.textSegmentation(null), null, 12.6f, 39.4f);
+        actions.execute(content, ShareTarget.textSegmentation(null), null, 12.6f, 39.4f,
+                "segmentation-operation");
 
         assertNotNull(BigBangLauncherShadow.lastRequest);
         assertEquals("selected words", BigBangLauncherShadow.lastRequest.getString("text"));
@@ -302,19 +340,23 @@ public final class DragShareActionsTest {
         assertEquals("after words", BigBangLauncherShadow.lastRequest.getString("after_text"));
         assertEquals(13, BigBangLauncherShadow.lastRequest.getInt("x"));
         assertEquals(39, BigBangLauncherShadow.lastRequest.getInt("y"));
+        assertEquals("segmentation-operation", OperationTrace.read(BigBangLauncherShadow.lastRequest));
+        assertTrue(operationEvents().contains("stage=segmentation outcome=accepted"));
 
         BigBangLauncherShadow.accepted = false;
         BigBangLauncherShadow.lastRequest = null;
-        actions.execute(content, ShareTarget.textSegmentation(null), null, 1f, 2f);
+        actions.execute(content, ShareTarget.textSegmentation(null), null, 1f, 2f,
+                "segmentation-rejected-operation");
         assertNotNull(BigBangLauncherShadow.lastRequest);
         assertTrue(DragShareToastShadow.messages.stream()
                 .anyMatch(message -> message.startsWith("无法打开分词窗口：")));
+        assertTrue(operationEvents().contains("stage=segmentation outcome=rejected"));
     }
 
     @Test public void ocrAndQrOpenDistinctImageIntentsWithTheSameUriGrantContract() throws Exception {
         Uri image = stagedImage("ocr-qr");
         actions.execute(CapturedContent.image(bitmap(), "source.app", null, true),
-                ShareTarget.imageOcr(null), image, 0f, 0f);
+                ShareTarget.imageOcr(null), image, 0f, 0f, "ocr-operation");
         Intent ocr = nextStartedActivity();
         assertEquals(new ComponentName(BuildConfig.APPLICATION_ID, ImageOcrActivity.class.getName()),
                 ocr.getComponent());
@@ -323,15 +365,19 @@ public final class DragShareActionsTest {
         assertEquals(image, ocr.getParcelableExtra(ImageOcrActivity.EXTRA_HOSTED_URI));
         assertFalse(ocr.getBooleanExtra(ImageOcrActivity.EXTRA_QR, true));
         assertEquals(image, ocr.getClipData().getItemAt(0).getUri());
+        assertEquals("ocr-operation", OperationTrace.read(ocr.getExtras()));
+        assertEquals("ocr-operation", OperationTrace.read(ocr.getClipData()));
         assertTrue((ocr.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0);
 
         actions.execute(CapturedContent.image(bitmap(), "source.app", null, true),
-                ShareTarget.qrScan(null), image, 0f, 0f);
+                ShareTarget.qrScan(null), image, 0f, 0f, "qr-operation");
         Intent qr = nextStartedActivity();
         assertEquals(image, qr.getData());
         assertEquals(image, qr.getParcelableExtra(ImageOcrActivity.EXTRA_HOSTED_URI));
         assertTrue(qr.getBooleanExtra(ImageOcrActivity.EXTRA_QR, false));
         assertEquals(image, qr.getClipData().getItemAt(0).getUri());
+        assertEquals("qr-operation", OperationTrace.read(qr.getExtras()));
+        assertEquals("qr-operation", OperationTrace.read(qr.getClipData()));
         assertTrue((qr.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0);
     }
 
@@ -365,6 +411,14 @@ public final class DragShareActionsTest {
         assertNotNull("expected a launched activity", robolectricIntent);
         assertFalse("expected startActivity snapshot", startContext.snapshots.isEmpty());
         return startContext.snapshots.remove(0);
+    }
+
+    private static String operationEvents() {
+        StringBuilder result = new StringBuilder();
+        for (ShadowLog.LogItem item : ShadowLog.getLogsForTag("DragShare/Operation")) {
+            result.append(item.msg).append('\n');
+        }
+        return result.toString();
     }
 
     private static Bitmap bitmap() {

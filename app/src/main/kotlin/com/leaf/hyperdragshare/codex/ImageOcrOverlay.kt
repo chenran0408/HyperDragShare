@@ -55,7 +55,15 @@ object ImageOcrOverlay {
     @JvmStatic fun start(context: Context, uri: Uri): Boolean = open(context, uri, false, null)
 
     @JvmStatic fun startFromPress(context: Context, uri: Uri, confirmedAt: Long): Boolean =
-        open(context, uri, false, null, pressConfirmedAt = confirmedAt)
+        startFromPress(context, uri, confirmedAt, "-")
+
+    @JvmStatic fun startFromPress(context: Context, uri: Uri, confirmedAt: Long,
+        operation: String): Boolean {
+        val accepted = open(context, uri, false, null, pressConfirmedAt = confirmedAt,
+            operation = operation)
+        OperationTrace.event(operation, "image_ocr", if (accepted) "accepted" else "rejected", uri)
+        return accepted
+    }
 
     @JvmStatic fun startWithResult(context: Context, uri: Uri, onResult: (String?) -> Unit): Boolean =
         open(context, uri, false, null, onResult)
@@ -64,9 +72,17 @@ object ImageOcrOverlay {
         open(context, uri, true, owner)
 
     /** Starts the image window inside the transparent share Activity. */
-    @JvmStatic fun startHosted(activity: android.app.Activity, uri: Uri, qr: Boolean): Boolean {
-        if (activity.isFinishing || activity.isDestroyed) return false
-        main.post { showHosted(activity, uri, qr) }
+    @JvmStatic fun startHosted(activity: android.app.Activity, uri: Uri, qr: Boolean): Boolean =
+        startHosted(activity, uri, qr, "-")
+
+    @JvmStatic fun startHosted(activity: android.app.Activity, uri: Uri, qr: Boolean,
+        operation: String): Boolean {
+        if (activity.isFinishing || activity.isDestroyed) {
+            OperationTrace.event(operation, "image_window", "rejected_host_closed", uri)
+            return false
+        }
+        OperationTrace.event(operation, "image_window", "accepted", uri)
+        main.post { showHosted(activity, uri, qr, operation) }
         return true
     }
 
@@ -81,17 +97,22 @@ object ImageOcrOverlay {
         }
     }
 
-    private fun showHosted(activity: android.app.Activity, uri: Uri, qr: Boolean) {
-        if (activity.isFinishing || activity.isDestroyed) return
+    private fun showHosted(activity: android.app.Activity, uri: Uri, qr: Boolean, operation: String) {
+        if (activity.isFinishing || activity.isDestroyed) {
+            OperationTrace.event(operation, "image_window", "late_ignored", uri)
+            return
+        }
         replaceActive()
         val app = activity.applicationContext
         if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
+            OperationTrace.event(operation, "image_window", "rejected_locked", uri)
             activity.finish()
             return
         }
-        val job = Job(app, uri, qr, null, null, activity) { activity.finish() }
+        val job = Job(app, uri, qr, null, null, activity, { activity.finish() }, operation)
         active = job
         val shown = job.window.show()
+        OperationTrace.event(operation, "image_window", if (shown) "shown" else "show_failed", uri)
         DragShareLog.i("DragShare/ImageOcrWindow", "image window requested qr=$qr hosted=true shown=$shown")
         if (shown) job.decode() else activity.finish()
     }
@@ -103,7 +124,8 @@ object ImageOcrOverlay {
     }
 
     private fun open(context: Context, uri: Uri, qr: Boolean, owner: android.view.View?,
-        onResult: ((String?) -> Unit)? = null, pressConfirmedAt: Long = 0L): Boolean {
+        onResult: ((String?) -> Unit)? = null, pressConfirmedAt: Long = 0L,
+        operation: String = "-"): Boolean {
         if (!Settings.canDrawOverlays(context) && ForegroundActivity.resumed() == null) {
             main.post {
                 android.widget.Toast.makeText(context.applicationContext, "请先在模块设置中允许悬浮窗权限",
@@ -114,18 +136,21 @@ object ImageOcrOverlay {
         val app = context.applicationContext
         main.post {
             if (owner != null && !owner.isAttachedToWindow) {
+                OperationTrace.event(operation, "image_window", "rejected_owner_detached", uri)
                 onResult?.invoke(null)
                 return@post
             }
             replaceActive()
             if (app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked) {
+                OperationTrace.event(operation, "image_window", "rejected_locked", uri)
                 onResult?.invoke(null)
                 return@post
             }
             val host = ForegroundActivity.resumed()
-            val job = Job(app, uri, qr, owner, onResult, host)
+            val job = Job(app, uri, qr, owner, onResult, host, operation = operation)
             active = job
             val shown = job.window.show(pressConfirmedAt)
+            OperationTrace.event(operation, "image_window", if (shown) "shown" else "show_failed", uri)
             DragShareLog.i("DragShare/ImageOcrWindow",
                 "image window requested qr=$qr owner=${owner != null} hosted=${job.hosted} shown=$shown")
             if (shown) job.decode()
@@ -135,7 +160,8 @@ object ImageOcrOverlay {
 
     private class Job(private val app: Context, private val uri: Uri, private val qr: Boolean,
         private val owner: android.view.View?, private val onResult: ((String?) -> Unit)?,
-        val hostActivity: android.app.Activity? = null, private val onHostClosed: (() -> Unit)? = null) {
+        val hostActivity: android.app.Activity? = null, private val onHostClosed: (() -> Unit)? = null,
+        private val operation: String = "-") {
         val hosted: Boolean get() = hostActivity != null
         private val context: Context = hostActivity ?: app.createDisplayContext(
             app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
@@ -173,7 +199,8 @@ object ImageOcrOverlay {
                 if (wasActive) onHostClosed?.invoke()
             },
             onFailure = {
-                DragShareLog.w("DragShare/ImageOcrWindow", "window failed", it)
+                OperationTrace.event(operation, "image_window", "failed_${it.javaClass.simpleName}", uri)
+                DragShareLog.w("DragShare/ImageOcrWindow", "window failed type=${it.javaClass.simpleName}")
                 android.widget.Toast.makeText(app, "无法显示识别窗口：${it.message}", android.widget.Toast.LENGTH_LONG).show()
             },
         ) {
@@ -316,14 +343,16 @@ object ImageOcrOverlay {
             if (active === this) active = null
             dismissForReplacement()
             if (host == null) {
-                if (!open(app, uri, qr, owner, onResult)) onResult?.invoke(null)
+                if (!open(app, uri, qr, owner, onResult, operation = operation)) onResult?.invoke(null)
                 return
             }
             main.post {
                 if (host.isFinishing || host.isDestroyed) return@post
-                val next = Job(app, uri, qr, owner, onResult, host, closeHost)
+                val next = Job(app, uri, qr, owner, onResult, host, closeHost, operation)
                 active = next
-                if (next.window.show()) next.decode() else host.finish()
+                val shown = next.window.show()
+                OperationTrace.event(operation, "image_window", if (shown) "shown" else "show_failed", uri)
+                if (shown) next.decode() else host.finish()
             }
         }
 
@@ -354,7 +383,7 @@ object ImageOcrOverlay {
                 bitmap.recycle()
                 if (!cancelled) {
                     if (error == null) completed(text.orEmpty()) else failed(error)
-                }
+                } else OperationTrace.event(operation, "image_ocr", "late_ignored", uri)
             }
         }
 
@@ -363,23 +392,33 @@ object ImageOcrOverlay {
                 bitmap.recycle()
                 if (!cancelled) {
                     if (error != null) failed(error)
-                    else if (found.isEmpty()) errorText = "这张图片没有发现二维码或条形码"
-                    else codes = found
-                }
+                    else if (found.isEmpty()) {
+                        errorText = "这张图片没有发现二维码或条形码"
+                        OperationTrace.event(operation, "image_ocr", "empty", uri)
+                    } else {
+                        codes = found
+                        OperationTrace.event(operation, "image_ocr", "result_available", uri)
+                    }
+                } else OperationTrace.event(operation, "image_ocr", "late_ignored", uri)
             }
         }
 
         private fun completed(text: String) {
             if (text.isBlank()) {
+                OperationTrace.event(operation, "image_ocr", "empty", uri)
                 errorText = "这张图片没有识别到文字"
                 return
             }
+            OperationTrace.event(operation, "image_ocr", "result_available", uri)
             resultDelivered = true
             val host = hostActivity
             if (host != null && onResult == null && active === this) {
                 active = null
                 window.dismiss()
-                val args = android.os.Bundle().apply { putString("text", text) }
+                val args = android.os.Bundle().apply {
+                    putString("text", text)
+                    OperationTrace.put(this, operation)
+                }
                 if (!BigBangOverlayLauncher.requestHosted(host, args)) host.finish()
                 return
             }
@@ -390,7 +429,9 @@ object ImageOcrOverlay {
 
         private fun failed(error: Exception) {
             if (cancelled) return
-            DragShareLog.w("DragShare/ImageOcrWindow", "image recognition failed", error)
+            OperationTrace.event(operation, "image_ocr", "failed_${error.javaClass.simpleName}", uri)
+            DragShareLog.w("DragShare/ImageOcrWindow",
+                "image recognition failed type=${error.javaClass.simpleName}")
             if (codes != null) actionError = "无法打开：${error.message}"
             else errorText = "识别失败：${error.message}"
         }

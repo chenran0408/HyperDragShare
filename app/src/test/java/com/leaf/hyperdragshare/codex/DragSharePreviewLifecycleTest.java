@@ -115,9 +115,9 @@ public final class DragSharePreviewLifecycleTest {
 
     private static Object session(String text, long downTime) throws Exception {
         Class<?> type = Class.forName(DragShareController.class.getName() + "$Session");
-        var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class);
+        var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class, String.class);
         constructor.setAccessible(true);
-        return constructor.newInstance(CapturedContent.text(text, "test.app", null), downTime);
+        return constructor.newInstance(CapturedContent.text(text, "test.app", null), downTime, OperationTrace.id("press", downTime));
     }
 
     private static void preparePreview(DragShareController controller, View preview, Object session)

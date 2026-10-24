@@ -63,6 +63,7 @@ final class PressCaptureSource {
     private static final class PendingWeChat {
         final CapturedContent content;
         final long request;
+        final String operation;
         final long started;
         boolean ocrComplete;
         String text;
@@ -70,11 +71,16 @@ final class PressCaptureSource {
         boolean textDelivered;
         boolean textWindowAccepted;
 
-        PendingWeChat(CapturedContent content, long request) {
+        PendingWeChat(CapturedContent content, long request, String operation) {
             this.content = content;
             this.request = request;
+            this.operation = operation;
             this.started = SystemClock.elapsedRealtime();
         }
+    }
+
+    private String operationId() {
+        return OperationTrace.id("press", downTime);
     }
 
     PressCaptureSource(
@@ -128,7 +134,7 @@ final class PressCaptureSource {
             } catch (IOException | SecurityException | IllegalStateException error) {
                 DragShareLog.w(TAG, "connection stage=press_reader_failed elapsed_ms="
                         + (SystemClock.elapsedRealtime() - connectionStarted));
-                DragShareLog.w(TAG, "cannot prepare press reader", error);
+                DragShareLog.w(TAG, "cannot prepare press reader error=" + error.getClass().getSimpleName());
                 main.post(() -> {
                     readerOpening = false;
                     if (!stopped) readerFailed(null, "取词连接未建立，正在重连。" + error.getMessage(), false);
@@ -203,6 +209,7 @@ final class PressCaptureSource {
                 && "com.tencent.mm".equals(content.sourcePackage);
         if (!ownsCurrentPress || !isWeChatSource
                 || !settings.isSharingEnabled(content.isImage())) return false;
+        OperationTrace.event(operationId(), "portal_capture", "accepted");
         PendingWeChat pending = pendingWeChat;
         if (!content.isImage() && pending != null && pending.textWindowAccepted) {
             // OCR has already opened this press's text window; do not replace it with
@@ -291,12 +298,19 @@ final class PressCaptureSource {
         AtomicBoolean excludedByPolicy = new AtomicBoolean();
         worker.execute(() -> {
             long lookupStarted = SystemClock.elapsedRealtime();
+            OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture", "started");
             try {
-                if (request != generation || stopped) return;
+                if (request != generation || stopped) {
+                    OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture",
+                            "late_ignored");
+                    return;
+                }
                 SharedRootNodeCapture.Connection.PressResult result = session.capturePress(x, y, excluded,
                         settings.isSharingEnabled(false), settings.isSharingEnabled(true), earlyCapture, source ->
                                 acceptAutomaticSource(request, source, excludedByPolicy));
                 CapturedContent content = result.content;
+                OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture",
+                        content == null ? "empty" : "returned");
                 DragShareLog.i(TAG, "press capture returned elapsed_ms="
                         + (SystemClock.elapsedRealtime() - lookupStarted)
                         + " kind=" + (content == null ? "none" : content.isImage() ? "image" : "text"));
@@ -306,6 +320,8 @@ final class PressCaptureSource {
                 if (result.policyExcluded) excludedByPolicy.set(true);
                 main.post(() -> {
                     if (request != generation || !allowed()) {
+                        OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture",
+                                "late_ignored");
                         DragShareLog.i(TAG, "press payload dropped kind="
                                 + (content == null ? "none" : content.isImage() ? "image" : "text")
                                 + " reason=" + (stopped ? "stopped"
@@ -327,7 +343,9 @@ final class PressCaptureSource {
                     else schedule();
                 });
             } catch (IOException | SecurityException error) {
-                DragShareLog.w(TAG, "press lookup failed", error);
+                OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture",
+                        "failed_" + error.getClass().getSimpleName());
+                DragShareLog.w(TAG, "press lookup failed error=" + error.getClass().getSimpleName());
                 main.post(() -> {
                     if (stopped) return;
                     if (error instanceof SharedRootNodeCapture.ConnectionFailedException || error instanceof SecurityException) {
@@ -373,6 +391,7 @@ final class PressCaptureSource {
     }
 
     private void openText(long request, CapturedContent content) {
+        String operation = operationId();
         Bundle text = new Bundle();
         text.putString("text", content.text);
         text.putLong("press_confirmed_at", confirmedAt);
@@ -380,6 +399,7 @@ final class PressCaptureSource {
         text.putString("after_text", content.afterText);
         text.putInt("x", Math.round(downX));
         text.putInt("y", Math.round(downY));
+        OperationTrace.put(text, operation);
         if ("com.android.settings".equals(content.sourcePackage)) {
             try {
                 android.content.Intent bridge = new android.content.Intent();
@@ -388,12 +408,14 @@ final class PressCaptureSource {
                 bridge.putExtra(ImageOcrActivity.EXTRA_BIGBANG_ARGS, text);
                 bridge.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(bridge);
+                OperationTrace.event(operation, "text_window", "activity_launch_returned");
                 DragShareLog.i(TAG, "Settings text panel handed to Activity window");
                 Bundle accepted = new Bundle();
                 accepted.putBoolean("accepted", true);
-                completeHandoff(accepted, request);
+                completeHandoff(accepted, request, operation);
             } catch (SecurityException | IllegalStateException error) {
-                DragShareLog.w(TAG, "cannot open Settings text panel", error);
+                OperationTrace.event(operation, "text_window", "failed_" + error.getClass().getSimpleName());
+                DragShareLog.w(TAG, "cannot open Settings text panel error=" + error.getClass().getSimpleName());
                 showFailure("无法打开分词窗口：" + error.getMessage());
                 controller.endPressPipeline(downTime);
                 blocker.stopAsync();
@@ -401,11 +423,13 @@ final class PressCaptureSource {
             return;
         }
         try {
+            OperationTrace.event(operation, "text_window", "requested");
             Bundle result = context.getContentResolver().call(
                     ImageStagingClient.BASE_URI, "open_bigbang_window", null, text);
-            completeHandoff(result, request);
+            completeHandoff(result, request, operation);
         } catch (SecurityException | IllegalStateException error) {
-            DragShareLog.w(TAG, "cannot open press text window", error);
+            OperationTrace.event(operation, "text_window", "failed_" + error.getClass().getSimpleName());
+            DragShareLog.w(TAG, "cannot open press text window error=" + error.getClass().getSimpleName());
             showFailure("无法打开分词窗口：" + error.getMessage());
             controller.endPressPipeline(downTime);
             blocker.stopAsync();
@@ -436,13 +460,14 @@ final class PressCaptureSource {
             rejectWeChatScreenCapture(content, "drag_before_ocr");
             return;
         }
-        PendingWeChat pending = new PendingWeChat(content, request);
+        PendingWeChat pending = new PendingWeChat(content, request, operationId());
         pendingWeChat = pending;
         startTouchBlocker(request);
         DragShareLog.i(TAG, "WeChat OCR started elapsedFromConfirmMs="
                 + (SystemClock.uptimeMillis() - confirmedAt) + "; gesture decides text or image");
         activeOcrRequest = AicrOcrClient.recognize(context, content.bitmap, (text, error) -> {
             if (pending != pendingWeChat || request != generation || stopped) {
+                OperationTrace.event(pending.operation, "image_ocr", "late_ignored");
                 recycle(content);
                 return;
             }
@@ -532,7 +557,7 @@ final class PressCaptureSource {
             if (pointerDown) return;
             pendingWeChat = null;
             recycle(pending.content);
-            DragShareLog.w(TAG, "WeChat OCR direct failed", pending.error);
+            DragShareLog.w(TAG, "WeChat OCR direct failed error=" + pending.error.getClass().getSimpleName());
             showFailure("微信文字识别失败：" + pending.error.getMessage());
             controller.endPressPipeline(downTime);
             blocker.stopAsync();
@@ -553,15 +578,18 @@ final class PressCaptureSource {
         recognized.putLong("press_confirmed_at", confirmedAt);
         recognized.putInt("x", Math.round(downX));
         recognized.putInt("y", Math.round(downY));
+        OperationTrace.put(recognized, pending.operation);
         try {
+            OperationTrace.event(pending.operation, "text_window", "requested");
             Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
                     BigBangOverlayLauncher.METHOD_OPEN, null, recognized);
-            completeHandoff(result, pending.request);
+            completeHandoff(result, pending.request, pending.operation);
             if (pending.textWindowAccepted) {
                 DragShareLog.i(TAG, "WeChat OCR text window accepted; image candidate retained until root release");
             }
         } catch (SecurityException | IllegalStateException | IllegalArgumentException failure) {
-            DragShareLog.w(TAG, "cannot open WeChat text panel", failure);
+            OperationTrace.event(pending.operation, "text_window", "failed_" + failure.getClass().getSimpleName());
+            DragShareLog.w(TAG, "cannot open WeChat text panel error=" + failure.getClass().getSimpleName());
             showFailure("无法显示微信识别结果：" + failure.getMessage());
             controller.endPressPipeline(downTime);
             blocker.stopAsync();
@@ -584,12 +612,13 @@ final class PressCaptureSource {
     private boolean dismissWeChatTextWindow() {
         Bundle request = new Bundle();
         request.putLong("press_confirmed_at", confirmedAt);
+        OperationTrace.put(request, operationId());
         try {
             Bundle result = context.getContentResolver().call(ImageStagingClient.BASE_URI,
                     BigBangOverlayLauncher.METHOD_DISMISS_PRESS, null, request);
             return result != null && result.getBoolean("accepted");
         } catch (SecurityException | IllegalStateException | IllegalArgumentException error) {
-            DragShareLog.w(TAG, "cannot dismiss this WeChat press window", error);
+            DragShareLog.w(TAG, "cannot dismiss this WeChat press window error=" + error.getClass().getSimpleName());
             return false;
         }
     }
@@ -610,13 +639,15 @@ final class PressCaptureSource {
         blocker.stopAsync();
     }
 
-    private void completeHandoff(Bundle result, long request) {
+    private void completeHandoff(Bundle result, long request, String operation) {
         if (result != null && result.getBoolean("accepted")) {
+            OperationTrace.event(operation, "text_window", "accepted");
             PendingWeChat pending = pendingWeChat;
             if (pending != null && pending.request == request) pending.textWindowAccepted = true;
             startTouchBlocker(request);
             controller.handoffToPress(downTime);
         } else {
+            OperationTrace.event(operation, "text_window", "rejected");
             DragShareLog.w(TAG, "press window request was not accepted");
             controller.endPressPipeline(downTime);
             blocker.stopAsync();

@@ -83,10 +83,14 @@ public final class ShareImageProvider extends ContentProvider {
             Uri uri = extras == null ? null : extras.getParcelable("image", Uri.class);
             if (uri == null) throw new IllegalArgumentException("缺少识别图片");
             resolveFile(uri);
+            String operation = OperationTrace.read(extras);
+            OperationTrace.event(operation, "image_ocr", "requested", uri);
             long identity = Binder.clearCallingIdentity();
             try {
                 Bundle result = new Bundle();
-                result.putBoolean("accepted", ImageOcrOverlay.startFromPress(contextOrThrow(), uri, extras.getLong("press_confirmed_at")));
+                boolean accepted = ImageOcrOverlay.startFromPress(contextOrThrow(), uri,
+                        extras.getLong("press_confirmed_at"), operation);
+                result.putBoolean("accepted", accepted);
                 return result;
             } finally {
                 Binder.restoreCallingIdentity(identity);
@@ -117,6 +121,7 @@ public final class ShareImageProvider extends ContentProvider {
         }
         if (BigBangOverlayLauncher.METHOD_OPEN.equals(method)) {
             enforcePortalCaller();
+            OperationTrace.event(OperationTrace.read(extras), "text_window", "provider_requested");
             long identity = Binder.clearCallingIdentity();
             try {
                 return BigBangOverlayLauncher.request(contextOrThrow(), extras);
@@ -284,6 +289,29 @@ public final class ShareImageProvider extends ContentProvider {
     }
 
     private Bundle stageImage(Bundle extras) {
+        String operation = OperationTrace.read(extras);
+        OperationTrace.event(operation, "stage", "provider_started");
+        Bundle result;
+        try {
+            result = stageImageData(extras);
+        } catch (RuntimeException error) {
+            OperationTrace.event(operation, "stage", "provider_failed_" + error.getClass().getSimpleName());
+            throw error;
+        }
+        // Extracting an optional trace address is diagnostic only; never turn a stored image
+        // into a failed stage because the trace metadata is missing or malformed.
+        try {
+            String value = result.getString(ImageStagingClient.RESULT_URI);
+            if (value != null) {
+                OperationTrace.event(operation, "stage", "provider_completed", Uri.parse(value));
+            }
+        } catch (RuntimeException ignored) {
+            // The original result remains the successful business response.
+        }
+        return result;
+    }
+
+    private Bundle stageImageData(Bundle extras) {
         if (extras == null) {
             throw new IllegalArgumentException("Missing image data");
         }
@@ -377,6 +405,7 @@ public final class ShareImageProvider extends ContentProvider {
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         if (!"r".equals(mode)) {
+            OperationTrace.imageAccess(uri, "rejected_mode", Binder.getCallingUid());
             throw new FileNotFoundException("Read-only provider");
         }
         try {
@@ -384,12 +413,16 @@ public final class ShareImageProvider extends ContentProvider {
             if (!file.isFile()) {
                 throw new FileNotFoundException("Staged image is missing");
             }
+            ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+            OperationTrace.imageAccess(uri, "descriptor_opened", Binder.getCallingUid());
             DragShareLog.i(TAG, "open uid=" + Binder.getCallingUid()
                     + " bytes=" + file.length());
-            return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+            return descriptor;
         } catch (FileNotFoundException | RuntimeException error) {
+            String reason = error.getClass().getSimpleName();
+            OperationTrace.imageAccess(uri, "failed_" + reason, Binder.getCallingUid());
             DragShareLog.w(TAG, "open failed uid=" + Binder.getCallingUid()
-                    + " uri=" + describeUri(uri), error);
+                    + " reason=" + reason + " uri=" + describeUri(uri));
             throw error;
         }
     }
@@ -415,7 +448,8 @@ public final class ShareImageProvider extends ContentProvider {
             file = resolveFile(uri);
         } catch (RuntimeException error) {
             DragShareLog.w(TAG, "query failed uid=" + Binder.getCallingUid()
-                    + " uri=" + describeUri(uri), error);
+                    + " reason=" + error.getClass().getSimpleName()
+                    + " uri=" + describeUri(uri));
             throw error;
         }
         DragShareLog.d(TAG, "query uid=" + Binder.getCallingUid()
@@ -589,12 +623,7 @@ public final class ShareImageProvider extends ContentProvider {
     }
 
     private static String describeUri(Uri uri) {
-        if (uri == null) {
-            return "null";
-        }
-        return uri.getScheme() + "://" + uri.getAuthority()
-                + "/" + (uri.getPathSegments().isEmpty()
-                ? "" : uri.getPathSegments().get(0)) + "/<redacted>";
+        return "asset:" + OperationTrace.asset(uri);
     }
 
     private File fileForToken(String token, String suffix) {

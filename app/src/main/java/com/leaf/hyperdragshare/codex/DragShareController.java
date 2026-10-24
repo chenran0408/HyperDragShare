@@ -521,23 +521,28 @@ final class DragShareController {
             float requestedInitialY,
             DragShareSettings loadedSettings,
             long downTime) {
+        String operation = OperationTrace.id("press", downTime);
         if (downTime < 0L) {
             pendingPortalHostFloatWindowSuppression = false;
             if (payload.isImage() && payload.bitmapOwnedByDragShare
                     && !payload.bitmap.isRecycled()) payload.bitmap.recycle();
+            OperationTrace.event(operation, "show", "rejected_no_root");
             log("native preview skipped because no physical Root gesture was observed");
             return;
         }
         if (downTime != rootDownTime || (downTime >= 0L && downTime == pressHandoffTime)) {
             pendingPortalHostFloatWindowSuppression = false;
+            OperationTrace.event(operation, "show", "rejected_stale");
             return;
         }
         if (destroyed) {
             pendingPortalHostFloatWindowSuppression = false;
+            OperationTrace.event(operation, "show", "rejected_destroyed");
             return;
         }
         if (active) {
             pendingPortalHostFloatWindowSuppression = false;
+            OperationTrace.event(operation, "show", "rejected_duplicate");
             if (!duplicateStartLogged) {
                 duplicateStartLogged = true;
                 log("duplicate Taplus start ignored during active drag");
@@ -572,7 +577,7 @@ final class DragShareController {
 
         try {
             refreshDisplayGeometry();
-            session = new Session(payload, downTime);
+            session = new Session(payload, downTime, operation);
             createPreview(payload);
             createGlow();
             if (glowView != null && glowParams != null) {
@@ -581,6 +586,8 @@ final class DragShareController {
             }
             showPreviewOverlay();
             active = true;
+            OperationTrace.event(operation, "show", "accepted");
+            OperationTrace.event(operation, "preview", "attached");
             refreshStaleInputWatchdog();
             pendingPortalHostFloatWindowSuppression = false;
 
@@ -603,20 +610,24 @@ final class DragShareController {
 
             loadTargetsAndCreateMenu(session, payload, initialX, initialY);
         } catch (RuntimeException error) {
+            OperationTrace.event(operation, "preview", "failed_" + error.getClass().getSimpleName());
             failOverlay("拖拽窗口创建失败", error);
             return;
         }
 
         if (payload.isImage()) {
             final Session stagedSession = session;
+            OperationTrace.event(stagedSession.operationId, "stage", "requested");
             ImageStagingClient.stage(context, payload.bitmap, new ImageStagingClient.Callback() {
                 @Override
                 public void onStaged(Uri uri) {
                     mainHandler.post(() -> {
                         if (destroyed || stagedSession.cancelled) {
+                            OperationTrace.event(stagedSession.operationId, "stage", "late_ignored", uri);
                             return;
                         }
                         stagedSession.stagedUri = uri;
+                        OperationTrace.event(stagedSession.operationId, "stage", "completed", uri);
                         if (stagedSession.pendingTarget != null) {
                             launchPendingShare(stagedSession);
                         }
@@ -627,11 +638,13 @@ final class DragShareController {
                 public void onFailure(Throwable error) {
                     mainHandler.post(() -> {
                         if (!destroyed && !stagedSession.cancelled) {
-                            log("image staging failed", error);
+                            OperationTrace.event(stagedSession.operationId, "stage",
+                                    "failed_" + error.getClass().getSimpleName());
+                            log("image staging failed error=" + error.getClass().getSimpleName());
                             if (stagedSession.pendingTarget != null) {
                                 showToast("图片准备失败");
                             }
-                        }
+                        } else OperationTrace.event(stagedSession.operationId, "stage", "late_ignored");
                     });
                 }
             });
@@ -1826,6 +1839,7 @@ final class DragShareController {
         // accessibility overlay has been removed. Keep the passive overlay attached through
         // the user-selected launch, then clean it up in the same main-thread turn.
         if (allowShare && target != null && finished != null) {
+            OperationTrace.event(finished.operationId, "target", "selected");
             if (!finished.payload.isImage()
                     || target.isSaveToLocal()
                     || finished.stagedUri != null) {
@@ -1835,6 +1849,7 @@ final class DragShareController {
                 showToast("正在准备图片");
             }
         } else if (finished != null && finished.pendingTarget == null) {
+            OperationTrace.event(finished.operationId, "target", allowShare ? "rejected" : "cancelled");
             finished.cancelled = true;
         }
         removeGestureViews(true);
@@ -1845,6 +1860,7 @@ final class DragShareController {
             return;
         }
         active = false;
+        if (session != null) OperationTrace.event(session.operationId, "gesture", "cancelled");
         cancelStaleInputWatchdog();
         stopEdgeScroll();
         backgroundTouchBlocker.stop();
@@ -1904,7 +1920,8 @@ final class DragShareController {
                 target,
                 shareSession.stagedUri,
                 lastX,
-                lastY);
+                lastY,
+                shareSession.operationId);
         shareSession.cancelled = true;
     }
 
@@ -2463,13 +2480,15 @@ final class DragShareController {
     private static final class Session {
         final CapturedContent payload;
         final long rootDownTime;
+        final String operationId;
         Uri stagedUri;
         ShareTarget pendingTarget;
         boolean cancelled;
 
-        Session(CapturedContent payload, long rootDownTime) {
+        Session(CapturedContent payload, long rootDownTime, String operationId) {
             this.payload = payload;
             this.rootDownTime = rootDownTime;
+            this.operationId = operationId;
         }
     }
 
