@@ -43,6 +43,10 @@ flowchart TD
 
 ## 修改与验证
 
+### Exit / Destroy Resource Ownership
+
+窗口/面板的创建、持有、异步借用和退出释放点见 [退出资源归属](EXIT_LIFECYCLE.md)。Controller仍协调手势和窗口；动作类未重设计。销毁窗口不能提前释放已接受动作借用的Bitmap、文件或URI。退出清理撤销本窗口的监听/回调，旧回调先核对生命周期和owner，不影响新会话。
+
 新增动作前核对现有ShareTarget与执行工具，明确是否需要URI/Bitmap/坐标及原线程。不能把整个Controller或可随意读取字段的回调交给动作类。窗口生命周期、会话模型和输入权威的变更须另批处理。
 
 `DragShareActionsTest`覆盖真实ShareLauncher/Provider的Intent与grant/revoke调用、剪贴板/中转站与内置目标输入/提示；存图用测试专用工具shadow核对Bitmap、原工作线程和结果。`DragShareActionLifecycleTest`保留真实控制器与动作类，通过可控stage/clipboard边界验证结束、取消、重复旧回调、会话替换与失败隔离。已有`DragSharePreviewLifecycleTest`、`ShareImageProviderTest`、`SharedImageCleanupTest`、`LocalImageSaverTest`、`StashStoreTest`继续保留原断言。

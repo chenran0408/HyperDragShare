@@ -1,12 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮从DragShareController提取动作执行，沿用已完成的设置拆分和配置更新入口；没有操作手机、安装、推送或发布版本。
+核对日期：2026-10-24。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。本轮完成退出/销毁资源与异步回调审计及最小修复；设置拆分、配置更新和动作提取已完成，不重复执行。没有操作手机、安装、推送或发布版本。
 
 ## 在哪里继续
 
 | 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
 |---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；当前动作提取源码 `001942e32507ad0660c5330662d13cece906bfe7`，后续纯文档HEAD用git log核对 | 1.7.219-beta.19 / 261（验证构建，无新版交付） |
+| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；当前生命周期源码 `9e7bf9a130ffcca22735be82b2f7eb5b4b3bd870`，后续纯文档HEAD用git log核对 | 1.7.219-beta.19 / 261（验证构建，无新版交付） |
 | 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
@@ -19,10 +19,24 @@
 
 - 产品源码d6d1f3a；4,881,913 bytes；SHA256 `FB87509F1FCCDB6224CA6C1CA5CCD7A518A5CAC485EE9A8DC8BF127AEB1E06D5`。
 - 既有交付记录：572项JVM/Robolectric测试0失败/错误/跳过；Lint0错误、178警告、2提示；Beta/R8、版本与v2验签通过。签名证书与beta18一致，不能据此推定与正式发布密钥一致。
-- beta19没有安装或实机/完整Android模拟器交互证据。历史4597c7a完成设置职责移动，a064f17完成配置更新；本轮动作提取也仅生成编译/R8验证包，保留旧元数据，不提供为新版交付，不替换上述安装包。
+- beta19没有安装或实机/完整Android模拟器交互证据。历史4597c7a完成设置职责移动，a064f17完成配置更新；动作提取批次与本轮生命周期均只生成编译/R8验证包，保留旧元数据，不提供为新版交付，不替换上述安装包。
 - 既有正式包1.7.218发布/设备证据保留于DEVICE_VALIDATION及归档。本轮没有重新查询GitHub Release资产/Latest状态、没有重新验签正式APK，不能用tag存在替代资产核验。
 
-原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；本轮完整要求、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`。
+原始功能任务唯一完整依据：`D:/CODEX/Tasks/2026-10-23/mmgg-feedback-10-23/TASK_BRIEF.md`；同目录TASK_CHECKLIST和HANDOFF保留全部历史编号/证据（旧标题/前言是历史版本，最新状态按本页和提交核对）。原beta4任务位于 `D:/CODEX/Tasks/2026-10-23/mmgg-1-7-219-beta-4`。历史调查位于 `D:/CODEX/Tasks/2026-10-24/mmgg-baseline-audit`；备份/CI/设置拆分记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-settings-foundation`；配置记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-config-updates`；动作批次记录位于 `D:/CODEX/Tasks/2026-10-24/mmgg-controller-actions`；本轮完整要求、清单、结果和恢复入口位于 `D:/CODEX/Tasks/2026-10-24/mmgg-exit-lifecycle`。
+
+## 退出/销毁生命周期（本轮）
+
+从3af1c4a继续，Luna high分组审计/实施，主Agent运行修复前测试、审查最小实现与集中验证。稳定e25c667保持不动。未改DragShareActions、Root权威/UP/CANCEL、宿主取消回放、配置/UI或Bitmap/文件/URI授权释放策略。
+
+- **已证实并修复**：预热窗destroy遗漏dispose；Honeycomb/TaskSwitcher在已移除View上构造method reference导致重复cancel/dismiss空指针；SideWheel取消snap后end回调重挂timeout；图片接收切换hosted/BigBang未使旧copy代次失效；交互窗首帧前/posted后退出未完整解绑，以及observer迁移后layout listener清理遗漏。窗口detach/dispose幂等解绑并使旧UI callback失效；正常一次首帧确认和动作时序保留。
+- **本地提交**：b971633手势overlay退出；1845768窗口监听/预热；9e7bf9a图片输入代次及解码退出测试。实际受验app tree为`bc458d77f866d8c8ad5688471d08c5105212443b`，文档提交不改变它。
+- **实际验证**：`testDebugUnitTest lintDebug assembleDebug assembleBeta assembleRelease`成功，2m35s；120类618项0失败/错误/跳过，新增21项；Debug、Beta `minifyBetaWithR8`、Release `minifyReleaseWithR8`及mapping均完成。Release产物是unsigned；版本元数据保留，只作验证包，不替换原beta19交付、不提供新版安装。
+- **Lint**：0错误、180警告、2提示。比历史增加两条StaticFieldLeak，位于BigBangOverlayLauncher和SearchOverlayWindow的既有静态active持有窗口，因新增observedView字段被规则识别。已审查正常dispose清该字段、onDismiss清active和监听解绑，并有行为测试；未进行堆可达性测量，不把提示等同已证实泄漏，也未屏蔽规则。
+- **测试证据**：预热/退出动画/旧代次/重复销毁/模糊通知；Dialog首帧前、已post后、直接dismiss/cancel和observer迁移；snap中detach；图像copy迟到成功/失败遇到新intent、正常成功与destroy；OCR/QR decode晚于重复退出。既有动作/授权调用/存图/中转站/分词/输入/AICR/生命周期断言完整保留。
+- **失败处理**：测试先暴露缺陷再修改；新增夹具的Shadow/observer存储和异步Dialog收尾问题均单独修正。全量曾由新测试未等待onDismiss引入静态touch-region污染，修夹具后旧测试恢复；未修改旧断言或生产通知时机。所有失败XML与日志保留，不作为通过证据。
+- **未覆盖/未改风险**：真实ROM WindowManager/Surface/Binder/旋转多屏锁屏/IME、URI实际授予撤销及目标发送；没有实机、完整模拟器或堆内存测试。BoomChipPage迟到布局/动画、阻塞任务持有Context、WebViewClient迟到及进程级runtime teardown只有代码风险记录，未强行修复。
+
+资源地图新增[Exit / Destroy Resource Ownership](EXIT_LIFECYCLE.md)，列出creator → owner → async borrower → release point及取消/移除/guard策略。当前结果在本页维护，完整交付见任务`outputs/DELIVERY.md`，机器结果见`outputs/verification/RESULTS.json`；没有运行云端CI。
 
 ## 设置页职责（已完成，不重复拆分）
 
@@ -47,15 +61,15 @@
 
 上轮本地备份bundle与5个tag在BRANCHES落实记录有入口；当时已显式推送两维护线/tag到用户origin。本轮只作本地提交，不新增或删除引用。
 
-## 动作执行职责与本轮验证
+## 动作执行职责与既有验证（001942e批次）
 
 源码001942e：`DragShareActions`承接外部文字/图片分享、复制、存图、中转站、分词、OCR/扫码。入口只接收payload/target/stagedUri/x/y，依赖同一Context/main Handler/DragShareToast及固定来源布尔；异步worker持有本次动作数据，不访问Controller/Session。Controller保留选目标、结束/取消、pending暂存与会话结束标记、全部预览/菜单/动画和清理；2653→2506行，新执行器202行，没有把会话模型搬进执行器。
 
 资源与线程地图见[DRAG_ACTIONS](DRAG_ACTIONS.md)。ShareLauncher、ClipboardWriter、StashClient、LocalImageSaver、Provider、设置和输入代码均未改；没有新增Bitmap recycle、URI提前撤销/删除、线程调度/超时/重试。成功提交的旧图片动作可在新手势期间继续使用原URI，完成回调只提示，不清新窗口。
 
-- **基线实际执行**：提取前79fbf72上的PreviewLifecycle/LocalImageSaver/StashStore/ShareImageProvider四类26项通过，18秒，旧断言完整保留。
-- **本轮全量本地**：`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功1m49s；115类597项0失败/错误/跳过，Lint0错误/178警告/2提示，Debug与实际minifyBetaWithR8完成、mapping存在。源码提交前受验工作树与001942e的app tree相同：`48de1d5a1c525aef7c2a2c2f02ae48872205fd65`。
-- **新增行为证据**：ActionsTest11项验证真实外部分享Intent/Provider授权调用与读图、ClipboardWriter系统边界替身、真实StashClient/Provider/Store、存图线程/Bitmap替身、分词Bundle和OCR/QR；ActionLifecycleTest3项使用真实Controller/Actions与可控stage/clipboard，覆盖重复回调、取消/销毁迟到、旧已接受动作在新手势中的数据与失败隔离/preview不变。旧输入/生命周期测试随全量通过。
+- **动作批次基线（历史）**：提取前79fbf72上的PreviewLifecycle/LocalImageSaver/StashStore/ShareImageProvider四类26项通过，18秒，旧断言完整保留。
+- **动作批次全量本地（历史）**：`testDebugUnitTest lintDebug assembleDebug assembleBeta`成功1m49s；115类597项0失败/错误/跳过，Lint0错误/178警告/2提示，Debug与实际minifyBetaWithR8完成、mapping存在。源码提交前受验工作树与001942e的app tree相同：`48de1d5a1c525aef7c2a2c2f02ae48872205fd65`。
+- **动作批次新增证据（历史）**：ActionsTest11项验证真实外部分享Intent/Provider授权调用与读图、ClipboardWriter系统边界替身、真实StashClient/Provider/Store、存图线程/Bitmap替身、分词Bundle和OCR/QR；ActionLifecycleTest3项使用真实Controller/Actions与可控stage/clipboard，覆盖重复回调、取消/销毁迟到、旧已接受动作在新手势中的数据与失败隔离/preview不变。旧输入/生命周期测试随全量通过。
 - **失败与修正记录**：新增测试先遇夹具编译问题，后定位框架自动补ClipData与模拟权限查询边界；仅修新夹具，未改旧断言/生产行为。专用诊断证明未grant前及revoke后查询均为允许，所以只对真实Context调用的包/URI/flags作断言，不声称系统权限撤销已验证。临时诊断输出未进入最终测试文件。
 - **证据位置**：mmgg-controller-actions/outputs/verification/RESULTS.json、baseline-junit.zip、junit-results.zip、lint-results-debug.xml与uri-permission-diagnostic.xml；原日志在work。未推送或运行云端CI、未操作手机/安装/发布；验证APK不作为新版交付。
 - **未覆盖**：真实接收端读取/发送、系统URI权限实际授予/撤销、Root剪贴板/AppOp、AICR/宿主启动限制及完整Miuix交互/视觉。Bitmap与暂存文件继续原所有权/GC和24小时清理策略，未新增运行中租约；没有声称本批修复原功能待办。
@@ -98,11 +112,9 @@
 | N10-AICR-MISSING | 用户明确暂停 | 既有组件提示分析保留；不扩大为已解决或恢复排查 |
 | R01/R02/B01/B08及其余原清单 | 保留已有分块整理/替身证据与边界 | 无真实CPU/帧率基准、不量化性能提升；历史触控探针已隔离，不能恢复面积研究；原三图/应用图标卡没有统一根因证据 |
 
-## 下一批候选：预览退出生命周期最小范围
+## 下一批候选：文字面板退出验证
 
-配置入口（8783de5/a064f17）与动作执行（001942e）均已完成，不重复开发。上轮手势诊断跟踪提取只是建议，本轮用户选择动作边界，因此未混做跟踪提取；畸形显式null Bundle等无关兼容也未混入。
-
-下一轮可只处理退出中的预览：`previewExitGeneration`和三份exiting资源引用，以及`startPreviewExit/finishPreviewExit/isPreviewExitPending/removePendingPreviewExitImmediately`。先补退出完成、新手势强制移除、迟到动画回调、重复清理及destroy的行为测试，再考虑提取持有View/ModernView/ModernWindow的单一退出拥有者。保持160/220ms动画、代次/对象身份核对、先清引用再移除的顺序。暂不同时拆菜单fade/dispose、目标查询、动作、Root/宿主回放或手势Session。当前四项旧生命周期测试主要覆盖查询/watchdog，不等于该预览退出矩阵已验收。本批没有改这些窗口路径。
+预览退出、旧代次、重复销毁与迟到回调已在本轮补测，不再从零重复；没有为了减少行数提取通用窗口owner。下一批最小范围是BigBangPanelSession.close与BoomChipPage待执行的布局、行/chip动画和选区通知：先用可控队列验证退出后不访问View，不启动拖出，不改变新session；只修稳定复现的未撤销任务。保留现有分词/选区/拖放交互，不同时拆Root输入、会话模型、宿主适配或动作执行。真实接收发送/微信原图/上游面板体验等原未完项继续保留。
 
 ## 后续开始顺序
 
