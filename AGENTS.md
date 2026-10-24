@@ -60,6 +60,7 @@ git diff --check
 - 配置修改入口、字段增加步骤与兼容检查：[CONFIGURATION](docs/CONFIGURATION.md)。
 - 拖拽动作执行、线程与资源边界：[DRAG_ACTIONS](docs/DRAG_ACTIONS.md)。
 - 两条跨进程链路、操作关联与完成证据：[OPERATION_TRACING](docs/OPERATION_TRACING.md)。
+- 长按菜单冲突、输入源/focus边界和可控触摸日志：[TOUCH_STREAM_DIAGNOSTICS](docs/TOUCH_STREAM_DIAGNOSTICS.md)。
 - 统一反馈页、诊断ZIP和触控报告导出：[DIAGNOSTICS](docs/DIAGNOSTICS.md)。
 - 微信图片参考源码、原图与裁剪图区别、后续分词面板来源：[WECHAT_IMAGE_REFERENCE](docs/WECHAT_IMAGE_REFERENCE.md)。
 - 窗口退出、异步回调与资源归属：[EXIT_LIFECYCLE](docs/EXIT_LIFECYCLE.md)。
