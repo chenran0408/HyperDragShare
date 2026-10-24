@@ -2,6 +2,7 @@ package com.leaf.hyperdragshare.codex;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -199,6 +200,108 @@ public final class PressPreviewHandoffTest {
             source.stop();
             controller.destroy();
             if (!bitmap.isRecycled()) bitmap.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void verifiedWeChatThumbnailCanEnterPreviewForCurrentRootPress() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        registerShareProvider(context);
+        DragShareController controller = controller();
+        down(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(
+                context, null, controller, DragShareSettings.defaults());
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        Bitmap bitmap = Bitmap.createBitmap(3, 4, Bitmap.Config.ARGB_8888);
+        CapturedContent thumbnail = CapturedContent.nodeThumbnailImage(
+                bitmap, "com.tencent.mm", new Rect(10, 20, 300, 500));
+
+        try {
+            assertTrue(thumbnail.isWeChatThumbnail());
+            java.lang.reflect.Method openImage = PressCaptureSource.class.getDeclaredMethod(
+                    "openImage", long.class, CapturedContent.class);
+            openImage.setAccessible(true);
+            openImage.invoke(source, 8L, thumbnail);
+            ShadowLooper.shadowMainLooper().idle();
+
+            Object session = field(controller, "session").get(controller);
+            assertNotNull(session);
+            CapturedContent shown = (CapturedContent) field(session, "payload").get(session);
+            assertTrue(shown.isWeChatThumbnail());
+            assertTrue(controller.isActive());
+            assertFalse(bitmap.isRecycled());
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!bitmap.isRecycled()) bitmap.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void releasedPressRejectsAndRecyclesLateWeChatThumbnail() throws Exception {
+        ShadowLog.clear();
+        DragShareController controller = controller();
+        down(controller, 100L);
+        PressCaptureSource source = new PressCaptureSource(
+                RuntimeEnvironment.getApplication(), null, controller, DragShareSettings.defaults());
+        field(source, "pointerDown").setBoolean(source, false);
+        field(source, "downTime").setLong(source, 100L);
+        Bitmap bitmap = Bitmap.createBitmap(3, 4, Bitmap.Config.ARGB_8888);
+        CapturedContent thumbnail = CapturedContent.nodeThumbnailImage(
+                bitmap, "com.tencent.mm", new Rect(10, 20, 300, 500));
+
+        try {
+            java.lang.reflect.Method openImage = PressCaptureSource.class.getDeclaredMethod(
+                    "openImage", long.class, CapturedContent.class);
+            openImage.setAccessible(true);
+            openImage.invoke(source, 8L, thumbnail);
+            ShadowLooper.shadowMainLooper().idle();
+
+            assertNull(field(controller, "session").get(controller));
+            assertTrue(bitmap.isRecycled());
+            assertTrue(operationMessages().contains("stage=image_decision outcome=pointer_released"));
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!bitmap.isRecycled()) bitmap.recycle();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void actualPortalImageReplacesAnActiveThumbnailPreview() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        registerShareProvider(context);
+        DragShareController controller = controller();
+        down(controller, 100L);
+        Bitmap thumbnailBitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        CapturedContent thumbnail = CapturedContent.nodeThumbnailImage(
+                thumbnailBitmap, "com.tencent.mm", new Rect(0, 0, 2, 2));
+        Object thumbnailSession = nativeSession(controller, 100L, thumbnail);
+        PressCaptureSource source = new PressCaptureSource(
+                context, null, controller, DragShareSettings.defaults());
+        field(source, "pointerDown").setBoolean(source, true);
+        field(source, "downTime").setLong(source, 100L);
+        ((PressTriggerDetector) field(source, "detector").get(source)).start(20f, 30f, 100L, 500L);
+        Bitmap portalBitmap = Bitmap.createBitmap(3, 3, Bitmap.Config.ARGB_8888);
+        CapturedContent portal = CapturedContent.portalMediaImage(
+                portalBitmap, "com.tencent.mm", new Rect(0, 0, 3, 3));
+
+        try {
+            assertTrue(source.acceptWeChatPortalContent(portal));
+            ShadowLooper.shadowMainLooper().idle();
+
+            assertTrue((boolean) field(thumbnailSession, "cancelled").get(thumbnailSession));
+            Object activeSession = field(controller, "session").get(controller);
+            assertNotNull(activeSession);
+            CapturedContent shown = (CapturedContent) field(activeSession, "payload").get(activeSession);
+            assertTrue(shown.imageOrigin == CapturedContent.ImageOrigin.PORTAL_MEDIA);
+            assertTrue(shown.bitmap == portalBitmap);
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!thumbnailBitmap.isRecycled()) thumbnailBitmap.recycle();
+            if (!portalBitmap.isRecycled()) portalBitmap.recycle();
             ShadowLooper.shadowMainLooper().idle();
         }
     }
@@ -407,24 +510,34 @@ public final class PressPreviewHandoffTest {
         }
     }
 
-    @Test public void portalMediaImageIsTheOnlyTrustedWeChatImageOrigin() {
+    @Test public void portalMediaAndExplicitWeChatThumbnailHaveDistinctTrustedOrigins() {
         Bitmap portalImage = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
         Bitmap rootImage = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
         Bitmap unknownImage = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+        Bitmap thumbnailImage = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+        Bitmap otherThumbnailImage = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
         try {
             CapturedContent portal = CapturedContent.portalMediaImage(
                     portalImage, "com.tencent.mm", new Rect(0, 0, 2, 2));
             CapturedContent root = CapturedContent.screenCaptureImage(
                     rootImage, "com.tencent.mm", new Rect(0, 0, 2, 2));
+            CapturedContent thumbnail = CapturedContent.nodeThumbnailImage(
+                    thumbnailImage, "com.tencent.mm", new Rect(0, 0, 2, 2));
 
             assertEquals(CapturedContent.ImageOrigin.PORTAL_MEDIA, portal.imageOrigin);
             assertEquals(CapturedContent.ImageOrigin.SCREEN_CAPTURE, root.imageOrigin);
+            assertEquals(CapturedContent.ImageOrigin.NODE_THUMBNAIL, thumbnail.imageOrigin);
+            assertTrue(thumbnail.isWeChatThumbnail());
+            assertFalse(CapturedContent.nodeThumbnailImage(
+                    otherThumbnailImage, "other.app", new Rect()).isWeChatThumbnail());
             assertEquals(CapturedContent.ImageOrigin.UNKNOWN,
                     CapturedContent.image(unknownImage, "com.tencent.mm", new Rect(), true).imageOrigin);
         } finally {
             if (!portalImage.isRecycled()) portalImage.recycle();
             if (!rootImage.isRecycled()) rootImage.recycle();
             if (!unknownImage.isRecycled()) unknownImage.recycle();
+            if (!thumbnailImage.isRecycled()) thumbnailImage.recycle();
+            if (!otherThumbnailImage.isRecycled()) otherThumbnailImage.recycle();
         }
     }
 
@@ -465,10 +578,16 @@ public final class PressPreviewHandoffTest {
 
     // Establish the passive native preview state without attaching real overlay windows.
     private static Object nativeSession(DragShareController controller, long downTime) throws Exception {
+        return nativeSession(controller, downTime,
+                CapturedContent.text("test", "test.app", null));
+    }
+
+    private static Object nativeSession(DragShareController controller, long downTime,
+                                        CapturedContent payload) throws Exception {
         Class<?> type = Class.forName(DragShareController.class.getName() + "$Session");
         var constructor = type.getDeclaredConstructor(CapturedContent.class, long.class, String.class);
         constructor.setAccessible(true);
-        Object session = constructor.newInstance(CapturedContent.text("test", "test.app", null), downTime, OperationTrace.id("press", downTime));
+        Object session = constructor.newInstance(payload, downTime, OperationTrace.id("press", downTime));
         field(controller, "session").set(controller, session);
         field(controller, "active").set(controller, true);
         return session;

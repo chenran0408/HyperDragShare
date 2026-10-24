@@ -439,8 +439,11 @@ final class RootNodeCaptureClient {
             if (imageCropped) {
                 Bitmap image = screen;
                 screen = null;
-                return pressOcrRegion
-                        ? CapturedContent.pressOcrRegion(image, source, verifiedBounds)
+                if (pressOcrRegion) {
+                    return CapturedContent.pressOcrRegion(image, source, verifiedBounds);
+                }
+                return "com.tencent.mm".equals(source)
+                        ? CapturedContent.nodeThumbnailImage(image, source, verifiedBounds)
                         : CapturedContent.screenCaptureImage(image, source, verifiedBounds);
             }
             int width = node.getInt("width"), height = node.getInt("height");
@@ -457,7 +460,9 @@ final class RootNodeCaptureClient {
             if (pressOcrRegion) {
                 return CapturedContent.pressOcrRegion(image, source, crop);
             }
-            return CapturedContent.screenCaptureImage(image, source, crop);
+            return "com.tencent.mm".equals(source)
+                    ? CapturedContent.nodeThumbnailImage(image, source, crop)
+                    : CapturedContent.screenCaptureImage(image, source, crop);
         } finally {
             if (screen != null) screen.recycle();
         }

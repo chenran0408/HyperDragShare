@@ -7,7 +7,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 import android.graphics.Rect;
+import android.graphics.Bitmap;
 import android.app.UiAutomation;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.accessibility.AccessibilityWindowInfo;
@@ -142,6 +144,70 @@ public final class RootImageSelectionTest {
         AccessibilityNodeSnapshot image = node("android.widget.ImageView", "reader").build();
         assertFalse(RootNodeCaptureMain.holdControlAtPoint(List.of(image), 30, 30, "reader"));
         assertNotNull(select(image, List.of(), true, true));
+    }
+
+    @Test public void verifiedWeChatImageNodeCropIsMarkedAsThumbnail() throws Exception {
+        Rect bounds = new Rect(40, 60, 180, 220);
+        Bitmap cropped = Bitmap.createBitmap(4, 5, Bitmap.Config.ARGB_8888);
+        Bundle captured = new Bundle();
+        captured.putParcelable("bitmap", cropped);
+        captured.putParcelable("bounds", bounds);
+        captured.putBoolean("image_cropped", true);
+        Bundle node = new Bundle();
+        node.putString("package", "com.tencent.mm");
+        node.putParcelable("bounds", bounds);
+        node.putBoolean("image", true);
+        node.putBoolean("press_ocr_region", false);
+        node.putInt("window_id", 4);
+
+        CapturedContent content = RootNodeCaptureClient.contentFromNode(
+                org.robolectric.RuntimeEnvironment.getApplication(), node,
+                (source, windowId, requested) -> new Rect(requested),
+                null,
+                (source, windowId, requested) -> captured);
+        try {
+            assertNotNull(content);
+            assertEquals(CapturedContent.ImageOrigin.NODE_THUMBNAIL, content.imageOrigin);
+            assertTrue(content.isWeChatThumbnail());
+            assertEquals(bounds, content.sourceBounds);
+            assertTrue(content.bitmapOwnedByDragShare);
+            assertFalse(cropped.isRecycled());
+        } finally {
+            if (content != null && content.bitmap != null && !content.bitmap.isRecycled()) {
+                content.bitmap.recycle();
+            }
+        }
+    }
+
+    @Test public void genericPressOcrCropRemainsOrdinaryScreenshot() throws Exception {
+        Rect bounds = new Rect(40, 60, 180, 220);
+        Bitmap cropped = Bitmap.createBitmap(4, 5, Bitmap.Config.ARGB_8888);
+        Bundle captured = new Bundle();
+        captured.putParcelable("bitmap", cropped);
+        captured.putParcelable("bounds", bounds);
+        captured.putBoolean("image_cropped", true);
+        Bundle node = new Bundle();
+        node.putString("package", "com.tencent.mm");
+        node.putParcelable("bounds", bounds);
+        node.putBoolean("image", true);
+        node.putBoolean("press_ocr_region", true);
+        node.putInt("window_id", 4);
+
+        CapturedContent content = RootNodeCaptureClient.contentFromNode(
+                org.robolectric.RuntimeEnvironment.getApplication(), node,
+                (source, windowId, requested) -> new Rect(requested),
+                (source, windowId, requested) -> captured,
+                null);
+        try {
+            assertNotNull(content);
+            assertEquals(CapturedContent.ImageOrigin.SCREEN_CAPTURE, content.imageOrigin);
+            assertTrue(content.pressOcrRegion);
+            assertFalse(content.isWeChatThumbnail());
+        } finally {
+            if (content != null && content.bitmap != null && !content.bitmap.isRecycled()) {
+                content.bitmap.recycle();
+            }
+        }
     }
 
     @Test public void ordinaryTextAndUnrelatedRecordingControlsRemainReadable() {

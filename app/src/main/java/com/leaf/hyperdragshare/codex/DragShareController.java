@@ -49,6 +49,8 @@ final class DragShareController {
     private static final int PREVIEW_IMAGE_SIZE_DP = 148;
     private static final int PORTAL_PREVIEW_TEXT_SIZE_DP = 112;
     private static final int PORTAL_PREVIEW_IMAGE_SIZE_DP = 116;
+    private static final String THUMBNAIL_BADGE_TEXT = "缩略图";
+    private static final String THUMBNAIL_BADGE_DESCRIPTION = "微信图片缩略图，非原文件";
     private static final int MENU_TRIGGER_DP = 72;
     private static final int EDGE_SCROLL_FULL_SPEED_INSET_DP = 8;
     private static final long MODERN_OVERLAY_EXIT_DURATION_MS = 220L;
@@ -959,7 +961,31 @@ final class DragShareController {
                     ViewGroup.LayoutParams.MATCH_PARENT));
         }
 
+        if (payload.isWeChatThumbnail()) {
+            addThumbnailBadge(standardPreviewView);
+        }
+
         previewParams = overlayParams(previewWidth, previewHeight, "DragShare preview");
+    }
+
+    private void addThumbnailBadge(FrameLayout preview) {
+        TextView badge = new TextView(context);
+        badge.setText(THUMBNAIL_BADGE_TEXT);
+        badge.setContentDescription(THUMBNAIL_BADGE_DESCRIPTION);
+        badge.setTextColor(Color.WHITE);
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        badge.setGravity(Gravity.CENTER);
+        badge.setPadding(dp(6), dp(3), dp(6), dp(3));
+        badge.setBackground(roundDrawable(Color.argb(220, 0, 0, 0), 6));
+        badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.END);
+        int margin = dp(6);
+        params.setMargins(margin, margin, margin, margin);
+        preview.addView(badge, params);
     }
 
     private void showPreviewOverlay() {

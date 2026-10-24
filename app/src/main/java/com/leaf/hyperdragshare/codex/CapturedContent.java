@@ -8,7 +8,8 @@ final class CapturedContent {
     enum ImageOrigin {
         UNKNOWN,
         PORTAL_MEDIA,
-        SCREEN_CAPTURE
+        SCREEN_CAPTURE,
+        NODE_THUMBNAIL
     }
 
     enum Kind {
@@ -93,6 +94,15 @@ final class CapturedContent {
                 true, false, ImageOrigin.SCREEN_CAPTURE, null, null);
     }
 
+    static CapturedContent nodeThumbnailImage(
+            Bitmap value,
+            String sourcePackage,
+            Rect sourceBounds) {
+        if (value == null || value.isRecycled()) return null;
+        return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
+                true, false, ImageOrigin.NODE_THUMBNAIL, null, null);
+    }
+
     static CapturedContent portalMediaImage(Bitmap value, String sourcePackage, Rect sourceBounds) {
         if (value == null || value.isRecycled()) return null;
         return new CapturedContent(Kind.IMAGE, null, value, sourcePackage, sourceBounds,
@@ -107,6 +117,11 @@ final class CapturedContent {
 
     boolean isImage() {
         return kind == Kind.IMAGE;
+    }
+
+    boolean isWeChatThumbnail() {
+        return isImage() && "com.tencent.mm".equals(sourcePackage)
+                && imageOrigin == ImageOrigin.NODE_THUMBNAIL;
     }
 
     String mimeType() {

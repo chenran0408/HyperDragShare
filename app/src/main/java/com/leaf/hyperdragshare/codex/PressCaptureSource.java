@@ -646,7 +646,8 @@ final class PressCaptureSource {
     private static boolean isUnverifiedWeChatImage(CapturedContent content) {
         return content != null && "com.tencent.mm".equals(content.sourcePackage)
                 && content.isImage()
-                && content.imageOrigin != CapturedContent.ImageOrigin.PORTAL_MEDIA;
+                && content.imageOrigin != CapturedContent.ImageOrigin.PORTAL_MEDIA
+                && !content.isWeChatThumbnail();
     }
 
     private static String captureKindOutcome(CapturedContent content) {
@@ -655,6 +656,7 @@ final class PressCaptureSource {
         if (!content.isImage()) return source + "_text";
         switch (content.imageOrigin) {
             case PORTAL_MEDIA: return source + "_image_portal_media";
+            case NODE_THUMBNAIL: return source + "_image_node_thumbnail";
             case SCREEN_CAPTURE: return source + "_image_screen_capture";
             default: return source + "_image_unknown";
         }
@@ -667,7 +669,7 @@ final class PressCaptureSource {
                 + (content == null ? "unknown" : content.imageOrigin.name())
                 + " stage=" + stage);
         recycle(content);
-        showFailure("这次按压没有取得可用原图，已取消截图拖拽；请通过传送门选择原图");
+        showFailure("没有取得原图，也未能识别图片边界，请通过传送门选图");
         controller.endPressPipeline(downTime);
         blocker.stopAsync();
     }
