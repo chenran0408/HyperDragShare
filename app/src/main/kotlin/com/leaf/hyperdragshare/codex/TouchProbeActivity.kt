@@ -1,7 +1,9 @@
 package com.leaf.hyperdragshare.codex
 
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,6 +11,8 @@ import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -64,6 +68,10 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
 import kotlin.concurrent.thread
 
 internal data class TouchProbeUiState(
@@ -76,6 +84,23 @@ internal data class TouchProbeUiState(
     val exportInFlight: Boolean = false,
 )
 
+internal fun canExportTouchProbeReport(state: TouchProbeUiState): Boolean =
+    !state.captureActive && !state.exportInFlight
+
+internal fun shouldOfferTouchProbeExportOptions(
+    matchKind: TouchProfileRegistry.MatchKind,
+): Boolean = matchKind != TouchProfileRegistry.MatchKind.EXACT_LIBRARY
+
+internal fun interface TouchProbeReportRunner {
+    fun export(
+        context: Context,
+        connection: TouchReportReader.ConnectionInfo?,
+        snapshot: TouchProbeCollector.Snapshot,
+        status: String,
+        options: TouchProbeExporter.Options,
+    ): TouchProbeExporter.Result
+}
+
 internal interface TouchProbeReaderHandle {
     fun start()
     fun close()
@@ -86,6 +111,7 @@ internal interface TouchProbeReaderHandle {
  * the production press/drag pipeline.
  */
 class TouchProbeActivity : ComponentActivity() {
+    internal var updateChannelForGate: String = BuildConfig.UPDATE_CHANNEL
     private val mainHandler = Handler(Looper.getMainLooper())
     private val collector = TouchProbeCollector()
     private var reader: TouchProbeReaderHandle? = null
@@ -94,6 +120,31 @@ class TouchProbeActivity : ComponentActivity() {
     private var lastUiAt = 0L
     private var exportInFlight = false
     private var uiState by mutableStateOf(TouchProbeUiState())
+    private val reportExportSession = DiagnosticExportSession()
+    private var pendingReportToken: Long? = null
+    private var pendingReport: TouchProbeExporter.Result? = null
+
+    private val textReportSaveLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain"),
+    ) { destination -> onTouchReportSaveResult(destination) }
+    private val adapterPackageSaveLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { destination -> onTouchReportSaveResult(destination) }
+
+    internal var reportRunner = TouchProbeReportRunner { context, connection, snapshot, status, options ->
+        TouchProbeExporter.export(context, connection, snapshot, status, options)
+    }
+    internal var exportTaskLauncher: (() -> Unit) -> Unit = { task ->
+        thread(name = "touch-probe-export", block = task)
+    }
+    internal var touchReportSavePicker: (TouchProbeExporter.Result) -> Unit = { exported ->
+        when (exported.kind) {
+            TouchProbeExporter.PackageKind.TEXT_REPORT ->
+                textReportSaveLauncher.launch(exported.file.name)
+            TouchProbeExporter.PackageKind.ADAPTER_ZIP ->
+                adapterPackageSaveLauncher.launch(exported.file.name)
+        }
+    }
 
     internal var readerFactory: (TouchReportReader.Listener) -> TouchProbeReaderHandle = { listener ->
         val activeReader = TouchReportReader(listener)
@@ -107,7 +158,7 @@ class TouchProbeActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (BuildConfig.UPDATE_CHANNEL != "beta") {
+        if (updateChannelForGate != "beta") {
             Toast.makeText(this, "触控报告测试仅在内测版开放", Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -130,7 +181,7 @@ class TouchProbeActivity : ComponentActivity() {
                     onEndTouch = ::endSampleTouch,
                     onUndo = ::undoLastSample,
                     onClear = ::clearSamples,
-                    onShare = ::shareReport,
+                    onExport = ::exportReport,
                 )
             }
         }
@@ -142,6 +193,11 @@ class TouchProbeActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        reportExportSession.cancelActive()
+        pendingReportToken = null
+        pendingReport = null
+        exportInFlight = false
+        uiState = uiState.copy(exportInFlight = false)
         stopProbe("页面关闭")
         super.onDestroy()
     }
@@ -346,21 +402,24 @@ class TouchProbeActivity : ComponentActivity() {
         }
     }
 
-    private fun shareReport(options: TouchProbeExporter.Options) {
+    internal fun exportReport(options: TouchProbeExporter.Options) {
         if (uiState.captureActive) {
-            Toast.makeText(this, "请先抬起手指，再分享测试结果", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "请先抬起手指，再导出触控报告", Toast.LENGTH_SHORT).show()
             return
         }
         if (exportInFlight) return
+        val exportToken = reportExportSession.begin() ?: return
         exportInFlight = true
         publish(uiState.copy(exportInFlight = true))
+        val appContext = applicationContext
         val connectionSnapshot = connection
         val sampleSnapshot = collector.snapshot()
         val currentStatus = uiState.status
-        thread(name = "touch-probe-export") {
+        val launchResult = runCatching {
+            exportTaskLauncher {
             val result = runCatching {
-                TouchProbeExporter.export(
-                    this,
+                reportRunner.export(
+                    appContext,
                     connectionSnapshot,
                     sampleSnapshot,
                     currentStatus,
@@ -368,74 +427,133 @@ class TouchProbeActivity : ComponentActivity() {
                 )
             }
             mainHandler.post {
-                exportInFlight = false
-                uiState = uiState.copy(exportInFlight = false)
+                if (!reportExportSession.isActive(exportToken) || isDestroyed) return@post
                 if (isFinishing || isDestroyed) {
+                    finishTouchReportExport(exportToken, uiState.status)
                     result.onSuccess {
                         Toast.makeText(
                             applicationContext,
-                            "结果已生成，但页面已关闭，未打开分享面板",
+                            "触控报告已生成，但页面已关闭，未打开保存或分享面板",
                             Toast.LENGTH_LONG,
                         ).show()
-                    }.onFailure { error ->
+                    }.onFailure {
                         Toast.makeText(
                             applicationContext,
-                            "无法生成测试结果：${error.message}",
+                            "触控报告生成失败，请重试",
                             Toast.LENGTH_LONG,
                         ).show()
                     }
                     return@post
                 }
                 result.onSuccess { exported ->
-                    val sendResult = runCatching {
-                        val uri = FileProvider.getUriForFile(
-                            this,
-                            "${BuildConfig.APPLICATION_ID}.updates",
-                            exported.file,
-                        )
-                        val mimeType = if (exported.kind == TouchProbeExporter.PackageKind.ADAPTER_ZIP) {
-                            "application/zip"
-                        } else {
-                            "text/plain"
-                        }
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = mimeType
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            putExtra(
-                                Intent.EXTRA_SUBJECT,
-                                "MMGG 触控测试结果 ${BuildConfig.VERSION_NAME}",
-                            )
-                            clipData = ClipData.newRawUri("MMGG touch probe", uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        startActivity(Intent.createChooser(send, "分享触控测试结果"))
+                    pendingReportToken = exportToken
+                    pendingReport = exported
+                    uiState = uiState.copy(status = "请选择保存位置；保存成功后可继续分享")
+                    runCatching { touchReportSavePicker(exported) }.onFailure {
+                        finishTouchReportExport(exportToken, "无法打开触控报告保存窗口")
+                        Toast.makeText(this, "无法打开触控报告保存窗口，请重试", Toast.LENGTH_LONG).show()
                     }
-                    val attachmentNote = when {
-                        exported.kind == TouchProbeExporter.PackageKind.TEXT_REPORT ->
-                            "已生成精简报告，不附带算法库"
-                        exported.libraryAttached ->
-                            "已生成完整适配包，算法库校验通过"
-                        else ->
-                            "适配包已生成，但算法库不可用；报告已写明原因"
-                    }
-                    sendResult.onFailure {
-                        Toast.makeText(
-                            this,
-                            "结果已保存到 ${exported.file.name}，但没有可用的分享应用",
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }.onSuccess {
-                        Toast.makeText(this, attachmentNote, Toast.LENGTH_LONG).show()
-                    }
-                }.onFailure { error ->
+                }.onFailure {
+                    finishTouchReportExport(exportToken, "触控报告生成失败")
                     Toast.makeText(
                         this,
-                        "无法生成测试结果：${error.message}",
+                        "触控报告生成失败，请重试",
                         Toast.LENGTH_LONG,
                     ).show()
                 }
             }
+            }
         }
+        launchResult.onFailure {
+            finishTouchReportExport(exportToken, "触控报告生成失败")
+            Toast.makeText(this, "触控报告生成失败，请重试", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    internal fun onTouchReportSaveResult(destination: Uri?) {
+        val token = pendingReportToken ?: return
+        val exported = pendingReport ?: return
+        if (!reportExportSession.consumeSavePickerResult(token)) return
+        pendingReportToken = null
+        if (destination == null) {
+            if (reportExportSession.cancelBeforeSavePicker(token)) {
+                pendingReport = null
+                exportInFlight = false
+                uiState = uiState.copy(
+                    status = "已取消保存，未分享触控报告",
+                    exportInFlight = false,
+                )
+            }
+            return
+        }
+
+        uiState = uiState.copy(status = "正在保存触控报告…", exportInFlight = true)
+        val appContext = applicationContext
+        val appContentResolver = appContext.contentResolver
+        lifecycleScope.launch {
+            val outcome = reportExportSession.saveAndShare(
+                token = token,
+                save = {
+                    withContext(Dispatchers.IO) {
+                        val output = appContentResolver.openOutputStream(destination, "w")
+                            ?: throw IOException("无法打开所选位置")
+                        output.use { stream ->
+                            exported.file.inputStream().use { it.copyTo(stream) }
+                        }
+                    }
+                },
+                share = {
+                    val uri = FileProvider.getUriForFile(
+                        appContext,
+                        "${BuildConfig.APPLICATION_ID}.updates",
+                        exported.file,
+                    )
+                    val mimeType = if (exported.kind == TouchProbeExporter.PackageKind.ADAPTER_ZIP) {
+                        "application/zip"
+                    } else {
+                        "text/plain"
+                    }
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = mimeType
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "MMGG 触控测试结果 ${BuildConfig.VERSION_NAME}")
+                        clipData = ClipData.newRawUri("MMGG touch probe", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(send, "分享触控测试结果"))
+                },
+            )
+            if (outcome == DiagnosticExportOutcome.STALE) return@launch
+            pendingReport = null
+            exportInFlight = false
+            val attachmentNote = when {
+                exported.kind == TouchProbeExporter.PackageKind.TEXT_REPORT ->
+                    "精简报告，不含算法库"
+                exported.libraryAttached -> "完整适配包，算法库校验通过"
+                else -> "适配包未附算法库，报告已记录原因"
+            }
+            val status = when (outcome) {
+                DiagnosticExportOutcome.SAVED_CHOOSER_OPENED ->
+                    "触控报告已保存（$attachmentNote），并已打开分享面板"
+                DiagnosticExportOutcome.SAVE_FAILED -> "保存触控报告失败，请重试"
+                DiagnosticExportOutcome.SHARE_FAILED ->
+                    "触控报告已保存（$attachmentNote），但无法打开分享面板"
+                DiagnosticExportOutcome.STALE -> return@launch
+            }
+            uiState = uiState.copy(status = status, exportInFlight = false)
+            if (outcome == DiagnosticExportOutcome.SAVE_FAILED ||
+                outcome == DiagnosticExportOutcome.SHARE_FAILED) {
+                Toast.makeText(this@TouchProbeActivity, status, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun finishTouchReportExport(token: Long, status: String) {
+        if (!reportExportSession.finish(token)) return
+        pendingReportToken = null
+        pendingReport = null
+        exportInFlight = false
+        uiState = uiState.copy(status = status, exportInFlight = false)
     }
 }
 
@@ -451,7 +569,7 @@ private fun TouchProbeScreen(
     onEndTouch: () -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
-    onShare: (TouchProbeExporter.Options) -> Unit,
+    onExport: (TouchProbeExporter.Options) -> Unit,
 ) {
     var group by rememberSaveable { mutableStateOf(TouchProbeCollector.Group.FINGERTIP) }
     var showClearConfirm by rememberSaveable { mutableStateOf(false) }
@@ -478,6 +596,45 @@ private fun TouchProbeScreen(
                     }
                 },
             )
+        },
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MiuixTheme.colorScheme.background)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = when {
+                        state.captureActive -> "请先抬起手指，再导出报告。"
+                        state.status.startsWith("正在保存") -> "正在保存触控报告…"
+                        state.status.startsWith("请选择保存位置") -> "选择保存位置后，可以继续分享报告。"
+                        state.exportInFlight -> "正在生成触控报告…"
+                        state.status.startsWith("触控数据流已中断") ->
+                            "采样已停止；可以导出当前诊断报告。"
+                        else -> "报告含设备信息和触控样本，不含页面文字、截图、剪贴板或应用内容；" +
+                            "先保存，之后可分享。"
+                    },
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                TextButton(
+                    text = "导出触控报告",
+                    enabled = canExportTouchProbeReport(state),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    onClick = { onExport(TouchProbeExporter.Options.smartDefault()) },
+                )
+                if (shouldOfferTouchProbeExportOptions(compatibility.matchKind)) {
+                    BasicComponent(
+                        title = "适配排查选项",
+                        summary = "按需附带或重新采集算法库；报告仍会保留失败信息",
+                        enabled = canExportTouchProbeReport(state),
+                        onClick = { showExportOptions = true },
+                    )
+                }
+            }
         },
     ) { padding ->
         LazyColumn(
@@ -597,9 +754,9 @@ private fun TouchProbeScreen(
                             )
                             TestInstructionStep(
                                 number = "4",
-                                title = "检查并分享结果",
-                                body = "检查指尖和拇指指腹各 3 个样本后，点“分享测试结果”。"
-                                    + "已知机型只生成精简报告；需要适配的机型会提示补充算法库。",
+                                title = "检查并导出结果",
+                                body = "检查指尖和拇指指腹各 3 个样本后，点“导出触控报告”并选择保存位置。"
+                                    + "保存后可继续分享到其他应用；需要适配的机型可选择附带算法库。",
                             )
                         }
                     }
@@ -828,41 +985,6 @@ private fun TouchProbeScreen(
                 }
             }
 
-            if (state.status != "尚未开始" &&
-                !state.status.startsWith("正在查找")) {
-                item {
-                    SmallTitle("分享测试结果")
-                    Text(
-                        text = if (state.status.startsWith("触控数据流已中断")) {
-                            "本次采样已停止。可以分享当前诊断报告，或手动重新检测。"
-                        } else {
-                            "报告用于跨机型适配，包含手机型号、系统版本、测试结果和异常原因；" +
-                                "不包含页面文字、截图、剪贴板或应用内容。" +
-                                "只有在你点击分享后，文件才会离开本机。"
-                        },
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                    TextButton(
-                        text = "分享测试结果",
-                        enabled = !state.captureActive && !state.exportInFlight,
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        colors = ButtonDefaults.textButtonColorsPrimary(),
-                        onClick = { onShare(TouchProbeExporter.Options.smartDefault()) },
-                    )
-                    if (compatibility.matchKind == TouchProfileRegistry.MatchKind.NONE) {
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            BasicComponent(
-                                title = "适配排查选项",
-                                summary = "仅在自动检测需要补充算法库或重新采集时使用",
-                                enabled = !state.captureActive && !state.exportInFlight,
-                                onClick = { showExportOptions = true },
-                            )
-                        }
-                    }
-                }
-            }
-
             state.connection?.let {
                 item {
                     Card(colors = CardDefaults.defaultColors(
@@ -935,7 +1057,7 @@ private fun TouchProbeScreen(
     if (showExportOptions) {
         TouchProbeDialog(
             title = "适配排查选项",
-            summary = "默认会自动选择精简报告或完整适配包。只有点击“按选项分享”后才会打开分享面板。",
+            summary = "默认会自动选择精简报告或完整适配包。导出后先选择保存位置，再决定是否分享。",
             onDismissRequest = { showExportOptions = false },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -976,13 +1098,13 @@ private fun TouchProbeScreen(
                         onClick = { showExportOptions = false },
                     )
                     TextButton(
-                        text = "按选项分享",
+                        text = "按选项导出",
                         enabled = !state.exportInFlight,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.textButtonColorsPrimary(),
                         onClick = {
                             showExportOptions = false
-                            onShare(
+                            onExport(
                                 TouchProbeExporter.Options(
                                     alwaysAttachLibrary,
                                     textOnlyReport,

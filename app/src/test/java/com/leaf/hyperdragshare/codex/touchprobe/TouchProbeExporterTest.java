@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -97,6 +98,38 @@ public class TouchProbeExporterTest {
                 "文件不是 64 位 arm64 ELF",
                 TouchProbeExporter.copyValidationFailure(
                         "aaaaaaaa", "aaaaaaaa", 5, 5, false));
+    }
+
+    @Test
+    public void failureAndEmptyStatesStillExportTextReportWithAvailableEvidence()
+            throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        String[] statuses = {
+                "尚未开始",
+                "连接失败：触控服务不可用",
+                "已连接：未知算法库，仅收集诊断数据",
+                "算法库哈希不匹配，无法安全采样",
+                "触控数据流已中断，采样已停止：读取失败",
+        };
+
+        for (String status : statuses) {
+            TouchProbeExporter.Result result = TouchProbeExporter.export(
+                    context,
+                    null,
+                    new TouchProbeCollector().snapshot(),
+                    status,
+                    TouchProbeExporter.Options.smartDefault(),
+                    () -> { throw new java.io.IOException("mapping unavailable"); });
+
+            assertEquals(TouchProbeExporter.PackageKind.TEXT_REPORT, result.kind);
+            assertFalse(result.libraryAttached);
+            String report = Files.readString(result.file.toPath(), StandardCharsets.UTF_8);
+            assertTrue(report.contains("status=" + status));
+            assertTrue(report.contains("frames=0"));
+            assertTrue(report.contains("refresh_warning="));
+            assertTrue(report.contains("mapping unavailable"));
+            assertTrue(report.contains("profile_match_exact=false"));
+        }
     }
 
     @Test

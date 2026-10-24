@@ -89,6 +89,11 @@ public final class TouchProbeExporter {
         }
     }
 
+    @FunctionalInterface
+    interface Discovery {
+        TouchDeviceMapParser.DeviceMap discover() throws Exception;
+    }
+
     public static final class TouchLibraryCopy {
         public final String state;
         public final String source;
@@ -126,6 +131,16 @@ public final class TouchProbeExporter {
             TouchProbeCollector.Snapshot snapshot,
             String status,
             Options options) throws Exception {
+        return export(context, connection, snapshot, status, options, TouchReportReader::discover);
+    }
+
+    static Result export(
+            Context context,
+            TouchReportReader.ConnectionInfo connection,
+            TouchProbeCollector.Snapshot snapshot,
+            String status,
+            Options options,
+            Discovery discovery) throws Exception {
         Options effective = options == null ? Options.smartDefault() : options;
         File directory = new File(context.getCacheDir(), DIRECTORY);
         if (!directory.exists() && !directory.mkdirs()) {
@@ -138,7 +153,7 @@ public final class TouchProbeExporter {
         TouchDeviceMapParser.DeviceMap copyMap = null;
         String refreshWarning = "";
         try {
-            TouchDeviceMapParser.DeviceMap refreshed = TouchReportReader.discover();
+            TouchDeviceMapParser.DeviceMap refreshed = discovery.discover();
             copyMap = refreshed;
             if (identityMap == null
                     || (refreshed.pid == identityMap.pid
