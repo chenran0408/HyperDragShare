@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -76,56 +75,28 @@ internal fun ActivationDiagnosticsPage(
     onOpenProblemDiagnostics: () -> Unit,
 ) {
     val snapshot = monitor.snapshot
-    val rows = listOf(
-        DiagnosticRow("Root 授权", snapshot?.root ?: ActivationEvidence.CHECKING,
-            when (snapshot?.root ?: ActivationEvidence.CHECKING) {
-                ActivationEvidence.READY -> "Root 命令已成功返回"
-                ActivationEvidence.UNAVAILABLE -> "Root 管理器拒绝或未授予本次请求；仅影响依赖 Root 的功能"
-                ActivationEvidence.UNKNOWN -> "检查超时或无响应，无法判断授权结果"
-                ActivationEvidence.NOT_APPLICABLE -> "当前功能不需要 Root"
-                ActivationEvidence.CHECKING -> "正在检查"
-            }, "按压取词、部分触控输入和 Portal 运行通道"),
-        DiagnosticRow("传送门模块", snapshot?.injection ?: ActivationEvidence.CHECKING,
-            evidenceDescription(snapshot?.injection ?: ActivationEvidence.CHECKING,
-                "收到当前版本的存活模块会话", "检测到旧版本会话", "未收到当前版本的存活会话"),
-            "传送门内容捕获和相关拖拽功能"),
-        DiagnosticRow("传送门服务", snapshot?.portalService ?: ActivationEvidence.CHECKING,
-            evidenceDescription(snapshot?.portalService ?: ActivationEvidence.CHECKING,
-                "服务报告已就绪", "服务报告未就绪", "尚无可确认的服务状态"),
-            "系统传送门入口和内容捕获"),
-        DiagnosticRow("传送门 Root 通道", snapshot?.portalRoot ?: ActivationEvidence.CHECKING,
-            evidenceDescription(snapshot?.portalRoot ?: ActivationEvidence.CHECKING,
-                "传送门进程的 Root 检查成功", "传送门进程的 Root 检查被拒绝",
-                "尚无结果或检查超时；不会按未授权处理"),
-            "依赖传送门进程 Root 能力的触控和识别路径"),
-        DiagnosticRow("Root 触控输入", snapshot?.rootInput ?: ActivationEvidence.CHECKING,
-            snapshot?.rootInputError?.takeIf { it.isNotBlank() }
-                ?: evidenceDescription(snapshot?.rootInput ?: ActivationEvidence.CHECKING,
-                    "触控输入已就绪", "触控输入明确报告不可用", "没有可确认的输入状态"),
-            "按压取词及读取 Root 触控流的操作"),
-        DiagnosticRow("按压取词组件", snapshot?.pressReader ?: ActivationEvidence.CHECKING,
-            if (snapshot?.thumbTriggerEnabled == false) "拇指触发未启用，此项不适用"
-            else snapshot?.pressReaderError?.takeIf { it.isNotBlank() }
-                ?: evidenceDescription(snapshot?.pressReader ?: ActivationEvidence.CHECKING,
-                    "按压取词已就绪", "组件明确报告不可用", "未收到就绪或错误报告"),
-            "拇指触发开启时的按压识别"),
-        DiagnosticRow("应用悬浮窗权限", snapshot?.overlayPermission ?: ActivationEvidence.CHECKING,
-            evidenceDescription(snapshot?.overlayPermission ?: ActivationEvidence.CHECKING,
-                "已允许应用显示悬浮窗", "尚未允许显示悬浮窗", "权限状态暂时无法读取"),
-            "大爆炸、点按识屏和部分应用侧悬浮工具"),
-        DiagnosticRow("小米澎湃 AI 引擎", ActivationEvidence.UNKNOWN,
-            "按需调用 OCR、实体识别或条码服务；当前没有通用心跳检查，需实际使用对应识别功能确认",
-            "仅使用 AI 识别的功能；不会影响普通拖拽或手势"),
-        DiagnosticRow("系统手势作用域", ActivationEvidence.UNKNOWN,
-            "当前应用无法无打扰地验证系统进程中的模块钩子，请通过实际手势或模块管理器确认",
-            "底角、蜂巢和小窗手势"),
-        DiagnosticRow("复制直达", if (snapshot?.copyDirectEnabled == true)
-            ActivationEvidence.UNKNOWN else ActivationEvidence.NOT_APPLICABLE,
-            if (snapshot?.copyDirectEnabled == true)
-                "功能已开启，但 AICR 卡片服务按需调用，没有持续运行状态报告"
-            else "功能未启用",
-            "仅复制直达卡片；其他复制与分享功能独立运行"),
-    )
+    val rootNeeds = buildList {
+        if (snapshot?.root == ActivationEvidence.UNAVAILABLE) add("MMGG")
+        if (snapshot?.portalRoot == ActivationEvidence.UNAVAILABLE) add("小米传送门")
+    }
+    val missingPermissions = buildList {
+        if (snapshot?.overlayPermission == ActivationEvidence.UNAVAILABLE) add("悬浮窗")
+    }
+    val portalInstalled = packageInstalled(context, PORTAL_PACKAGE)
+    val aicrInstalled = packageInstalled(context, AICR_PACKAGE)
+    val missingSoftware = buildList {
+        if (portalInstalled == false) add("小米传送门" to "取词和相关拖拽功能需要此组件。")
+        if (aicrInstalled == false) add("小米澎湃 AI 引擎" to "系统识字和 AI 识别功能需要此组件。")
+    }
+    val portalNeedsReload = snapshot?.injection == ActivationEvidence.UNAVAILABLE
+        || snapshot?.portalService == ActivationEvidence.UNAVAILABLE
+        || snapshot?.rootInput == ActivationEvidence.UNAVAILABLE
+        || (snapshot?.thumbTriggerEnabled == true && snapshot.pressReader == ActivationEvidence.UNAVAILABLE)
+    val hasUnknown = (snapshot?.let {
+        listOf(it.root, it.injection, it.portalService, it.portalRoot, it.rootInput,
+            if (it.thumbTriggerEnabled) it.pressReader else ActivationEvidence.NOT_APPLICABLE,
+            it.overlayPermission).any { evidence -> evidence == ActivationEvidence.UNKNOWN }
+    } ?: false) || (snapshot != null && (portalInstalled == null || aicrInstalled == null))
     val scrollBehavior = MiuixScrollBehavior()
     Scaffold(
         topBar = {
@@ -148,15 +119,15 @@ internal fun ActivationDiagnosticsPage(
                 SmallTitle("功能状态")
                 Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
                     BasicComponent(
-                        title = when (snapshot?.overallState ?: ActivationState.CHECKING) {
-                            ActivationState.CHECKING -> "正在检查"
-                            ActivationState.NORMAL -> "已检查项目正常"
-                            ActivationState.NEEDS_ACTION -> "部分项目需要处理"
-                            ActivationState.UNKNOWN -> "暂时无法确认部分项目"
-                            ActivationState.NOT_APPLICABLE -> "当前没有适用项目"
+                        title = when {
+                            monitor.checking || snapshot == null -> "正在检查"
+                            rootNeeds.isNotEmpty() || missingPermissions.isNotEmpty()
+                                    || missingSoftware.isNotEmpty() || portalNeedsReload -> "有项目需要处理"
+                            hasUnknown -> "部分状态暂时无法确认"
+                            else -> "已检查项目正常"
                         },
-                        summary = if (monitor.checking) "正在更新状态，当前结果保留显示" else
-                            "状态依据运行时报告和实际权限查询；未收到响应会标为待确认。",
+                        summary = if (monitor.checking) "正在更新状态" else
+                            "这里只显示需要处理的项目；未能确认的状态不会当作权限缺失。",
                         insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     )
                     SettingsNavigationPreference(
@@ -167,10 +138,61 @@ internal fun ActivationDiagnosticsPage(
                     )
                 }
             }
-            item("diagnostics-components-title") {
-                SmallTitle("运行环节")
+            item("diagnostics-root") {
+                if (rootNeeds.isNotEmpty()) {
+                    SimpleDiagnosticSection("需要 Root", rootNeeds.map { it to "请在 Root 管理器中为${it}授权后重新检查" }) {
+                        monitor.refresh()
+                    }
+                }
             }
-            items(rows, key = { it.title }) { row -> DiagnosticEvidenceCard(row) }
+            item("diagnostics-permissions") {
+                if (missingPermissions.isNotEmpty()) {
+                    SimpleDiagnosticSection("缺少权限", missingPermissions.map { it to "允许 MMGG 显示悬浮窗" }) {
+                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                            .setData(android.net.Uri.parse("package:${context.packageName}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }
+                }
+            }
+            item("diagnostics-software") {
+                if (missingSoftware.isNotEmpty()) {
+                    SimpleDiagnosticSection("缺少软件", missingSoftware.map { (name, impact) ->
+                        name to "${impact}请从系统组件更新或设备厂商提供的渠道安装。"
+                    })
+                }
+            }
+            item("diagnostics-reload") {
+                if (portalNeedsReload && missingSoftware.none { it.first == "小米传送门" }) {
+                    SimpleDiagnosticSection("需要检查或重载", listOf("小米传送门" to "检查 LSPosed 作用域后，在通用设置中热重载传送门")) {
+                        onOpenGeneralSettings()
+                    }
+                }
+            }
+            item("diagnostics-unknown") {
+                if (hasUnknown) {
+                    Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+                        BasicComponent(
+                            title = "有状态暂时无法确认",
+                            summary = "这不代表权限未授予或软件缺失。需要继续排查时，可导出诊断包查看技术信息。",
+                            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+            }
+            item("diagnostics-clear") {
+                if (snapshot != null && !monitor.checking && rootNeeds.isEmpty()
+                    && missingPermissions.isEmpty() && missingSoftware.isEmpty() && !portalNeedsReload && !hasUnknown
+                ) {
+                    Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+                        BasicComponent(
+                            title = "没有发现需要处理的项目",
+                            summary = "已检查的权限和运行状态正常。",
+                            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+            }
             item("diagnostics-actions") {
                 SmallTitle("处理入口")
                 Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
@@ -186,57 +208,48 @@ internal fun ActivationDiagnosticsPage(
                         icon = SettingModule.GENERAL.icon,
                         onClick = onOpenGeneralSettings,
                     )
-                    SettingsNavigationPreference(
-                        title = "打开悬浮窗权限",
-                        summary = "仅适用于依赖应用悬浮窗的工具",
-                        icon = MiuixIcons.Info,
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                                .setData(android.net.Uri.parse("package:${context.packageName}"))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        },
-                    )
                 }
             }
         }
     }
 }
 
-private data class DiagnosticRow(
-    val title: String,
-    val evidence: ActivationEvidence,
-    val detail: String,
-    val impact: String,
-)
-
-private fun evidenceDescription(
-    evidence: ActivationEvidence,
-    ready: String,
-    unavailable: String,
-    unknown: String,
-): String = when (evidence) {
-    ActivationEvidence.CHECKING -> "正在检查"
-    ActivationEvidence.READY -> ready
-    ActivationEvidence.UNAVAILABLE -> unavailable
-    ActivationEvidence.UNKNOWN -> unknown
-    ActivationEvidence.NOT_APPLICABLE -> "当前功能不适用"
+@Composable
+private fun SimpleDiagnosticSection(
+    title: String,
+    rows: List<Pair<String, String>>,
+    onClick: (() -> Unit)? = null,
+) {
+    if (rows.isEmpty()) return
+    SmallTitle(title)
+    Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
+        rows.forEach { (name, detail) ->
+            if (onClick == null) {
+                BasicComponent(
+                    title = name,
+                    summary = detail,
+                    insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                )
+            } else {
+                SettingsNavigationPreference(
+                    title = name,
+                    summary = detail,
+                    icon = MiuixIcons.Info,
+                    onClick = onClick,
+                )
+            }
+        }
+    }
 }
 
-@Composable
-private fun DiagnosticEvidenceCard(row: DiagnosticRow) {
-    val status = when (row.evidence) {
-        ActivationEvidence.CHECKING -> "检查中"
-        ActivationEvidence.READY -> "正常"
-        ActivationEvidence.UNAVAILABLE -> "需要处理"
-        ActivationEvidence.UNKNOWN -> "待确认"
-        ActivationEvidence.NOT_APPLICABLE -> "不适用"
-    }
-    Card(Modifier.padding(horizontal = 12.dp, vertical = 3.dp)) {
-        BasicComponent(
-            title = "${row.title} · $status",
-            summary = "${row.detail}\n影响功能：${row.impact}",
-            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        )
-    }
+private const val PORTAL_PACKAGE = "com.miui.contentextension"
+private const val AICR_PACKAGE = "com.xiaomi.aicr"
+
+private fun packageInstalled(context: Context, packageName: String): Boolean? = try {
+    context.packageManager.getApplicationInfo(packageName, 0)
+    true
+} catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+    false
+} catch (_: RuntimeException) {
+    null
 }

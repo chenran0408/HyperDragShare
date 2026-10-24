@@ -2,12 +2,16 @@ package com.leaf.hyperdragshare.codex
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -15,21 +19,29 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.leaf.hyperdragshare.gestures.config.ConfigContract as C
 import com.leaf.hyperdragshare.gestures.config.ConfigStore
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
 
 /** Register Hyper gesture/freeform settings for the shared searchable settings catalog. */
@@ -42,6 +54,7 @@ internal fun gestureSettingEntries(
     val prefs = remember(store) { store.preferences() }
     val revision = remember(store) { mutableIntStateOf(0) }
     val localValues = remember(store) { mutableStateMapOf<String, Any>() }
+    val sliderPreviewValues = remember(store) { mutableStateMapOf<String, Float>() }
     val entries = mutableListOf<SettingEntry>()
     var currentModule = SettingModule.GESTURES
     var currentGroup = "总开关与通用"
@@ -211,7 +224,8 @@ internal fun gestureSettingEntries(
 
     fun slider(title: String, key: String, min: Int, max: Int, suffix: String, speedMultiplier: Boolean = false) {
         register(key, title, if (speedMultiplier) "调整任务拖动速度" else "范围 $min–$max$suffix") { enabled ->
-            GestureSliderPreference(context, store, prefs, localValues, revision, key, title, min, max, suffix, speedMultiplier, enabled)
+            GestureSliderPreference(context, store, prefs, localValues, sliderPreviewValues,
+                revision, key, title, min, max, suffix, speedMultiplier, enabled)
         }
     }
 
@@ -272,6 +286,23 @@ internal fun gestureSettingEntries(
     slider("触发区宽度", C.KEY_HOT_WIDTH_PERCENT, 5, 20, "%")
     slider("触发区高度", C.KEY_HOT_HEIGHT_PERCENT, 3, C.MAX_HOT_HEIGHT_PERCENT, "%")
     slider("一段扇形距离", C.KEY_TRIGGER_PERCENT, 6, 24, "%")
+    register("bottom_corner_preview", "触发范围预览", "实时查看底角触发范围与扇形距离", MiuixIcons.Info) { _ ->
+        BottomCornerTriggerPreview(
+            widthPercent = sliderPreviewValues[C.KEY_HOT_WIDTH_PERCENT]
+                ?: ((localValues[C.KEY_HOT_WIDTH_PERCENT] as? Int)
+                    ?: prefs.getInt(C.KEY_HOT_WIDTH_PERCENT, C.DEFAULT_HOT_WIDTH_PERCENT)).toFloat(),
+            heightPercent = sliderPreviewValues[C.KEY_HOT_HEIGHT_PERCENT]
+                ?: ((localValues[C.KEY_HOT_HEIGHT_PERCENT] as? Int)
+                    ?: prefs.getInt(C.KEY_HOT_HEIGHT_PERCENT, C.DEFAULT_HOT_HEIGHT_PERCENT)).toFloat(),
+            distancePercent = sliderPreviewValues[C.KEY_TRIGGER_PERCENT]
+                ?: ((localValues[C.KEY_TRIGGER_PERCENT] as? Int)
+                    ?: prefs.getInt(C.KEY_TRIGGER_PERCENT, C.DEFAULT_TRIGGER_PERCENT)).toFloat(),
+            leftEnabled = (localValues[C.KEY_BOTTOM_LEFT_ENABLED] as? Boolean)
+                ?: prefs.getBoolean(C.KEY_BOTTOM_LEFT_ENABLED, C.DEFAULT_BOTTOM_LEFT_ENABLED),
+            rightEnabled = (localValues[C.KEY_BOTTOM_RIGHT_ENABLED] as? Boolean)
+                ?: prefs.getBoolean(C.KEY_BOTTOM_RIGHT_ENABLED, C.DEFAULT_BOTTOM_RIGHT_ENABLED),
+        )
+    }
     slider("蜂巢停顿时间", C.KEY_BOTTOM_HONEYCOMB_SETTLE_MS, C.MIN_BOTTOM_HONEYCOMB_SETTLE_MS, C.MAX_BOTTOM_HONEYCOMB_SETTLE_MS, " ms")
     slider("图标选择距离", C.KEY_SELECTION_RADIUS_PERCENT, C.MIN_SELECTION_RADIUS_PERCENT, C.MAX_SELECTION_RADIUS_PERCENT, "%")
     currentGroup = "高级设置"
@@ -422,6 +453,7 @@ private fun GestureSliderPreference(
     store: ConfigStore,
     prefs: android.content.SharedPreferences,
     localValues: MutableMap<String, Any>,
+    previewValues: MutableMap<String, Float>,
     revision: MutableIntState,
     key: String,
     title: String,
@@ -435,6 +467,9 @@ private fun GestureSliderPreference(
     var value by remember(key, currentRevision) {
         mutableFloatStateOf(((localValues[key] as? Int) ?: prefs.getInt(key, gestureSettingDefault(key, min))).coerceIn(min, max).toFloat())
     }
+    DisposableEffect(key, previewValues) {
+        onDispose { previewValues.remove(key) }
+    }
     SliderPreference(
         title = title,
         enabled = enabled,
@@ -443,12 +478,112 @@ private fun GestureSliderPreference(
             else "${value.toInt()}$suffix",
         valueRange = min.toFloat()..max.toFloat(),
         steps = (max - min - 1).coerceAtLeast(0),
-        onValueChange = { value = it },
+        onValueChange = {
+            value = it
+            previewValues[key] = it
+        },
         onValueChangeFinished = {
             localValues[key] = value.toInt()
             saveGestureIntegerSetting(context, store, key, value.toInt())
+            previewValues.remove(key)
         },
     )
+}
+
+@Composable
+private fun BottomCornerTriggerPreview(
+    widthPercent: Float,
+    heightPercent: Float,
+    distancePercent: Float,
+    leftEnabled: Boolean,
+    rightEnabled: Boolean,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(end = 12.dp, top = 10.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("触发范围预览", fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("竖屏", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                CornerTriggerScreenPreview(
+                    modifier = Modifier.fillMaxWidth().height(118.dp),
+                    landscape = false,
+                    widthPercent = widthPercent,
+                    heightPercent = heightPercent,
+                    leftEnabled = leftEnabled,
+                    rightEnabled = rightEnabled,
+                )
+            }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("横屏", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                CornerTriggerScreenPreview(
+                    modifier = Modifier.fillMaxWidth().height(118.dp),
+                    landscape = true,
+                    widthPercent = widthPercent,
+                    heightPercent = heightPercent,
+                    leftEnabled = leftEnabled,
+                    rightEnabled = rightEnabled,
+                )
+            }
+        }
+        Text(
+            "宽 ${widthPercent.toInt()}% · 高 ${heightPercent.toInt()}% · 扇形距离 ${distancePercent.toInt()}%（屏幕短边）",
+            fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+        Text(
+            "示意图按竖屏和横屏分别缩放；灰色角落表示该侧已关闭。",
+            fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+    }
+}
+
+@Composable
+private fun CornerTriggerScreenPreview(
+    modifier: Modifier,
+    landscape: Boolean,
+    widthPercent: Float,
+    heightPercent: Float,
+    leftEnabled: Boolean,
+    rightEnabled: Boolean,
+) {
+    val frameColor = MiuixTheme.colorScheme.surfaceContainer
+    val outlineColor = MiuixTheme.colorScheme.onSurfaceVariantActions
+    val activeColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.48f)
+    val disabledColor = MiuixTheme.colorScheme.onSurfaceVariantActions.copy(alpha = 0.16f)
+    Canvas(modifier) {
+        val frameWidth = size.width * if (landscape) 0.92f else 0.57f
+        val frameHeight = size.height * if (landscape) 0.62f else 0.94f
+        val left = (size.width - frameWidth) / 2f
+        val top = (size.height - frameHeight) / 2f
+        drawRoundRect(
+            color = frameColor,
+            topLeft = Offset(left, top),
+            size = Size(frameWidth, frameHeight),
+            cornerRadius = CornerRadius(10.dp.toPx()),
+        )
+        val zoneWidth = frameWidth * (widthPercent.coerceIn(5f, 20f) / 100f)
+        val zoneHeight = frameHeight * (heightPercent.coerceIn(3f, 20f) / 100f)
+        drawRect(
+            color = if (leftEnabled) activeColor else disabledColor,
+            topLeft = Offset(left, top + frameHeight - zoneHeight),
+            size = Size(zoneWidth, zoneHeight),
+        )
+        drawRect(
+            color = if (rightEnabled) activeColor else disabledColor,
+            topLeft = Offset(left + frameWidth - zoneWidth, top + frameHeight - zoneHeight),
+            size = Size(zoneWidth, zoneHeight),
+        )
+        drawRoundRect(
+            color = outlineColor,
+            topLeft = Offset(left, top),
+            size = Size(frameWidth, frameHeight),
+            cornerRadius = CornerRadius(10.dp.toPx()),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
+        )
+    }
 }
 
 @Composable
