@@ -919,11 +919,13 @@ private fun portalSettingEntries(
 
     row("copy.browser", "复制直达浏览器", SettingModule.COPY_DIRECT, "目标应用",
         summary = if (copyDirectBrowserUnavailable) {
-            "当前已选浏览器未安装；请重新选择，不会自动切换"
+            "当前已选浏览器不可用，请重新选择；也可改为跟随系统默认"
+        } else if (copyDirectBrowserPackage.isEmpty()) {
+            "跟随系统默认浏览器；在系统设置中更换后，下次打开链接自动跟随"
         } else {
-            "选择复制直达打开链接时使用的浏览器"
+            "固定使用所选浏览器；选择“跟随系统默认浏览器”可与系统设置同步"
         },
-        keywords = "链接 网页 浏览器 默认",
+        keywords = "链接 网页 浏览器 默认 系统 同步",
         enabled = copyDirectEnabled,
         prerequisite = "先启用复制直达与分词",
     ) { title, summary, enabled ->
@@ -939,7 +941,8 @@ private fun portalSettingEntries(
                     copyDirectBrowserPackage = choice.packageName
                     Toast.makeText(
                         context,
-                        "已保存：下次复制直达打开链接时使用新浏览器，无需重启。",
+                        if (choice.packageName.isEmpty()) "已跟随系统默认浏览器，无需重启。"
+                        else "已保存：下次复制直达使用所选浏览器，无需重启。",
                         Toast.LENGTH_SHORT,
                     ).show()
                 }

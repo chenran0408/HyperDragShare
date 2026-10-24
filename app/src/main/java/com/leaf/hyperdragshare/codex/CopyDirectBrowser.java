@@ -3,6 +3,7 @@ package com.leaf.hyperdragshare.codex;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
@@ -27,14 +28,17 @@ public final class CopyDirectBrowser {
 
     public static List<Choice> choices(Context context) {
         PackageManager packages = context.getPackageManager();
-        Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
+        Intent web = new Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://example.com/copy-direct-probe"))
                 .addCategory(Intent.CATEGORY_BROWSABLE);
         Map<String, Choice> browsers = new LinkedHashMap<>();
         for (ResolveInfo result : packages.queryIntentActivities(web,
                 PackageManager.MATCH_DEFAULT_ONLY | PackageManager.GET_RESOLVED_FILTER)) {
             if (result.activityInfo.exported && result.filter != null
                     && result.filter.hasCategory(Intent.CATEGORY_BROWSABLE)
-                    && result.filter.countDataAuthorities() == 0) {
+                    && supportsBroadWebAddresses(result.filter)
+                    && (result.filter.hasDataScheme("http")
+                        || result.filter.hasDataScheme("https"))) {
                 String name = result.activityInfo.packageName;
                 browsers.putIfAbsent(name, new Choice(name, result.loadLabel(packages).toString()));
             }
@@ -56,5 +60,18 @@ public final class CopyDirectBrowser {
             throw new ActivityNotFoundException("所选复制直达浏览器不可用，请在设置中重新选择");
         }
         return explicit;
+    }
+
+    private static boolean supportsBroadWebAddresses(IntentFilter filter) {
+        if (filter.countDataAuthorities() == 0) return true;
+        if (filter.countDataPaths() != 0 || filter.countDataSchemeSpecificParts() != 0) {
+            return false;
+        }
+        // A wildcard host with no port/path restriction accepts arbitrary web addresses.
+        for (int index = 0; index < filter.countDataAuthorities(); index++) {
+            IntentFilter.AuthorityEntry authority = filter.getDataAuthority(index);
+            if ("*".equals(authority.getHost()) && authority.getPort() == -1) return true;
+        }
+        return false;
     }
 }

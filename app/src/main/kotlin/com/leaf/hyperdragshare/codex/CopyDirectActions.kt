@@ -36,6 +36,12 @@ object CopyDirectActions {
         }
 
         val destination = directTextDestination(text)
+        val browserOperation = if (destination?.kind == DirectTextKind.Url) {
+            OperationTrace.fresh("copy")
+        } else "-"
+        if (browserOperation != "-") {
+            OperationTrace.event(browserOperation, "copy_direct_prepare", "requested")
+        }
         val segmentIntent = TextSegmentationActivity.createIntent(text)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         var failureMessage: String? = null
@@ -70,6 +76,14 @@ object CopyDirectActions {
             segmentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        if (browserOperation != "-") {
+            val outcome = when {
+                mainIntent == null -> "browser_unavailable"
+                mainIntent.`package`.isNullOrEmpty() -> "default_browser_ready"
+                else -> "selected_browser_ready"
+            }
+            OperationTrace.event(browserOperation, "copy_direct_prepare", outcome)
+        }
         val icon = Icon.createWithResource(app, R.drawable.ic_copy)
         return Bundle().apply {
             putBoolean("accepted", true)
