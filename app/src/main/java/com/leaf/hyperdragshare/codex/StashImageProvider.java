@@ -91,7 +91,7 @@ public final class StashImageProvider extends ContentProvider {
             OperationTrace.imageAccess(uri, "metadata_query_failed", callerUid);
             DragShareLog.w("DragShare/Stash", "image drop metadata failed error=" + error.getClass().getSimpleName());
             new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(getContext(),
-                    "无法读取图片信息，原图仍保留", Toast.LENGTH_LONG).show());
+                    "无法读取图片信息，请重试", Toast.LENGTH_LONG).show());
             throw new IllegalStateException("无法读取中转站图片信息", error);
         } finally { Binder.restoreCallingIdentity(identity); }
     }

@@ -260,7 +260,7 @@ object StashOverlayPanel {
                 embedded.startDrag(clip, shadow, flags,
                     onStarted = { started ->
                         OperationTrace.event(operation, "module_drag_start_callback",
-                            if (started) "native_started" else "native_start_rejected")
+                            if (started) "reported_true" else "reported_false")
                         if (started) {
                             val density = context.resources.displayMetrics.density
                             dragContentWidthDp = overlay.composeView.width / density

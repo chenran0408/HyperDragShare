@@ -135,7 +135,7 @@ internal class StashSurfaceHost private constructor(
             onStarted(false)
             return
         }
-        OperationTrace.event(OperationTrace.read(clip), "module_host_drag_request", "forwarded")
+        OperationTrace.event(OperationTrace.read(clip), "module_host_drag_request", "requested")
         val shadowSnapshot = if (ownerSupportsShadowV1) {
             runCatching { StashDragShadowSnapshot.capture(shadow) }.getOrNull()
         } else null
