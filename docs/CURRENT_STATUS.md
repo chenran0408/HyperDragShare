@@ -6,7 +6,7 @@
 
 |职责|目录|分支/基线|
 |---|---|---|
-|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta@f8213cf`；Phase1A实现`4a8ec68`；本轮触发资格修复；Beta28打包源码`827bf2a`|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；本轮触发资格代码`f8213cf`；Phase1A实现`4a8ec68`；Beta28打包源码`827bf2a`|
 |正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`；1.7.218/242，未改|
 
 开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
@@ -18,7 +18,7 @@
 - **指针与配置语义**：第二指加入后仍从其DOWN开始完整确认时长，这是当前 `handleContactEvent` 调用 `startTwoFinger(...eventTime, configuredTimeout...)` 的实际语义，代码和行为测试一致。第二指未确认时离开会取消候选；`twoFingerContactSequence`继续抑制余下第一指事件，不能退化成单指。模式在DOWN读取；设置变更会取消未确认的当前候选，新模式由下一次DOWN读取。
 - **范围**：没有修改Controller、32ms/257、Root UP/CANCEL、Blocker、evdev参数、600ms/120ms/36px、阈值、控件避让、ControlRisk/Feature Gate、微信Hook或侧栏UI；Candidate A仍冻结于`080c30c`，其worktree未改。模块/系统双指时长、键和默认值未变。
 - **本轮验证**：在未改生产代码时，22项先行测试有5项按预期失败，证明资格缺口。完成后触发/配置/evdev定向集75项、Phase1A等价回归52项及全量784项均零失败/错误/跳过；Lint 0错误、181警告、2提示；`assembleDebug`成功。DEBUG APK仅用于构建验证，SHA-256 `70E35F7F46C51C4A1D844C460A39B569D6EE81894CDC15B42C4B99EB4BCD64D9`，不作为交付。未运行Beta/R8、未增版、未生成Candidate B、未进行模拟器UI或实机验证。
-- 细化证据、M1–M10与命令见 `D:/CODEX/Tasks/2026-10-25/mmgg-two-finger-trigger-qualification/outputs/DELIVERY.md`。本轮仅提交`f8213cf`；Candidate B仍须单独跑Beta/R8并确认签名/产物后才成立。
+- 细化证据、M1–M10与命令见 `D:/CODEX/Tasks/2026-10-25/mmgg-two-finger-trigger-qualification/outputs/DELIVERY.md`。本轮代码提交为`f8213cf`；Candidate B仍须单独跑Beta/R8并确认签名/产物后才成立。
 
 ## Phase 1A delayed callback owner 修复（实现提交 4a8ec68，尚未增版打包）
 
