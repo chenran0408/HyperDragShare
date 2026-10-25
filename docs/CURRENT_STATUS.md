@@ -6,10 +6,19 @@
 
 |职责|目录|分支/基线|
 |---|---|---|
-|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；Phase1A实现`4a8ec68`；当前HEAD请以`git log -1`核对；Beta28打包源码`827bf2a`|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta@f8213cf`；Phase1A实现`4a8ec68`；本轮触发资格修复；Beta28打包源码`827bf2a`|
 |正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`；1.7.218/242，未改|
 
 开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
+
+## 双指长按触发资格修复（`f8213cf`；未增版、未生成Beta包）
+
+- **现象与根因**：设置中的 `twoFingerLongPressEnabled` 会被 `PortalPressSettings`（有效系统模式优先、不可用时模块设置后备）读取并传给 Root parser，但 `PressCaptureSource.handlePointer(ACTION_DOWN)` 原先仍无条件启动普通单指 detector；`schedule()`因此安排120ms分类和确认时长 fire。未改生产代码时，回归测试复现单指在TWO_FINGER模式下 601ms/3601ms fire、单指→双指设置后的新手势仍 fire，以及WeChat Portal图片takeover绕过确认。Root capture结果原本会等 detector fire，但Portal image takeover有独立直达窗口路径。
+- **修改**：Root DOWN时快照模式。SINGLE沿用原 detector；TWO_FINGER使用不安排分类的第一指候选。Detector自身拒绝候选阶段分类/fire；只有在候选窗口内合法第二指加入后，才沿用原双指时长/位移判断获得资格。Portal内容在确认前可缓存以接住宿主回调，但不启动pipeline、preview或feature；资格确认后再消费。Root capture worker与主线程返回、自动来源选择、display均校验资格及既有请求代次；失效的迟到图片被回收。OCR与Blocker只从已确认的图片分支启动。
+- **指针与配置语义**：第二指加入后仍从其DOWN开始完整确认时长，这是当前 `handleContactEvent` 调用 `startTwoFinger(...eventTime, configuredTimeout...)` 的实际语义，代码和行为测试一致。第二指未确认时离开会取消候选；`twoFingerContactSequence`继续抑制余下第一指事件，不能退化成单指。模式在DOWN读取；设置变更会取消未确认的当前候选，新模式由下一次DOWN读取。
+- **范围**：没有修改Controller、32ms/257、Root UP/CANCEL、Blocker、evdev参数、600ms/120ms/36px、阈值、控件避让、ControlRisk/Feature Gate、微信Hook或侧栏UI；Candidate A仍冻结于`080c30c`，其worktree未改。模块/系统双指时长、键和默认值未变。
+- **本轮验证**：在未改生产代码时，22项先行测试有5项按预期失败，证明资格缺口。完成后触发/配置/evdev定向集75项、Phase1A等价回归52项及全量784项均零失败/错误/跳过；Lint 0错误、181警告、2提示；`assembleDebug`成功。DEBUG APK仅用于构建验证，SHA-256 `70E35F7F46C51C4A1D844C460A39B569D6EE81894CDC15B42C4B99EB4BCD64D9`，不作为交付。未运行Beta/R8、未增版、未生成Candidate B、未进行模拟器UI或实机验证。
+- 细化证据、M1–M10与命令见 `D:/CODEX/Tasks/2026-10-25/mmgg-two-finger-trigger-qualification/outputs/DELIVERY.md`。本轮仅提交`f8213cf`；Candidate B仍须单独跑Beta/R8并确认签名/产物后才成立。
 
 ## Phase 1A delayed callback owner 修复（实现提交 4a8ec68，尚未增版打包）
 
@@ -54,7 +63,7 @@ SHA256：`36A8E3A36A769B2772E4CC654593AE392B477CC8AA5A34EE6A683573BA561759`。
 ## Beta25 实际完成和证据边界
 
 - 侧边栏中转站：用户复测正常，记录未复现，没有猜测性修改；不能据此关闭其他入口/接收方尚未确认的问题。
-- 双指长按：新增模块后备开关（缺省false）及独立600ms/250–3000ms时长。优先只读当前用户Settings.System的`support_double_press_mode`、`support_long_press_mode`（Portal5.1.5离线源码证据）；不可读/缺失/未知回退模块。系统双指模式不取消旧单指能力。没有已证实的系统时长接口，时长由模块控制。活动拖拽仍按原多指取消，Root保持权威。确认后OCR正常抬指保留已接受请求，真正取消仍丢弃旧结果。
+- 双指长按（Beta25当时实现，当前资格问题由`f8213cf`修正）：模块后备开关默认false及独立600ms/250–3000ms时长。优先只读当前用户Settings.System的`support_double_press_mode`、`support_long_press_mode`（Portal5.1.5离线源码证据）；不可读/缺失/未知回退模块。Beta25当时意图是系统双指模式不取消旧单指能力，但此实现被证明遗漏了普通单指detector路径；当前SINGLE与TWO_FINGER互斥，具体现状见本页“**双指长按触发资格修复**”。没有已证实的系统时长接口，时长由模块控制。活动拖拽仍按原多指取消，Root保持权威。确认后OCR正常抬指保留已接受请求，真正取消仍丢弃旧结果。
 - 横屏小窗/IME：取消IME出现前排队的窗外点击；IME可见期间阻止普通窗外关闭，键盘隐藏恢复原规则，保留原隐藏键盘操作。沿用现有可见性/Insets和恢复尺寸，不以focus改变独断关闭。
 - 拖拽菜单边距：复用原8dp/0–64dp字段，现代菜单原已消费该字段，修复设置禁用；适用于现代/简洁线性菜单，没有改圆形或原生传送门布局。
 - 触发区域：新增`hot_bottom_gap_dp`默认0、0–200dp，与区域高度独立；实际命中、捕获窗口和预览共享几何。屏上被动预览实时画方向、范围、间隔与菜单近似位置；不拦截正常触摸，注册现有排除区域避免触发MMGG，退出页面/后台释放。

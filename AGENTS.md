@@ -15,7 +15,7 @@
 
 1. 面向 Root＋LSPosed，使用 API 82 `MainHook`，不恢复无 Root 模式、系统无障碍服务声明或 `content_capture_mode` 来源选择。Root helper 的 UiAutomation 节点读取不等于 AccessibilityService。
 2. 按压使用 Root evdev 时长/位移；真实触摸面积研究已由用户停止。不继续解码、校准或重新接入 `probe/`（不是 Gradle 模块）。默认确认时长600ms，可调250–3000ms；保留合法旧配置与旧键。
-   双指是明确支持的按压候选：只读已验证Portal模式键，读取不可用时用模块后备开关/独立时长；原单指继续保留。Root解析触点结构，主队列按当前会话决定是否接纳双指；活动单指拖拽不能因启用双指而放行第二指。不得把原始evdev轴值当屏幕px阈值。
+   双指是明确支持且与单指互斥的按压模式：只读已验证Portal模式键，读取不可用时用模块后备开关/独立时长；SINGLE模式保留原单指能力。TWO_FINGER模式下第一指仅等待第二指加入，不能分类、确认或触发功能；合法双指确认前后的pointer退化不能恢复单指资格。Root解析触点结构，主队列按当前会话决定是否接纳双指；活动单指拖拽不能因启用双指而放行第二指。不得把原始evdev轴值当屏幕px阈值。
 3. Root 流进入活动拖拽后是唯一权威输入。真实 UP/CANCEL决定结束；Portal `cancelTask`、257/258、重复 pick不能提前结束活动会话。cancelTask/257须在真实结束后回放以复位宿主，258移动取消继续抑制。不得混入旧 MIUI 监听或凭私有控制码伪造松手。
 4. 拖拽预览和边缘菜单保持 `FLAG_NOT_TOUCHABLE`、被动跟手；交互分词/中转站窗口按各自策略处理，不能把上述规则扩成所有窗口永久穿透。所有退出/取消/服务销毁释放窗口、任务、Bitmap、InputMonitor；旧回调不能影响新会话。
 5. Hook精确限制包、进程、类和方法；当前作用域以 `MainHook.java` 与 `res/values/arrays.xml`核对（包括可选MiTrustService）。安全中心只适配已核对版本40001365/SDK37的`:ui`。不加入/强停 `com.miui.contentcatcher`，不批量杀系统进程，不全局关闭phantom/内存回收。普通运行时不导入Xposed；仅现有Hook入口/适配层使用。
