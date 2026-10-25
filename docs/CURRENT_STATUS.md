@@ -1,17 +1,25 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-25。唯一当前状态入口。最新本地候选 **1.7.219-beta.26 / 268**，产品源码`fa3f60b3d840788fbef5ed07e8ec500dcf59590d`，本地tag `delivered/mmgg-1.7.219-beta.26`。后续测试/文档提交不改变该APK源码身份。没有安装、设备操作、发布或push；Beta26用于收集更明确的诊断，不能宣称已解决设备端AICR/占用。
+核对日期：2026-10-25。唯一当前状态入口。最新本地候选 **1.7.219-beta.28 / 270**，源码提交`827bf2aae98c913826f87202c34cc19be0f81c1e`。APK见`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback/outputs/beta28/MMGG-1.7.219-beta.28.apk`，SHA-256 `9A1BDDA4BA4FCF96DDE4F8A018EE70C4860223D28AB0149B1E0089482F3A5867`。Beta28已覆盖安装到测试设备并完成AICR图片识字复测；没有发布或push。Beta26记录以下降为历史诊断批次。
 
 ## 在哪里继续
 
 |职责|目录|分支/基线|
 |---|---|---|
-|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；产品fa3f60b，实际分支HEAD用git log核对|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；当前产品提交`827bf2a`，实际分支HEAD用git log核对|
 |正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`；1.7.218/242，未改|
 
 开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
 
-## 本轮两个独立反馈
+## AICR 版本无关访问兼容（Beta28，当前）
+
+- 静态比较设备活动更新版4.13.2与系统内置4.12.18：Core AIDL描述符/事务保持一致；4.13.2在Core `onTransact`前做调用方签名校验，4.12.18 Core Stub没有这道门。
+- Beta27设备复测发现错误Hook使用了JADX显示的`defpackage.u8`，但设备DEX类描述符实际为根类`Lu8;`，因此Hook没有安装，AICR仍拒绝。该失败已明确记录，Beta27不作为可用修复交付。
+- Beta28改为Hook Android `ApplicationPackageManager.checkSignatures(int,int)`；仅当Binder真实调用UID所属包包含MMGG、比较参数是该UID与system UID、调用栈属于AICR Core Binder `onTransact`时返回签名匹配。无需解析AICR混淆helper类名；其余签名比较保持原样。AICR不存在/不支持目标方法时fail-closed，保留原逻辑。
+- 设备复测观察到Hook在AICR Core进程加载并命中；Core接口匹配、引擎就绪、Vision V2匹配、图片接受、检测完成、结果读取及释放均成功；用户确认页面已显示识别结果。4.13.2当前设备链路验证通过。4.12.18旧版没有该Core授权门，静态证据预期兼容但未在设备上降级安装验证。任意未来AICR内部调用方式变化不保证兼容；若不再用系统签名比较，Hook会不命中并保留原拒绝行为。
+- 本轮全量758项测试0失败/错误/跳过，Lint 0错误/181警告/2提示，Debug与Beta/R8通过。Beta28 v2签名与Beta26相同；APK SHA-256见页首。源码提交`cdbaa4f`先加入版本无关Hook草案，Beta27实测发现并定位类名问题；`827bf2a`改为框架签名比较边界并增版Beta28。Beta27安装包失败草案留在任务目录，不作为候选。
+
+## Beta26诊断批次（历史；由Beta28设备复测更新）
 
 - **图片识字不支持**：源码已确认绑定→接口→引擎/Status→V2→传图→检测→结果读取链路。Status7是MMGG本地文案映射，反馈文案本身不能证明设备返回7；实际设备原因未知。新增每请求op和受控阶段，提示区分系统能力/接口、图片、连接失败，避免异常正文进入日志。没有加模型回退，原Bitmap和绑定释放策略不变。固定报告AICR/传送门版本，不扫描应用；版本相同不证明能力相同。
 - **取词连接/占用**：review整合已有结构日志，补attempt与MMGG进程实例、请求/启动/拒绝/占用/成功/lease/Binder death/释放/重试间隔。模块拥有Root Session，Portal拥有lease；既有认证RPC汇入模块最近80条内存摘要，ZIP新增root-connection.txt，不依赖文件日志。不更改权限、Root权威、重试或资源释放策略。已有会话的占用者未知，不归因GKD或Scene。
