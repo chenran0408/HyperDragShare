@@ -6,11 +6,11 @@
 
 | origin ref | HEAD | 状态 |
 |---|---|---|
-| `beta` | `bdd6bdf5901b6dafc24f667e287069f90f39ab56` | Beta24候选源提交，快进推送完成；`delivered/mmgg-1.7.219-beta.24` 指向同一源码 |
+| `beta` | 远端实时HEAD请用 `git ls-remote --heads origin beta` 查询 | Beta24源码提交为 `bdd6bdf5901b6dafc24f667e287069f90f39ab56`；`delivered/mmgg-1.7.219-beta.24` 固定该源码。文档提交可继续推进分支HEAD |
 | `repair-from-189` | `e25c66725cda51f23bdb8d95de036f7811eba017` | 稳定维护线及 GitHub 默认分支，未改动 |
 
 - Beta24 APK `D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24/MMGG-1.7.219-beta.24.apk`，versionCode 266，4,947,493 bytes，SHA256 `B932D60E7CB3C2329AFD911BF099DC8418381C0FAE732412872BAFE67BC4A5B6`。源码提交只将`app/build.gradle`从beta23/265增至beta24/266。实际`assembleBeta`成功（R8、资源收缩、lintVitalBeta；1m14s），APK v2签名通过，证书为Android Debug（SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`），不是正式签名证明。单测、完整Lint、模拟器/实机验收、设备安装未运行。
-- Beta24 push触发GitHub Actions Android checks run `40112982633`（SHA `bdd6bdf`）；查询时为`in_progress`，不可写成通过，后续结果以对应run为准。
+- Beta24 push触发GitHub Actions Android checks run `40112982633`（SHA `bdd6bdf`），最终 `success`；这是云端检查结果，不包含设备验收。
 - 已逐条删除远程`hyperos4-adaptation`（原HEAD `3520884f8296f4b2215ad79ca822d3e0f1864ffd`）、`kotlin-libxposed-102`（`a6ee01b615ca5bec32aa3a6914b43ccb92734b89`）、`main`（`1a042132194643d470fa58163abf7504c8963f88`）。删除前重新核对了各ref、默认分支和归档tag；当时open PR为0。两条维护线都包含共同基线`3520884`；历史main/Kotlin实验分别由远程tag `archive/origin-main-2026-10-24`、`archive/kotlin-libxposed-102-2026-10-24`保留。Kotlin archive tag peel仍为`a6ee01b`。未删除或移动任何tag、upstream分支、稳定/开发本地分支或工作树。
 - 已`fetch --prune origin`并更新`origin/HEAD -> origin/repair-from-189`。远程复核恰有beta和repair-from-189两heads，default/HEAD为repair-from-189。远程tag ref共18个；本地共48个。保留所有历史tag，不批量推送其他本地tag。
 - 当次分支检查显示没有受保护分支或仓库rulesets；移除前无open PR。origin公开、非归档。upstream仍指向`Leaf-lsgtky/HyperDragShare`，没有对upstream执行写入。

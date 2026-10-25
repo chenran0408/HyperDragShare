@@ -11,7 +11,7 @@
 
 开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
 
-正式tag `v1.7.218^{}`=`c03e880cf67ce4c87e81bbcb45fa1fbcf0a2e247`；稳定HEAD比它多3个历史文档提交与设置拆分批次的CI提交，产品源码相同。origin默认分支现为`repair-from-189@e25c667`，Beta24推送至`beta@bdd6bdf`；远程旧默认`hyperos4-adaptation`、`main`、`kotlin-libxposed-102`已删除，归档tag保留，完整关系和复核SHA见[BRANCHES](BRANCHES.md)。upstream仍为Leaf-lsgtky原作者仓库，不向其推送本fork提交；不要从`v1.9.3`实验tag直接开始。
+正式tag `v1.7.218^{}`=`c03e880cf67ce4c87e81bbcb45fa1fbcf0a2e247`；稳定HEAD比它多3个历史文档提交与设置拆分批次的CI提交，产品源码相同。origin默认分支现为`repair-from-189@e25c667`；Beta24源码由`bdd6bdf`及交付tag固定，远端`beta`的实时HEAD用`git ls-remote --heads origin beta`核对（文档提交可推进HEAD）。远程旧默认`hyperos4-adaptation`、`main`、`kotlin-libxposed-102`已删除，归档tag保留，完整关系和复核SHA见[BRANCHES](BRANCHES.md)。upstream仍为Leaf-lsgtky原作者仓库，不向其推送本fork提交；不要从`v1.9.3`实验tag直接开始。
 
 ## 交付身份与验证边界
 
