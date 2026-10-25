@@ -71,12 +71,13 @@ public final class AicrOcrClient {
         private final Bitmap bitmap;
         private final ResultCallback callback;
         private final String address;
+        private final String operation = OperationTrace.fresh("aicr");
         private final AtomicBoolean cancelled = new AtomicBoolean();
         private final CountDownLatch connected = new CountDownLatch(1);
         private final long startedAt = SystemClock.elapsedRealtime();
         private volatile IBinder core;
         private boolean bound;
-        private String stage = "连接服务";
+        private String stage = "bind";
 
         private final ServiceConnection connection = new ServiceConnection() {
             @Override public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -119,7 +120,7 @@ public final class AicrOcrClient {
                 deliver(null, null, true);
                 return;
             }
-            trace("bind_request");
+            trace("bind", "request");
             try {
                 ServiceInfo service = context.getPackageManager().getServiceInfo(
                         SERVICE_COMPONENT, PackageManager.MATCH_DISABLED_COMPONENTS);
@@ -130,19 +131,22 @@ public final class AicrOcrClient {
                     throw new IOException("系统 AICR 服务组件已停用");
                 }
             } catch (PackageManager.NameNotFoundException error) {
-                DragShareLog.w(TAG, "AICR component is missing", error);
+                trace("bind", "component_missing");
+                DragShareLog.w(TAG, "failure stage=bind category=component_missing");
                 deliver(null, new IOException("系统 AICR 服务未安装或组件缺失", error), true);
                 return;
             } catch (SecurityException error) {
-                DragShareLog.w(TAG, "AICR component lookup denied", error);
+                trace("bind", "lookup_denied");
+                DragShareLog.w(TAG, "failure stage=bind category=lookup_denied");
                 deliver(null, new IOException("系统拒绝连接 AICR，权限受限", error), true);
                 return;
             } catch (IOException error) {
-                DragShareLog.w(TAG, "AICR component is disabled", error);
+                trace("bind", "service_disabled");
+                DragShareLog.w(TAG, "failure stage=bind category=service_disabled");
                 deliver(null, error, true);
                 return;
             }
-            trace("service_checked");
+            trace("bind", "service_checked");
             Intent intent = new Intent("com.xiaomi.aicr.access.AICR_ENGINE")
                     .setComponent(SERVICE_COMPONENT)
                     .putExtra("bind_type", address);
@@ -152,16 +156,18 @@ public final class AicrOcrClient {
                     throw new IOException("无法连接 AICR，请确认系统智能服务已启用");
                 }
             } catch (SecurityException error) {
-                DragShareLog.w(TAG, "AICR binding denied", error);
+                trace("bind", "binding_denied");
+                DragShareLog.w(TAG, "failure stage=bind category=binding_denied");
                 deliver(null, new IOException("系统拒绝连接 AICR，权限受限", error), true);
                 return;
             } catch (IOException | RuntimeException error) {
-                DragShareLog.w(TAG, "unable to bind AICR", error);
+                trace("bind", "binding_failed");
+                DragShareLog.w(TAG, "failure stage=bind category=binding_failed");
                 deliver(null, error instanceof IOException ? error
-                        : new IOException("连接 AICR 失败：" + error.getMessage(), error), true);
+                        : new IOException("系统 AICR 连接失败，请确认系统智能服务可用后重试", error), true);
                 return;
             }
-            trace("bind_service");
+            trace("bind", "service_requested");
             new Thread(this::recognize, "AicrOcr").start();
         }
 
@@ -171,64 +177,86 @@ public final class AicrOcrClient {
             AicrOcrResult recognized = null;
             Exception failure = null;
             try {
+                stage = "connection";
                 if (!connected.await(15, TimeUnit.SECONDS)) {
                     throw new IOException("连接 AICR 超时，请稍后重试");
                 }
-                trace("service_connected");
                 checkCancelled();
                 service = core;
                 if (service == null) throw new IOException("AICR 未提供可用连接");
+                trace("connection", "connected");
+                stage = "core_interface";
                 if (!CORE.equals(service.getInterfaceDescriptor())) {
                     throw new IOException("当前 AICR 服务接口不受支持");
                 }
-                stage = "取得识别引擎";
+                trace("core_interface", "matched");
+                stage = "engine";
                 requestedPlugin = true;
                 IBinder vision = plugin(service, address);
-                trace("plugin_ready");
+                trace("engine", "plugin_ready");
                 checkCancelled();
+                stage = "vision_interface";
                 if (!VISION.equals(vision.getInterfaceDescriptor())) {
                     throw new IOException("当前 AICR 视觉接口不受支持");
                 }
+                trace("vision_interface", "matched");
+                stage = "interface_version";
                 if (!"V2".equals(version(vision))) {
-                    throw new IOException("当前 AICR OCR 版本不受支持，需要 V2");
+                    trace("interface_version", "version_unsupported");
+                    throw new AicrUnsupportedVersionException();
                 }
-                trace("v2_ready");
+                trace("interface_version", "version_v2");
                 checkCancelled();
-                stage = "传入图片";
+                stage = "image";
                 int session = setImage(vision, bitmap);
-                if (session < 0) throw new IOException("AICR 无法读取这张图片");
-                trace("image_accepted");
+                if (session < 0) {
+                    trace("image", "image_rejected");
+                    throw new IOException("AICR 无法读取这张图片");
+                }
+                trace("image", "image_accepted");
                 checkCancelled();
-                stage = "检测文字";
+                stage = "execute_detect";
                 detect(vision, session);
-                trace("text_detected");
+                trace("execute_detect", "detected");
                 checkCancelled();
-                stage = "识别文字";
+                stage = "result_read";
                 recognized = recognizeResult(vision, session);
-                trace("text_recognized");
                 checkCancelled();
                 if (recognized == null || recognized.text == null) throw new IOException("AICR 图片会话已失效，请重试");
                 if (recognized.text.trim().isEmpty()) throw new IOException("这张图片没有识别到文字");
+                trace("result_read", "result_read");
             } catch (CancellationException error) {
                 failure = error;
+                trace(stage, "cancelled");
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
                 failure = new IOException("AICR 识别被中断", error);
-                DragShareLog.w(TAG, "interrupted at " + stage, error);
+                trace(stage, "interrupted");
+                DragShareLog.w(TAG, "failure stage=" + stage + " category=interrupted");
+            } catch (AicrStatusException error) {
+                failure = error;
+                trace("engine", statusOutcome(error.status));
+                DragShareLog.w(TAG, "failure stage=engine category=" + statusOutcome(error.status));
+            } catch (AicrUnsupportedVersionException error) {
+                failure = error;
+                DragShareLog.w(TAG, "failure stage=interface_version category=version_unsupported");
             } catch (IOException | RemoteException | RuntimeException error) {
                 failure = error instanceof IOException ? error
-                        : new IOException("AICR " + stage + "失败：" + error.getMessage(), error);
-                DragShareLog.w(TAG, "failed at " + stage, error);
+                        : new IOException(stageFailureMessage(stage), error);
+                String outcome = failureOutcome(stage, error);
+                trace(stage, outcome);
+                DragShareLog.w(TAG, "failure stage=" + stage + " category=" + outcome);
             } finally {
                 if (requestedPlugin && service != null) {
                     try {
                         release(service, address);
+                        trace("release", "released");
                     } catch (RemoteException | RuntimeException error) {
-                        DragShareLog.w(TAG, "unable to release AICR connection", error);
+                        DragShareLog.w(TAG, "failure stage=release category=binder");
+                        trace("release", "release_failed");
                         if (failure == null) failure = new IOException("AICR 连接未能正常释放，请稍后重试", error);
                         else failure.addSuppressed(error);
                     }
-                    trace("released");
                 }
                 AicrOcrResult result = recognized;
                 Exception error = failure;
@@ -240,9 +268,46 @@ public final class AicrOcrClient {
             if (cancelled.get()) throw new CancellationException("AICR 识别已取消");
         }
 
-        private void trace(String state) {
-            DragShareLog.i(TAG, "stage=" + state + " elapsed_ms="
+        private void trace(String state, String outcome) {
+            OperationTrace.event(operation, state, outcome);
+            DragShareLog.i(TAG, "stage=" + state + " outcome=" + outcome + " elapsed_ms="
                     + (SystemClock.elapsedRealtime() - startedAt));
+        }
+
+        private static String statusOutcome(int status) {
+            return switch (status) {
+                case 5 -> "engine_not_ready";
+                case 6 -> "plugin_status_6";
+                case 7 -> "plugin_status_7";
+                case 8 -> "permission_denied";
+                default -> "plugin_status_other";
+            };
+        }
+
+        private static String failureOutcome(String stage, Exception error) {
+            if ("connection".equals(stage)) return "connection_failed";
+            if ("core_interface".equals(stage) || "vision_interface".equals(stage)) {
+                return "interface_unsupported";
+            }
+            if ("interface_version".equals(stage)) return "version_query_failed";
+            if ("engine".equals(stage)) return "engine_not_ready";
+            if ("image".equals(stage)) return "image_rejected";
+            if ("execute_detect".equals(stage)) return "detect_failed";
+            if ("result_read".equals(stage)) return "result_read_failed";
+            if ("release".equals(stage)) return "release_failed";
+            if (error instanceof RemoteException) return "binder_failed";
+            return "request_failed";
+        }
+
+        private static String stageFailureMessage(String stage) {
+            return switch (stage) {
+                case "connection" -> "系统 AICR 连接失败，请确认系统智能服务可用后重试";
+                case "engine" -> "系统 AICR OCR 引擎不可用或接口不兼容";
+                case "core_interface", "vision_interface" -> "系统 AICR 接口不受支持";
+                case "image" -> "AICR 无法读取这张图片";
+                case "execute_detect", "result_read" -> "系统 AICR 识别失败，请稍后重试";
+                default -> "系统 AICR 请求失败，请稍后重试";
+            };
         }
 
         /** Only invoked on main; worker has finished using the image before reaching this point. */
@@ -251,7 +316,7 @@ public final class AicrOcrClient {
                 try {
                     context.unbindService(connection);
                 } catch (RuntimeException error) {
-                    DragShareLog.w(TAG, "unable to unbind AICR", error);
+                    DragShareLog.w(TAG, "failure stage=cleanup category=unbind");
                     if (failure == null) failure = new IOException("AICR 连接清理失败", error);
                     else failure.addSuppressed(error);
                 }
@@ -263,6 +328,21 @@ public final class AicrOcrClient {
             } else {
                 callback.onComplete(failure == null ? result : null, failure);
             }
+        }
+    }
+
+    private static final class AicrStatusException extends IOException {
+        final int status;
+
+        AicrStatusException(int status, String message) {
+            super(message);
+            this.status = status;
+        }
+    }
+
+    private static final class AicrUnsupportedVersionException extends IOException {
+        AicrUnsupportedVersionException() {
+            super("当前 AICR OCR 版本不受支持，需要 V2");
         }
     }
 
@@ -301,8 +381,8 @@ public final class AicrOcrClient {
             if (reply.readInt() != 0) status.readFromParcel(reply);
             if (!status.containsKey("Status")) throw new IOException("AICR 未返回引擎状态");
             int code = status.getInt("Status");
-            if (code != 0) throw new IOException(statusMessage(code));
-            if (binder == null) throw new IOException("AICR 引擎尚未就绪");
+            if (code != 0) throw new AicrStatusException(code, statusMessage(code));
+            if (binder == null) throw new AicrStatusException(5, "AICR 引擎尚未就绪");
             return binder;
         } finally { reply.recycle(); data.recycle(); }
     }
@@ -315,7 +395,7 @@ public final class AicrOcrClient {
             case 4 -> "AICR 服务发生错误";
             case 5 -> "AICR 未提供 OCR 引擎";
             case 6 -> "AICR 无法读取图片";
-            case 7 -> "当前 AICR 不支持此识别能力";
+            case 7 -> "系统 AICR 不支持图片识字，请检查系统智能服务版本";
             case 8 -> "AICR 拒绝了识别权限";
             default -> "AICR 返回未知状态：" + code;
         };

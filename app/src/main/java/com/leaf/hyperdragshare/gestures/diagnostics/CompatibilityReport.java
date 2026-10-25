@@ -68,6 +68,8 @@ public final class CompatibilityReport {
         appendPackage(out, context, context.getPackageName(), "Hyper手势");
         appendPackage(out, context, "com.android.systemui", "系统界面");
         appendPackage(out, context, "com.miui.home", "小米桌面");
+        appendPackage(out, context, "com.xiaomi.aicr", "小米澎湃AI引擎");
+        appendPackage(out, context, "com.miui.contentextension", "传送门");
         appendOptionalPackage(out, context, "org.lsposed.manager", "LSPosed Manager");
 
         SharedPreferences preferences = store.preferences();

@@ -17,6 +17,7 @@ import android.os.Looper;
 import android.os.Parcel;
 import android.os.RemoteException;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
@@ -25,6 +26,7 @@ import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowLooper;
 import org.robolectric.shadows.ShadowPackageManager;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowLog;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
@@ -36,6 +38,11 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = 33)
 public final class AicrOcrClientTest {
+    @Before public void configureLogging() {
+        DragShareLog.configure(DragShareSettings.defaults());
+        ShadowLog.clear();
+    }
+
     @Test public void successIsDeliveredOnMainAfterReleaseAndUnbind() throws Exception {
         FakeContext context = new FakeContext(false);
         Bitmap bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
@@ -122,6 +129,65 @@ public final class AicrOcrClientTest {
         bitmap.recycle();
     }
 
+    @Test public void unsupportedOcrCapabilityIsReportedAsSystemCapability() throws Exception {
+        ShadowLog.clear();
+        Completion completion = recognize(new FakeContext(false, true, true, true, false, 7, "V2", 1));
+        assertEquals("系统 AICR 不支持图片识字，请检查系统智能服务版本", completion.error.getMessage());
+        assertFalse(completion.error.getMessage().contains("无法读取这张图片"));
+        String events = operationEvents();
+        assertTrue(events.contains("stage=engine outcome=plugin_status_7"));
+        assertTrue(events.contains("stage=release outcome=released"));
+        assertTrue(events.indexOf("stage=core_interface outcome=matched")
+                < events.indexOf("stage=engine outcome=plugin_status_7"));
+        assertTrue(events.indexOf("stage=engine outcome=plugin_status_7")
+                < events.indexOf("stage=release outcome=released"));
+        assertFalse(events.contains("stage=image "));
+    }
+
+    @Test public void incompatibleOcrVersionIsReportedBeforeImageSubmission() throws Exception {
+        ShadowLog.clear();
+        FakeContext context = new FakeContext(false, true, true, true, false, 0, "V1", 1);
+        Completion completion = recognize(context);
+        assertTrue(completion.error.getMessage().contains("OCR 版本不受支持"));
+        assertEquals(0, context.visionImageSubmissions);
+        String events = operationEvents();
+        assertTrue(events.contains("stage=interface_version outcome=version_unsupported"));
+        assertTrue(events.indexOf("stage=vision_interface outcome=matched")
+                < events.indexOf("stage=interface_version outcome=version_unsupported"));
+        assertFalse(events.contains("stage=image "));
+    }
+
+    @Test public void missingOcrEngineIsReportedSeparatelyFromCapabilityAndImage() throws Exception {
+        ShadowLog.clear();
+        Completion completion = recognize(new FakeContext(false, true, true, true, false, 5, "V2", 1));
+        assertTrue(completion.error.getMessage().contains("AICR 未提供 OCR 引擎"));
+        assertTrue(operationEvents().contains("stage=engine outcome=engine_not_ready"));
+    }
+
+    @Test public void unreadableImageIsReportedSeparately() throws Exception {
+        ShadowLog.clear();
+        Completion completion = recognize(new FakeContext(false, true, true, true, false, 0, "V2", -1));
+        assertTrue(completion.error.getMessage().contains("无法读取这张图片"));
+        assertTrue(operationEvents().contains("stage=image outcome=image_rejected"));
+    }
+
+    private static Completion recognize(FakeContext context) throws Exception {
+        Bitmap bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
+        Completion completion = new Completion(context, bitmap);
+        AicrOcrClient.recognize(context, bitmap, completion);
+        awaitCompletion(completion);
+        bitmap.recycle();
+        return completion;
+    }
+
+    private static String operationEvents() {
+        StringBuilder events = new StringBuilder();
+        for (ShadowLog.LogItem item : ShadowLog.getLogsForTag("DragShare/Operation")) {
+            events.append(item.msg).append('\n');
+        }
+        return events.toString();
+    }
+
     private static void assertPreflightFailureAndSlotReleased(FakeContext unavailable,
             String expectedMessage) throws Exception {
         Bitmap unavailableBitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
@@ -179,6 +245,10 @@ public final class AicrOcrClientTest {
         final CountDownLatch allowDetect;
         final AtomicInteger releases = new AtomicInteger();
         final AtomicInteger recognizes = new AtomicInteger();
+        private final int engineStatus;
+        private final String pluginVersion;
+        private final int imageSession;
+        int visionImageSubmissions;
         int binds;
         int unbinds;
         private final boolean denyPackageLookup;
@@ -188,10 +258,11 @@ public final class AicrOcrClientTest {
                     throws RemoteException {
                 data.enforceInterface("com.xiaomi.aicr.plugin.IVisionService");
                 reply.writeNoException();
-                if (code == 6) reply.writeString("V2");
+                if (code == 6) reply.writeString(pluginVersion);
                 else if (code == 1) {
                     data.readTypedObject(Bitmap.CREATOR);
-                    reply.writeInt(1);
+                    visionImageSubmissions++;
+                    reply.writeInt(imageSession);
                 } else if (code == 3) {
                     data.readInt();
                     detectEntered.countDown();
@@ -228,7 +299,7 @@ public final class AicrOcrClientTest {
                     reply.writeStrongBinder(vision);
                     reply.writeInt(1);
                     Bundle status = new Bundle();
-                    status.putInt("Status", 0);
+                    status.putInt("Status", engineStatus);
                     status.writeToParcel(reply, 0);
                 } else if (code == 2) {
                     data.readString();
@@ -244,7 +315,17 @@ public final class AicrOcrClientTest {
 
         FakeContext(boolean blockDetection, boolean installService, boolean applicationEnabled,
                 boolean serviceEnabled, boolean denyPackageLookup) {
+            this(blockDetection, installService, applicationEnabled, serviceEnabled,
+                    denyPackageLookup, 0, "V2", 1);
+        }
+
+        FakeContext(boolean blockDetection, boolean installService, boolean applicationEnabled,
+                boolean serviceEnabled, boolean denyPackageLookup, int engineStatus,
+                String pluginVersion, int imageSession) {
             super(RuntimeEnvironment.getApplication());
+            this.engineStatus = engineStatus;
+            this.pluginVersion = pluginVersion;
+            this.imageSession = imageSession;
             allowDetect = new CountDownLatch(blockDetection ? 1 : 0);
             this.denyPackageLookup = denyPackageLookup;
             if (installService) {

@@ -168,7 +168,7 @@ internal class ScreenOcrSession(
     }
 
     private fun reportFailure(message: Int, error: Exception) {
-        DragShareLog.w(TAG, "screen recognition failed", error)
+        DragShareLog.w(TAG, "screen recognition failed category=aicr")
         main.post {
             if (!closed) {
                 failureDetail = context.getString(message) + "\n" + error.message.orEmpty()
