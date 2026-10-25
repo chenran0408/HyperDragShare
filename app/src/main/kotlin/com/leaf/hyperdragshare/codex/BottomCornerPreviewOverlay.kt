@@ -143,7 +143,7 @@ internal class BottomCornerPreviewOverlay(
         }
         private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = dp(13)
-            typeface = android.graphics.Typeface.create("sans-serif-medium", 0)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
         private var safeInsets = WindowInsetsCompat.CONSUMED
         private var touchRegionId = 0
