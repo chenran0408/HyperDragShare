@@ -1,15 +1,22 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-25。唯一当前状态入口。最新本地候选 **1.7.219-beta.28 / 270**，源码提交`827bf2aae98c913826f87202c34cc19be0f81c1e`。APK见`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback/outputs/beta28/MMGG-1.7.219-beta.28.apk`，SHA-256 `9A1BDDA4BA4FCF96DDE4F8A018EE70C4860223D28AB0149B1E0089482F3A5867`。Beta28已覆盖安装到测试设备并完成AICR图片识字复测；没有发布或push。Beta26记录以下降为历史诊断批次。
+核对日期：2026-10-25。唯一当前状态入口。最新已打包版本仍为 **1.7.219-beta.28 / 270**，其源码提交`827bf2aae98c913826f87202c34cc19be0f81c1e`。APK见`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback/outputs/beta28/MMGG-1.7.219-beta.28.apk`，SHA-256 `9A1BDDA4BA4FCF96DDE4F8A018EE70C4860223D28AB0149B1E0089482F3A5867`。Beta28已覆盖安装到测试设备并完成AICR图片识字复测；没有发布或push。当前 beta 源码另含未增版的 Phase 1A owner 修复，见下节；Beta28 APK不包含该修复。
 
 ## 在哪里继续
 
 |职责|目录|分支/基线|
 |---|---|---|
-|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；当前产品提交`827bf2a`，实际分支HEAD用git log核对|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；当前HEAD`4a8ec68`；Beta28打包源码`827bf2a`|
 |正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`；1.7.218/242，未改|
 
 开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
+
+## Phase 1A delayed callback owner 修复（源码 HEAD 4a8ec68，尚未增版打包）
+
+- **现象与代码证据**：旧 `onHostTaskCancelled` 在32ms回调执行时读取当前`active`，并在inactive分支停止当前 blocker、清理当前窗口；现有测试曾直接证明它可能取消回调排队期间新建的Session。`finishFromControlEvent` 同样在主队列执行时才读取当前active/session。
+- **修改**：Controller主队列接受新的Root `ACTION_DOWN`时递增本地 generation。32ms回调捕获generation与Session身份；失主则直接返回，已结束但仍被引用的旧Session不再重复清理当前资源。257回调只接受到达时捕获的非空Session且执行时仍为同一Session。Root UP/CANCEL队列语义未过滤。`BackgroundTouchBlocker`生产代码和fallback顺序未改。
+- **验证**：H1-H5、C1-C3、K1-K3、E1/E2针对性逻辑覆盖及生命周期回归52项通过；全量单测773项0失败/错误/跳过，`lintDebug` 0错误/181警告/2提示，`assembleDebug`成功。没有Beta/R8增版构建、实机测试、安装或发布；项目版本仍1.7.219-beta.28/270，既有APK不含本修复。
+- **结论边界**：K3验证owner检查读到失效时不启动取消事务；检查返回true之后至底层系统API作用之间仍有无法原子消除的窗口，API不接受Session token。没有宿主View收到`ACTION_CANCEL`的回执，本修复也不证明微信长按菜单冲突根因。E3源码审查未发现旧MOVE重排到B的证据，`acceptPointerEvent`不变。完整任务记录：`D:/CODEX/Tasks/2026-10-25/mmgg-phase-1a-root-owner`。
 
 ## AICR 版本无关访问兼容（Beta28，当前）
 
@@ -38,7 +45,7 @@ SHA256：`36A8E3A36A769B2772E4CC654593AE392B477CC8AA5A34EE6A683573BA561759`。
 ## 保留待办
 
 - Sidebar中转站最新复测正常，记录未复现，不猜测性修改。普通文字拖拽仍缺具体现场原因，现有逻辑回归通过不等于所有设备通过。
-- 微信原媒体/图片节点分类、单条消息载荷、32ms旧宿主取消竞态、Alook现场跳转、参考分词面板完整交互等旧待办保留。
+- 微信原媒体/图片节点分类、单条消息载荷、Alook现场跳转、参考分词面板完整交互等旧待办保留。32ms回调已完成代码级owner修复，但微信菜单冲突是否由该竞态造成仍未确认，需后续Beta现场复测。
 - 评论/消息正文原生长按意图冲突按用户决定延期，不重启触摸面积研究。Beta25双指/IME/实时预览的真实ROM交互仍需用户验收。
 
 ## Beta25 历史批次（已完成，非当前排查进度）

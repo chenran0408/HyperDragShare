@@ -2,7 +2,9 @@
 
 本阶段只加入观察日志，未修核心状态机、未调整阈值、未新增宿主 App Hook。版本、提交和真实验证见[当前状态](CURRENT_STATUS.md)。正常/异常 App 的成对设备采样尚未获得，不能把源码候选认作微信现场根因。
 
-后续新增双指候选的输入分工：`EvdevTouchParser`只解析触点结构；`RootTouchSource`在主队列将精确双指交给`PressCaptureSource`明确接纳或拒绝。只在单指尚未确认且无活动拖拽时接纳双指；同SYN双指起始也可处理。拒绝、第三指和丢指隔离余触点至全抬起；已接纳的双指流不因后续设置改变而伪造终端。原活动单指拖拽落第二指仍取消。模式来源与字段见[CONFIGURATION](CONFIGURATION.md)，这不改变下述宿主菜单冲突诊断的证据局限或修复旧32ms竞态。
+**Phase 1A 后续状态（2026-10-25，源码提交`4a8ec68`）**：本页第6节记录的32ms旧回调竞态已在Controller中按Root generation与Session身份修复，257回调也绑定到到达时的Session；旧UP/CANCEL仍正常排队处理。H1-H5/C1-C3/K1-K3及E1/E2测试、全量测试、Lint和Debug结果见[当前状态](CURRENT_STATUS.md)。这是逻辑层竞态修复，不是微信现场根因证明；真实宿主View的TouchTarget/CANCEL仍不可从现有Root日志直接观察。底层blocker API没有Session token，owner检查之后仍保留跨线程残余窗口。
+
+后续新增双指候选的输入分工：`EvdevTouchParser`只解析触点结构；`RootTouchSource`在主队列将精确双指交给`PressCaptureSource`明确接纳或拒绝。只在单指尚未确认且无活动拖拽时接纳双指；同SYN双指起始也可处理。拒绝、第三指和丢指隔离余触点至全抬起；已接纳的双指流不因后续设置改变而伪造终端。原活动单指拖拽落第二指仍取消。模式来源与字段见[CONFIGURATION](CONFIGURATION.md)。Phase 1A仅修复了已证实的Controller旧回调竞态，不代表宿主菜单冲突已归因或已验证。
 
 ## 1. 完整事件入口
 
@@ -44,7 +46,7 @@ DRAGGING → 真实UP/FINISHED 或 CANCEL/明确退出/CANCELLED → 清理/CLEA
 |---|---|---|
 | Root UP/CANCEL | Controller.handleMotionOnMain / finishGestureOnMain | `root_up`允许原目标动作；`root_cancel`按原规则取消 |
 | Portal 257 | PortalHooks.handleCallback / Controller.finishFromControlEvent | Root拥有期间记录DEFERRED并保留旧回放；非拥有期间沿原路径`host_control_257`完成 |
-| 宿主cancelTask | PortalHooks.cancelTask hook / Controller.onHostTaskCancelled | Root拥有时DEFERRED；否则原32ms回调仍检查active，停止原因`delayed_host_cancel_task`；无活动时有RESOLVED记录 |
+| 宿主cancelTask | PortalHooks.cancelTask hook / Controller.onHostTaskCancelled | 历史基线曾在32ms后检查当前active；Phase 1A现捕获Root generation与Session owner，失主时不清理当前资源；见本页开头状态说明 |
 | 输入静默 | Controller.refreshStaleInputWatchdog | 原30秒不变，`stale_input_watchdog_30000ms`，结合lastEventAge判断；旧Session隔离规则不变 |
 | 显式退出/替换/异常 | cancelActiveSession、showContentForPressTakeover、destroy、failOverlay | `explicit_cancel_active_session/same_press_takeover/controller_destroy/overlay_failure_*` |
 | 物理多指/主指离开 | EvdevTouchParser.emitFrame | 原多触点分支CANCEL并忽略到全部抬起；主指离开按原规则UP。不是宿主发来的MotionEvent CANCEL |
@@ -73,7 +75,7 @@ Root只有坐标/触摸尺寸变化才产生MOVE；手指静止时没有MOVE是�
 
 尚无本轮正常/异常App成对输入记录。用户前一份ZIP明确为Beta20/262，只有受控操作阶段，没有本轮逐流字段，不能据它选择A/B/C/D。
 
-本轮替身测试**实际复现C类代码竞态**，不是设备菜单复现：
+本页记录的第一阶段替身测试**实际复现C类代码竞态**，不是设备菜单复现；Phase 1A 后续修复及回归见开头状态说明：
 
 ```text
 无active时 onHostTaskCancelled 排32ms回调
