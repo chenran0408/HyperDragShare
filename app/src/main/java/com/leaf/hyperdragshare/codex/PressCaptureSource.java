@@ -52,6 +52,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
     private long readerRetryDelayMs;
     private boolean readerFailureShown;
     private boolean readerOpening;
+    private String readerAttemptId = "-";
     private IBinder.DeathRecipient leaseDeath;
     private final Runnable readerRetry = () -> {
         if (stopped || nodeSession != null) return;
@@ -135,30 +136,39 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
     private void openReader() {
         if (stopped || nodeSession != null || readerOpening) return;
         readerOpening = true;
+        String attemptId = RootConnectionDiagnostics.newAttempt();
+        readerAttemptId = attemptId;
         worker.execute(() -> {
             long connectionStarted = SystemClock.elapsedRealtime();
             try {
-                SharedRootNodeCapture.Connection ready = SharedRootNodeCapture.open(context, false);
+                SharedRootNodeCapture.Connection ready = SharedRootNodeCapture.open(context, false, attemptId);
                 DragShareLog.i(TAG, "connection stage=press_reader_ready elapsed_ms="
                         + (SystemClock.elapsedRealtime() - connectionStarted));
                 main.post(() -> {
                     readerOpening = false;
                     if (stopped) {
+                        recordRootEvent(ready.connectionAttemptId(), "release", -1L);
                         ready.close();
                         return;
                     }
                     IBinder.DeathRecipient death = () -> main.post(() -> {
                         if (stopped || nodeSession != ready) return;
+                        recordRootEvent(ready.connectionAttemptId(), "binder_death", -1L);
                         DragShareLog.w(TAG, "press reader lease died; reconnecting to the module process");
                         readerFailed(ready, "取词服务进程已退出，正在重连。", true);
                     });
                     if (!ready.linkToDeath(death)) {
+                        readerAttemptId = ready.connectionAttemptId();
+                        recordRootEvent(ready.connectionAttemptId(), "connect_failed", -1L);
+                        recordRootEvent(ready.connectionAttemptId(), "release", -1L);
                         ready.close();
                         readerFailed(null, "取词连接已失效，正在重连。", false);
                         return;
                     }
                     nodeSession = ready;
                     leaseDeath = death;
+                    readerAttemptId = ready.connectionAttemptId();
+                    recordRootEvent(ready.connectionAttemptId(), "lease_ready", -1L);
                     main.removeCallbacks(readerRetry);
                     readerRetryDelayMs = 0L;
                     readerFailureShown = false;
@@ -171,6 +181,8 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
                 DragShareLog.w(TAG, "cannot prepare press reader error=" + error.getClass().getSimpleName());
                 main.post(() -> {
                     readerOpening = false;
+                    readerAttemptId = attemptId;
+                    recordRootEvent(attemptId, "connect_failed", -1L);
                     if (!stopped) readerFailed(null, "取词连接未建立，正在重连。" + error.getMessage(), false);
                 });
             }
@@ -920,12 +932,16 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         nodeSession = null;
         cancelGesture();
         if (failed != null) {
+            recordRootEvent(failed.connectionAttemptId(), "release", -1L);
             failed.unlinkFromDeath(leaseDeath);
             failed.close();
         }
         leaseDeath = null;
         ModuleActivation.reportPressReader(context, false, reason);
-        if (reconnectNow) openReader();
+        if (reconnectNow) {
+            if (failed != null) recordRootEvent(failed.connectionAttemptId(), "retry_scheduled", 0L);
+            openReader();
+        }
         else scheduleReaderRetry();
     }
 
@@ -935,6 +951,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         readerRetryDelayMs = readerRetryDelayMs <= 0L
                 ? READER_RETRY_FIRST_MS
                 : Math.min(readerRetryDelayMs * 2L, READER_RETRY_MAX_MS);
+        recordRootEvent(readerAttemptId, "retry_scheduled", readerRetryDelayMs);
         DragShareLog.i(TAG, "press reader retry scheduled in_ms=" + readerRetryDelayMs);
         if (readerRetryDelayMs >= READER_RETRY_MAX_MS && !readerFailureShown) {
             readerFailureShown = true;
@@ -960,6 +977,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
             nodeSession = null;
             ModuleActivation.reportPressReader(context, false, "");
             if (session != null) {
+                recordRootEvent(session.connectionAttemptId(), "release", -1L);
                 session.unlinkFromDeath(leaseDeath);
                 session.close();
             }
@@ -969,5 +987,11 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         };
         if (Looper.myLooper() == Looper.getMainLooper()) stop.run();
         else main.post(stop);
+    }
+
+    private void recordRootEvent(String attemptId, String outcome, long retryIntervalMs) {
+        if (retryIntervalMs >= 0L) RootConnectionDiagnostics.retry(attemptId, retryIntervalMs);
+        else RootConnectionDiagnostics.event(attemptId, outcome);
+        ModuleActivation.reportRootConnectionEvent(context, attemptId, outcome, retryIntervalMs);
     }
 }

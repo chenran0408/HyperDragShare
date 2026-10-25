@@ -28,6 +28,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.RuntimeEnvironment;
+import org.json.JSONObject;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = 35)
@@ -104,11 +105,59 @@ public final class DiagnosticBundleExporterTest {
                 "File log does not exist.");
 
         Map<String, String> entries = readZip(result.file);
-        assertEquals(2, entries.size());
+        assertEquals(3, entries.size());
         assertTrue(entries.get("summary.txt").contains("root=READY"));
+        assertTrue(entries.containsKey("root-connection.txt"));
+        assertTrue(entries.get("manifest.txt").contains("root-connection.txt: included"));
         assertTrue(entries.get("manifest.txt").contains("compatibility.txt: unavailable"));
         assertTrue(entries.get("manifest.txt").contains("runtime-log.txt: unavailable"));
         assertTrue(entries.get("manifest.txt").contains("File log does not exist."));
+    }
+
+    @Test public void rootConnectionSummaryIsPresentWithoutFileLogsAndContainsOnlyControlledEvents() throws Exception {
+        String attempt = RootConnectionDiagnostics.newAttempt();
+        RootConnectionDiagnostics.event(attempt, "request");
+        RootConnectionDiagnostics.event(attempt, "helper_start");
+        RootConnectionDiagnostics.event(attempt, "already_registered");
+        RootConnectionDiagnostics.retry(attempt, 250L);
+        RootConnectionDiagnostics.event(attempt, "permission_denied");
+        RootConnectionDiagnostics.event(attempt, "connect_failed");
+        RootConnectionDiagnostics.event(attempt, "connect_success");
+        RootConnectionDiagnostics.event(attempt, "lease_ready");
+        RootConnectionDiagnostics.event(attempt, "binder_death");
+        RootConnectionDiagnostics.event(attempt, "release");
+        RootConnectionDiagnostics.event(attempt, "release");
+
+        DiagnosticBundleExporter.Result result = DiagnosticBundleExporter.writeBundle(
+                directory, validStateSummary(), null, null, null, "Runtime log unavailable.");
+
+        Map<String, String> entries = readZip(result.file);
+        String root = entries.get("root-connection.txt");
+        assertNotNull(root);
+        assertTrue(root.contains("attempt=" + attempt + " proc="));
+        assertTrue(root.contains("outcome=already_registered"));
+        assertTrue(root.contains("retry_interval_ms=250"));
+        assertTrue(root.contains("outcome=binder_death"));
+        assertTrue(root.contains("outcome=release"));
+        assertTrue(root.contains("outcome=permission_denied"));
+        assertTrue(root.contains("outcome=connect_failed"));
+        assertTrue(root.contains("outcome=connect_success"));
+        assertTrue(root.contains("outcome=lease_ready"));
+        assertFalse(root.contains("Throwable"));
+        assertFalse(root.contains("content://"));
+        assertFalse(root.contains("token="));
+        assertFalse(entries.containsKey("runtime-log.txt"));
+    }
+
+    @Test public void rootStartupCodesMapOnlyToKnownConnectionCategories() throws Exception {
+        assertEquals("already_registered", RootNodeCaptureClient.startupFailureCode(
+                new JSONObject().put("error_code", "uiautomation_already_registered")));
+        assertEquals("permission_denied", RootNodeCaptureClient.startupFailureCode(
+                new JSONObject().put("error_code", "uiautomation_permission_denied")));
+        assertEquals("connect_failed", RootNodeCaptureClient.startupFailureCode(
+                new JSONObject().put("error_code", "uiautomation_connect_failed")));
+        assertEquals("startup_rejected", RootNodeCaptureClient.startupFailureCode(
+                new JSONObject().put("error_code", "content://private/token")));
     }
 
     @Test public void runtimeFilterKeepsStructuredTraceAndDropsArbitraryMessagesAndThrowableText() throws Exception {
@@ -246,7 +295,9 @@ public final class DiagnosticBundleExporterTest {
         assertEquals(DragShareSettings.LOG_LEVEL_INFO, preferences.getInt("log_level", -1));
         assertEquals(DragShareSettings.LOG_DESTINATION_SYSTEM,
                 preferences.getInt("log_destination", -1));
-        assertFalse(readZip(result.file).containsKey("runtime-log.txt"));
+        Map<String, String> entries = readZip(result.file);
+        assertFalse(entries.containsKey("runtime-log.txt"));
+        assertTrue(entries.containsKey("root-connection.txt"));
     }
 
     private static String validStateSummary() {

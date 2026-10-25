@@ -23,6 +23,11 @@ final class ModuleActivation {
     static final String EXTRA_ROOT_INPUT_READY = "root_input_ready";
     static final String EXTRA_ROOT_INPUT_ERROR = "root_input_error";
     static final String EXTRA_LIFETIME_TOKEN = "portal_lifetime_token";
+    static final String EXTRA_ROOT_CONNECTION_ATTEMPT = "root_connection_attempt";
+    static final String EXTRA_ROOT_CONNECTION_PROC = "root_connection_proc";
+    static final String EXTRA_ROOT_CONNECTION_OUTCOME = "root_connection_outcome";
+    static final String EXTRA_ROOT_CONNECTION_AT = "root_connection_at";
+    static final String EXTRA_ROOT_CONNECTION_RETRY_MS = "root_connection_retry_ms";
 
     static final String PREFS_NAME = "module_activation";
     private static final String KEY_INJECTED_VERSION = "injected_version";
@@ -75,6 +80,29 @@ final class ModuleActivation {
             extras.putBoolean(EXTRA_PRESS_READER_READY, ready);
             extras.putString(EXTRA_PRESS_READER_ERROR, error);
             reportPortalStatus(context, extras);
+        }
+    }
+
+    /** Reports one allow-listed lifecycle event over the existing portal status handshake. */
+    static void reportRootConnectionEvent(Context context, String attemptId, String outcome,
+                                          long retryIntervalMs) {
+        try {
+            if (context == null || !MainHook.TAPLUS_PACKAGE.equals(context.getPackageName())
+                    || !RootConnectionDiagnostics.validAttempt(attemptId)
+                    || !RootConnectionDiagnostics.allowedPortalOutcome(outcome)) return;
+            if ("retry_scheduled".equals(outcome)
+                    && (retryIntervalMs < 0L || retryIntervalMs > 86_400_000L)) return;
+            Bundle extras = new Bundle();
+            extras.putLong(EXTRA_VERSION_CODE, BuildConfig.VERSION_CODE);
+            extras.putInt(EXTRA_PROCESS_ID, android.os.Process.myPid());
+            extras.putString(EXTRA_ROOT_CONNECTION_ATTEMPT, attemptId);
+            extras.putString(EXTRA_ROOT_CONNECTION_PROC, DragShareLog.processInstance());
+            extras.putString(EXTRA_ROOT_CONNECTION_OUTCOME, outcome);
+            extras.putLong(EXTRA_ROOT_CONNECTION_AT, System.currentTimeMillis());
+            if (retryIntervalMs >= 0L) extras.putLong(EXTRA_ROOT_CONNECTION_RETRY_MS, retryIntervalMs);
+            reportPortalStatus(context, extras);
+        } catch (RuntimeException | LinkageError ignored) {
+            // Optional diagnostics cannot block capture or lease recovery.
         }
     }
 
@@ -199,6 +227,21 @@ final class ModuleActivation {
             editor.putLong(KEY_ROOT_INPUT_VERSION, reportedVersion)
                     .putBoolean(EXTRA_ROOT_INPUT_READY, extras.getBoolean(EXTRA_ROOT_INPUT_READY))
                     .putString(EXTRA_ROOT_INPUT_ERROR, extras.getString(EXTRA_ROOT_INPUT_ERROR, ""));
+        }
+        try {
+            if (extras.containsKey(EXTRA_ROOT_CONNECTION_ATTEMPT)
+                    && extras.containsKey(EXTRA_ROOT_CONNECTION_PROC)
+                    && extras.containsKey(EXTRA_ROOT_CONNECTION_OUTCOME)
+                    && extras.containsKey(EXTRA_ROOT_CONNECTION_AT)) {
+                RootConnectionDiagnostics.importPortalEvent(
+                        extras.getString(EXTRA_ROOT_CONNECTION_ATTEMPT),
+                        extras.getString(EXTRA_ROOT_CONNECTION_PROC),
+                        extras.getString(EXTRA_ROOT_CONNECTION_OUTCOME),
+                        extras.getLong(EXTRA_ROOT_CONNECTION_RETRY_MS, -1L),
+                        extras.getLong(EXTRA_ROOT_CONNECTION_AT));
+            }
+        } catch (RuntimeException ignored) {
+            // Optional diagnostic extras cannot block the readiness fields from being stored.
         }
         editor.apply();
     }

@@ -49,44 +49,114 @@ final class RootNodeCaptureClient {
         Bundle capture(String source, int windowId, Rect requestedBounds) throws IOException, InterruptedException;
     }
 
+    interface HelperProcessLauncher {
+        Process start(String command) throws IOException;
+    }
+
     static Session open(Context context) throws IOException, InterruptedException {
+        return open(context, RootConnectionDiagnostics.newAttempt(), command ->
+                new ProcessBuilder("su", "-c", command).start());
+    }
+
+    static Session open(Context context, String attemptId) throws IOException, InterruptedException {
+        return open(context, attemptId, command -> new ProcessBuilder("su", "-c", command).start());
+    }
+
+    static Session open(Context context, String attemptId, HelperProcessLauncher launcher)
+            throws IOException, InterruptedException {
         long started = android.os.SystemClock.elapsedRealtime();
+        String operation = RootConnectionDiagnostics.validAttempt(attemptId)
+                ? attemptId : RootConnectionDiagnostics.newAttempt();
+        RootConnectionDiagnostics.event(operation, "request");
+        OperationTrace.event(operation, "uiautomation_connect", "requested");
+        boolean outcomeLogged = false;
         String apk;
         try {
             apk = context.getPackageManager().getApplicationInfo(BuildConfig.APPLICATION_ID, 0).sourceDir;
         } catch (PackageManager.NameNotFoundException error) {
+            RootConnectionDiagnostics.event(operation, "connect_failed");
+            OperationTrace.event(operation, "uiautomation_connect", "module_apk_unavailable");
             throw new IOException("Module APK unavailable for Root node capture", error);
         }
-        String command = "CLASSPATH='" + apk.replace("'", "'\\''")
-                + "' /system/bin/app_process /system/bin " + RootNodeCaptureMain.class.getName() + " --serve";
-        Session session = new Session(context, new ProcessBuilder("su", "-c", command).start());
         try {
-            JSONObject startup = session.awaitResponse();
-            if (!startup.getBoolean("ready")) {
-                throw new IOException(startup.optString("error", "界面取词服务未就绪"));
+            String command = "CLASSPATH='" + apk.replace("'", "'\\''")
+                    + "' /system/bin/app_process /system/bin " + RootNodeCaptureMain.class.getName() + " --serve";
+            RootConnectionDiagnostics.event(operation, "helper_start");
+            Process process;
+            try {
+                process = launcher.start(command);
+            } catch (IOException | SecurityException error) {
+                RootConnectionDiagnostics.event(operation, "helper_start_failed");
+                OperationTrace.event(operation, "uiautomation_connect", "helper_start_failed");
+                outcomeLogged = true;
+                throw error;
             }
-            DragShareLog.i(TAG, "connection ready elapsed_ms="
-                    + (android.os.SystemClock.elapsedRealtime() - started));
-            return session;
-        } catch (JSONException error) {
-            session.close();
-            throw new IOException("Invalid Root node startup response", error);
-        } catch (IOException | InterruptedException error) {
-            session.close();
+            Session session = new Session(context, process, operation);
+            try {
+                JSONObject startup = session.awaitResponse();
+                if (!startup.getBoolean("ready")) {
+                    String failureCode = startupFailureCode(startup);
+                    RootConnectionDiagnostics.event(operation, failureCode);
+                    OperationTrace.event(operation, "uiautomation_connect", failureCode);
+                    outcomeLogged = true;
+                    throw new IOException(startupFailureMessage(failureCode));
+                }
+                DragShareLog.i(TAG, "connection ready elapsed_ms="
+                        + (android.os.SystemClock.elapsedRealtime() - started));
+                OperationTrace.event(operation, "uiautomation_connect", "ready");
+                RootConnectionDiagnostics.event(operation, "connect_success");
+                outcomeLogged = true;
+                return session;
+            } catch (JSONException error) {
+                RootConnectionDiagnostics.event(operation, "startup_rejected");
+                OperationTrace.event(operation, "uiautomation_connect", "invalid_helper_response");
+                outcomeLogged = true;
+                session.close();
+                throw new IOException("Invalid Root node startup response", error);
+            } catch (IOException | InterruptedException error) {
+                session.close();
+                throw error;
+            } catch (RuntimeException error) {
+                session.close();
+                throw error;
+            }
+        } catch (IOException | InterruptedException | RuntimeException error) {
+            if (!outcomeLogged) {
+                RootConnectionDiagnostics.event(operation, "connect_failed");
+                OperationTrace.event(operation, "uiautomation_connect", "connect_failed");
+            }
             throw error;
         }
+    }
+
+    static String startupFailureCode(JSONObject startup) {
+        return switch (startup.optString("error_code", "")) {
+            case "uiautomation_already_registered" -> "already_registered";
+            case "uiautomation_permission_denied" -> "permission_denied";
+            case "uiautomation_connect_failed" -> "connect_failed";
+            default -> "startup_rejected";
+        };
+    }
+
+    private static String startupFailureMessage(String code) {
+        return switch (code) {
+            case "already_registered" -> "界面取词服务正被其他自动化会话占用，请结束该会话后重试";
+            case "permission_denied" -> "系统拒绝界面取词连接，请检查 Root 授权";
+            default -> "无法连接界面取词服务，请稍后重试";
+        };
     }
 
     static final class Session implements AutoCloseable {
         private final Context context;
         private final Process process;
+        private final String connectionAttemptId;
         private final LinkedBlockingQueue<Reply> responses = new LinkedBlockingQueue<>();
-        private final StringBuilder diagnostics = new StringBuilder();
         private volatile boolean closed;
 
-        private Session(Context context, Process process) {
+        private Session(Context context, Process process, String connectionAttemptId) {
             this.context = context;
             this.process = process;
+            this.connectionAttemptId = connectionAttemptId;
             Thread errors = new Thread(() -> readErrors(process.getErrorStream()), "root-node-errors");
             errors.setDaemon(true);
             errors.start();
@@ -94,6 +164,8 @@ final class RootNodeCaptureClient {
             reader.setDaemon(true);
             reader.start();
         }
+
+        String connectionAttemptId() { return connectionAttemptId; }
 
         synchronized CapturedContent capture(float x, float y, Set<String> blockedPackages,
                                              boolean allowText, boolean allowImages,
@@ -349,7 +421,7 @@ final class RootNodeCaptureClient {
                     if (line.length() > 4 * 1024 * 1024) throw new IOException("Root node response exceeds limit");
                     responses.offer(new Reply(line, null));
                 }
-                if (!closed) responses.offer(new Reply(null, new IOException("Root node process exited: " + diagnostics())));
+                if (!closed) responses.offer(new Reply(null, new IOException("Root node process exited")));
             } catch (IOException error) {
                 if (!closed) responses.offer(new Reply(null, error));
             }
@@ -357,31 +429,20 @@ final class RootNodeCaptureClient {
 
         private void readErrors(InputStream stream) {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    DragShareLog.w(TAG, "helper stderr: " + line);
-                    synchronized (diagnostics) {
-                        if (diagnostics.length() < 16384) diagnostics.append(line).append('\n');
-                    }
-                }
-            } catch (IOException error) {
-                if (!closed) DragShareLog.w(TAG, "cannot read Root node process diagnostics", error);
-            }
-        }
-
-        private String diagnostics() {
-            synchronized (diagnostics) { return diagnostics.toString(); }
+                while (reader.readLine() != null) { /* Drain helper output without copying arbitrary text. */ }
+            } catch (IOException ignored) { /* stderr is diagnostic-only. */ }
         }
 
         @Override public void close() {
             if (closed) return;
             closed = true;
+            RootConnectionDiagnostics.event(connectionAttemptId, "session_release");
             responses.offer(new Reply(null, new IOException("Root node process closed")));
             try {
                 // EOF lets an idle helper exit normally. Its own watchdog bounds a stuck capture.
                 process.getOutputStream().close();
             } catch (IOException error) {
-                DragShareLog.w(TAG, "cannot close Root node request pipe", error);
+                DragShareLog.w(TAG, "cannot close Root node request pipe");
             }
             process.destroy();
         }

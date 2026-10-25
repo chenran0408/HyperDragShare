@@ -105,18 +105,21 @@ public final class RootNodeCaptureMain {
                 Throwable cause = error instanceof java.lang.reflect.InvocationTargetException
                         && error.getCause() != null ? error.getCause() : error;
                 String reason;
+                String errorCode;
                 if (cause instanceof IllegalStateException && cause.getMessage() != null
                         && cause.getMessage().contains("already registered")) {
                     reason = "界面取词服务正被其他自动化会话占用，请结束该会话后重试";
+                    errorCode = "uiautomation_already_registered";
                 } else if (cause instanceof SecurityException) {
                     reason = "系统拒绝界面取词连接，请检查 Root 授权";
+                    errorCode = "uiautomation_permission_denied";
                 } else {
-                    reason = "无法连接界面取词服务：" + cause.getClass().getSimpleName()
-                            + (cause.getMessage() == null ? "" : "（" + cause.getMessage() + "）");
+                    reason = "无法连接界面取词服务，请稍后重试";
+                    errorCode = "uiautomation_connect_failed";
                 }
-                System.err.println("Root node connection failed");
-                error.printStackTrace(System.err);
-                System.out.println(new JSONObject().put("ready", false).put("error", reason));
+                // Do not expose framework exception text or stack traces to either log destination.
+                System.out.println(new JSONObject().put("ready", false).put("error", reason)
+                        .put("error_code", errorCode));
                 System.out.flush();
             }
             if (connected) {

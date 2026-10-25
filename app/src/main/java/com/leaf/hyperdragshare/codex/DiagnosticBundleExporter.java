@@ -107,6 +107,7 @@ final class DiagnosticBundleExporter {
                         : "No safe structured runtime diagnostics were available.");
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(output))) {
             addText(zip, "summary.txt", buildSummary(stateSummary));
+            addText(zip, "root-connection.txt", RootConnectionDiagnostics.summary());
             if (compatibility != null) {
                 addText(zip, "compatibility.txt", sanitizeCompatibility(compatibility));
             }
@@ -230,6 +231,7 @@ final class DiagnosticBundleExporter {
                 .append(android.os.Build.VERSION.SDK_INT).append(")\n\n")
                 .append("Available state:\n")
                 .append(sanitizeStateSummary(stateSummary));
+        out.append("\nRoot connection events: see root-connection.txt.\n");
         if (out.charAt(out.length() - 1) != '\n') out.append('\n');
         return out.toString();
     }
@@ -239,6 +241,7 @@ final class DiagnosticBundleExporter {
                                         boolean runtimeAvailable, String logReason) {
         StringBuilder out = new StringBuilder("Diagnostic bundle contents\n");
         out.append("summary.txt: included\n")
+                .append("root-connection.txt: included\n")
                 .append("compatibility.txt: ")
                 .append(compatibilityAvailable ? "included" : "unavailable")
                 .append('\n')
@@ -293,7 +296,7 @@ final class DiagnosticBundleExporter {
                     || trimmed.matches("说明: Hyper手势兼容性报告不包含快捷方式名称、联系人和用户选择的应用清单。")
                     || trimmed.matches("=== [^\\r\\n]{1,60} ===")
                     || trimmed.matches("(?:厂商|品牌|型号|设备|产品|Android|安全补丁|增量版本|Fingerprint|当前显示): .{0,256}")
-                    || trimmed.matches("(?:Hyper手势|系统界面|小米桌面|LSPosed Manager): [A-Za-z0-9_.-]+ [^\\r\\n]{0,100}")
+                    || trimmed.matches("(?:Hyper手势|系统界面|小米桌面|LSPosed Manager|小米澎湃AI引擎|传送门): [A-Za-z0-9_.-]+ [^\\r\\n]{0,100}")
                     || trimmed.matches("(?:接口状态|最后连接时间|bottom_target_count|honeycomb_target_count):?=?[ A-Za-z0-9_.:-]{0,128}")
                     || trimmed.matches("[A-Za-z0-9_.-]{1,80}=(?:true|false|\\d{1,8})")) {
                 safe.append(trimmed).append('\n');

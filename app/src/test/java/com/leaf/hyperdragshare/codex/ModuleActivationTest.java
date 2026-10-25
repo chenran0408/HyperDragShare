@@ -307,6 +307,21 @@ public final class ModuleActivationTest {
         assertEquals(1, lifetime.unlinks);
     }
 
+    @Test public void malformedOptionalRootDiagnosticCannotBlockReadinessStatus() {
+        Context context = RuntimeEnvironment.getApplication();
+        Lifetime lifetime = new Lifetime();
+        Bundle report = readyReport(72, lifetime);
+        report.putInt(ModuleActivation.EXTRA_ROOT_CONNECTION_ATTEMPT, 42);
+        report.putString(ModuleActivation.EXTRA_ROOT_CONNECTION_PROC, "portal-72");
+        report.putString(ModuleActivation.EXTRA_ROOT_CONNECTION_OUTCOME, "lease_ready");
+        report.putLong(ModuleActivation.EXTRA_ROOT_CONNECTION_AT, System.currentTimeMillis());
+
+        ModuleActivation.recordInjected(context, report);
+
+        assertEquals(ModuleActivation.ReportedStatus.READY, ModuleActivation.injectionStatus(context));
+        assertEquals(ModuleActivation.ReportedStatus.READY, ModuleActivation.pressReaderStatus(context));
+    }
+
     /** A controllable remote Binder boundary; no processes or Root commands are started. */
     private static final class Lifetime {
         boolean alive = true;
