@@ -8,6 +8,9 @@
 
 | 资源 | creator → owner → async borrower → release point | 退出语义 |
 |---|---|---|
+| 设置页屏上触发区预览 | GestureSettingsContent创建 → 页面级BottomCornerPreviewOverlay → 无后台借用 → 类别/路由离开、ON_STOP、dispose或结束按钮 | 列表滚动不销毁owner；非触摸窗口登记既有OverlayTouchRegions以抑制模块手势。stop幂等，移窗失败也注销区域；add部分失败清窗口/登记 |
+| 传送门模式设置订阅 | PortalPressSettings.observe → PressCaptureSource或设置页面各自持有Subscription → Settings通知队列 → stop/dispose.close | 只读当前用户System键；订阅自有closed guard，注销前排队的迟到通知也不再更新owner |
+| IME期间待执行窗外点击 | OutsideGestureRecognizer → 当前识别器 → 单击Handler延时 → IME显隐转换clearAll、窗口消失或原cancel | IME显示取消待关闭操作，普通窗外动作暂缓；已核对的隐藏键盘即时路径保持；输入法隐藏后恢复原关闭规则 |
 | 活动预览、菜单、流光、环形窗 | Controller创建 → Controller字段 → 目标查询/动画 → removeGestureViews、各Window.dispose | 退出取消动画/查询，窗口释放，旧代次不得清理新窗口 |
 | 退出中的预览 | startPreviewExit移交 → exiting*字段 → 160/220ms退出回调 → finishPreviewExit或立即移除 | generation＋对象身份；先清owner字段再移窗；回调允许短时完成但失效后不访问UI |
 | 现代预热窗/首帧监听 | prewarmModernOverlay → Controller → draw/post → finish或disposeModernOverlayPrewarm | 本轮补destroy漏调；旧回调先检查destroyed/owner身份 |
@@ -26,6 +29,8 @@
 | Honeycomb/TaskSwitcher窗和preview | Controller → 当前View → 帧/动画/背景回调 → removeNow/releaseResources | remove先清owner、撤销帧和token消息；外部cancel/dismiss空View须在guard后解引用 |
 | Fan窗与触发捕获 | Controller/FanRuntime → 当前View/capture → 延时确认/timeout/MotionEvent → removeNow | 对象身份/代次、移callbacks、回收MotionEvent；进程级runtime不当短命window处理 |
 | Recents壁纸/任务缩略图 | Cache/Repository → Cache/Repository → cover/View借用 → 原cache/repository规则 | cover.detach清引用，迟到callback核对View；不回收借用缓存Bitmap |
+
+横屏/IME命中范围由`FanRuntime`结合既有Hook、WindowInsets与HyperOS状态，`HyperOsFreeformBridge.trackedBounds(true)`纳入IME调整前restore范围；无可靠浮动键盘矩形时暂停窗外捕获。最终窗外动作再检查IME可见性，不以焦点false关闭。真实ROM的信号顺序/尺寸准确性须独立验收。
 | BackgroundTouchBlocker InputMonitor | blocker → blocker → 原executor → synchronized stop/dispose | Controller退出调用stop；executor本身未close是待验证持有风险，不据此改输入策略 |
 | 主界面/设置/首次引导/更新弹窗 | Activity/Compose → lifecycle/composition → lifecycleScope/effects → onDestroy/onDispose | observer/receiver/Jobs按原路径取消，DownloadManager系统下载可继续；TouchProbe关闭reader |
 

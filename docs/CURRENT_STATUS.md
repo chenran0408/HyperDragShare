@@ -1,27 +1,48 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-25。本页是唯一当前状态入口；历史调查见[归档](archive/2026-10-24/README.md)。最新Beta候选为1.7.219-beta.24 / versionCode 266，源码由`delivered/mmgg-1.7.219-beta.24`固定；APK已完成本地Beta/R8构建与签名核对，未做单测、完整Lint、模拟器/实机验收或安装。Beta24已推送到origin并设为候选tag，详见下方交付身份和[分支复核](BRANCHES.md)。GitHub现只保留beta与repair-from-189两远程分支，默认分支为repair-from-189。用户此前决定将评论/消息正文与原生长按菜单意图冲突延期，待触摸面积适配完成后再评估；本轮没有恢复面积研究或改核心手势。Alook现场无响应仍未确认根因；32ms旧宿主取消竞态、微信原媒体/单消息载荷、中转站接收和参考面板待办均保留。
+核对日期：2026-10-25。本页是唯一当前状态入口。最新本地候选为 **1.7.219-beta.25 / 267**，源码由本地tag `delivered/mmgg-1.7.219-beta.25` 固定到 `b0d7c775ec64cec292ec5b078496dc910ae2ace8`。未安装、发布或推送；后续文档提交不改变APK对应源码。新一轮AICR与按压连接反馈正在独立排查，不能把Beta25当作这两个反馈的修复包。
 
 ## 在哪里继续
 
-| 职责 | 工作树 | 分支 / 有效源码基线 | 版本 |
-|---|---|---|---|
-| 后续修复、新功能、Beta验收 | `D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare` | `beta`；Beta24源码 `bdd6bdf5901b6dafc24f667e287069f90f39ab56`，tag固定；后续文档HEAD用git log核对 | 1.7.219-beta.24 / 266 |
-| 已发布正式版维护 | `D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare` | `repair-from-189` / `e25c66725cda51f23bdb8d95de036f7811eba017`（仅新增CI，正式产品源码仍等同b40abaf） | 1.7.218 / 242 |
+|职责|目录|有效分支与基线|
+|---|---|---|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；Beta25产品源码b0d7c77，实际HEAD用git log核对|
+|正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`，1.7.218/242，本轮未改|
 
-开始前执行 `git log -1`、`git status --short`；文档提交会使HEAD推进，不能将上表源码哈希误当永远不变的分支HEAD。两个工作树在提交前后按实际状态核对；构建缓存、本机配置和.learnings保留，不属于待合入功能修复。
+开始前核对status/log/worktree及并发写入。origin只保留beta与repair-from-189，默认正式线；upstream是原作者仓库。分支历史见[BRANCHES](BRANCHES.md)。正式tag与稳定HEAD的产品源码关系沿用该文档。
 
-正式tag `v1.7.218^{}`=`c03e880cf67ce4c87e81bbcb45fa1fbcf0a2e247`；稳定HEAD比它多3个历史文档提交与设置拆分批次的CI提交，产品源码相同。origin默认分支现为`repair-from-189@e25c667`；Beta24源码由`bdd6bdf`及交付tag固定，远端`beta`的实时HEAD用`git ls-remote --heads origin beta`核对（文档提交可推进HEAD）。远程旧默认`hyperos4-adaptation`、`main`、`kotlin-libxposed-102`已删除，归档tag保留，完整关系和复核SHA见[BRANCHES](BRANCHES.md)。upstream仍为Leaf-lsgtky原作者仓库，不向其推送本fork提交；不要从`v1.9.3`实验tag直接开始。
+## Beta25 实际完成和证据边界
 
-## 交付身份与验证边界
+- 侧边栏中转站：用户复测正常，记录未复现，没有猜测性修改；不能据此关闭其他入口/接收方尚未确认的问题。
+- 双指长按：新增模块后备开关（缺省false）及独立600ms/250–3000ms时长。优先只读当前用户Settings.System的`support_double_press_mode`、`support_long_press_mode`（Portal5.1.5离线源码证据）；不可读/缺失/未知回退模块。系统双指模式不取消旧单指能力。没有已证实的系统时长接口，时长由模块控制。活动拖拽仍按原多指取消，Root保持权威。确认后OCR正常抬指保留已接受请求，真正取消仍丢弃旧结果。
+- 横屏小窗/IME：取消IME出现前排队的窗外点击；IME可见期间阻止普通窗外关闭，键盘隐藏恢复原规则，保留原隐藏键盘操作。沿用现有可见性/Insets和恢复尺寸，不以focus改变独断关闭。
+- 拖拽菜单边距：复用原8dp/0–64dp字段，现代菜单原已消费该字段，修复设置禁用；适用于现代/简洁线性菜单，没有改圆形或原生传送门布局。
+- 触发区域：新增`hot_bottom_gap_dp`默认0、0–200dp，与区域高度独立；实际命中、捕获窗口和预览共享几何。屏上被动预览实时画方向、范围、间隔与菜单近似位置；不拦截正常触摸，注册现有排除区域避免触发MMGG，退出页面/后台释放。
+- 触控报告：每次重查当前算法库哈希；已知匹配不附库，不匹配尝试附库，缺失/读取失败保留报告和原因。复制仍执行原哈希/ELF/尺寸校验，不绕过采样校验、不恢复面积研究。
+- 文字拖拽：现有普通文字、微信完成OCR后的文字接管和动作测试仍在且通过；缺少具体现场链路，未确认全局回归，不改全局手势。最小复现见任务交付。
 
-最新候选：`D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24/MMGG-1.7.219-beta.24.apk`，beta24/266，4,947,493 bytes；SHA256 `B932D60E7CB3C2329AFD911BF099DC8418381C0FAE732412872BAFE67BC4A5B6`。
+配置/源码地图：[CONFIGURATION](CONFIGURATION.md)、[EXIT_LIFECYCLE](EXIT_LIFECYCLE.md)、[DIAGNOSTICS](DIAGNOSTICS.md)、[TOUCH_STREAM_DIAGNOSTICS](TOUCH_STREAM_DIAGNOSTICS.md)。本轮完整依据、逐项证据与恢复在 `D:/CODEX/Tasks/2026-10-25/mmgg-beta25-edge-settings`。
 
-- 源码提交/tag：`bdd6bdf5901b6dafc24f667e287069f90f39ab56` / `delivered/mmgg-1.7.219-beta.24`；版本提交只改`app/build.gradle`，将beta23/265改为beta24/266。Beta源线现已推至origin；后续文档提交不改变APK所对应源码/tag。
-- 实际构建：`.\gradlew.bat --no-daemon assembleBeta`成功，1m14s；包括`minifyBetaWithR8`、资源收缩、打包及`lintVitalBeta`。`aapt`核对包名`com.leaf.hyperdragshare.codex`、versionName/code、compile SDK37；APK为4,947,493 bytes。
-- `apksigner verify`通过v2；实际证书是Android Debug，SHA-256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`。当前环境未配置正式release密钥，不代表和正式包同签。
-- 未运行单元测试、完整Lint、模拟器/实机安装或UI验收；没有手机操作/正式发布。Beta24 push后GitHub Actions Android checks run `40112982633`（commit `bdd6bdf`）在核对时为`in_progress`，不写成通过。构建日志、mapping、metadata和签名证据见本任务`D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24`。
+## 交付身份与本轮验证
 
+APK：`D:/CODEX/Tasks/2026-10-25/mmgg-beta25-edge-settings/outputs/beta25/MMGG-1.7.219-beta.25.apk`，4,963,877 bytes。
+SHA256：`2EB8F1EC159D47E9CA25BE074B4E0AC0A29CB425D9BB881ADD3B53B2B6B04BFA`。
+
+- 源码b0d7c77；app tree `884c787a372842da16fff41120c8fa3ba257ac98`。从已提交快照隔离构建，456个跟踪app文件归一化hash全部一致；未混入原工作树中来源未确认的RootNodeCaptureClient/Main两份连接诊断改动。用户后续已授权单独review整合这两份改动。
+- 针对性17类187项通过。隔离快照全量135类736项零失败/错误/跳过；首次完整链在Lint发现新增预览Typeface常量错误，修为语义相同的Typeface.NORMAL后，重跑受影响预览4项通过及Lint/Debug/Beta。最终Lint **0错误/181警告/2提示**；Debug与实际Beta/R8成功1m38s。完整736项与最终源码仅相差该命名常量修正，未重复运行不受影响全量。
+- aapt核对267/beta25；apksigner v2通过，与留存Beta24同Android Debug证书：SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`。不推定正式版同签。
+- 没有模拟器完整UI、设备、云端CI或Release任务结果；系统Portal键读取、ROM双指事件、IME真实时序和大字体/完整Miuix页面仍需实机回归。Canvas位图与逻辑测试不能替代设备交互。
+- 本轮源码提交：7414ca8、d7b8e13、c2da433、d21620e、25e27ce、b0d7c77。没有push/安装/发布。构建日志、JUnit、Lint、mapping、签名和manifest见本任务outputs。
+
+## 保留待办
+
+- AICR“不支持接口”反馈与Root UiAutomation连接/占用分别调查；占用者未知，不推断GKD/Scene。新任务记录：`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback`。
+- 微信原媒体/节点分类、单条消息载荷、32ms旧宿主取消竞态、Alook现场跳转、参考分词面板完整交互等旧待办保留，Beta25没有宣称解决。
+- 评论/消息正文与原生长按意图冲突按用户决定延期，不重启触摸面积研究。无日志不等于失败。
+
+### Beta24 历史交付
+
+Beta24/266源码bdd6bdf，tag `delivered/mmgg-1.7.219-beta.24`；APK在 `D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24`，SHA256 `B932D60E7CB3C2329AFD911BF099DC8418381C0FAE732412872BAFE67BC4A5B6`。历史本地仅assembleBeta/R8与签名核对；该轮未执行全量单测/完整Lint。历史云端Android checks run40112982633已成功（前版文档in_progress已失效）。Beta24历史推送不代表Beta25已推送。
 ### beta23交付（历史证据）
 
 历史候选：`D:/CODEX/Tasks/2026-10-24/mmgg-usability-controls-alook/outputs/beta23/MMGG-1.7.219-beta.23.apk`，beta23/265，4,947,489 bytes；SHA256 `3A764D859C4A4FC9FB85DDFF0FDF66F959F111E4562633933D3591669C7B853C`。
@@ -206,3 +227,4 @@
 1. 读根AGENTS、本页和DECISIONS，再读完整任务原文；核对beta真实HEAD/状态与其他写入者。
 2. 后续按用户指示推进最小控制器拆分或N03/N06/N05功能缺口，不把记录当自动执行授权。系统指针监听仍只是候选，未采用，不叠加到Root会话。
 3. 受影响检查/集中回归命令见[AGENTS](../AGENTS.md)；Beta交付与远程/CI后续建议见[RELEASE_CHANNELS](RELEASE_CHANNELS.md)和[BRANCHES](BRANCHES.md)。
+
