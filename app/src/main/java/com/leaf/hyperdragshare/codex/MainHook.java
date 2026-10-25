@@ -20,6 +20,7 @@ public final class MainHook implements IXposedHookLoadPackage {
             PortalHooks.install(lpparam.classLoader);
         } else if (AICR_PACKAGE.equals(lpparam.packageName)) {
             AicrCopyHooks.install(lpparam.classLoader);
+            AicrCoreAccessHooks.install(lpparam.classLoader);
         } else if (TRUST_SERVICE_PACKAGE.equals(lpparam.packageName)) {
             TrustServiceRiskHooks.install(lpparam);
         } else if (SYSTEM_UI_PACKAGE.equals(lpparam.packageName)
