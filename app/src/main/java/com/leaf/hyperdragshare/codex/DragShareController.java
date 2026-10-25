@@ -242,6 +242,8 @@ final class DragShareController {
     private boolean menuShown;
 
     private volatile Session session;
+    /** Main-thread accepted Root ACTION_DOWN owner, used by delayed host callbacks. */
+    private volatile long rootOperationGeneration;
     private DragShareSettings settings = DragShareSettings.defaults();
     private OverlayColors palette = OverlayColors.light();
     private final GestureDiagnostics.Stream diagnostics = new GestureDiagnostics.Stream("drag_controller");
@@ -428,6 +430,10 @@ final class DragShareController {
         lastObservedY = y;
         lastObservedEventTime = eventTime;
         mainHandler.post(() -> {
+            if ("root".equals(source) && action == MotionEvent.ACTION_DOWN) {
+                // Advance ownership only when this controller serially accepts the new root down.
+                rootOperationGeneration++;
+            }
             if (GestureDiagnostics.enabled()) {
                 try {
                     diagnostics.root(action, x, y, Float.NaN, Float.NaN, downTime, eventTime,
@@ -514,8 +520,10 @@ final class DragShareController {
     }
 
     void finishFromControlEvent() {
+        Session expectedSession = session;
+        if (expectedSession == null) return;
         mainHandler.post(() -> {
-            if (!active) {
+            if (!active || session != expectedSession) {
                 return;
             }
             handlePointerOnMain(lastObservedX, lastObservedY);
@@ -526,10 +534,19 @@ final class DragShareController {
 
     void onHostTaskCancelled() {
         traceDiagnostic("HOST_CANCEL_SCHEDULED", "host_cancel_delay_32ms", null);
+        long expectedGeneration = rootOperationGeneration;
+        Session expectedSession = session;
         // Give the queued 257/control callback a chance to finish the drag first.
         mainHandler.postDelayed(() -> {
+            if (rootOperationGeneration != expectedGeneration || session != expectedSession) {
+                traceDiagnostic("HOST_CANCEL_RESOLVED", "stale_root_owner", null);
+                return;
+            }
             if (active) {
                 cancelGestureOnMain("delayed_host_cancel_task");
+            } else if (expectedSession != null) {
+                // That owner already completed its own cleanup; do not clean current-oriented state again.
+                traceDiagnostic("HOST_CANCEL_RESOLVED", "owner_already_finished", null);
             } else {
                 traceDiagnostic("HOST_CANCEL_RESOLVED", "inactive_at_delayed_callback", null);
                 backgroundTouchBlocker.stop();

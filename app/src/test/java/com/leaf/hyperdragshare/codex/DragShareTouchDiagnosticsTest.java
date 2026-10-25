@@ -127,7 +127,7 @@ public final class DragShareTouchDiagnosticsTest {
         }
     }
 
-    @Test public void delayedHostCancelCanCancelNewGestureAndDiagnosticRecordsExistingRace() throws Exception {
+    @Test public void delayedHostCancelCannotCancelNewGesture() throws Exception {
         DragShareController controller = controller();
         try {
             assertFalse(controller.isActive());
@@ -146,13 +146,69 @@ public final class DragShareTouchDiagnosticsTest {
 
             ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
 
-            assertFalse("old delayed callback still uses the new active flag", controller.isActive());
-            assertTrue((boolean) get(replacement, "cancelled"));
+            assertTrue("old delayed callback must not cancel the replacement session", controller.isActive());
+            assertFalse((boolean) get(replacement, "cancelled"));
             String log = messages();
             assertTrue(log.contains("action=HOST_CANCEL_SCHEDULED"));
+            assertTrue(log.contains("action=HOST_CANCEL_RESOLVED"));
             assertTrue(log.contains("action=ACTION_MOVE") && log.contains("state=DRAGGING dragging=true"));
-            assertTrue(log.contains("action=DRAG_STOP")
-                    && log.contains("reason=delayed_host_cancel_task"));
+            assertFalse(log.contains("reason=delayed_host_cancel_task"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void control257FinishesSessionThatOwnedQueuedCallback() throws Exception {
+        DragShareController controller = controller();
+        Object owner = session("owner", 300L);
+        set(controller, "session", owner);
+        set(controller, "active", true);
+        try {
+            controller.finishFromControlEvent();
+            ShadowLooper.shadowMainLooper().idle();
+            assertFalse(controller.isActive());
+            assertTrue("no-target 257 retains existing finish cancellation semantics",
+                    (boolean) get(owner, "cancelled"));
+            assertTrue(messages().contains("reason=host_control_257"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void queuedControl257ForOldSessionCannotFinishReplacement() throws Exception {
+        DragShareController controller = controller();
+        Object owner = session("owner", 300L);
+        Object replacement = session("replacement", 400L);
+        set(controller, "session", owner);
+        set(controller, "active", true);
+        try {
+            controller.finishFromControlEvent();
+            // The callback remains queued until the main looper is drained.
+            set(controller, "session", replacement);
+            set(controller, "active", true);
+            ShadowLooper.shadowMainLooper().idle();
+            assertTrue(controller.isActive());
+            assertFalse((boolean) get(replacement, "cancelled"));
+            assertFalse(messages().contains("reason=host_control_257"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void control257QueuedWithoutSessionCannotFinishLaterSession() throws Exception {
+        DragShareController controller = controller();
+        Object later = session("later", 500L);
+        try {
+            controller.finishFromControlEvent();
+            set(controller, "session", later);
+            set(controller, "active", true);
+            ShadowLooper.shadowMainLooper().idle();
+            assertTrue(controller.isActive());
+            assertFalse((boolean) get(later, "cancelled"));
+            assertFalse(messages().contains("reason=host_control_257"));
         } finally {
             controller.destroy();
             ShadowLooper.shadowMainLooper().idle();
@@ -173,6 +229,213 @@ public final class DragShareTouchDiagnosticsTest {
             assertTrue(log.contains("state=IDLE dragging=false"));
             assertTrue(log.contains("reason=inactive_at_delayed_callback"));
             assertFalse(log.contains("reason=delayed_host_cancel_task"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void delayedHostCancelCannotCancelReplacementSessionWithoutNewRootDown() throws Exception {
+        DragShareController controller = controller();
+        Object original = session("original", 600L);
+        Object replacement = session("portal_replacement", 700L);
+        set(controller, "session", original);
+        set(controller, "active", true);
+        try {
+            controller.onHostTaskCancelled();
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+            set(controller, "session", replacement);
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+
+            assertTrue(controller.isActive());
+            assertFalse((boolean) get(replacement, "cancelled"));
+            assertTrue(messages().contains("reason=stale_root_owner"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void delayedHostCancelFromFinishedSessionCannotCancelBInSameRootGeneration() throws Exception {
+        DragShareController controller = controller();
+        Object owner = session("owner", 650L);
+        Object replacement = session("same_generation_replacement", 660L);
+        set(controller, "rootDownTime", 650L);
+        set(controller, "session", owner);
+        set(controller, "active", true);
+        try {
+            long generation = (long) get(controller, "rootOperationGeneration");
+            controller.onHostTaskCancelled();
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+            controller.acceptPointerEvent(MotionEvent.ACTION_UP, 505f, 1005f, 670L, "root");
+            ShadowLooper.shadowMainLooper().idle();
+            assertFalse(controller.isActive());
+            assertTrue((boolean) get(owner, "cancelled"));
+
+            // Model a Portal payload replacing the completed Session without a new Root DOWN.
+            set(controller, "session", replacement);
+            set(controller, "active", true);
+            assertTrue((long) get(controller, "rootOperationGeneration") == generation);
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+
+            assertTrue(controller.isActive());
+            assertFalse((boolean) get(replacement, "cancelled"));
+            assertTrue(messages().contains("reason=stale_root_owner"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void delayedHostCancelWithNoSessionCannotCancelLaterSameGenerationSession() throws Exception {
+        DragShareController controller = controller();
+        Object later = session("same_generation_later", 800L);
+        try {
+            long generation = (long) get(controller, "rootOperationGeneration");
+            controller.onHostTaskCancelled();
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+            set(controller, "session", later);
+            set(controller, "active", true);
+            assertTrue((long) get(controller, "rootOperationGeneration") == generation);
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+
+            assertTrue(controller.isActive());
+            assertFalse((boolean) get(later, "cancelled"));
+            assertTrue(messages().contains("reason=stale_root_owner"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void delayedHostCancelAfterOwnerFinishesDoesNotRepeatCurrentCleanup() throws Exception {
+        DragShareController controller = controller();
+        Object owner = session("finished_owner", 900L);
+        set(controller, "rootDownTime", 900L);
+        set(controller, "session", owner);
+        set(controller, "active", true);
+        try {
+            controller.onHostTaskCancelled();
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+            controller.acceptPointerEvent(MotionEvent.ACTION_UP,
+                    505f, 1005f, 920L, "root");
+            ShadowLooper.shadowMainLooper().idle();
+            assertFalse(controller.isActive());
+            assertTrue((boolean) get(owner, "cancelled"));
+
+            BackgroundTouchBlocker blocker = (BackgroundTouchBlocker) get(controller, "backgroundTouchBlocker");
+            DisposeMarker marker = new DisposeMarker();
+            set(blocker, "inputMonitor", marker);
+            set(blocker, "started", true);
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+
+            assertTrue("finished owner must not stop a later/current blocker",
+                    get(blocker, "inputMonitor") == marker);
+            assertTrue((boolean) get(blocker, "started"));
+            assertFalse(messages().contains("reason=remove_views"));
+            assertTrue(messages().contains("reason=owner_already_finished"));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void oldHostCancelCannotRemoveNewRootSessionsPreviewView() throws Exception {
+        DragShareController controller = controller();
+        Object owner = session("owner", 1000L);
+        Object replacement = session("replacement", 1100L);
+        set(controller, "rootDownTime", 1000L);
+        set(controller, "session", owner);
+        set(controller, "active", true);
+        try {
+            controller.onHostTaskCancelled();
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+            controller.acceptPointerEvent(MotionEvent.ACTION_UP,
+                    505f, 1005f, 1020L, "root");
+            controller.acceptPointerEvent(MotionEvent.ACTION_DOWN,
+                    600f, 1200f, 1100L, "root");
+            ShadowLooper.shadowMainLooper().idle();
+            set(controller, "session", replacement);
+            set(controller, "active", true);
+            android.view.View replacementPreview = new android.view.View(RuntimeEnvironment.getApplication());
+            set(controller, "previewView", replacementPreview);
+            ShadowLooper.shadowMainLooper().idleFor(16, TimeUnit.MILLISECONDS);
+
+            assertTrue(controller.isActive());
+            assertFalse((boolean) get(replacement, "cancelled"));
+            assertTrue(get(controller, "previewView") == replacementPreview);
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    @Test public void queuedRootUpCompletesOldSessionBeforeNewDownStarts() throws Exception {
+        assertQueuedRootTerminalKeepsLaterSessionActive(MotionEvent.ACTION_UP, 120L, "root_up");
+    }
+
+    @Test public void queuedRootCancelCancelsOldSessionBeforeNewDownStarts() throws Exception {
+        assertQueuedRootTerminalKeepsLaterSessionActive(MotionEvent.ACTION_CANCEL, 120L, "root_cancel");
+    }
+
+    private static void assertQueuedRootTerminalKeepsLaterSessionActive(
+            int terminalAction, long terminalTime, String expectedReason) throws Exception {
+        DragShareController controller = controller();
+        Object owner = session("queued_owner", 100L);
+        Object later = session("queued_later", 200L);
+        set(controller, "rootDownTime", 100L);
+        set(controller, "session", owner);
+        set(controller, "active", true);
+        try {
+            controller.acceptPointerEvent(terminalAction, 510f, 1010f, terminalTime, "root");
+            controller.acceptPointerEvent(MotionEvent.ACTION_DOWN, 600f, 1200f, 200L, "root");
+            postSessionOnMain(controller, later);
+            ShadowLooper.shadowMainLooper().idle();
+
+            assertFalse("old terminal event must finish its session", controller.isActive() && get(controller, "session") == owner);
+            assertTrue((boolean) get(owner, "cancelled"));
+            assertTrue(controller.isActive());
+            assertTrue(get(controller, "session") == later);
+            assertFalse((boolean) get(later, "cancelled"));
+            assertTrue(messages().contains("reason=" + expectedReason));
+        } finally {
+            controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+        }
+    }
+
+    private static void postSessionOnMain(DragShareController controller, Object nextSession) throws Exception {
+        android.os.Handler handler = (android.os.Handler) get(controller, "mainHandler");
+        handler.post(() -> {
+            try {
+                set(controller, "session", nextSession);
+                set(controller, "active", true);
+            } catch (Exception error) {
+                throw new AssertionError(error);
+            }
+        });
+    }
+
+    public static final class DisposeMarker {
+        public void dispose() {}
+    }
+
+    @Test public void rootOwnerGenerationAdvancesOnlyForAcceptedRootDown() throws Exception {
+        DragShareController controller = controller();
+        try {
+            assertTrue((long) get(controller, "rootOperationGeneration") == 0L);
+            controller.acceptPointerEvent(MotionEvent.ACTION_DOWN, 500f, 1000f, 100L, "root");
+            // Reader-thread enqueue must not itself advance the serial owner.
+            assertTrue((long) get(controller, "rootOperationGeneration") == 0L);
+            ShadowLooper.shadowMainLooper().idle();
+            assertTrue((long) get(controller, "rootOperationGeneration") == 1L);
+
+            controller.acceptPointerEvent(MotionEvent.ACTION_POINTER_DOWN,
+                    510f, 1010f, 110L, "root");
+            controller.acceptPointerEvent(MotionEvent.ACTION_DOWN,
+                    520f, 1020f, 120L, "portal");
+            ShadowLooper.shadowMainLooper().idle();
+            assertTrue((long) get(controller, "rootOperationGeneration") == 1L);
         } finally {
             controller.destroy();
             ShadowLooper.shadowMainLooper().idle();
