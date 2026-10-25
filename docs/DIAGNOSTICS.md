@@ -25,7 +25,8 @@ FileProvider继续使用现有`${applicationId}.updates`、read grant、EXTRA_ST
 | 条目 | 内容/可用条件 |
 |---|---|
 | summary.txt | 版本/版本码、设备环境和当前ActivationSnapshot枚举摘要；无状态时明确不可用 |
-| compatibility.txt | 既有CompatibilityReport的设备、组件版本、非敏感数值配置等受控字段；生成失败可缺失 |
+| root-connection.txt | 模块进程最近80条受控连接/lease/重试事件；无记录明确说明，不依赖文件日志 |
+| compatibility.txt | 既有CompatibilityReport的设备、固定AICR/传送门组件版本、非敏感数值配置等受控字段；生成失败可缺失 |
 | runtime-log.txt | 能读取文件日志时，保留受控OperationTrace和logger头；没有合规记录时可缺失 |
 | manifest.txt | 每项included/unavailable、缺失原因、开启文件日志后复现的建议、隐私过滤说明 |
 
@@ -51,3 +52,5 @@ ZIP不打包用户正文、图片、截图、剪贴板、原始敏感URI或授�
 2. 需要记录问题时，主动进入日志设置开启文件日志，重载所需作用域后复现，再导出ZIP；结束后可恢复原日志设置。
 3. 触控诊断在未开始、连接失败或算法不匹配时检查底部按钮；取消保存、再导出，不应一直显示处理中。不要尝试绕过算法校验。
 4. 中转站独立入口与安全中心入口分别拖同类图片至微信/QQ，记下入口、时间、落点、拖影是否结束、目标是否变化；无须把私人原图附给报告。用ZIP判断最后确认阶段，目标最终发送仍需人工确认。
+
+图片识字与取词连接分别判读；阶段、进程和记录上限见[OCR_CONNECTION_DIAGNOSTICS](OCR_CONNECTION_DIAGNOSTICS.md)。系统日志目的地仍可能没有runtime-log.txt；新增安全摘要只保留当前模块进程内最近事件，不等于持久完整日志。

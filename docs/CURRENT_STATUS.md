@@ -1,16 +1,41 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-25。本页是唯一当前状态入口。最新本地候选为 **1.7.219-beta.25 / 267**，源码由本地tag `delivered/mmgg-1.7.219-beta.25` 固定到 `b0d7c775ec64cec292ec5b078496dc910ae2ace8`。未安装、发布或推送；后续文档提交不改变APK对应源码。新一轮AICR与按压连接反馈正在独立排查，不能把Beta25当作这两个反馈的修复包。
+核对日期：2026-10-25。唯一当前状态入口。最新本地候选 **1.7.219-beta.26 / 268**，产品源码`fa3f60b3d840788fbef5ed07e8ec500dcf59590d`，本地tag `delivered/mmgg-1.7.219-beta.26`。后续测试/文档提交不改变该APK源码身份。没有安装、设备操作、发布或push；Beta26用于收集更明确的诊断，不能宣称已解决设备端AICR/占用。
 
 ## 在哪里继续
 
-|职责|目录|有效分支与基线|
+|职责|目录|分支/基线|
 |---|---|---|
-|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；Beta25产品源码b0d7c77，实际HEAD用git log核对|
-|正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`，1.7.218/242，本轮未改|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；产品fa3f60b，实际分支HEAD用git log核对|
+|正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`；1.7.218/242，未改|
 
-开始前核对status/log/worktree及并发写入。origin只保留beta与repair-from-189，默认正式线；upstream是原作者仓库。分支历史见[BRANCHES](BRANCHES.md)。正式tag与稳定HEAD的产品源码关系沿用该文档。
+开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
 
+## 本轮两个独立反馈
+
+- **图片识字不支持**：源码已确认绑定→接口→引擎/Status→V2→传图→检测→结果读取链路。Status7是MMGG本地文案映射，反馈文案本身不能证明设备返回7；实际设备原因未知。新增每请求op和受控阶段，提示区分系统能力/接口、图片、连接失败，避免异常正文进入日志。没有加模型回退，原Bitmap和绑定释放策略不变。固定报告AICR/传送门版本，不扫描应用；版本相同不证明能力相同。
+- **取词连接/占用**：review整合已有结构日志，补attempt与MMGG进程实例、请求/启动/拒绝/占用/成功/lease/Binder death/释放/重试间隔。模块拥有Root Session，Portal拥有lease；既有认证RPC汇入模块最近80条内存摘要，ZIP新增root-connection.txt，不依赖文件日志。不更改权限、Root权威、重试或资源释放策略。已有会话的占用者未知，不归因GKD或Scene。
+- 能证明的改进是诊断和错误表达；没有设备复现，未声称修复供应商能力或真实竞争。日志缺失不直接判失败。调用链、ownership、阶段与上限见[OCR_CONNECTION_DIAGNOSTICS](OCR_CONNECTION_DIAGNOSTICS.md)，ZIP格式见[DIAGNOSTICS](DIAGNOSTICS.md)。
+
+## 交付与实际验证
+
+APK：`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback/outputs/beta26/MMGG-1.7.219-beta.26.apk`；4,963,877 bytes。
+SHA256：`36A8E3A36A769B2772E4CC654593AE392B477CC8AA5A34EE6A683573BA561759`。
+
+- 产品fa3f60b；app tree `a13cccea867f47731f73ab3af13cc53ee2b73d51`。aapt核对268/beta26；v2验签通过，与留存Beta25同Android Debug证书SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，不推定与正式包同签。
+- 本轮针对性11类84项通过41s；全量137类751项零失败/错误/跳过，Lint0错误181警告2提示，Debug和实际Beta/R8成功2m44s。之后只补测试文件，实际Press协调器3秒重试/注册死亡回调立即恢复/ID关联1项单独通过16s，不重复运行无变更产品的全包。
+- 源码提交：c1dbdd5（连接）、2e1c2db（AICR与版本）、fa3f60b（增版）；5619495仅补重试测试，APK仍对应fa3f60b。本轮完整任务、证据、JUnit、日志、mapping、签名及交付在`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback`。
+- 未覆盖真实ROM供应商Status、真实Binder进程死亡、自动化竞争和占用者、完整模拟器UI、设备、云端CI。安全摘要在模块进程重启后可缺失；完整运行日志仍需用户主动开启文件日志后复现。
+
+## 保留待办
+
+- Sidebar中转站最新复测正常，记录未复现，不猜测性修改。普通文字拖拽仍缺具体现场原因，现有逻辑回归通过不等于所有设备通过。
+- 微信原媒体/图片节点分类、单条消息载荷、32ms旧宿主取消竞态、Alook现场跳转、参考分词面板完整交互等旧待办保留。
+- 评论/消息正文原生长按意图冲突按用户决定延期，不重启触摸面积研究。Beta25双指/IME/实时预览的真实ROM交互仍需用户验收。
+
+## Beta25 历史批次（已完成，非当前排查进度）
+
+以下为Beta25当时证据。随后RootNode诊断已在Beta26单独整合；不再是待归属改动。
 ## Beta25 实际完成和证据边界
 
 - 侧边栏中转站：用户复测正常，记录未复现，没有猜测性修改；不能据此关闭其他入口/接收方尚未确认的问题。
@@ -33,12 +58,6 @@ SHA256：`2EB8F1EC159D47E9CA25BE074B4E0AC0A29CB425D9BB881ADD3B53B2B6B04BFA`。
 - aapt核对267/beta25；apksigner v2通过，与留存Beta24同Android Debug证书：SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`。不推定正式版同签。
 - 没有模拟器完整UI、设备、云端CI或Release任务结果；系统Portal键读取、ROM双指事件、IME真实时序和大字体/完整Miuix页面仍需实机回归。Canvas位图与逻辑测试不能替代设备交互。
 - 本轮源码提交：7414ca8、d7b8e13、c2da433、d21620e、25e27ce、b0d7c77。没有push/安装/发布。构建日志、JUnit、Lint、mapping、签名和manifest见本任务outputs。
-
-## 保留待办
-
-- AICR“不支持接口”反馈与Root UiAutomation连接/占用分别调查；占用者未知，不推断GKD/Scene。新任务记录：`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback`。
-- 微信原媒体/节点分类、单条消息载荷、32ms旧宿主取消竞态、Alook现场跳转、参考分词面板完整交互等旧待办保留，Beta25没有宣称解决。
-- 评论/消息正文与原生长按意图冲突按用户决定延期，不重启触摸面积研究。无日志不等于失败。
 
 ### Beta24 历史交付
 
@@ -227,4 +246,3 @@ Beta24/266源码bdd6bdf，tag `delivered/mmgg-1.7.219-beta.24`；APK在 `D:/CODE
 1. 读根AGENTS、本页和DECISIONS，再读完整任务原文；核对beta真实HEAD/状态与其他写入者。
 2. 后续按用户指示推进最小控制器拆分或N03/N06/N05功能缺口，不把记录当自动执行授权。系统指针监听仍只是候选，未采用，不叠加到Root会话。
 3. 受影响检查/集中回归命令见[AGENTS](../AGENTS.md)；Beta交付与远程/CI后续建议见[RELEASE_CHANNELS](RELEASE_CHANNELS.md)和[BRANCHES](BRANCHES.md)。
-
