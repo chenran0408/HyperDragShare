@@ -276,6 +276,8 @@ final class FanRuntime {
 
     private volatile int imeHeight;
 
+    private volatile boolean imeGestureProtectionActive;
+
     private volatile boolean shadeExpanded;
 
     private volatile boolean controlCenterExpanded;
@@ -549,6 +551,11 @@ final class FanRuntime {
         if (freeform.trackedTaskId() < 0 && freeform.pendingLaunchBounds() == null) {
             outsideGestures.clearAll();
         }
+        if (!freeform.hasInteractiveFreeform()) {
+            syncImeGestureProtection(false);
+            imeDismissTap = false;
+            capturedImeDismissTap = false;
+        }
     }
 
     void onNativeFreeformMotion(MotionEvent event) {
@@ -588,6 +595,7 @@ final class FanRuntime {
                 visible ? "ime_visible_observed" : "ime_hidden_observed");
         imeVisible = visible;
         imeHeight = visible ? Math.max(0, height) : 0;
+        syncImeGestureProtection(freeform.hasInteractiveFreeform() && visible);
         if (visible && (state == State.ARMED || state == State.CLAIMED || (state == State.ACTIVE && !activeSideList) || state == State.HONEYCOMB)) {
             resetFan();
             Log.i("Bottom application gesture cancelled because input method became visible");
@@ -972,9 +980,17 @@ final class FanRuntime {
                         config.hotWidthPercent, config.hotHeightPercent, 0, 0);
             }
             Rect pendingLaunch = freeform.pendingLaunchBounds();
-            Rect tracked = freeform.trackedBounds();
-            Rect ime = tracked == null ? null : visibleImeBounds();
+            boolean imeActive = freeform.hasInteractiveFreeform() && inputMethodActive();
+            syncImeGestureProtection(imeActive);
+            Rect tracked = freeform.trackedBounds(imeActive);
+            Rect ime = tracked == null || !imeActive ? null : visibleImeBounds();
             boolean freeformActive = pendingLaunch != null || tracked != null || freeform.hasInteractiveFreeform();
+            if (imeActive && ime == null) {
+                // Floating IMEs may be visible without a usable frame. Do not guess
+                // which touches are outside the keyboard and consume them as a close.
+                outsideGestures.onCancel();
+                return;
+            }
             if (pendingLaunch != null) {
                 if (outsideEnabled && GestureGeometry.outsideRegion(x, y, pendingLaunch.left, pendingLaunch.top, pendingLaunch.right, pendingLaunch.bottom) == GestureGeometry.OutsideRegion.OUTSIDE) {
                     Insets reserves = sideGestureReserves();
@@ -986,7 +1002,6 @@ final class FanRuntime {
                 return;
             }
             boolean outsideTracked = tracked != null && !insideTrackedOrIme(x, y, tracked, ime);
-            boolean imeActive = imeVisible || ime != null;
             if (outsideEnabled && outsideTracked && imeActive) {
                 imeDismissTap = true;
                 if (systemEdgeSide == null)
@@ -1939,6 +1954,8 @@ final class FanRuntime {
     }
 
     private void refreshOutsideCapture() {
+        boolean hasInteractiveWindow = freeform.hasInteractiveFreeform();
+        syncImeGestureProtection(hasInteractiveWindow && inputMethodActive());
         if (!runtimeReady() || !outsideEnabledForCurrentDisplay()) {
             outsideCapture.remove();
             outsideGestures.clearAll();
@@ -1962,7 +1979,6 @@ final class FanRuntime {
         if (pending != null && !visibleWindows.contains(pending)) {
             visibleWindows.add(pending);
         }
-        boolean hasInteractiveWindow = freeform.hasInteractiveFreeform();
         if (pending == null && !hasInteractiveWindow)
             visibleWindows.clear();
         if (visibleWindows.isEmpty()) {
@@ -1971,7 +1987,7 @@ final class FanRuntime {
         }
         boolean inputMethodActive = hasInteractiveWindow && inputMethodActive();
         Rect ime = hasInteractiveWindow ? visibleImeBounds() : null;
-        if (inputMethodActive && ime == null) {
+        if (!shouldCaptureOutsideWithIme(inputMethodActive, ime)) {
             // A floating IME often reports visibility without a stable inset rectangle.
             // A guessed full-width bottom cutout would cover the real keyboard position,
             // so pause capture until HyperOS reports a reliable frame or hides the IME.
@@ -2127,6 +2143,16 @@ final class FanRuntime {
         }
     }
 
+    static boolean shouldCaptureOutsideWithIme(boolean imeVisible, Rect imeBounds) {
+        return !imeVisible || imeBounds != null;
+    }
+
+    private void syncImeGestureProtection(boolean visible) {
+        if (imeGestureProtectionActive == visible) return;
+        imeGestureProtectionActive = visible;
+        outsideGestures.setInputMethodVisible(visible);
+    }
+
     private static boolean insideTrackedOrIme(float x, float y, Rect tracked, Rect ime) {
         return GestureGeometry.insideEither(x, y, tracked.left, tracked.top, tracked.right, tracked.bottom, ime == null ? 0 : ime.left, ime == null ? 0 : ime.top, ime == null ? 0 : ime.right, ime == null ? 0 : ime.bottom, ime != null);
     }
@@ -2171,7 +2197,8 @@ final class FanRuntime {
                 ignoredCaptureDownTime = downTime;
             capturedImeDismissTap = false;
             Rect ime = visibleImeBounds();
-            boolean imeActive = imeVisible || ime != null;
+            boolean imeActive = freeform.hasInteractiveFreeform() && inputMethodActive();
+            syncImeGestureProtection(imeActive);
             float leftReserve = nativeSideEdge ? systemSides.left : 0f;
             float rightReserve = nativeSideEdge ? systemSides.right : 0f;
             Rect pending = freeform.pendingLaunchBounds();
@@ -2179,7 +2206,7 @@ final class FanRuntime {
                 outsideGestures.onDown(x, y, pending, width, leftReserve, rightReserve, eventTime);
                 return;
             }
-            Rect tracked = freeform.trackedBounds();
+            Rect tracked = freeform.trackedBounds(imeActive);
             if (tracked == null) {
                 outsideGestures.onCancel();
                 return;
@@ -2239,6 +2266,12 @@ final class FanRuntime {
         if (systemPanelInputBlocked()) {
             outsideGestures.clearAll();
             Log.i("Ignored pending outside action while a system panel is active");
+            return;
+        }
+        if (freeform.hasInteractiveFreeform() && inputMethodActive()) {
+            syncImeGestureProtection(true);
+            outsideGestures.clearAll();
+            Log.i("Ignored outside freeform action while input method is visible");
             return;
         }
         int action = doubleTap ? config.outsideDoubleAction : config.outsideSingleAction;

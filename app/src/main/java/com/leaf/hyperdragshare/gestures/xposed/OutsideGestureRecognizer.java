@@ -29,6 +29,7 @@ final class OutsideGestureRecognizer {
     private long downTime;
     private long lastAcceptedDownEventTime = Long.MIN_VALUE;
     private boolean pendingTap;
+    private boolean inputMethodVisible;
     private float pendingX;
     private float pendingY;
     private long pendingTime;
@@ -58,6 +59,15 @@ final class OutsideGestureRecognizer {
         if (doubleTapTimeout == resolved) return;
         if (pendingTap) dispatchPendingSingle();
         doubleTapTimeout = resolved;
+    }
+
+    void setInputMethodVisible(boolean visible) {
+        if (inputMethodVisible == visible) return;
+        inputMethodVisible = visible;
+        // A pending outside tap may otherwise fire after the keyboard appears and
+        // dismiss the freeform window while the user is typing. Also discard a
+        // partially observed tap across the IME transition.
+        clearAll();
     }
 
     boolean onDown(float x, float y, Rect bounds, int displayWidth,
@@ -125,6 +135,11 @@ final class OutsideGestureRecognizer {
 
     void onUp(float x, float y, long eventTime, Runnable claimInput) {
         if (!finishTap(x, y, eventTime, claimInput)) return;
+        if (inputMethodVisible) {
+            clearPending();
+            secondTap = false;
+            return;
+        }
         if (secondTap) {
             clearPending();
             secondTap = false;

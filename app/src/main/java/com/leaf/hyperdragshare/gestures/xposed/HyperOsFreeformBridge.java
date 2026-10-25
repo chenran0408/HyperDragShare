@@ -624,7 +624,7 @@ final class HyperOsFreeformBridge {
         }
     }
 
-    Rect trackedBounds() {
+    Rect trackedBounds(boolean includeImeResizedContent) {
         int taskId = interactionTaskId();
         if (taskId < 0) return null;
         boolean owned;
@@ -670,11 +670,25 @@ final class HyperOsFreeformBridge {
         }
         try {
             Object bounds = XposedHelpers.callMethod(info, "getScaledBounds");
-            return bounds instanceof Rect ? new Rect((Rect) bounds) : null;
+            Rect current = bounds instanceof Rect ? new Rect((Rect) bounds) : null;
+            if (!includeImeResizedContent || current == null) return current;
+            Rect restore = rectCall(info, "getRestoreNormalBounds");
+            float scale = numberCall(info, "getFreeformScale", 1f);
+            return includeRestoreBounds(current, restore, scale, true);
         } catch (Throwable error) {
             Log.e("Cannot read tracked task bounds", error);
             return null;
         }
+    }
+
+    static Rect includeRestoreBounds(Rect current, Rect restore, float scale,
+                                     boolean includeRestore) {
+        Rect result = current == null ? null : new Rect(current);
+        if (!includeRestore || restore == null || restore.isEmpty()) return result;
+        Rect visualRestore = visualBounds(restore, scale);
+        if (result == null) return visualRestore;
+        result.union(visualRestore);
+        return result;
     }
 
     List<Rect> visibleFreeformBounds() {
