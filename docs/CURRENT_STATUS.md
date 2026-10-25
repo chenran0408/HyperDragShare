@@ -1,12 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-25。唯一当前状态入口。最新已打包版本仍为 **1.7.219-beta.28 / 270**，其源码提交`827bf2aae98c913826f87202c34cc19be0f81c1e`。APK见`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback/outputs/beta28/MMGG-1.7.219-beta.28.apk`，SHA-256 `9A1BDDA4BA4FCF96DDE4F8A018EE70C4860223D28AB0149B1E0089482F3A5867`。Beta28已覆盖安装到测试设备并完成AICR图片识字复测；没有发布或push。当前 beta 源码另含未增版的 Phase 1A owner 修复，见下节；Beta28 APK不包含该修复。
+核对日期：2026-10-26。唯一当前状态入口。Candidate A 仍冻结于 Phase 1A baseline `080c30c`。Candidate B 为 **1.7.219-beta.29 / 271**，源码`e49f48de9746254e1ca2922e7f02253c4c61f572`，APK SHA-256 `B920A46BDAC355C5CE1802F0344ACC5E04CD2330EE4D2B9E5D53F85564B17011`；设备验证结论是 **DEVICE NO-GO**：系统双指模式下单指仍触发MMGG面板。该结论供后续输入根因调查使用，本轮侧栏图标UI提交不改写Candidate B代码或产物。Beta29 APK与完整设备证据见`D:/CODEX/Tasks/2026-10-26/mmgg-candidate-b/outputs/`和`D:/CODEX/Tasks/2026-10-26/mmgg-beta29-device-validation/outputs/DEVICE_EVIDENCE.md`。本轮只处理安全中心侧栏中转站图标浅色背景对比度，详情见下方“侧栏中转站图标可见性”。没有连接设备、安装、发布或push。
 
 ## 在哪里继续
 
 |职责|目录|分支/基线|
 |---|---|---|
-|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；本轮触发资格代码`f8213cf`；Phase1A实现`4a8ec68`；Beta28打包源码`827bf2a`|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；Candidate B冻结输入基线`e49f48d`；其后仅有独立侧栏图标UI改动；双指实机结论DEVICE NO-GO|
 |正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`；1.7.218/242，未改|
 
 开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
@@ -51,9 +51,15 @@ SHA256：`36A8E3A36A769B2772E4CC654593AE392B477CC8AA5A34EE6A683573BA561759`。
 - 源码提交：c1dbdd5（连接）、2e1c2db（AICR与版本）、fa3f60b（增版）；5619495仅补重试测试，APK仍对应fa3f60b。本轮完整任务、证据、JUnit、日志、mapping、签名及交付在`D:/CODEX/Tasks/2026-10-25/mmgg-aicr-connection-feedback`。
 - 未覆盖真实ROM供应商Status、真实Binder进程死亡、自动化竞争和占用者、完整模拟器UI、设备、云端CI。安全摘要在模块进程重启后可缺失；完整运行日志仍需用户主动开启文件日志后复现。
 
+## 侧栏中转站图标可见性（UI修复；实机视觉待验）
+
+- `NativeSidebarHooks.Panel`是SecurityCenter侧栏中的模块自绘入口，不是`StashOverlayPanel`内容窗。图标为固定白色描边Drawable；旧闲置/active底板分别为低alpha白色`0x18ffffff`/`0x44ffffff`，没有稳定局部底色，因此在白色、亮壁纸和玻璃背景上前景与底板/背景融合。图标alpha本身为全不透明。
+- 修复后沿用白色Glyph与48dp按钮/28dp图标尺寸；仅在该按钮下增加半透明深色scrim，选中时提高scrim强度并用宿主theme `colorAccent`细描边区分。点击、拖放、窗口、尺寸、位置及手势逻辑未变。颜色合成行为由`SidebarStashIconStyleTest`覆盖。
+- 本地验证通过：全量786项单测、Lint 0错误/181警告/2提示、Debug构建；没有截图框架或设备视觉验证。明确标记`VISUAL DEVICE VALIDATION PENDING`。该UI修复独立于Candidate B冻结输入版本；提交号保存在本轮任务交付记录。
+
 ## 保留待办
 
-- Sidebar中转站最新复测正常，记录未复现，不猜测性修改。普通文字拖拽仍缺具体现场原因，现有逻辑回归通过不等于所有设备通过。
+- 侧栏中转站拖出此前复测正常；图标低对比度已有上述局部代码修复，但不同HyperOS浅色/玻璃主题下实机视觉仍待验证。普通文字拖拽仍缺具体现场原因，现有逻辑回归通过不等于所有设备通过。
 - 微信原媒体/图片节点分类、单条消息载荷、Alook现场跳转、参考分词面板完整交互等旧待办保留。32ms回调已完成代码级owner修复，但微信菜单冲突是否由该竞态造成仍未确认，需后续Beta现场复测。
 - 评论/消息正文原生长按意图冲突按用户决定延期，不重启触摸面积研究。Beta25双指/IME/实时预览的真实ROM交互仍需用户验收。
 
@@ -236,7 +242,7 @@ Beta24/266源码bdd6bdf，tag `delivered/mmgg-1.7.219-beta.24`；APK在 `D:/CODE
 | 传送门媒体适配 | `PortalHooks`、`PortalContentCaptureSource`、`CapturedContent.ImageOrigin` | 验证Taplus当前媒体载荷标PORTAL_MEDIA并交接同次按压；截图/未知来源不冒充原图。旧版成功来源是候选，需要现场证据 |
 | 分词及选中操作 | ICU `TextSegmenter`→`BigBangPanelSession`/`BigBangOverlayContent`→`BoomChipPage`/`SwipeSelectView` | 上游资源/左右动作排布已部分复用；按下至抬手冻结选区布局/旧动画/padding。完整Leaf样式、定位与真实体验仍未验收 |
 | 图片识字/扫码 | `AicrOcrClient`、`AicrBarcodeClient` | 复用系统AICR，不内置MLKit/ZXing双引擎；服务不可用与权限是不同问题。小米翻译接口未接通 |
-| 中转站 | `StashStore`/`StashOverlayPanel`、`NativeSidebarHooks`、`EmbeddedStashDragBridge`、`SidebarDragWindowFlags` | 独立/原生侧栏路径并存；嵌入式拖影、连接占位清理与拖动期宿主穿透已有逻辑修复；目标接收/发送未闭环 |
+| 中转站 | `StashStore`/`StashOverlayPanel`、`NativeSidebarHooks`/`SidebarStashIconStyle`、`EmbeddedStashDragBridge`、`SidebarDragWindowFlags` | 独立/原生侧栏路径并存；入口低对比度局部修复；嵌入式拖影、连接占位清理与拖动期宿主穿透已有逻辑修复；目标接收/发送未闭环 |
 | 菜单/配置/界面 | `DragShareSettings`、`SettingsScreen`、`LinearMenuGeometry`/`CircleMenuGeometry` | 六位置/四外观、近手按左右拖向选边；底边触发带优先；合法配置保留；保存后提示生效范围；现代玻璃有回退 |
 | 手势/小窗 | `gestures.xposed.FanFreeformHook`、运行时/ConfigStore | FanFreeform157来源整合；恢复侧滑入口/目标，窗外点击总开关AND方向键；底角DOWN修复用户报告已改善；设备矩阵仍不完整 |
 | 复制直达/进程支持 | `AicrCopyHooks`、`RootProcessFrameworkHooks`、`TrustServiceRiskHooks`、`OverlayNotificationHooks` | 系统原生复制卡片/精确Hook；作用域加载与实际功能分别验收，不自动扩大系统保护 |

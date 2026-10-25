@@ -344,8 +344,10 @@ final class NativeSidebarHooks {
                 if (selected == Section.STASH) openStash();
                 else message("当前应用没有原生场景工具");
             } else if (pane.getParent() == turbo) turbo.removeView(pane);
-            GradientDrawable tile = background(selected == Section.STASH ? 0x44ffffff : 0x18ffffff, 12);
-            stashButton.setBackground(new RippleDrawable(ColorStateList.valueOf(0x44ffffff), tile,
+            boolean stashActive = selected == Section.STASH;
+            GradientDrawable tile = background(SidebarStashIconStyle.surface(stashActive), 12);
+            if (stashActive) tile.setStroke(dp(1), color(android.R.attr.colorAccent));
+            stashButton.setBackground(new RippleDrawable(ColorStateList.valueOf(SidebarStashIconStyle.RIPPLE_COLOR), tile,
                     background(android.graphics.Color.WHITE, 12)));
             reportRegions(context);
         }
@@ -658,7 +660,7 @@ final class NativeSidebarHooks {
         private final int size;
         RailIcon(int size) {
             this.size = size;
-            paint.setColor(android.graphics.Color.WHITE);
+            paint.setColor(SidebarStashIconStyle.ICON_COLOR);
             paint.setStyle(android.graphics.Paint.Style.STROKE);
             paint.setStrokeWidth(1.7f); paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
         }
