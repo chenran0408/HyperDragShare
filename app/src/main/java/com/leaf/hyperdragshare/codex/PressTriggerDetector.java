@@ -10,12 +10,14 @@ public final class PressTriggerDetector {
     private long downTime = -1L;
     private long deadline = -1L;
     private long classificationDeadline = -1L;
+    private boolean awaitingSecondFinger;
     private boolean twoFinger;
     private float secondDownX;
     private float secondDownY;
     private float movementLimit = MOVE_LIMIT;
 
     public void start(float x, float y, long time, long confirmMillis) {
+        awaitingSecondFinger = false;
         twoFinger = false;
         movementLimit = MOVE_LIMIT;
         active = true;
@@ -25,6 +27,13 @@ public final class PressTriggerDetector {
         downTime = time;
         deadline = time + confirmMillis;
         classificationDeadline = time + 120L;
+    }
+
+    /** Starts the bounded first-contact window without scheduling a press trigger. */
+    public void startTwoFingerCandidate(float x, float y, long time, long candidateMillis) {
+        start(x, y, time, candidateMillis);
+        awaitingSecondFinger = true;
+        classificationDeadline = -1L;
     }
 
     /** Starts a two-contact candidate with an explicit screen-space slop. */
@@ -66,13 +75,14 @@ public final class PressTriggerDetector {
     }
 
     public boolean takeClassification(long now) {
-        if (!active || fired || classificationDeadline < 0L || now < classificationDeadline) return false;
+        if (!active || awaitingSecondFinger || fired
+                || classificationDeadline < 0L || now < classificationDeadline) return false;
         classificationDeadline = -1L;
         return true;
     }
 
     public boolean fire(long now) {
-        if (!active || fired || now < deadline) return false;
+        if (!active || awaitingSecondFinger || fired || now < deadline) return false;
         fired = true;
         classificationDeadline = -1L;
         return true;
@@ -82,11 +92,13 @@ public final class PressTriggerDetector {
         active = false;
         deadline = -1L;
         classificationDeadline = -1L;
+        awaitingSecondFinger = false;
         twoFinger = false;
     }
 
     public boolean isActive() { return active; }
     public boolean isFired() { return fired; }
+    public boolean isAwaitingSecondFinger() { return active && awaitingSecondFinger; }
     public boolean isTwoFinger() { return twoFinger; }
     public long downTime() { return downTime; }
     public long deadline() { return deadline; }

@@ -74,6 +74,8 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
     private float latestY;
     private boolean weChatImageDragIntent;
     private boolean twoFingerContactSequence;
+    private volatile boolean twoFingerModeForGesture;
+    private volatile boolean twoFingerPressQualified;
 
     private static final class PendingWeChat {
         final CapturedContent content;
@@ -246,7 +248,14 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         if (action == MotionEvent.ACTION_DOWN) {
             cancelGesture();
             downTime = time;
-            detector.start(x, y, time, settings.resolvePressConfirmationTimeoutMillis());
+            twoFingerModeForGesture = isTwoFingerPressEnabled();
+            twoFingerPressQualified = !twoFingerModeForGesture;
+            if (twoFingerModeForGesture) {
+                detector.startTwoFingerCandidate(x, y, time,
+                        settings.resolvePressConfirmationTimeoutMillis());
+            } else {
+                detector.start(x, y, time, settings.resolvePressConfirmationTimeoutMillis());
+            }
             pointerDown = true;
             downX = x;
             downY = y;
@@ -298,10 +307,13 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         boolean initialTwoFingerDown = pointerCount == 2 && action == MotionEvent.ACTION_DOWN
                 && !pointerDown && !detector.isActive();
         if (initialTwoFingerDown) {
-            if (!canStartInitialTwoFingerCandidate(isTwoFingerPressEnabled(), controller,
+            boolean twoFingerEnabled = isTwoFingerPressEnabled();
+            if (!canStartInitialTwoFingerCandidate(twoFingerEnabled, controller,
                     x, y, secondX, secondY)) {
                 return false;
             }
+            twoFingerModeForGesture = true;
+            twoFingerPressQualified = true;
             downTime = eventTime;
             downX = x;
             downY = y;
@@ -320,11 +332,13 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
             return true;
         }
         if (pointerCount == 2 && action == MotionEvent.ACTION_POINTER_DOWN) {
-            if (!canStartTwoFingerCandidate(isTwoFingerPressEnabled(), controller, detector, eventTime,
+            if (!twoFingerModeForGesture || twoFingerPressQualified
+                    || !canStartTwoFingerCandidate(true, controller, detector, eventTime,
                     x, y, secondX, secondY)) return false;
             detector.startTwoFinger(x, y, secondX, secondY, eventTime,
                     settings.resolveTwoFingerPressConfirmationTimeoutMillis(),
                     ViewConfiguration.get(context).getScaledTouchSlop());
+            twoFingerPressQualified = true;
             twoFingerContactSequence = true;
             pointerDown = true;
             latestX = x;
@@ -418,6 +432,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
             return true;
         }
         boolean imageTakeover = content.isImage() && isWeChatSource && ownsCurrentPress
+                && (!twoFingerModeForGesture || detector.isFired())
                 && (pending != null || controller.isActive());
         if (imageTakeover && pending != null && pending.textWindowAccepted
                 && !dismissWeChatTextWindow()) {
@@ -437,7 +452,9 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         cached = content;
         lookupRunning = false;
         displayQueued = false;
-        controller.notePressPipeline(downTime);
+        if (!twoFingerModeForGesture || detector.isFired()) {
+            controller.notePressPipeline(downTime);
+        }
         DragShareLog.i(TAG, "press accepted native portal source=com.tencent.mm kind="
                 + (content.isImage() ? "image" : "text"));
         if (imageTakeover) {
@@ -457,18 +474,26 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
                 && !context.getSystemService(KeyguardManager.class).isKeyguardLocked();
     }
 
+    /** Mode is captured at DOWN; only a valid second contact qualifies a two-finger press. */
+    private boolean pressTriggerQualified() {
+        return !twoFingerModeForGesture || twoFingerPressQualified;
+    }
+
     private void schedule() {
         main.removeCallbacks(classify);
         main.removeCallbacks(fire);
+        if (!pressTriggerQualified()) return;
         if (detector.classificationDeadline() >= 0L) main.postAtTime(classify, detector.classificationDeadline());
         if (detector.isActive() && !detector.isFired()) main.postAtTime(fire, detector.deadline());
     }
 
     private void classifyPress() {
-        if (allowed() && detector.takeClassification(SystemClock.uptimeMillis()) && cached == null) lookup();
+        if (pressTriggerQualified() && allowed()
+                && detector.takeClassification(SystemClock.uptimeMillis()) && cached == null) lookup();
     }
 
     private void firePress() {
+        if (!pressTriggerQualified()) return;
         if (!allowed()) {
             cancelGesture();
             return;
@@ -485,6 +510,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
     }
 
     private void lookup() {
+        if (!pressTriggerQualified()) return;
         SharedRootNodeCapture.Connection session = nodeSession;
         if (session == null) {
             cancelGesture();
@@ -503,7 +529,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
             long lookupStarted = SystemClock.elapsedRealtime();
             OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture", "started");
             try {
-                if (request != generation || stopped) {
+                if (request != generation || stopped || !pressTriggerQualified()) {
                     OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture",
                             "late_ignored");
                     return;
@@ -524,7 +550,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
                 }
                 if (result.policyExcluded) excludedByPolicy.set(true);
                 main.post(() -> {
-                    if (request != generation || !allowed()) {
+                    if (request != generation || !allowed() || !pressTriggerQualified()) {
                         OperationTrace.event(OperationTrace.id("press", requestDownTime), "capture",
                                 "late_ignored");
                         DragShareLog.i(TAG, "press payload dropped kind="
@@ -570,13 +596,13 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
     }
 
     private boolean acceptAutomaticSource(long request, String source, AtomicBoolean excludedByPolicy) {
-        if (request != generation || !allowed()) return false;
+        if (request != generation || !pressTriggerQualified() || !allowed()) return false;
         if (AccessibilityBlacklist.isBlocked(context, settings, source)
                 || GameCapturePolicy.shouldPause(context, settings, source)) {
             excludedByPolicy.set(true);
             return false;
         }
-        return request == generation && allowed();
+        return request == generation && pressTriggerQualified() && allowed();
     }
 
     private void display() {
@@ -585,7 +611,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         CapturedContent content = cached;
         cached = null;
         long request = generation;
-        if (request != generation || !allowed()) {
+        if (request != generation || !allowed() || !pressTriggerQualified()) {
             DragShareLog.i(TAG, "press handoff dropped reason="
                     + (stopped ? "stopped" : "source_unavailable"));
             recycle(content);
@@ -885,7 +911,7 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
     }
 
     private void startTouchBlocker(long request) {
-        if (pointerDown) {
+        if (pointerDown && pressTriggerQualified()) {
             controller.notePressDiagnostics(downTime, null, null, "press_background_block_requested");
             blocker.startAsync(() -> !stopped && request == generation && pointerDown);
         }
@@ -913,6 +939,8 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
         main.removeCallbacks(classify);
         main.removeCallbacks(fire);
         detector.cancel();
+        twoFingerModeForGesture = false;
+        twoFingerPressQualified = false;
         lookupRunning = false;
         displayQueued = false;
         recycle(cached);

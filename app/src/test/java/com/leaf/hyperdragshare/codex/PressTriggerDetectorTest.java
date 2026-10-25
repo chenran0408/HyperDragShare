@@ -77,6 +77,22 @@ public final class PressTriggerDetectorTest {
         assertTrue(detector.isTwoFinger());
     }
 
+    @Test public void firstContactCandidateWaitsWithoutClassificationOrFireUntilSecondFingerJoins() {
+        PressTriggerDetector detector = new PressTriggerDetector();
+        detector.startTwoFingerCandidate(10f, 20f, 2000L, 600L);
+
+        assertTrue(detector.isAwaitingSecondFinger());
+        assertFalse(detector.takeClassification(2120L));
+        assertFalse(detector.fire(2600L));
+        assertTrue(detector.isActive());
+
+        detector.startTwoFinger(10f, 20f, 40f, 50f, 2700L, 700L, 8f);
+        assertFalse(detector.isAwaitingSecondFinger());
+        assertFalse(detector.fire(3399L));
+        assertTrue(detector.fire(3400L));
+        assertTrue(detector.isTwoFinger());
+    }
+
     @Test public void movementOfEitherFingerCancelsTwoFingerCandidateUsingProvidedSlop() {
         PressTriggerDetector first = twoFinger(8f);
         first.onTwoPointerEvent(2, 19f, 20f, 40f, 50f, 2);
