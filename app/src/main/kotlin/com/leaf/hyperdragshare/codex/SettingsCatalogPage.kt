@@ -123,10 +123,12 @@ internal fun SettingsModulePage(
     focusId: String?,
     scrollPositions: SettingsScrollPositionStore,
     isCurrent: Boolean,
+    onGestureCategoryChanged: (String?) -> Unit = {},
     onBack: () -> Unit,
 ) {
     if (module == SettingModule.GESTURES) {
-        GestureSettingsModulePage(entries, focusId, scrollPositions, isCurrent, onBack)
+        GestureSettingsModulePage(entries, focusId, scrollPositions, isCurrent,
+            onGestureCategoryChanged, onBack)
     } else {
         StandardSettingsModulePage(module, entries, focusId, scrollPositions, onBack)
     }
@@ -207,6 +209,7 @@ private fun GestureSettingsModulePage(
     focusId: String?,
     scrollPositions: SettingsScrollPositionStore,
     isCurrent: Boolean,
+    onGestureCategoryChanged: (String?) -> Unit,
     onBack: () -> Unit,
 ) {
     val categories = GESTURE_SETTING_CATEGORIES
@@ -220,6 +223,13 @@ private fun GestureSettingsModulePage(
     val rootListState = rememberSettingsListState(scrollPositions, "module:GESTURES:categories")
     val category = categories.firstOrNull { it.id == selectedCategoryId }
     val scrollBehavior = MiuixScrollBehavior()
+
+    DisposableEffect(isCurrent, selectedCategoryId) {
+        if (isCurrent) onGestureCategoryChanged(selectedCategoryId)
+        onDispose {
+            if (isCurrent) onGestureCategoryChanged(null)
+        }
+    }
 
     BackHandler(enabled = isCurrent && category != null) { selectedCategoryId = null }
     val back = {

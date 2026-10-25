@@ -1,8 +1,9 @@
 package com.leaf.hyperdragshare.codex
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Configuration
 import android.widget.Toast
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
@@ -21,10 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.leaf.hyperdragshare.gestures.config.ConfigContract as C
@@ -42,6 +42,9 @@ import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import java.util.Locale
 
 /** Register Hyper gesture/freeform settings for the shared searchable settings catalog. */
@@ -49,12 +52,98 @@ import java.util.Locale
 internal fun gestureSettingEntries(
     context: Context,
     onManageTargets: (String) -> Unit,
+    previewPageActive: Boolean = false,
 ): List<SettingEntry> {
     val store = remember(context) { ConfigStore(context) }
     val prefs = remember(store) { store.preferences() }
     val revision = remember(store) { mutableIntStateOf(0) }
     val localValues = remember(store) { mutableStateMapOf<String, Any>() }
     val sliderPreviewValues = remember(store) { mutableStateMapOf<String, Float>() }
+    val previewOverlay = remember(context.applicationContext) {
+        BottomCornerPreviewOverlay(context.applicationContext)
+    }
+    var previewVisible by remember(previewOverlay) { mutableStateOf(false) }
+    val previewLifecycleOwner = remember(context) { findPreviewLifecycleOwner(context) }
+    DisposableEffect(previewOverlay, previewLifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                previewOverlay.stop()
+                previewVisible = false
+            }
+        }
+        previewLifecycleOwner?.lifecycle?.addObserver(observer)
+        onDispose {
+            previewLifecycleOwner?.lifecycle?.removeObserver(observer)
+            previewOverlay.stop()
+        }
+    }
+    DisposableEffect(previewOverlay, previewPageActive) {
+        if (!previewPageActive) {
+            previewOverlay.stop()
+            previewVisible = false
+        }
+        onDispose {
+            if (!previewPageActive) {
+                previewOverlay.stop()
+                previewVisible = false
+            }
+        }
+    }
+    val scheme = MiuixTheme.colorScheme
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val bottomOrientationKey = if (landscape) C.KEY_BOTTOM_LANDSCAPE_ENABLED else C.KEY_BOTTOM_PORTRAIT_ENABLED
+    val bottomOrientationDefault = if (landscape) C.DEFAULT_BOTTOM_LANDSCAPE_ENABLED else C.DEFAULT_BOTTOM_PORTRAIT_ENABLED
+    val sideOrientationKey = if (landscape) C.KEY_SIDE_LANDSCAPE_ENABLED else C.KEY_SIDE_PORTRAIT_ENABLED
+    val sideOrientationDefault = if (landscape) C.DEFAULT_SIDE_LANDSCAPE_ENABLED else C.DEFAULT_SIDE_PORTRAIT_ENABLED
+    fun previewData() = BottomCornerPreviewOverlay.PreviewData(
+        hotWidthPercent = (sliderPreviewValues[C.KEY_HOT_WIDTH_PERCENT]
+            ?: ((localValues[C.KEY_HOT_WIDTH_PERCENT] as? Int)
+                ?: prefs.getInt(C.KEY_HOT_WIDTH_PERCENT, C.DEFAULT_HOT_WIDTH_PERCENT)).toFloat()).toInt(),
+        hotHeightPercent = (sliderPreviewValues[C.KEY_HOT_HEIGHT_PERCENT]
+            ?: ((localValues[C.KEY_HOT_HEIGHT_PERCENT] as? Int)
+                ?: prefs.getInt(C.KEY_HOT_HEIGHT_PERCENT, C.DEFAULT_HOT_HEIGHT_PERCENT)).toFloat()).toInt(),
+        bottomGapDp = (sliderPreviewValues[C.KEY_HOT_BOTTOM_GAP_DP]
+            ?: ((localValues[C.KEY_HOT_BOTTOM_GAP_DP] as? Int)
+                ?: prefs.getInt(C.KEY_HOT_BOTTOM_GAP_DP, C.DEFAULT_HOT_BOTTOM_GAP_DP)).toFloat()).toInt(),
+        fanDistancePercent = (sliderPreviewValues[C.KEY_TRIGGER_PERCENT]
+            ?: ((localValues[C.KEY_TRIGGER_PERCENT] as? Int)
+                ?: prefs.getInt(C.KEY_TRIGGER_PERCENT, C.DEFAULT_TRIGGER_PERCENT)).toFloat()).toInt(),
+        sideDistancePercent = (sliderPreviewValues[C.KEY_SIDE_TRIGGER_PERCENT]
+            ?: ((localValues[C.KEY_SIDE_TRIGGER_PERCENT] as? Int)
+                ?: prefs.getInt(C.KEY_SIDE_TRIGGER_PERCENT, C.DEFAULT_SIDE_TRIGGER_PERCENT)).toFloat()).toInt(),
+        sideTopSafeMarginPercent = (sliderPreviewValues[C.KEY_SIDE_TOP_SAFE_MARGIN_PERCENT]
+            ?: ((localValues[C.KEY_SIDE_TOP_SAFE_MARGIN_PERCENT] as? Int)
+                ?: prefs.getInt(C.KEY_SIDE_TOP_SAFE_MARGIN_PERCENT, C.DEFAULT_SIDE_TOP_SAFE_MARGIN_PERCENT)).toFloat()).toInt(),
+        leftCornerEnabled = ((localValues[C.KEY_BOTTOM_LEFT_ENABLED] as? Boolean)
+            ?: prefs.getBoolean(C.KEY_BOTTOM_LEFT_ENABLED, C.DEFAULT_BOTTOM_LEFT_ENABLED))
+            && ((localValues[bottomOrientationKey] as? Boolean)
+                ?: prefs.getBoolean(bottomOrientationKey, bottomOrientationDefault)),
+        rightCornerEnabled = ((localValues[C.KEY_BOTTOM_RIGHT_ENABLED] as? Boolean)
+            ?: prefs.getBoolean(C.KEY_BOTTOM_RIGHT_ENABLED, C.DEFAULT_BOTTOM_RIGHT_ENABLED))
+            && ((localValues[bottomOrientationKey] as? Boolean)
+                ?: prefs.getBoolean(bottomOrientationKey, bottomOrientationDefault)),
+        sideEnabled = ((localValues[C.KEY_SIDE_GESTURE_ENABLED] as? Boolean)
+            ?: prefs.getBoolean(C.KEY_SIDE_GESTURE_ENABLED, C.DEFAULT_SIDE_GESTURE_ENABLED))
+            && ((localValues[sideOrientationKey] as? Boolean)
+                ?: prefs.getBoolean(sideOrientationKey, sideOrientationDefault)),
+        sideDirectionHorizontal = prefs.getBoolean(C.KEY_SIDE_DIRECTION_HORIZONTAL,
+            C.DEFAULT_SIDE_DIRECTION_HORIZONTAL),
+        sideDirectionUp = prefs.getBoolean(C.KEY_SIDE_DIRECTION_UP, C.DEFAULT_SIDE_DIRECTION_UP),
+        sideDirectionDown = prefs.getBoolean(C.KEY_SIDE_DIRECTION_DOWN, C.DEFAULT_SIDE_DIRECTION_DOWN),
+        primaryColor = scheme.primary.toArgb(),
+        surfaceColor = scheme.surfaceContainer.toArgb(),
+        textColor = scheme.onSurface.toArgb(),
+        mutedColor = scheme.onSurfaceVariantSummary.toArgb(),
+    )
+    if (previewVisible) previewOverlay.update(previewData())
+    val startPreview: () -> Unit = {
+        if (previewPageActive && previewOverlay.show(previewData())) previewVisible = true
+        else Toast.makeText(context, "请先允许 MMGG 显示悬浮窗，再开始屏幕预览。", Toast.LENGTH_LONG).show()
+    }
+    val stopPreview: () -> Unit = {
+        previewOverlay.stop()
+        previewVisible = false
+    }
     val entries = mutableListOf<SettingEntry>()
     var currentModule = SettingModule.GESTURES
     var currentGroup = "总开关与通用"
@@ -272,6 +361,14 @@ internal fun gestureSettingEntries(
     bool("侧滑停留打开列表", "滑入后达到触发距离并停留；可关闭以只使用侧滑。不会更改安全中心侧栏开关。", C.KEY_SIDE_HOLD_ENABLED, C.DEFAULT_SIDE_HOLD_ENABLED)
     slider("侧滑停留时间", C.KEY_SIDE_HOLD_DELAY_MS, C.MIN_SIDE_HOLD_DELAY_MS, C.MAX_SIDE_HOLD_DELAY_MS, " ms")
     slider("侧滑触发距离", C.KEY_SIDE_TRIGGER_PERCENT, C.MIN_SIDE_TRIGGER_PERCENT, C.MAX_SIDE_TRIGGER_PERCENT, "%")
+    register("side_gesture_preview", "屏幕手势预览", "查看侧滑方向与触发范围的屏幕叠加预览", MiuixIcons.Info) { _ ->
+        BottomCornerTriggerPreview(
+            visible = previewVisible,
+            enabled = previewPageActive,
+            onStart = startPreview,
+            onStop = stopPreview,
+        )
+    }
     chooser("竖屏侧滑布局", listOf("列表", "圆环", "扇形", "蜂巢", "任务切换", "系统最近任务"), C.KEY_SIDE_PORTRAIT_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
     chooser("横屏侧滑布局", listOf("列表", "圆环", "扇形", "蜂巢", "任务切换", "系统最近任务"), C.KEY_SIDE_LANDSCAPE_LAYOUT_MODE, C.DEFAULT_SIDE_LAYOUT_MODE, values = listOf(C.SIDE_LAYOUT_LIST, C.SIDE_LAYOUT_RING, C.SIDE_LAYOUT_FAN, C.SIDE_LAYOUT_HONEYCOMB, C.SIDE_LAYOUT_TASKS, C.SIDE_LAYOUT_SYSTEM_RECENTS))
     bool("竖屏侧滑全屏启动", "关闭时以小窗启动", C.KEY_SIDE_PORTRAIT_FULLSCREEN, C.DEFAULT_SIDE_PORTRAIT_FULLSCREEN)
@@ -285,22 +382,15 @@ internal fun gestureSettingEntries(
     currentGroup = "底角触发"
     slider("触发区宽度", C.KEY_HOT_WIDTH_PERCENT, 5, 20, "%")
     slider("触发区高度", C.KEY_HOT_HEIGHT_PERCENT, 3, C.MAX_HOT_HEIGHT_PERCENT, "%")
+    slider("触发区距屏幕底边", C.KEY_HOT_BOTTOM_GAP_DP,
+        C.MIN_HOT_BOTTOM_GAP_DP, C.MAX_HOT_BOTTOM_GAP_DP, " dp")
     slider("一段扇形距离", C.KEY_TRIGGER_PERCENT, 6, 24, "%")
     register("bottom_corner_preview", "触发范围预览", "实时查看底角触发范围与扇形距离", MiuixIcons.Info) { _ ->
         BottomCornerTriggerPreview(
-            widthPercent = sliderPreviewValues[C.KEY_HOT_WIDTH_PERCENT]
-                ?: ((localValues[C.KEY_HOT_WIDTH_PERCENT] as? Int)
-                    ?: prefs.getInt(C.KEY_HOT_WIDTH_PERCENT, C.DEFAULT_HOT_WIDTH_PERCENT)).toFloat(),
-            heightPercent = sliderPreviewValues[C.KEY_HOT_HEIGHT_PERCENT]
-                ?: ((localValues[C.KEY_HOT_HEIGHT_PERCENT] as? Int)
-                    ?: prefs.getInt(C.KEY_HOT_HEIGHT_PERCENT, C.DEFAULT_HOT_HEIGHT_PERCENT)).toFloat(),
-            distancePercent = sliderPreviewValues[C.KEY_TRIGGER_PERCENT]
-                ?: ((localValues[C.KEY_TRIGGER_PERCENT] as? Int)
-                    ?: prefs.getInt(C.KEY_TRIGGER_PERCENT, C.DEFAULT_TRIGGER_PERCENT)).toFloat(),
-            leftEnabled = (localValues[C.KEY_BOTTOM_LEFT_ENABLED] as? Boolean)
-                ?: prefs.getBoolean(C.KEY_BOTTOM_LEFT_ENABLED, C.DEFAULT_BOTTOM_LEFT_ENABLED),
-            rightEnabled = (localValues[C.KEY_BOTTOM_RIGHT_ENABLED] as? Boolean)
-                ?: prefs.getBoolean(C.KEY_BOTTOM_RIGHT_ENABLED, C.DEFAULT_BOTTOM_RIGHT_ENABLED),
+            visible = previewVisible,
+            enabled = previewPageActive,
+            onStart = startPreview,
+            onStop = stopPreview,
         )
     }
     slider("蜂巢停顿时间", C.KEY_BOTTOM_HONEYCOMB_SETTLE_MS, C.MIN_BOTTOM_HONEYCOMB_SETTLE_MS, C.MAX_BOTTOM_HONEYCOMB_SETTLE_MS, " ms")
@@ -492,98 +582,38 @@ private fun GestureSliderPreference(
 
 @Composable
 private fun BottomCornerTriggerPreview(
-    widthPercent: Float,
-    heightPercent: Float,
-    distancePercent: Float,
-    leftEnabled: Boolean,
-    rightEnabled: Boolean,
+    visible: Boolean,
+    enabled: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(end = 12.dp, top = 10.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("触发范围预览", fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("竖屏", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                CornerTriggerScreenPreview(
-                    modifier = Modifier.fillMaxWidth().height(118.dp),
-                    landscape = false,
-                    widthPercent = widthPercent,
-                    heightPercent = heightPercent,
-                    leftEnabled = leftEnabled,
-                    rightEnabled = rightEnabled,
-                )
-            }
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("横屏", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                CornerTriggerScreenPreview(
-                    modifier = Modifier.fillMaxWidth().height(118.dp),
-                    landscape = true,
-                    widthPercent = widthPercent,
-                    heightPercent = heightPercent,
-                    leftEnabled = leftEnabled,
-                    rightEnabled = rightEnabled,
-                )
-            }
-        }
+        Text("屏幕实时预览", fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface)
         Text(
-            "宽 ${widthPercent.toInt()}% · 高 ${heightPercent.toInt()}% · 扇形距离 ${distancePercent.toInt()}%（屏幕短边）",
+            "显示斜滑、侧滑方向、触发范围和菜单位置；叠加层不会拦截触摸，菜单仅作示意。",
             fontSize = 12.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
-        Text(
-            "示意图按竖屏和横屏分别缩放；灰色角落表示该侧已关闭。",
-            fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        TextButton(
+            text = if (visible) "结束屏幕预览" else "开始屏幕预览",
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.textButtonColorsPrimary(),
+            enabled = enabled,
+            onClick = if (visible) onStop else onStart,
         )
     }
 }
 
-@Composable
-private fun CornerTriggerScreenPreview(
-    modifier: Modifier,
-    landscape: Boolean,
-    widthPercent: Float,
-    heightPercent: Float,
-    leftEnabled: Boolean,
-    rightEnabled: Boolean,
-) {
-    val frameColor = MiuixTheme.colorScheme.surfaceContainer
-    val outlineColor = MiuixTheme.colorScheme.onSurfaceVariantActions
-    val activeColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.48f)
-    val disabledColor = MiuixTheme.colorScheme.onSurfaceVariantActions.copy(alpha = 0.16f)
-    Canvas(modifier) {
-        val frameWidth = size.width * if (landscape) 0.92f else 0.57f
-        val frameHeight = size.height * if (landscape) 0.62f else 0.94f
-        val left = (size.width - frameWidth) / 2f
-        val top = (size.height - frameHeight) / 2f
-        drawRoundRect(
-            color = frameColor,
-            topLeft = Offset(left, top),
-            size = Size(frameWidth, frameHeight),
-            cornerRadius = CornerRadius(10.dp.toPx()),
-        )
-        val zoneWidth = frameWidth * (widthPercent.coerceIn(5f, 20f) / 100f)
-        val zoneHeight = frameHeight * (heightPercent.coerceIn(3f, 20f) / 100f)
-        drawRect(
-            color = if (leftEnabled) activeColor else disabledColor,
-            topLeft = Offset(left, top + frameHeight - zoneHeight),
-            size = Size(zoneWidth, zoneHeight),
-        )
-        drawRect(
-            color = if (rightEnabled) activeColor else disabledColor,
-            topLeft = Offset(left + frameWidth - zoneWidth, top + frameHeight - zoneHeight),
-            size = Size(zoneWidth, zoneHeight),
-        )
-        drawRoundRect(
-            color = outlineColor,
-            topLeft = Offset(left, top),
-            size = Size(frameWidth, frameHeight),
-            cornerRadius = CornerRadius(10.dp.toPx()),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
-        )
+private fun findPreviewLifecycleOwner(context: Context): LifecycleOwner? {
+    var current: Context? = context
+    while (current != null) {
+        if (current is LifecycleOwner) return current
+        current = (current as? ContextWrapper)?.baseContext
     }
+    return null
 }
 
 @Composable
@@ -636,6 +666,7 @@ private fun GestureResetPreference(
 private fun gestureSettingDefault(key: String, fallback: Int): Int = when (key) {
     C.KEY_HOT_WIDTH_PERCENT -> C.DEFAULT_HOT_WIDTH_PERCENT
     C.KEY_HOT_HEIGHT_PERCENT -> C.DEFAULT_HOT_HEIGHT_PERCENT
+    C.KEY_HOT_BOTTOM_GAP_DP -> C.DEFAULT_HOT_BOTTOM_GAP_DP
     C.KEY_TRIGGER_PERCENT -> C.DEFAULT_TRIGGER_PERCENT
     C.KEY_SELECTION_RADIUS_PERCENT -> C.DEFAULT_SELECTION_RADIUS_PERCENT
     C.KEY_BOTTOM_HONEYCOMB_SETTLE_MS -> C.DEFAULT_BOTTOM_HONEYCOMB_SETTLE_MS

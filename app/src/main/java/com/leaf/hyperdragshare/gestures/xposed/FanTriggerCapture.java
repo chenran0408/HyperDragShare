@@ -12,6 +12,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.WindowInsets;
 import com.leaf.hyperdragshare.gestures.config.OverlayTouchRegions;
 import com.leaf.hyperdragshare.codex.NativeSidebarState;
 
@@ -50,15 +51,14 @@ final class FanTriggerCapture {
     private volatile boolean capturing;
     private volatile long injectedDownTime;
     private volatile long injectedUntil;
-    private int width;
-    private int height;
-    private int leftInset;
-    private int rightInset;
+    private Rect leftBounds;
+    private Rect rightBounds;
     private boolean desiredEnabled;
     private boolean desiredLeftEnabled;
     private boolean desiredRightEnabled;
     private int desiredHotWidthPercent;
     private int desiredHotHeightPercent;
+    private int desiredBottomGapPx;
     private int desiredLeftInset;
     private int desiredRightInset;
     private volatile boolean passthroughInProgress;
@@ -74,10 +74,10 @@ final class FanTriggerCapture {
 
     void update(boolean enabled, boolean leftEnabled, boolean rightEnabled,
                 int hotWidthPercent, int hotHeightPercent,
-                int leftInset, int rightInset) {
+                int leftInset, int rightInset, int bottomGapPx) {
         runOnMain(() -> updateNow(enabled, leftEnabled, rightEnabled,
                 hotWidthPercent, hotHeightPercent,
-                leftInset, rightInset));
+                leftInset, rightInset, bottomGapPx));
     }
 
     boolean isCapturing() {
@@ -120,12 +120,13 @@ final class FanTriggerCapture {
 
     private void updateNow(boolean enabled, boolean leftEnabled, boolean rightEnabled,
                            int hotWidthPercent, int hotHeightPercent,
-                           int leftInset, int rightInset) {
+                           int leftInset, int rightInset, int bottomGapPx) {
         desiredLeftEnabled = enabled && leftEnabled;
         desiredRightEnabled = enabled && rightEnabled;
         desiredEnabled = desiredLeftEnabled || desiredRightEnabled;
         desiredHotWidthPercent = hotWidthPercent;
         desiredHotHeightPercent = hotHeightPercent;
+        desiredBottomGapPx = Math.max(0, bottomGapPx);
         desiredLeftInset = Math.max(0, leftInset);
         desiredRightInset = Math.max(0, rightInset);
         if (passthroughInProgress) return;
@@ -133,19 +134,26 @@ final class FanTriggerCapture {
             removeNow();
             return;
         }
-        Rect bounds = windowManager.getCurrentWindowMetrics().getBounds();
-        int nextWidth = Math.max(1, bounds.width() * hotWidthPercent / 100);
-        int nextHeight = Math.max(1, bounds.height() * hotHeightPercent / 100);
-        if (capturing && nextWidth == width && nextHeight == height
-                && this.leftInset == desiredLeftInset
-                && this.rightInset == desiredRightInset
-                && (leftView != null) == desiredLeftEnabled
-                && (rightView != null) == desiredRightEnabled) return;
+        android.view.WindowMetrics metrics = windowManager.getCurrentWindowMetrics();
+        Rect display = metrics.getBounds();
+        WindowInsets insets = metrics.getWindowInsets();
+        int topInset = insets == null ? 0 : insets.getInsetsIgnoringVisibility(
+                WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()).top;
+        GestureGeometry.HotZoneBounds leftZone = GestureGeometry.hotZoneBounds(
+                display.width(), display.height(), desiredLeftInset, desiredRightInset,
+                topInset, hotWidthPercent, hotHeightPercent, desiredBottomGapPx, false);
+        GestureGeometry.HotZoneBounds rightZone = GestureGeometry.hotZoneBounds(
+                display.width(), display.height(), desiredLeftInset, desiredRightInset,
+                topInset, hotWidthPercent, hotHeightPercent, desiredBottomGapPx, true);
+        Rect nextLeftBounds = desiredLeftEnabled
+                ? new Rect(leftZone.left, leftZone.top, leftZone.right, leftZone.bottom) : null;
+        Rect nextRightBounds = desiredRightEnabled
+                ? new Rect(rightZone.left, rightZone.top, rightZone.right, rightZone.bottom) : null;
+        if (capturing && sameBounds(nextLeftBounds, leftBounds)
+                && sameBounds(nextRightBounds, rightBounds)) return;
         removeNow();
-        width = nextWidth;
-        height = nextHeight;
-        this.leftInset = desiredLeftInset;
-        this.rightInset = desiredRightInset;
+        leftBounds = nextLeftBounds;
+        rightBounds = nextRightBounds;
         boolean attached = attach(TYPE_NAVIGATION_BAR_PANEL) || attach(2038);
         listener.onAvailabilityChanged(attached);
         if (!attached) {
@@ -265,7 +273,7 @@ final class FanTriggerCapture {
         if (!restored) removeNow();
         updateNow(desiredEnabled, desiredLeftEnabled, desiredRightEnabled,
                 desiredHotWidthPercent, desiredHotHeightPercent,
-                desiredLeftInset, desiredRightInset);
+                desiredLeftInset, desiredRightInset, desiredBottomGapPx);
         Log.i("Corner non-fan gesture handoff finished");
     }
 
@@ -273,7 +281,7 @@ final class FanTriggerCapture {
         passthroughInProgress = false;
         updateNow(desiredEnabled, desiredLeftEnabled, desiredRightEnabled,
                 desiredHotWidthPercent, desiredHotHeightPercent,
-                desiredLeftInset, desiredRightInset);
+                desiredLeftInset, desiredRightInset, desiredBottomGapPx);
         Log.i("Corner application tap passthrough accepted=" + accepted
                 + " captureRestored=" + (desiredEnabled && capturing));
     }
@@ -353,18 +361,17 @@ final class FanTriggerCapture {
         View right = desiredRightEnabled ? captureView("RIGHT") : null;
         try {
             if (left != null) {
-                windowManager.addView(left, params(type, Gravity.BOTTOM | Gravity.START,
-                        "FanFreeformTriggerLeft", leftInset));
+            windowManager.addView(left, params(type, "FanFreeformTriggerLeft", leftBounds));
             }
             if (right != null) {
-                windowManager.addView(right, params(type, Gravity.BOTTOM | Gravity.END,
-                        "FanFreeformTriggerRight", rightInset));
+                windowManager.addView(right, params(type, "FanFreeformTriggerRight", rightBounds));
             }
             leftView = left;
             rightView = right;
             capturing = true;
-            Log.i("Corner trigger capture attached size=" + width + "x" + height
-                    + " inset=" + leftInset + "/" + rightInset + " type=" + type);
+            Log.i("Corner trigger capture attached left=" + leftBounds
+                    + " right=" + rightBounds + " gapPx=" + desiredBottomGapPx
+                    + " type=" + type);
             return true;
         } catch (Throwable error) {
             removeView(left);
@@ -429,17 +436,17 @@ final class FanTriggerCapture {
         }
     }
 
-    private WindowManager.LayoutParams params(int type, int gravity, String title,
-                                              int horizontalInset) {
+    private WindowManager.LayoutParams params(int type, String title, Rect bounds) {
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                width, height, type,
+                bounds.width(), bounds.height(), type,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
-        params.gravity = gravity;
-        params.x = horizontalInset;
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = bounds.left;
+        params.y = bounds.top;
         params.setTitle(title);
         params.setFitInsetsTypes(0);
         params.layoutInDisplayCutoutMode =
@@ -456,6 +463,10 @@ final class FanTriggerCapture {
         capturing = false;
         gestureHandoffInProgress = false;
         clearCapturedEvents();
+    }
+
+    private static boolean sameBounds(Rect first, Rect second) {
+        return first == null ? second == null : first.equals(second);
     }
 
     private boolean setCaptureTouchable(boolean touchable) {

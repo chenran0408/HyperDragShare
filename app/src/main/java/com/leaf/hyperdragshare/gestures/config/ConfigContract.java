@@ -117,6 +117,7 @@ public final class ConfigContract {
     public static final String KEY_SELECTION_RADIUS_PERCENT = "selection_radius_percent";
     public static final String KEY_HOT_WIDTH_PERCENT = "hot_width_percent";
     public static final String KEY_HOT_HEIGHT_PERCENT = "hot_height_percent";
+    public static final String KEY_HOT_BOTTOM_GAP_DP = "hot_bottom_gap_dp";
     public static final String KEY_ICON_SIZE_DP = "icon_size_dp";
     public static final String KEY_CUSTOM_WINDOW_BOUNDS_ENABLED =
             "custom_window_bounds_enabled";
@@ -426,6 +427,9 @@ public final class ConfigContract {
     public static final int DEFAULT_HOT_WIDTH_PERCENT = 8;
     public static final int DEFAULT_HOT_HEIGHT_PERCENT = 11;
     public static final int MAX_HOT_HEIGHT_PERCENT = 20;
+    public static final int DEFAULT_HOT_BOTTOM_GAP_DP = 0;
+    public static final int MIN_HOT_BOTTOM_GAP_DP = 0;
+    public static final int MAX_HOT_BOTTOM_GAP_DP = 200;
     public static final int DEFAULT_ICON_SIZE_DP = 34;
     public static final int MIN_ICON_SIZE_DP = 34;
     public static final int MAX_ICON_SIZE_DP = 96;

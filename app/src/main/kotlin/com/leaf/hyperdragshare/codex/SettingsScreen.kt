@@ -81,6 +81,7 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
     val backStack = remember { mutableStateListOf<NavKey>(SettingsRoute.Main).apply {
         if (openGestures) add(SettingsRoute.Module(SettingModule.GESTURES))
     } }
+    var gestureCategoryId by remember { mutableStateOf<String?>(null) }
     val settingsScrollPositions = rememberSaveable(saver = SettingsScrollPositionStore.Saver) {
         SettingsScrollPositionStore()
     }
@@ -116,7 +117,13 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
             onOpenGames = { backStack.add(SettingsRoute.Games) },
             onOpenAbout = { backStack.add(SettingsRoute.About) }, persist = persist,
             onOpenProblemDiagnostics = { backStack.add(SettingsRoute.ProblemDiagnostics) },
-        ) + gestureSettingEntries(context, onManageTargets = openTargets)).sortedWith(
+        ) + gestureSettingEntries(
+            context,
+            onManageTargets = openTargets,
+            previewPageActive = (backStack.lastOrNull() as? SettingsRoute.Module)?.module
+                == SettingModule.GESTURES
+                && (gestureCategoryId == "bottom" || gestureCategoryId == "side"),
+        )).sortedWith(
             compareBy({ it.module.ordinal }, { it.module.groups.indexOf(it.group) }))
         val currentDirectory = rememberUpdatedState(directory)
         val currentQuery = rememberUpdatedState(searchQuery)
@@ -144,6 +151,7 @@ fun DragShareSettingsApp(context: Context, openGestures: Boolean = false) {
                 entry<SettingsRoute.Module> { route ->
                     SettingsModulePage(route.module, currentDirectory.value.filter { it.module == route.module },
                         route.focusId, settingsScrollPositions, backStack.lastOrNull() == route,
+                        onGestureCategoryChanged = { gestureCategoryId = it },
                         onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) })
                 }
                 entry(SettingsRoute.BottomTargets) {
@@ -710,11 +718,12 @@ private fun portalSettingEntries(
         )
     }
 
-    row("drag.simple.edge", "菜单到边缘距离", SettingModule.PORTAL, "拖拽菜单外观",
-        summary = "",
+    row("drag.simple.edge", "菜单到屏幕边缘距离", SettingModule.PORTAL, "拖拽菜单外观",
+        summary = "简洁与现代样式使用此距离；底侧菜单会向上留出间距，并按可用安全区域定位。",
         keywords = "简洁 菜单 边缘 距离",
-        enabled = dragSharingEnabled && settings.uiStyle == DragShareSettings.STYLE_SIMPLE,
-        prerequisite = dragSharingPrerequisite ?: "选择简洁拖拽样式后可调整",
+        enabled = dragSharingEnabled && (settings.uiStyle == DragShareSettings.STYLE_SIMPLE
+                || settings.uiStyle == DragShareSettings.STYLE_MODERN),
+        prerequisite = dragSharingPrerequisite ?: "选择简洁或现代拖拽样式后可调整",
     ) { title, summary, enabled ->
         SliderPreference(
             title = title,

@@ -2,9 +2,29 @@ package com.leaf.hyperdragshare.gestures.xposed;
 
 import com.leaf.hyperdragshare.gestures.config.ConfigContract;
 
-final class GestureGeometry {
+public final class GestureGeometry {
     enum Corner { LEFT, RIGHT }
     enum OutsideRegion { INSIDE, OUTSIDE }
+
+    /** Bounds for one bottom-corner trigger area, in display pixels. */
+    public static final class HotZoneBounds {
+        public final int left;
+        public final int top;
+        public final int right;
+        public final int bottom;
+
+        HotZoneBounds(int left, int top, int right, int bottom) {
+            this.left = left;
+            this.top = top;
+            this.right = right;
+            this.bottom = bottom;
+        }
+
+        public boolean contains(float x, float y) {
+            return right > left && bottom > top
+                    && x >= left && x <= right && y >= top && y <= bottom;
+        }
+    }
 
     static final class Point {
         final float x;
@@ -60,6 +80,52 @@ final class GestureGeometry {
     }
 
     private GestureGeometry() {}
+
+    /**
+     * Computes one bottom-corner trigger rectangle shared by settings preview and runtime.
+     * A zero gap deliberately keeps the historical full-display bottom baseline; this keeps
+     * existing configurations in the same place even when a system bottom inset is reported.
+     * The configured gap is measured from the physical display bottom. Height remains the
+     * configured percentage of display height; a very large gap is clamped so that it does
+     * not consume the trigger area's height. Top safe areas clip only when the requested height
+     * would cross them; bottom system bars do not create a discontinuity in the gap.
+     */
+    public static HotZoneBounds hotZoneBounds(int width, int height,
+                                               int leftInset, int rightInset,
+                                               int topInset,
+                                               int hotWidthPercent,
+                                               int hotHeightPercent,
+                                               int bottomGapPx,
+                                               boolean rightCorner) {
+        int safeWidth = Math.max(0, width);
+        int safeHeight = Math.max(0, height);
+        int leftSafe = Math.min(safeWidth, Math.max(0, leftInset));
+        int rightSafe = Math.min(safeWidth, Math.max(0, rightInset));
+        int zoneWidth = Math.round(safeWidth * clampPercent(hotWidthPercent, 5, 20) / 100f);
+        int desiredHeight = Math.round(safeHeight * clampPercent(hotHeightPercent, 3,
+                ConfigContract.MAX_HOT_HEIGHT_PERCENT) / 100f);
+        int safeTop = Math.min(safeHeight, Math.max(0, topInset));
+        int actualHeight = Math.min(desiredHeight, Math.max(0, safeHeight - safeTop));
+        int maximumGap = Math.max(0, safeHeight - actualHeight - safeTop);
+        int effectiveGap = Math.min(Math.max(0, bottomGapPx), maximumGap);
+        int bottom = safeHeight - effectiveGap;
+        int top = Math.max(safeTop, bottom - actualHeight);
+        int left;
+        int right;
+        if (rightCorner) {
+            right = Math.max(leftSafe, safeWidth - rightSafe);
+            left = Math.max(leftSafe, right - zoneWidth);
+        } else {
+            left = leftSafe;
+            right = Math.min(safeWidth - rightSafe, left + zoneWidth);
+        }
+        if (right < left) right = left;
+        return new HotZoneBounds(left, top, right, bottom);
+    }
+
+    private static int clampPercent(int value, int minimum, int maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+    }
 
     static Corner cornerAt(float x, float y, int width, int height,
                            float hotWidth, float hotHeight) {

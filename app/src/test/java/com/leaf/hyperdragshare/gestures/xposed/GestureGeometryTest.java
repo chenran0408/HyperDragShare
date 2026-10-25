@@ -12,6 +12,40 @@ import static org.junit.Assert.assertTrue;
 
 public class GestureGeometryTest {
     @Test
+    public void bottomGapZeroMatchesLegacyCornerBaselineAndInsetsDoNotShiftIt() {
+        GestureGeometry.HotZoneBounds left = GestureGeometry.hotZoneBounds(
+                1200, 2400, 24, 28, 24, 12, 12, 0, false);
+        GestureGeometry.HotZoneBounds right = GestureGeometry.hotZoneBounds(
+                1200, 2400, 24, 28, 24, 12, 12, 0, true);
+        assertEquals(2112, left.top);
+        assertEquals(2400, left.bottom);
+        assertEquals(24, left.left);
+        assertEquals(28, 1200 - right.right);
+
+        for (int y : new int[]{2111, 2112, 2399, 2400}) {
+            boolean expected = y >= 2112 && y <= 2400;
+            assertEquals(expected, left.contains(24, y));
+        }
+    }
+
+    @Test
+    public void bottomGapPreservesHeightAndClipsSafelyOnSmallDisplays() {
+        GestureGeometry.HotZoneBounds separated = GestureGeometry.hotZoneBounds(
+                600, 1000, 0, 0, 80, 10, 10, 36, false);
+        assertEquals(964, separated.bottom);
+        assertEquals(100, separated.bottom - separated.top);
+        assertFalse(separated.contains(30, 965));
+        assertTrue(separated.contains(30, 963));
+
+        GestureGeometry.HotZoneBounds clipped = GestureGeometry.hotZoneBounds(
+                120, 90, 0, 0, 80, 20, 20, 500, true);
+        assertEquals(96, clipped.left);
+        assertEquals(120, clipped.right);
+        assertEquals(80, clipped.top);
+        assertEquals(90, clipped.bottom);
+    }
+
+    @Test
     public void detectsOnlyBottomCorners() {
         assertEquals(GestureGeometry.Corner.LEFT,
                 GestureGeometry.cornerAt(20, 2580, 1200, 2608, 144, 183));

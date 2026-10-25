@@ -354,6 +354,11 @@ public final class ConfigProvider extends ContentProvider {
                     ConfigContract.MAX_SELECTION_RADIUS_PERCENT));
             out.putInt(ConfigContract.KEY_HOT_WIDTH_PERCENT, prefs.getInt(ConfigContract.KEY_HOT_WIDTH_PERCENT, ConfigContract.DEFAULT_HOT_WIDTH_PERCENT));
             out.putInt(ConfigContract.KEY_HOT_HEIGHT_PERCENT, prefs.getInt(ConfigContract.KEY_HOT_HEIGHT_PERCENT, ConfigContract.DEFAULT_HOT_HEIGHT_PERCENT));
+            out.putInt(ConfigContract.KEY_HOT_BOTTOM_GAP_DP, clamp(prefs.getInt(
+                    ConfigContract.KEY_HOT_BOTTOM_GAP_DP,
+                    ConfigContract.DEFAULT_HOT_BOTTOM_GAP_DP),
+                    ConfigContract.MIN_HOT_BOTTOM_GAP_DP,
+                    ConfigContract.MAX_HOT_BOTTOM_GAP_DP));
             out.putInt(ConfigContract.KEY_ICON_SIZE_DP, prefs.getInt(ConfigContract.KEY_ICON_SIZE_DP, ConfigContract.DEFAULT_ICON_SIZE_DP));
             out.putBoolean(ConfigContract.KEY_CUSTOM_WINDOW_BOUNDS_ENABLED,
                     prefs.getBoolean(ConfigContract.KEY_CUSTOM_WINDOW_BOUNDS_ENABLED,

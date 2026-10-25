@@ -17,6 +17,20 @@ import static org.junit.Assert.assertTrue;
 @Config(sdk = 35)
 public final class GestureOrientationConfigTest {
     @Test
+    public void hotBottomGapLoadsSeparatelyFromLegacyHeightAndDefaultsToZero() {
+        GestureConfig legacy = GestureConfig.from(new Bundle());
+        assertEquals(ConfigContract.DEFAULT_HOT_HEIGHT_PERCENT, legacy.hotHeightPercent);
+        assertEquals(0, legacy.hotBottomGapDp);
+
+        Bundle values = new Bundle();
+        values.putInt(ConfigContract.KEY_HOT_HEIGHT_PERCENT, 15);
+        values.putInt(ConfigContract.KEY_HOT_BOTTOM_GAP_DP, 48);
+        GestureConfig configured = GestureConfig.from(values);
+        assertEquals(15, configured.hotHeightPercent);
+        assertEquals(48, configured.hotBottomGapDp);
+    }
+
+    @Test
     public void bottomStagesAndLaunchModesAreIndependentByOrientation() {
         GestureConfig config = GestureConfig.defaults();
         config.bottomPortraitEnabled = true;

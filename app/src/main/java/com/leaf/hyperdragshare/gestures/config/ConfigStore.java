@@ -438,6 +438,8 @@ public final class ConfigStore {
                         ConfigContract.DEFAULT_HOT_WIDTH_PERCENT)
                 .putInt(ConfigContract.KEY_HOT_HEIGHT_PERCENT,
                         ConfigContract.DEFAULT_HOT_HEIGHT_PERCENT)
+                .putInt(ConfigContract.KEY_HOT_BOTTOM_GAP_DP,
+                        ConfigContract.DEFAULT_HOT_BOTTOM_GAP_DP)
                 .putInt(ConfigContract.KEY_TRIGGER_PERCENT,
                         ConfigContract.DEFAULT_TRIGGER_PERCENT)
                 .putInt(ConfigContract.KEY_SELECTION_RADIUS_PERCENT,
@@ -483,6 +485,8 @@ public final class ConfigStore {
                         ConfigContract.DEFAULT_HOT_WIDTH_PERCENT)
                 .putInt(ConfigContract.KEY_HOT_HEIGHT_PERCENT,
                         ConfigContract.DEFAULT_HOT_HEIGHT_PERCENT)
+                .putInt(ConfigContract.KEY_HOT_BOTTOM_GAP_DP,
+                        ConfigContract.DEFAULT_HOT_BOTTOM_GAP_DP)
                 .putInt(ConfigContract.KEY_TRIGGER_PERCENT,
                         ConfigContract.DEFAULT_TRIGGER_PERCENT)
                 .putInt(ConfigContract.KEY_SELECTION_RADIUS_PERCENT,
@@ -1050,6 +1054,8 @@ public final class ConfigStore {
                 .putInt(ConfigContract.KEY_SELECTION_RADIUS_PERCENT, ConfigContract.DEFAULT_SELECTION_RADIUS_PERCENT)
                 .putInt(ConfigContract.KEY_HOT_WIDTH_PERCENT, ConfigContract.DEFAULT_HOT_WIDTH_PERCENT)
                 .putInt(ConfigContract.KEY_HOT_HEIGHT_PERCENT, ConfigContract.DEFAULT_HOT_HEIGHT_PERCENT)
+                .putInt(ConfigContract.KEY_HOT_BOTTOM_GAP_DP,
+                        ConfigContract.DEFAULT_HOT_BOTTOM_GAP_DP)
                 .putInt(ConfigContract.KEY_ICON_SIZE_DP, ConfigContract.DEFAULT_ICON_SIZE_DP)
                 .putBoolean(ConfigContract.KEY_CUSTOM_WINDOW_BOUNDS_ENABLED,
                         ConfigContract.DEFAULT_CUSTOM_WINDOW_BOUNDS_ENABLED)

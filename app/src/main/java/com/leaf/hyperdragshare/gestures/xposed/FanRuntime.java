@@ -916,7 +916,8 @@ final class FanRuntime {
                 int displayId = context.getDisplay() == null ? 0 : context.getDisplay().getDisplayId();
                 triggerCapture.passthroughCapturedGesture(displayId);
                 triggerCapture.update(false, config.bottomLeftEnabled, config.bottomRightEnabled,
-                        config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+                        config.hotWidthPercent, config.hotHeightPercent, 0, 0,
+                        hotBottomGapPx());
             }
             outsideCapture.remove();
             outsideGestures.clearAll();
@@ -958,11 +959,13 @@ final class FanRuntime {
             resetFan();
             boolean landscape = width > height;
             boolean outsideEnabled = config.outsideEnabledFor(landscape);
-            float hotWidth = width * config.hotWidthPercent / 100f;
-            float hotHeight = height * config.hotHeightPercent / 100f;
             Insets systemSides = systemSideGestureInsets();
-            GestureGeometry.Corner cornerAtDown = GestureGeometry.cornerAt(
-                    x, y, width, height, hotWidth, hotHeight);
+            GestureGeometry.HotZoneBounds leftHotZone = hotZoneBounds(width, height, false);
+            GestureGeometry.HotZoneBounds rightHotZone = hotZoneBounds(width, height, true);
+            GestureGeometry.Corner cornerAtDown = leftHotZone.contains(x, y)
+                    ? GestureGeometry.Corner.LEFT
+                    : rightHotZone.contains(x, y) ? GestureGeometry.Corner.RIGHT : null;
+            float hotZoneTop = Math.min(leftHotZone.top, rightHotZone.top);
             GestureGeometry.Corner downCorner = config.bottomEnabledFor(landscape)
                     && config.bottomCornerEnabled(cornerAtDown) ? cornerAtDown : null;
             GestureGeometry.Corner systemEdgeSide = downCorner == null
@@ -970,14 +973,15 @@ final class FanRuntime {
             GestureGeometry.Corner sideEntryAtDown = null;
             if (cornerAtDown == null && canStartSide()) {
                 float sideTop = sideSafeTop(height);
-                float sideBottom = sideSafeBottom(height, hotHeight);
+                float sideBottom = sideSafeBottom(height, hotZoneTop);
                 sideEntryAtDown = GestureGeometry.sideAt(x, y, width,
                         systemSides.left, systemSides.right, sideTop, sideBottom,
                         96 * density);
             }
             if (!inputSources.usesNativeInput() && !triggerCapture.isCapturing() && canStartBottom()) {
                 triggerCapture.update(true, config.bottomLeftEnabled, config.bottomRightEnabled,
-                        config.hotWidthPercent, config.hotHeightPercent, 0, 0);
+                        config.hotWidthPercent, config.hotHeightPercent, 0, 0,
+                        hotBottomGapPx());
             }
             Rect pendingLaunch = freeform.pendingLaunchBounds();
             boolean imeActive = freeform.hasInteractiveFreeform() && inputMethodActive();
@@ -1314,9 +1318,10 @@ final class FanRuntime {
         activeSideList = true;
         activeSideFanList = sideLayoutMode == ConfigContract.SIDE_LAYOUT_FAN;
         activeSideRingList = sideLayoutMode == ConfigContract.SIDE_LAYOUT_RING;
-        float hotHeight = height * config.hotHeightPercent / 100f;
+        float hotZoneTop = Math.min(hotZoneBounds(width, height, false).top,
+                hotZoneBounds(width, height, true).top);
         float safeTop = sideSafeTop(height);
-        float safeBottom = sideSafeBottom(height, hotHeight);
+        float safeBottom = sideSafeBottom(height, hotZoneTop);
         float availablePerItem = (safeBottom - safeTop) / Math.max(1, activeTargets.size());
         sideIconDiameter = Math.min(config.sideIconSizeDp * density, Math.max(28 * density, availablePerItem - 4 * density));
         sideRowHeight = Math.min(sideIconDiameter + 10 * density, availablePerItem);
@@ -1913,7 +1918,7 @@ final class FanRuntime {
         boolean captureCornerDown = canStartBottom() && !foregroundGestureExcluded;
         triggerCapture.update(captureCornerDown, config.bottomLeftEnabled,
                 config.bottomRightEnabled, config.hotWidthPercent,
-                config.hotHeightPercent, 0, 0);
+                config.hotHeightPercent, 0, 0, hotBottomGapPx());
     }
 
     private void refreshGeometryAndCaptures(String reason) {
@@ -2003,10 +2008,16 @@ final class FanRuntime {
         visibleWindows.addAll(NativeSidebarState.snapshot());
         if (ime == null && !visibleWindows.isEmpty() && (triggerCapture.isCapturing() || inputSources.usesNativeInput())) {
             Rect display = displayBounds();
-            int hotWidth = Math.round(display.width() * config.hotWidthPercent / 100f);
-            int hotHeight = Math.round(display.height() * config.hotHeightPercent / 100f);
-            visibleWindows.add(new Rect(display.left, display.bottom - hotHeight, display.left + hotWidth, display.bottom));
-            visibleWindows.add(new Rect(display.right - hotWidth, display.bottom - hotHeight, display.right, display.bottom));
+            GestureGeometry.HotZoneBounds leftZone = hotZoneBounds(
+                    display.width(), display.height(), false);
+            GestureGeometry.HotZoneBounds rightZone = hotZoneBounds(
+                    display.width(), display.height(), true);
+            visibleWindows.add(new Rect(display.left + leftZone.left,
+                    display.top + leftZone.top, display.left + leftZone.right,
+                    display.top + leftZone.bottom));
+            visibleWindows.add(new Rect(display.left + rightZone.left,
+                    display.top + rightZone.top, display.left + rightZone.right,
+                    display.top + rightZone.bottom));
         }
         // Edge DOWN events must be captured too; waiting until UP to pilfer lets the
         // application underneath receive a real click. Side swipes are handled below.
@@ -2082,9 +2093,21 @@ final class FanRuntime {
         return Math.max(safe.top, height * config.sideTopSafeMarginPercent / 100f);
     }
 
-    private float sideSafeBottom(int height, float hotHeight) {
+    private float sideSafeBottom(int height, float hotZoneTop) {
         Insets safe = displaySafeInsets();
-        return Math.min(height - safe.bottom, height - hotHeight - 24 * density);
+        return Math.min(height - safe.bottom, hotZoneTop - 24 * density);
+    }
+
+    private int hotBottomGapPx() {
+        return Math.round(config.hotBottomGapDp * density);
+    }
+
+    private GestureGeometry.HotZoneBounds hotZoneBounds(int width, int height,
+                                                        boolean rightCorner) {
+        Insets safe = displaySafeInsets();
+        return GestureGeometry.hotZoneBounds(width, height, 0, 0, safe.top,
+                config.hotWidthPercent, config.hotHeightPercent,
+                hotBottomGapPx(), rightCorner);
     }
 
     private Rect displayBounds() {

@@ -6,6 +6,14 @@ import static org.junit.Assert.assertEquals;
 
 public final class ConfigContractTest {
     @Test
+    public void hotZoneBottomGapDefaultsToLegacyPositionAndHasBoundedDpRange() {
+        assertEquals("hot_bottom_gap_dp", ConfigContract.KEY_HOT_BOTTOM_GAP_DP);
+        assertEquals(0, ConfigContract.DEFAULT_HOT_BOTTOM_GAP_DP);
+        assertEquals(0, ConfigContract.MIN_HOT_BOTTOM_GAP_DP);
+        assertEquals(200, ConfigContract.MAX_HOT_BOTTOM_GAP_DP);
+    }
+
+    @Test
     public void keepsSideCancellationRangeStable() {
         assertEquals(11, ConfigContract.DEFAULT_SIDE_REVERSE_CANCEL_PERCENT);
         assertEquals(5, ConfigContract.MIN_SIDE_REVERSE_CANCEL_PERCENT);

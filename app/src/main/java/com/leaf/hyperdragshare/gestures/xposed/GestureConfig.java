@@ -45,6 +45,7 @@ final class GestureConfig {
     final int selectionRadiusPercent;
     final int hotWidthPercent;
     final int hotHeightPercent;
+    final int hotBottomGapDp;
     final int iconSizeDp;
     boolean customWindowPortraitEnabled =
             ConfigContract.DEFAULT_CUSTOM_WINDOW_PORTRAIT_ENABLED;
@@ -214,7 +215,8 @@ final class GestureConfig {
                           boolean sideWheelMode,
                           int sideReverseCancelPercent,
                           int triggerPercent, int selectionRadiusPercent,
-                          int hotWidthPercent, int hotHeightPercent, int iconSizeDp,
+                          int hotWidthPercent, int hotHeightPercent, int hotBottomGapDp,
+                          int iconSizeDp,
                           int widthPercent, int heightPercent, int positionX,
                           int positionY, int outsideSingleAction, int outsideDoubleAction,
                           List<TargetSpec> targets, boolean honeycombEnabled,
@@ -268,6 +270,9 @@ final class GestureConfig {
         this.hotWidthPercent = clamp(hotWidthPercent, 5, 20);
         this.hotHeightPercent = clamp(hotHeightPercent, 3,
                 ConfigContract.MAX_HOT_HEIGHT_PERCENT);
+        this.hotBottomGapDp = clamp(hotBottomGapDp,
+                ConfigContract.MIN_HOT_BOTTOM_GAP_DP,
+                ConfigContract.MAX_HOT_BOTTOM_GAP_DP);
         this.iconSizeDp = clamp(iconSizeDp, ConfigContract.MIN_ICON_SIZE_DP,
                 ConfigContract.MAX_ICON_SIZE_DP);
         this.widthPercent = clamp(widthPercent, 40, 90);
@@ -323,6 +328,7 @@ final class GestureConfig {
                 ConfigContract.DEFAULT_TRIGGER_PERCENT,
                 ConfigContract.DEFAULT_SELECTION_RADIUS_PERCENT,
                 ConfigContract.DEFAULT_HOT_WIDTH_PERCENT, ConfigContract.DEFAULT_HOT_HEIGHT_PERCENT,
+                ConfigContract.DEFAULT_HOT_BOTTOM_GAP_DP,
                 ConfigContract.DEFAULT_ICON_SIZE_DP,
                 ConfigContract.DEFAULT_WIDTH_PERCENT, ConfigContract.DEFAULT_HEIGHT_PERCENT,
                 ConfigContract.DEFAULT_POSITION_X, ConfigContract.DEFAULT_POSITION_Y,
@@ -419,6 +425,8 @@ final class GestureConfig {
                 bundle.getInt(ConfigContract.KEY_SELECTION_RADIUS_PERCENT, ConfigContract.DEFAULT_SELECTION_RADIUS_PERCENT),
                 bundle.getInt(ConfigContract.KEY_HOT_WIDTH_PERCENT, ConfigContract.DEFAULT_HOT_WIDTH_PERCENT),
                 bundle.getInt(ConfigContract.KEY_HOT_HEIGHT_PERCENT, ConfigContract.DEFAULT_HOT_HEIGHT_PERCENT),
+                bundle.getInt(ConfigContract.KEY_HOT_BOTTOM_GAP_DP,
+                        ConfigContract.DEFAULT_HOT_BOTTOM_GAP_DP),
                 bundle.getInt(ConfigContract.KEY_ICON_SIZE_DP, ConfigContract.DEFAULT_ICON_SIZE_DP),
                 bundle.getInt(ConfigContract.KEY_WIDTH_PERCENT, ConfigContract.DEFAULT_WIDTH_PERCENT),
                 bundle.getInt(ConfigContract.KEY_HEIGHT_PERCENT, ConfigContract.DEFAULT_HEIGHT_PERCENT),

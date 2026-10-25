@@ -38,4 +38,18 @@ public final class LinearMenuGeometryTest {
         assertTrue(b[2] < 192);
         assertEquals(192, b[0] + b[2] / 2);
     }
+
+    @Test public void bottomMenuMovesUpByTheConfiguredEdgeDistanceWithinInsets() {
+        int[] noMargin = LinearMenuGeometry.bounds(
+                DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM, 1080, 2400,
+                64, 96, 0, 4, 1f);
+        int[] withMargin = LinearMenuGeometry.bounds(
+                DragShareSettings.SIMPLE_MENU_POSITION_BOTTOM, 1080, 2400,
+                64, 96, 24, 4, 1f);
+
+        assertEquals(2400 - 96 - noMargin[3], noMargin[1]);
+        assertEquals(2400 - 96 - 24 - withMargin[3], withMargin[1]);
+        assertEquals(24, noMargin[1] - withMargin[1]);
+        assertTrue(withMargin[1] >= 64 + 24);
+    }
 }
