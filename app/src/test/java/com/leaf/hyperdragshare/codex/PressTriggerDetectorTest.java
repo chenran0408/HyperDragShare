@@ -66,6 +66,56 @@ public final class PressTriggerDetectorTest {
         assertFalse(detector.isActive());
     }
 
+    @Test public void twoFingerCandidateConfirmsOnlyAfterItsOwnConfiguredDuration() {
+        PressTriggerDetector detector = new PressTriggerDetector();
+        detector.startTwoFinger(10f, 20f, 40f, 50f, 2000L, 700L, 8f);
+
+        assertFalse(detector.takeClassification(2119L));
+        assertTrue(detector.takeClassification(2120L));
+        assertFalse(detector.fire(2699L));
+        assertTrue(detector.fire(2700L));
+        assertTrue(detector.isTwoFinger());
+    }
+
+    @Test public void movementOfEitherFingerCancelsTwoFingerCandidateUsingProvidedSlop() {
+        PressTriggerDetector first = twoFinger(8f);
+        first.onTwoPointerEvent(2, 19f, 20f, 40f, 50f, 2);
+        assertFalse(first.isActive());
+
+        PressTriggerDetector second = twoFinger(8f);
+        second.onTwoPointerEvent(2, 10f, 20f, 40f, 58.01f, 2);
+        assertFalse(second.isActive());
+        assertFalse(second.fire(3000L));
+    }
+
+    @Test public void losingEitherFingerThirdFingerAndTerminalEventsCancelCandidate() {
+        for (int count : new int[]{0, 1, 3}) {
+            PressTriggerDetector detector = twoFinger(8f);
+            detector.onTwoPointerEvent(2, 10f, 20f, 40f, 50f, count);
+            assertFalse(detector.isActive());
+            assertFalse(detector.fire(3000L));
+        }
+        for (int action : new int[]{1, 3, 6}) {
+            PressTriggerDetector detector = twoFinger(8f);
+            detector.onTwoPointerEvent(action, 10f, 20f, 40f, 50f, 2);
+            assertFalse(detector.isActive());
+        }
+    }
+
+    @Test public void confirmedTwoFingerGestureRemainsActiveForRootOwnedDragMovement() {
+        PressTriggerDetector detector = twoFinger(8f);
+        assertTrue(detector.fire(1700L));
+        detector.onTwoPointerEvent(2, 100f, 200f, 140f, 250f, 2);
+        assertTrue(detector.isActive());
+        assertTrue(detector.isFired());
+    }
+
+    private static PressTriggerDetector twoFinger(float slop) {
+        PressTriggerDetector detector = new PressTriggerDetector();
+        detector.startTwoFinger(10f, 20f, 40f, 50f, 1000L, 700L, slop);
+        return detector;
+    }
+
     private static PressTriggerDetector down(long duration) {
         PressTriggerDetector detector = new PressTriggerDetector();
         detector.start(10f, 20f, 1000L, duration);

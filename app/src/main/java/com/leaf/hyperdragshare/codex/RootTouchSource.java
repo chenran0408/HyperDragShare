@@ -36,6 +36,11 @@ final class RootTouchSource {
         void onState(boolean ready, String reason);
     }
 
+    interface ContactListener {
+        boolean onContactEvent(int action, float x, float y, float secondX, float secondY,
+                               int pointerCount, long eventTime);
+    }
+
     private static final String TAG = "DragShare/RootInput";
     private static final String READY_LINE = "HDS_INPUT_READY";
     private static final String INVENTORY_MARKER = "HDS_INPUT_INVENTORY";
@@ -51,6 +56,8 @@ final class RootTouchSource {
     private Run currentRun;
     private volatile boolean ready;
     private volatile String failureReason = "";
+    private volatile ContactListener contactListener;
+    private volatile boolean twoFingerPressEnabled;
     private boolean statePublished;
 
     /** Resources are transferred under this lock; no I/O or listener runs with it held. */
@@ -58,12 +65,15 @@ final class RootTouchSource {
         final GestureDiagnostics.Stream diagnostics = new GestureDiagnostics.Stream("root_evdev");
         volatile boolean cancelled;
         private Process process;
-        EvdevTouchParser parser;
+        volatile EvdevTouchParser parser;
         int rawMaxX;
         int rawMaxY;
         // Main-queue state of the gesture actually delivered to the host.
         boolean pointerDown;
         boolean ignoredGesture;
+        boolean rejectedTwoFingerCandidate;
+        boolean rejectedContactStreamEnded;
+        volatile long frameEventTime;
         float lastX;
         float lastY;
 
@@ -115,6 +125,11 @@ final class RootTouchSource {
                     boolean deliverCancel = !run.ignoredGesture;
                     run.pointerDown = false;
                     run.ignoredGesture = false;
+                    ContactListener contacts = contactListener;
+                    if (contacts != null) {
+                        contacts.onContactEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
+                                Float.NaN, Float.NaN, 0, SystemClock.uptimeMillis());
+                    }
                     if (deliverCancel) {
                         run.diagnostics.mark("ACTION_CANCEL", null, "INPUT_CANCELLED", null,
                                 null, null, "root_source_stop_synthetic_cancel");
@@ -129,6 +144,28 @@ final class RootTouchSource {
 
     boolean isReady() {
         return ready;
+    }
+
+    void setContactListener(ContactListener listener) {
+        contactListener = listener;
+    }
+
+    void setTwoFingerPressEnabled(boolean enabled) {
+        twoFingerPressEnabled = enabled;
+        Run run = currentRun;
+        if (run != null && run.parser != null) run.parser.setTwoFingerPressEnabled(enabled);
+    }
+
+    void clearContactListener(ContactListener listener) {
+        if (contactListener == listener) contactListener = null;
+    }
+
+    static EvdevTouchParser createParser(EvdevTouchParser.Listener listener,
+                                         EvdevTouchParser.ContactListener contactListener,
+                                         boolean twoFingerPressEnabled) {
+        EvdevTouchParser parser = new EvdevTouchParser(listener, contactListener);
+        parser.setTwoFingerPressEnabled(twoFingerPressEnabled);
+        return parser;
     }
 
     String failureReason() {
@@ -153,8 +190,11 @@ final class RootTouchSource {
         InputStream stream = null;
         long connectionStarted = SystemClock.elapsedRealtime();
         try {
-            run.parser = new EvdevTouchParser((action, x, y, major, minor, width) ->
-                    onRawFrame(run, action, x, y, major, minor, width));
+            run.parser = createParser((action, x, y, major, minor, width) ->
+                    onRawFrame(run, action, x, y, major, minor, width),
+                    (action, x, y, secondX, secondY, count) -> onRawContactFrame(
+                            run, action, x, y, secondX, secondY, count),
+                    twoFingerPressEnabled);
             long probeStarted = SystemClock.elapsedRealtime();
             String probe = rootText(run, probeCommand());
             logConnectionStage("device_probe", probeStarted);
@@ -217,6 +257,11 @@ final class RootTouchSource {
                     boolean deliverCancel = !run.ignoredGesture;
                     run.pointerDown = false;
                     run.ignoredGesture = false;
+                    ContactListener contacts = contactListener;
+                    if (contacts != null) {
+                        contacts.onContactEvent(MotionEvent.ACTION_CANCEL, run.lastX, run.lastY,
+                                Float.NaN, Float.NaN, 0, SystemClock.uptimeMillis());
+                    }
                     if (deliverCancel) {
                         run.diagnostics.mark("ACTION_CANCEL", null, "INPUT_CANCELLED", null,
                                 null, null, "root_reader_closed_synthetic_cancel");
@@ -434,11 +479,22 @@ final class RootTouchSource {
 
     private void onRawFrame(Run run, int action, float rawX, float rawY,
                             int major, int minor, int width) {
-        long eventTime = SystemClock.uptimeMillis();
+        long eventTime = run.frameEventTime > 0L
+                ? run.frameEventTime : SystemClock.uptimeMillis();
         int contacts = GestureDiagnostics.enabled() && run.parser != null
                 ? run.parser.diagnosticPointerCount() : -1;
         mainHandler.post(() -> {
             if (currentRun != run || run.cancelled) return;
+            if (run.rejectedTwoFingerCandidate) {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    run.pointerDown = false;
+                    if (run.rejectedContactStreamEnded) {
+                        run.rejectedTwoFingerCandidate = false;
+                        run.rejectedContactStreamEnded = false;
+                    }
+                }
+                return;
+            }
             WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
             DisplayMetrics metrics = new DisplayMetrics();
             manager.getDefaultDisplay().getRealMetrics(metrics);
@@ -466,6 +522,66 @@ final class RootTouchSource {
             run.lastY = point[1];
             listener.onPointerEvent(action, point[0], point[1], eventTime, major, minor, width);
         });
+    }
+
+    private void onRawContactFrame(Run run, int action, float rawX, float rawY,
+                                   float secondRawX, float secondRawY, int pointerCount) {
+        long eventTime = SystemClock.uptimeMillis();
+        run.frameEventTime = eventTime;
+        mainHandler.post(() -> {
+            if (currentRun != run || run.cancelled) return;
+            if (run.rejectedTwoFingerCandidate) {
+                if (pointerCount == 0) run.rejectedContactStreamEnded = true;
+                else if (run.rejectedContactStreamEnded && action == MotionEvent.ACTION_DOWN) {
+                    run.rejectedTwoFingerCandidate = false;
+                    run.rejectedContactStreamEnded = false;
+                }
+            }
+            float x = Float.NaN;
+            float y = Float.NaN;
+            float secondX = Float.NaN;
+            float secondY = Float.NaN;
+            if (pointerCount > 0 && Float.isFinite(rawX) && Float.isFinite(rawY)) {
+                WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+                DisplayMetrics metrics = new DisplayMetrics();
+                manager.getDefaultDisplay().getRealMetrics(metrics);
+                int rotation = manager.getDefaultDisplay().getRotation();
+                float[] point = GestureMath.mapRawPoint(rawX, rawY, run.rawMaxX, run.rawMaxY,
+                        metrics.widthPixels, metrics.heightPixels, rotation);
+                x = point[0];
+                y = point[1];
+                if (Float.isFinite(secondRawX) && Float.isFinite(secondRawY)) {
+                    float[] second = GestureMath.mapRawPoint(secondRawX, secondRawY,
+                            run.rawMaxX, run.rawMaxY, metrics.widthPixels, metrics.heightPixels, rotation);
+                    secondX = second[0];
+                    secondY = second[1];
+                }
+            }
+            if (action == MotionEvent.ACTION_DOWN && pointerCount > 0
+                    && Float.isFinite(x) && Float.isFinite(y)
+                    && OverlayTouchRegions.contains(x, y)) {
+                run.ignoredGesture = true;
+            }
+            ContactListener target = contactListener;
+            if (target == null || run.ignoredGesture) return;
+            boolean accepted = target.onContactEvent(
+                    action, x, y, secondX, secondY, pointerCount, eventTime);
+            if ((action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_DOWN)
+                    && pointerCount == 2 && !accepted) {
+                rejectTwoFingerCandidate(run, x, y, eventTime, pointerCount, rawX, rawY);
+            }
+        });
+    }
+
+    void rejectTwoFingerCandidate(Run run, float x, float y, long eventTime,
+                                  int pointerCount, float rawX, float rawY) {
+        run.rejectedTwoFingerCandidate = true;
+        if (!run.pointerDown) return;
+        run.pointerDown = false;
+        run.diagnostics.root(MotionEvent.ACTION_CANCEL, x, y, rawX, rawY, -1,
+                eventTime, pointerCount, null, "CANCELLED", null, null, null,
+                "two_finger_candidate_rejected");
+        listener.onPointerEvent(MotionEvent.ACTION_CANCEL, x, y, eventTime, 0, 0, 0);
     }
 
     static String findTouchDevicePath(CharSequence devices) {

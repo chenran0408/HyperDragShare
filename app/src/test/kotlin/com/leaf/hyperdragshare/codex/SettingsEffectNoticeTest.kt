@@ -117,6 +117,9 @@ class SettingsEffectNoticeTest {
             persist { setColorMode(DragShareSettings.COLOR_DARK) }
             assertToastContains("应用主题立即更新")
             persist { setEdgeTriggerDp(123) }
+            persist { setTwoFingerLongPressEnabled(true) }
+            assertToastContains("根输入（Root）")
+            persist { setTwoFingerLongPressTimeoutMillis(900) }
 
             persist { settings ->
                 val hidden = LinkedHashSet(settings.hiddenTargetKeys)
@@ -152,6 +155,8 @@ class SettingsEffectNoticeTest {
             assertEquals(DragShareSettings.COLOR_DARK, current.colorMode)
             assertEquals(DragShareSettings.COLOR_DARK, saved.colorMode)
             assertEquals(123, saved.edgeTriggerDp)
+            assertTrue(saved.twoFingerLongPressEnabled)
+            assertEquals(900, saved.twoFingerLongPressTimeoutMillis)
             assertEquals(setOf("target.added-hidden"), saved.hiddenTargetKeys)
             assertEquals(listOf("target.second", "target.first"), saved.targetOrder)
             assertEquals(setOf("app.added-blocked"), saved.accessibilityBlacklistedPackages)

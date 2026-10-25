@@ -9,6 +9,7 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.widget.Toast;
 
 import java.io.IOException;
@@ -19,7 +20,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** One press pipeline for both hosts: classify once, then use the confirmed gesture's result. */
-final class PressCaptureSource {
+final class PressCaptureSource implements RootTouchSource.ContactListener {
+    interface OcrRequest {
+        void cancel();
+    }
+
+    interface OcrRecognizer {
+        OcrRequest recognize(Context context, android.graphics.Bitmap bitmap,
+                             AicrOcrClient.Callback callback);
+    }
+
     private static final String TAG = "DragShare/Press";
     private static final float WECHAT_DRAG_DISTANCE_DP = 36f;
     private static final long READER_RETRY_FIRST_MS = 3000L;
@@ -32,6 +42,9 @@ final class PressCaptureSource {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final BackgroundTouchBlocker blocker;
     private final PressTriggerDetector detector = new PressTriggerDetector();
+    private final OcrRecognizer ocrRecognizer;
+    private volatile PortalPressSettings.Snapshot portalPressSettings;
+    private PortalPressSettings.Subscription portalPressSubscription;
     private final Runnable classify = this::classifyPress;
     private final Runnable fire = this::firePress;
     private volatile SharedRootNodeCapture.Connection nodeSession;
@@ -45,7 +58,7 @@ final class PressCaptureSource {
         DragShareLog.i(TAG, "press reader retry started");
         openReader();
     };
-    private AicrOcrClient.Request activeOcrRequest;
+    private OcrRequest activeOcrRequest;
     private PendingWeChat pendingWeChat;
     private volatile long generation;
     private volatile boolean pointerDown;
@@ -59,6 +72,7 @@ final class PressCaptureSource {
     private float latestX;
     private float latestY;
     private boolean weChatImageDragIntent;
+    private boolean twoFingerContactSequence;
 
     private static final class PendingWeChat {
         final CapturedContent content;
@@ -88,11 +102,31 @@ final class PressCaptureSource {
             RootTouchSource input,
             DragShareController controller,
             DragShareSettings settings) {
+        this(context, input, controller, settings, (ocrContext, bitmap, callback) -> {
+            AicrOcrClient.Request request = AicrOcrClient.recognize(ocrContext, bitmap, callback);
+            return request::cancel;
+        });
+    }
+
+    PressCaptureSource(
+            Context context,
+            RootTouchSource input,
+            DragShareController controller,
+            DragShareSettings settings,
+            OcrRecognizer ocrRecognizer) {
         this.context = context;
         this.input = input;
         this.controller = controller;
         this.settings = settings;
+        this.ocrRecognizer = ocrRecognizer;
         blocker = new BackgroundTouchBlocker(context);
+        portalPressSettings = PortalPressSettings.read(context);
+        portalPressSubscription = PortalPressSettings.observe(context, main,
+                this::refreshPortalPressSettings);
+        if (input != null) {
+            input.setContactListener(this);
+            input.setTwoFingerPressEnabled(isTwoFingerPressEnabled());
+        }
         ModuleActivation.reportPressReader(context, false, "");
         openReader();
     }
@@ -146,12 +180,45 @@ final class PressCaptureSource {
     void updateSettings(DragShareSettings updated) {
         DragShareSettings previous = settings;
         settings = updated;
-        if (previous.pauseAutomaticInGames != updated.pauseAutomaticInGames
+        if (input != null) input.setTwoFingerPressEnabled(isTwoFingerPressEnabled());
+        PortalPressSettings.Snapshot system = portalPressSettings;
+        boolean pressConfigurationChanged = (!system.available
+                && previous.twoFingerLongPressEnabled != updated.twoFingerLongPressEnabled)
+                || previous.twoFingerLongPressTimeoutMillis != updated.twoFingerLongPressTimeoutMillis;
+        boolean capturePolicyChanged = previous.pauseAutomaticInGames != updated.pauseAutomaticInGames
                 || !previous.manualGamePackages.equals(updated.manualGamePackages)
-                || !previous.accessibilityBlacklistedPackages.equals(updated.accessibilityBlacklistedPackages)) {
+                || !previous.accessibilityBlacklistedPackages.equals(updated.accessibilityBlacklistedPackages);
+        if (capturePolicyChanged) {
             if (Looper.myLooper() == Looper.getMainLooper()) cancelGesture();
             else main.post(this::cancelGesture);
+        } else if (pressConfigurationChanged) {
+            if (Looper.myLooper() == Looper.getMainLooper()) cancelUnconfirmedPressCandidate();
+            else main.post(this::cancelUnconfirmedPressCandidate);
         }
+    }
+
+    private boolean isTwoFingerPressEnabled() {
+        PortalPressSettings.Snapshot system = portalPressSettings;
+        if (system == null) system = PortalPressSettings.read(context);
+        return system.resolveTwoFingerEnabled(settings.twoFingerLongPressEnabled);
+    }
+
+    private void refreshPortalPressSettings() {
+        if (stopped) return;
+        PortalPressSettings.Snapshot previous = portalPressSettings;
+        PortalPressSettings.Snapshot updated = PortalPressSettings.read(context);
+        boolean wasEnabled = previous.resolveTwoFingerEnabled(settings.twoFingerLongPressEnabled);
+        portalPressSettings = updated;
+        boolean isEnabled = updated.resolveTwoFingerEnabled(settings.twoFingerLongPressEnabled);
+        if (input != null) input.setTwoFingerPressEnabled(isEnabled);
+        if (wasEnabled != isEnabled) {
+            cancelUnconfirmedPressCandidate();
+        }
+    }
+
+    private void cancelUnconfirmedPressCandidate() {
+        if (detector.isActive() && !detector.isFired()) cancelGesture();
+        else controller.endPressPipeline(downTime);
     }
 
     void onPointerEvent(int action, float x, float y, long time) {
@@ -161,6 +228,7 @@ final class PressCaptureSource {
 
     private void handlePointer(int action, float x, float y, long time) {
         if (stopped) return;
+        if (twoFingerContactSequence) return;
         latestX = x;
         latestY = y;
         if (action == MotionEvent.ACTION_DOWN) {
@@ -198,6 +266,117 @@ final class PressCaptureSource {
             return;
         }
         schedule();
+    }
+
+    @Override
+    public boolean onContactEvent(int action, float x, float y, float secondX, float secondY,
+                                  int pointerCount, long eventTime) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return handleContactEvent(action, x, y, secondX, secondY, pointerCount, eventTime);
+        } else {
+            main.post(() -> handleContactEvent(action, x, y, secondX, secondY,
+                    pointerCount, eventTime));
+            return false;
+        }
+    }
+
+    private boolean handleContactEvent(int action, float x, float y, float secondX, float secondY,
+                                       int pointerCount, long eventTime) {
+        if (stopped) return false;
+        boolean initialTwoFingerDown = pointerCount == 2 && action == MotionEvent.ACTION_DOWN
+                && !pointerDown && !detector.isActive();
+        if (initialTwoFingerDown) {
+            if (!canStartInitialTwoFingerCandidate(isTwoFingerPressEnabled(), controller,
+                    x, y, secondX, secondY)) {
+                return false;
+            }
+            downTime = eventTime;
+            downX = x;
+            downY = y;
+            pointerDown = true;
+            latestX = x;
+            latestY = y;
+            detector.startTwoFinger(x, y, secondX, secondY, eventTime,
+                    settings.resolveTwoFingerPressConfirmationTimeoutMillis(),
+                    ViewConfiguration.get(context).getScaledTouchSlop());
+            twoFingerContactSequence = true;
+            if (!allowed()) {
+                cancelGesture();
+                return false;
+            }
+            schedule();
+            return true;
+        }
+        if (pointerCount == 2 && action == MotionEvent.ACTION_POINTER_DOWN) {
+            if (!canStartTwoFingerCandidate(isTwoFingerPressEnabled(), controller, detector, eventTime,
+                    x, y, secondX, secondY)) return false;
+            detector.startTwoFinger(x, y, secondX, secondY, eventTime,
+                    settings.resolveTwoFingerPressConfirmationTimeoutMillis(),
+                    ViewConfiguration.get(context).getScaledTouchSlop());
+            twoFingerContactSequence = true;
+            pointerDown = true;
+            latestX = x;
+            latestY = y;
+            schedule();
+            return true;
+        }
+        if (!twoFingerContactSequence) return false;
+        if (pointerCount == 2 && action == MotionEvent.ACTION_MOVE) {
+            detector.onTwoPointerEvent(MotionEvent.ACTION_MOVE, x, y, secondX, secondY, pointerCount);
+            if (!detector.isActive()) {
+                cancelGesture();
+            } else {
+                if (detector.isFired()
+                        && Math.hypot(x - downX, y - downY) > WECHAT_DRAG_DISTANCE_DP
+                                * context.getResources().getDisplayMetrics().density) {
+                    weChatImageDragIntent = true;
+                    if (pendingWeChat != null) dragWeChatPressCandidate(x, y);
+                }
+                schedule();
+            }
+            return true;
+        }
+        if (pointerCount != 2 || action == MotionEvent.ACTION_CANCEL
+                || action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_UP) {
+            boolean released = action == MotionEvent.ACTION_UP
+                    || action == MotionEvent.ACTION_POINTER_UP;
+            if (released && detector.isFired() && !controller.isActive()) {
+                // Match a confirmed single-finger release: let accepted OCR/capture work
+                // finish after the Root stream cancels its now-invalid physical drag.
+                pointerDown = false;
+                detector.cancel();
+                main.removeCallbacks(classify);
+                main.removeCallbacks(fire);
+                blocker.stopAsync();
+                finishWeChatPress();
+            } else {
+                cancelGesture();
+            }
+            if (pointerCount == 0 || action == MotionEvent.ACTION_CANCEL) {
+                twoFingerContactSequence = false;
+            }
+        }
+        return true;
+    }
+
+    static boolean canStartTwoFingerCandidate(boolean enabled,
+                                              DragShareController controller,
+                                              PressTriggerDetector detector,
+                                              long eventTime,
+                                              float x, float y, float secondX, float secondY) {
+        return enabled && controller != null && !controller.isActive()
+                && detector != null && detector.isActive() && !detector.isFired()
+                && eventTime < detector.deadline()
+                && Float.isFinite(x) && Float.isFinite(y)
+                && Float.isFinite(secondX) && Float.isFinite(secondY);
+    }
+
+    static boolean canStartInitialTwoFingerCandidate(boolean enabled,
+                                                     DragShareController controller,
+                                                     float x, float y, float secondX, float secondY) {
+        return enabled && controller != null && !controller.isActive()
+                && Float.isFinite(x) && Float.isFinite(y)
+                && Float.isFinite(secondX) && Float.isFinite(secondY);
     }
 
     /** Prefer the host's actual text/image result over the same press's approximate OCR region. */
@@ -485,7 +664,7 @@ final class PressCaptureSource {
         startTouchBlocker(request);
         DragShareLog.i(TAG, "WeChat OCR started elapsedFromConfirmMs="
                 + (SystemClock.uptimeMillis() - confirmedAt) + "; gesture decides text or image");
-        activeOcrRequest = AicrOcrClient.recognize(context, content.bitmap, (text, error) -> {
+        activeOcrRequest = ocrRecognizer.recognize(context, content.bitmap, (text, error) -> {
             if (pending != pendingWeChat || request != generation || stopped) {
                 OperationTrace.event(pending.operation, "image_ocr", "late_ignored");
                 recycle(content);
@@ -767,6 +946,14 @@ final class PressCaptureSource {
     void stop() {
         Runnable stop = () -> {
             stopped = true;
+            PortalPressSettings.Subscription observer = portalPressSubscription;
+            portalPressSubscription = null;
+            if (observer != null) observer.close();
+            if (input != null) {
+                input.clearContactListener(this);
+                input.setTwoFingerPressEnabled(false);
+            }
+            twoFingerContactSequence = false;
             main.removeCallbacks(readerRetry);
             cancelGesture();
             SharedRootNodeCapture.Connection session = nodeSession;

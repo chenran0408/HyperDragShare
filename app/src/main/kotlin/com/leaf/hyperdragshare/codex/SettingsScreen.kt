@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
@@ -270,6 +272,17 @@ private fun portalSettingEntries(
     persist: (DragShareSettingsMutation) -> DragShareSettings,
 ): List<SettingEntry> {
     val coroutineScope = rememberCoroutineScope()
+    var portalPressSnapshot by remember(context) {
+        mutableStateOf(PortalPressSettings.read(context))
+    }
+    DisposableEffect(context) {
+        val subscription = PortalPressSettings.observe(context, Handler(Looper.getMainLooper())) {
+            portalPressSnapshot = PortalPressSettings.read(context)
+        }
+        onDispose { subscription.close() }
+    }
+    val effectiveTwoFingerLongPressEnabled = portalPressSnapshot
+        .resolveTwoFingerEnabled(settings.twoFingerLongPressEnabled)
     var copyDirectEnabled by remember(context) {
         mutableStateOf(IntegrationSettings.isCopyDirectEnabled(context))
     }
@@ -320,6 +333,9 @@ private fun portalSettingEntries(
     }
     var simpleEdgeDistance by remember(settings.simpleMenuEdgeDistanceDp) {
         mutableFloatStateOf(settings.simpleMenuEdgeDistanceDp.toFloat())
+    }
+    var twoFingerLongPressTimeout by remember(settings.twoFingerLongPressTimeoutMillis) {
+        mutableFloatStateOf(settings.twoFingerLongPressTimeoutMillis.toFloat())
     }
     var iconOpacity by remember(settings.iconOpacityPercent) {
         mutableFloatStateOf(settings.iconOpacityPercent.toFloat())
@@ -876,6 +892,55 @@ private fun portalSettingEntries(
                 persist { _ ->
                     setScrollSpeedDpPerSecond(scrollSpeed.roundToInt())
                 }
+            },
+            enabled = enabled,
+        )
+    }
+
+    val portalPressSummary = if (portalPressSnapshot.available) {
+        if (portalPressSnapshot.systemSelectedTwoFinger) {
+            "跟随传送门设置：双指长按触发分词与大爆炸；单指长按保持原行为。长按时长由 MMGG 调节。"
+        } else {
+            "跟随传送门设置：单指长按触发；长按时长由 MMGG 调节。"
+        }
+    } else {
+        "无法读取传送门手势模式，使用 MMGG 本地设置。双指长按触发分词与大爆炸；单指长按保持原行为。"
+    }
+    row("drag.twoFingerLongPress", "双指长按触发", SettingModule.PORTAL, "拖拽触摸与滚动",
+        summary = portalPressSummary,
+        keywords = "双指 长按 分词 大爆炸 触发",
+        enabled = !portalPressSnapshot.available,
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = effectiveTwoFingerLongPressEnabled,
+            onCheckedChange = { checked ->
+                persist { _ -> setTwoFingerLongPressEnabled(checked) }
+            },
+            enabled = enabled,
+        )
+    }
+
+    row("drag.twoFingerLongPressTimeout", "双指长按时长", SettingModule.PORTAL, "拖拽触摸与滚动",
+        summary = "双指按住达到此时长后确认",
+        keywords = "双指 长按 时间 毫秒",
+        enabled = effectiveTwoFingerLongPressEnabled,
+        prerequisite = if (effectiveTwoFingerLongPressEnabled) null else "先开启双指长按触发",
+    ) { title, summary, enabled ->
+        SliderPreference(
+            title = title,
+            summary = summary,
+            value = twoFingerLongPressTimeout,
+            valueText = "${twoFingerLongPressTimeout.roundToInt()} ms",
+            valueRange = DragShareSettings.MIN_TWO_FINGER_LONG_PRESS_TIMEOUT_MILLIS.toFloat()
+                ..DragShareSettings.MAX_TWO_FINGER_LONG_PRESS_TIMEOUT_MILLIS.toFloat(),
+            steps = 24,
+            showKeyPoints = true,
+            keyPoints = listOf(250f, 600f, 1200f, 2000f, 3000f),
+            onValueChange = { twoFingerLongPressTimeout = it },
+            onValueChangeFinished = {
+                persist { _ -> setTwoFingerLongPressTimeoutMillis(twoFingerLongPressTimeout.roundToInt()) }
             },
             enabled = enabled,
         )

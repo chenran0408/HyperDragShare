@@ -33,6 +33,8 @@ internal fun saveDragShareSettingsWithNotice(
     val gestureExclusionsChanged = previous.pauseAutomaticInGames != next.pauseAutomaticInGames
             || previous.manualGamePackages != next.manualGamePackages
             || previous.accessibilityBlacklistedPackages != next.accessibilityBlacklistedPackages
+    val rootInputChanged = previous.twoFingerLongPressEnabled != next.twoFingerLongPressEnabled
+            || previous.twoFingerLongPressTimeoutMillis != next.twoFingerLongPressTimeoutMillis
     val portalSessionChanged = previous.contentCaptureMode != next.contentCaptureMode
             || previous.uiStyle != next.uiStyle
             || previous.edgeTriggerDp != next.edgeTriggerDp
@@ -60,6 +62,7 @@ internal fun saveDragShareSettingsWithNotice(
         if (gestureExclusionsChanged) {
             add("已保存：传送门下次读取避让名单；系统界面（SystemUI）在后续手势读取更新后的名单。无需重启。")
         }
+        if (rootInputChanged) add("已保存：根输入（Root）会在下一次按压确认时读取双指长按设置。")
         if (portalSessionChanged) {
             add("已保存：传送门在下一次取词或选图时读取；当前操作不变。无需重启作用域。")
         }

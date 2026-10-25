@@ -16,6 +16,11 @@ final class EvdevTouchParser {
                 int rawWidthMajor);
     }
 
+    interface ContactListener {
+        void onContactFrame(int action, float x, float y, float secondX, float secondY,
+                           int pointerCount);
+    }
+
     static final int EV_SYN = 0;
     static final int EV_KEY = 1;
     static final int EV_ABS = 3;
@@ -37,6 +42,7 @@ final class EvdevTouchParser {
     private static final int UPDATED_WIDTH_MAJOR = 16;
 
     private final Listener listener;
+    private final ContactListener contactListener;
     private final float[] slotX = new float[MAX_SLOTS];
     private final float[] slotY = new float[MAX_SLOTS];
     private final int[] slotTouchMajor = new int[MAX_SLOTS];
@@ -53,7 +59,9 @@ final class EvdevTouchParser {
     private boolean buttonDownEdge;
     private boolean sawTrackingStart;
     private boolean primaryLifted;
+    private boolean secondaryLifted;
     private boolean multiTouchDetected;
+    private boolean thirdContactDetected;
     private boolean frameChanged;
     private boolean ignoreUntilAllPointersUp;
     private float lastX = Float.NaN;
@@ -61,10 +69,22 @@ final class EvdevTouchParser {
     private int lastTouchMajor;
     private int lastTouchMinor;
     private int lastWidthMajor;
+    private int lastContactCount;
+    private volatile boolean twoFingerPressEnabled;
+    private boolean twoFingerStream;
 
     EvdevTouchParser(Listener listener) {
+        this(listener, null);
+    }
+
+    EvdevTouchParser(Listener listener, ContactListener contactListener) {
         this.listener = listener;
+        this.contactListener = contactListener;
         resetSlots();
+    }
+
+    void setTwoFingerPressEnabled(boolean enabled) {
+        twoFingerPressEnabled = enabled;
     }
 
     void consume(int type, int code, int value) {
@@ -84,6 +104,11 @@ final class EvdevTouchParser {
     }
 
     void cancel() {
+        if (contactListener != null && lastContactCount > 0) {
+            contactListener.onContactFrame(MotionEvent.ACTION_CANCEL, lastX, lastY,
+                    Float.NaN, Float.NaN, 0);
+        }
+        lastContactCount = 0;
         if (gestureActive && Float.isFinite(lastX) && Float.isFinite(lastY)) {
             listener.onFrame(
                     MotionEvent.ACTION_CANCEL,
@@ -107,12 +132,15 @@ final class EvdevTouchParser {
             if (value < 0) {
                 if (currentSlot == primarySlot) {
                     primaryLifted = true;
+                } else if (gestureActive && trackingId[currentSlot] >= 0) {
+                    secondaryLifted = true;
                 }
                 trackingId[currentSlot] = -1;
                 updatedAxes[currentSlot] = 0;
             } else {
                 if (gestureActive && currentSlot != primarySlot) {
-                    multiTouchDetected = true;
+                    if (trackedPointerCount() >= 2) thirdContactDetected = true;
+                    else multiTouchDetected = true;
                 }
                 trackingId[currentSlot] = value;
                 // Drivers can report the new contact's axes before its tracking/button edge.
@@ -156,6 +184,8 @@ final class EvdevTouchParser {
             return;
         }
         int trackedCount = trackedPointerCount();
+        int previousContactCount = lastContactCount;
+        emitContactFrame(trackedCount, buttonTouchSeen && !buttonTouchDown);
         if (ignoreUntilAllPointersUp) {
             if (trackedCount == 0 && (!buttonTouchSeen || !buttonTouchDown)) {
                 ignoreUntilAllPointersUp = false;
@@ -173,7 +203,17 @@ final class EvdevTouchParser {
 
         if (!gestureActive) {
             if (trackedCount > 1) {
-                ignoreUntilAllPointersUp = true;
+                if (twoFingerPressEnabled && trackedCount == 2
+                        && trackedPointerCountWithCoordinates() == 2 && candidate >= 0) {
+                    primarySlot = candidate;
+                    gestureActive = true;
+                    twoFingerStream = true;
+                    setLast(candidate);
+                    listener.onFrame(MotionEvent.ACTION_DOWN, lastX, lastY,
+                            lastTouchMajor, lastTouchMinor, lastWidthMajor);
+                } else {
+                    ignoreUntilAllPointersUp = true;
+                }
             } else if (candidate >= 0 && (sawTrackingStart || buttonDownEdge)) {
                 primarySlot = candidate;
                 gestureActive = true;
@@ -190,8 +230,43 @@ final class EvdevTouchParser {
             return;
         }
 
-        if (trackedCount > 1 || multiTouchDetected) {
+        if (buttonTouchSeen && !buttonTouchDown) {
+            emitUp();
+            if (trackedCount > 0) ignoreUntilAllPointersUp = true;
+            finishFrame();
+            return;
+        }
+
+        if (previousContactCount == 2
+                && (trackedCount < 2 && trackedCount > 0 || primaryLifted || secondaryLifted)) {
             emitCancelAndIgnore();
+            finishFrame();
+            return;
+        }
+
+        if (trackedCount > 2 || thirdContactDetected || multiTouchDetected && trackedCount != 2) {
+            emitCancelAndIgnore();
+            finishFrame();
+            return;
+        }
+
+        if (trackedCount == 2) {
+            boolean hasTwoCoordinates = trackedPointerCountWithCoordinates() == 2
+                    && hasCoordinates(primarySlot);
+            if (twoFingerPressEnabled && gestureActive && hasTwoCoordinates) {
+                twoFingerStream = true;
+            }
+            if (twoFingerStream && gestureActive && hasTwoCoordinates) {
+                lastX = slotX[primarySlot];
+                lastY = slotY[primarySlot];
+                lastTouchMajor = slotTouchMajor[primarySlot];
+                lastTouchMinor = slotTouchMinor[primarySlot];
+                lastWidthMajor = slotWidthMajor[primarySlot];
+                listener.onFrame(MotionEvent.ACTION_MOVE, lastX, lastY,
+                        lastTouchMajor, lastTouchMinor, lastWidthMajor);
+            } else {
+                emitCancelAndIgnore();
+            }
             finishFrame();
             return;
         }
@@ -232,6 +307,47 @@ final class EvdevTouchParser {
             }
         }
         finishFrame();
+    }
+
+    private void emitContactFrame(int pointerCount, boolean terminal) {
+        if (contactListener == null) return;
+        if (terminal) {
+            contactListener.onContactFrame(MotionEvent.ACTION_UP, lastX, lastY,
+                    Float.NaN, Float.NaN, 0);
+            lastContactCount = 0;
+            return;
+        }
+        int action;
+        if (pointerCount == 0) {
+            action = lastContactCount > 0 ? MotionEvent.ACTION_UP : MotionEvent.ACTION_MOVE;
+        } else if (lastContactCount == 0) {
+            action = MotionEvent.ACTION_DOWN;
+        } else if (pointerCount > lastContactCount) {
+            action = MotionEvent.ACTION_POINTER_DOWN;
+        } else if (pointerCount < lastContactCount) {
+            action = pointerCount == 0 ? MotionEvent.ACTION_UP : MotionEvent.ACTION_POINTER_UP;
+        } else {
+            action = MotionEvent.ACTION_MOVE;
+        }
+        lastContactCount = pointerCount;
+        if (pointerCount == 0) {
+            contactListener.onContactFrame(action, lastX, lastY, Float.NaN, Float.NaN, 0);
+            return;
+        }
+        int first = primarySlot >= 0 && trackingId[primarySlot] >= 0
+                ? primarySlot : firstTrackedSlotWithCoordinates();
+        int second = -1;
+        for (int index = 0; index < MAX_SLOTS; index++) {
+            if (index != first && trackingId[index] >= 0 && hasCoordinates(index)) {
+                second = index;
+                break;
+            }
+        }
+        float x = first >= 0 ? slotX[first] : Float.NaN;
+        float y = first >= 0 ? slotY[first] : Float.NaN;
+        float secondX = second >= 0 ? slotX[second] : Float.NaN;
+        float secondY = second >= 0 ? slotY[second] : Float.NaN;
+        contactListener.onContactFrame(action, x, y, secondX, secondY, pointerCount);
     }
 
     private void emitUp() {
@@ -285,6 +401,14 @@ final class EvdevTouchParser {
         return count;
     }
 
+    private int trackedPointerCountWithCoordinates() {
+        int count = 0;
+        for (int index = 0; index < MAX_SLOTS; index++) {
+            if (trackingId[index] >= 0 && hasCoordinates(index)) count++;
+        }
+        return count;
+    }
+
     private int firstTrackedSlotWithCoordinates() {
         for (int index = 0; index < MAX_SLOTS; index++) {
             if (trackingId[index] >= 0 && hasCoordinates(index)) {
@@ -312,7 +436,9 @@ final class EvdevTouchParser {
         Arrays.fill(updatedAxes, 0);
         frameChanged = false;
         primaryLifted = false;
+        secondaryLifted = false;
         multiTouchDetected = false;
+        thirdContactDetected = false;
         buttonDownEdge = false;
         if (!gestureActive && !ignoreUntilAllPointersUp) {
             sawTrackingStart = false;
@@ -323,13 +449,17 @@ final class EvdevTouchParser {
         sawTrackingStart = false;
         buttonDownEdge = false;
         primaryLifted = false;
+        secondaryLifted = false;
         multiTouchDetected = false;
+        thirdContactDetected = false;
     }
 
     private void resetGesture() {
         gestureActive = false;
+        twoFingerStream = false;
         primarySlot = -1;
         primaryLifted = false;
+        secondaryLifted = false;
         lastX = Float.NaN;
         lastY = Float.NaN;
         clearTouchSizes();

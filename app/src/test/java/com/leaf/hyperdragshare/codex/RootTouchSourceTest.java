@@ -6,14 +6,25 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import android.view.MotionEvent;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.Config;
 
+@RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE)
 public final class RootTouchSourceTest {
     private static String input(String bus, String name, int event) {
         return "I: Bus=" + bus + "\nN: Name=\"" + name + "\"\nH: Handlers=event" + event
@@ -50,6 +61,41 @@ public final class RootTouchSourceTest {
         String devices = input("0000", "touchscreen", 7) + input("0000", "touchscreen", 8);
         assertEquals("/dev/input/event8", RootTouchSource.findTouchDevicePath(
                 devices, range(7, 0, 0) + range(8, 1199, 2607), 1200, 2608, 0));
+    }
+
+    @Test public void rootParserConfigurationForwardsTwoContactsToMainQueueDecision() {
+        List<Integer> actions = new ArrayList<>();
+        EvdevTouchParser parser = RootTouchSource.createParser(
+                (action, x, y, major, minor, width) -> actions.add(action),
+                (action, x, y, secondX, secondY, count) -> { }, true);
+
+        pointerDown(parser, 0, 42, 10, 20);
+        pointerDown(parser, 1, 43, 30, 40);
+
+        assertEquals(Arrays.asList(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE), actions);
+    }
+
+    @Test public void rejectedSecondFingerDispatchesRootCancelAndMarksTailIgnored() {
+        List<Integer> actions = new ArrayList<>();
+        RootTouchSource source = new RootTouchSource(RuntimeEnvironment.getApplication(),
+                (action, x, y, eventTime, major, minor, width) -> actions.add(action),
+                (ready, reason) -> { });
+        RootTouchSource.Run run = new RootTouchSource.Run();
+        run.pointerDown = true;
+
+        source.rejectTwoFingerCandidate(run, 20f, 30f, 200L, 2, 200f, 300f);
+
+        assertEquals(Arrays.asList(MotionEvent.ACTION_CANCEL), actions);
+        assertFalse(run.pointerDown);
+        assertTrue(run.rejectedTwoFingerCandidate);
+    }
+
+    private static void pointerDown(EvdevTouchParser parser, int slot, int trackingId, int x, int y) {
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_SLOT, slot);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_TRACKING_ID, trackingId);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_POSITION_X, x);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_POSITION_Y, y);
+        parser.consume(EvdevTouchParser.EV_SYN, EvdevTouchParser.SYN_REPORT, 0);
     }
 
     @Test public void equallyMatchingScreensAreNotSelectedByInventoryOrder() {

@@ -103,12 +103,31 @@ public final class DragShareSettingsTest {
         assertEquals(DragShareSettings.LOG_LEVEL_INFO, settings.logLevel);
         assertEquals(DragShareSettings.LOG_DESTINATION_SYSTEM, settings.logDestination);
         assertFalse(settings.pauseAutomaticInGames);
+        assertFalse(settings.twoFingerLongPressEnabled);
+        assertEquals(600, settings.resolveTwoFingerPressConfirmationTimeoutMillis());
         assertEquals(600, settings.resolvePressConfirmationTimeoutMillis());
         assertEquals(1f, settings.accessibilityTouchSlopMultiplier(), 0f);
         assertFalse(settings.isAccessibilityRecognitionEnabledForOrientation(
                 Configuration.ORIENTATION_LANDSCAPE));
         assertTrue(settings.isAccessibilityRecognitionEnabledForOrientation(
                 Configuration.ORIENTATION_PORTRAIT));
+    }
+
+    @Test
+    public void legacyBundlesDefaultTwoFingerLongPressOffAndClampItsDuration() {
+        DragShareSettings legacy = DragShareSettings.fromBundle(new Bundle());
+        assertFalse(legacy.twoFingerLongPressEnabled);
+        assertEquals(600, legacy.twoFingerLongPressTimeoutMillis);
+
+        DragShareSettings below = DragShareSettings.builder()
+                .setTwoFingerLongPressTimeoutMillis(1)
+                .build();
+        DragShareSettings above = DragShareSettings.builder()
+                .setTwoFingerLongPressTimeoutMillis(5000)
+                .build();
+        assertEquals(250, below.twoFingerLongPressTimeoutMillis);
+        assertEquals(3000, above.twoFingerLongPressTimeoutMillis);
+        assertEquals(250, below.resolveTwoFingerPressConfirmationTimeoutMillis());
     }
 
     @Test
@@ -937,6 +956,8 @@ public final class DragShareSettingsTest {
                 .setLogDestination(DragShareSettings.LOG_DESTINATION_FILE)
                 .setPauseAutomaticInGames(true)
                 .setManualGamePackages(new LinkedHashSet<>(Arrays.asList("app.game")))
+                .setTwoFingerLongPressEnabled(true)
+                .setTwoFingerLongPressTimeoutMillis(1375)
                 .build();
     }
 
@@ -977,6 +998,8 @@ public final class DragShareSettingsTest {
         if (!excluded.contains("logDestination")) assertEquals(expected.logDestination, actual.logDestination);
         if (!excluded.contains("pauseAutomaticInGames")) assertEquals(expected.pauseAutomaticInGames, actual.pauseAutomaticInGames);
         if (!excluded.contains("manualGamePackages")) assertEquals(expected.manualGamePackages, actual.manualGamePackages);
+        if (!excluded.contains("twoFingerLongPressEnabled")) assertEquals(expected.twoFingerLongPressEnabled, actual.twoFingerLongPressEnabled);
+        if (!excluded.contains("twoFingerLongPressTimeoutMillis")) assertEquals(expected.twoFingerLongPressTimeoutMillis, actual.twoFingerLongPressTimeoutMillis);
     }
 
     private static void assertUnmodifiableSet(Set<String> values) {
