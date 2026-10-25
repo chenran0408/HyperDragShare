@@ -2,7 +2,6 @@ package com.leaf.hyperdragshare.codex
 
 import android.os.Looper
 import com.leaf.hyperdragshare.codex.touchprobe.TouchProbeExporter
-import com.leaf.hyperdragshare.codex.touchprobe.TouchProfileRegistry
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -42,17 +41,6 @@ class TouchProbeExportLifecycleTest {
         assertFalse(canExportTouchProbeReport(TouchProbeUiState(captureActive = true)))
         assertFalse(canExportTouchProbeReport(TouchProbeUiState(exportInFlight = true)))
         assertTrue(canExportTouchProbeReport(TouchProbeUiState()))
-    }
-
-    @Test
-    fun advancedOptionsRemainAvailableForEveryUnverifiedProfile() {
-        assertTrue(shouldOfferTouchProbeExportOptions(TouchProfileRegistry.MatchKind.NONE))
-        assertTrue(shouldOfferTouchProbeExportOptions(
-            TouchProfileRegistry.MatchKind.CODE_SIGNATURE_CANDIDATE,
-        ))
-        assertFalse(shouldOfferTouchProbeExportOptions(
-            TouchProfileRegistry.MatchKind.EXACT_LIBRARY,
-        ))
     }
 
     @Test

@@ -27,10 +27,6 @@ import java.util.zip.ZipOutputStream;
 /** Creates a compact report or a complete, explicitly user-shared adaptation package. */
 public final class TouchProbeExporter {
     private static final String DIRECTORY = "touch-probe";
-    private static final String PREFS = "touch_probe_exports";
-    private static final String HASH_MAGIC = "hash";
-    private static final String CLASS_MAGIC = "class";
-    private static final String DATA_MAGIC = "data";
     private static final int ELF_CLASS_64 = 2;
     private static final int ELF_DATA_LITTLE_ENDIAN = 1;
     private static final int EM_AARCH64 = 183;
@@ -155,6 +151,9 @@ public final class TouchProbeExporter {
         try {
             TouchDeviceMapParser.DeviceMap refreshed = discovery.discover();
             copyMap = refreshed;
+            if (refreshed == null) {
+                throw new IOException("未发现当前触控算法库映射");
+            }
             if (identityMap == null
                     || (refreshed.pid == identityMap.pid
                     && refreshed.libraryHash.equalsIgnoreCase(identityMap.libraryHash))) {
@@ -164,9 +163,9 @@ public final class TouchProbeExporter {
                         + "算法库包使用当前映射。";
             }
         } catch (Exception error) {
-            refreshWarning = "导出时重新读取映射失败，沿用最近一次连接信息："
+            refreshWarning = "导出时重新读取映射失败，仅沿用最近一次连接身份生成报告："
                     + safe(error.getMessage());
-            copyMap = identityMap;
+            copyMap = null;
         }
 
         TouchProfileRegistry.Selection selection = identityMap == null
@@ -182,12 +181,14 @@ public final class TouchProbeExporter {
             reportConnection = new TouchReportReader.ConnectionInfo(
                     identityMap, selection, null, expected);
         }
-        boolean known = selection.isExactLibrary();
-        boolean attach = identityMap != null
-                && shouldAttachLibrary(context, identityMap, effective);
-        if (identityMap == null
-                && (effective.alwaysAttachLibrary || effective.recaptureLibrary)) {
+        boolean known = copyMap != null
+                && TouchProfileRegistry.resolve(copyMap).isExactLibrary();
+        boolean attach = copyMap != null
+                && shouldAttachLibrary(context, copyMap, effective);
+        if (copyMap == null) {
             refreshWarning += " 当前无法读取算法库映射，因此先生成文字报告。";
+        } else if (safe(copyMap.libraryHash).isBlank()) {
+            refreshWarning += " 当前映射缺少算法库 SHA-256，无法判断是否需要附带算法库。";
         }
 
         String report = TouchProbeReport.build(
@@ -195,7 +196,6 @@ public final class TouchProbeExporter {
         report += exportSummary(
                 known,
                 attach,
-                effective,
                 refreshWarning,
                 identityMap,
                 copyMap);
@@ -237,14 +237,6 @@ public final class TouchProbeExporter {
             }
         }
 
-        if (identityMap != null && !identityMap.libraryHash.isBlank()) {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .edit()
-                    .putBoolean(
-                            HASH_MAGIC + identityMap.libraryHash.toLowerCase(Locale.ROOT),
-                            true)
-                    .apply();
-        }
         return new Result(
                 output,
                 attach ? PackageKind.ADAPTER_ZIP : PackageKind.TEXT_REPORT,
@@ -343,14 +335,8 @@ public final class TouchProbeExporter {
             Context context,
             TouchDeviceMapParser.DeviceMap map,
             Options options) {
-        Options effective = options == null ? Options.smartDefault() : options;
-        if (effective.textOnly) return false;
-        if (effective.alwaysAttachLibrary || effective.recaptureLibrary) return true;
-        if (TouchProfileRegistry.resolve(map).isExactLibrary()) return false;
-        String key = HASH_MAGIC + safe(map.libraryHash).toLowerCase(Locale.ROOT);
-        return map.libraryHash.isBlank()
-                || !context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getBoolean(key, false);
+        if (map == null || safe(map.libraryHash).isBlank()) return false;
+        return !TouchProfileRegistry.resolve(map).isExactLibrary();
     }
 
     static String copyValidationFailure(
@@ -579,7 +565,6 @@ public final class TouchProbeExporter {
     private static String exportSummary(
             boolean known,
             boolean attach,
-            Options options,
             String warning,
             TouchDeviceMapParser.DeviceMap identity,
             TouchDeviceMapParser.DeviceMap copyMap) {
@@ -587,9 +572,7 @@ public final class TouchProbeExporter {
         out.append("\n=== 导出 ===\n");
         out.append("package_kind=").append(attach ? "adapter_zip" : "text_report").append('\n');
         out.append("known_library_sha256=").append(known).append('\n');
-        out.append("always_attach_library=").append(options.alwaysAttachLibrary).append('\n');
-        out.append("text_only=").append(options.textOnly).append('\n');
-        out.append("recapture_library=").append(options.recaptureLibrary).append('\n');
+        out.append("library_policy=attach_when_hash_differs_from_known_library\n");
         out.append("export_identity_pid=")
                 .append(identity == null ? "unavailable" : identity.pid).append('\n');
         out.append("export_copy_pid=")

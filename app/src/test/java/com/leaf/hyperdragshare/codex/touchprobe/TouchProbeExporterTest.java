@@ -50,20 +50,20 @@ public class TouchProbeExporterTest {
     }
 
     @Test
-    public void knownLibraryExportsCompactReportUnlessLibraryIsForced() {
+    public void matchingKnownLibraryNeverAttachesEvenWhenLegacyOptionsRequestIt() {
         Context context = RuntimeEnvironment.getApplication();
         TouchDeviceMapParser.DeviceMap map = map(TouchProfileRegistry.REFERENCE_LIBRARY_SHA256);
 
         assertFalse(TouchProbeExporter.shouldAttachLibrary(
                 context, map, TouchProbeExporter.Options.smartDefault()));
-        assertTrue(TouchProbeExporter.shouldAttachLibrary(
+        assertFalse(TouchProbeExporter.shouldAttachLibrary(
                 context, map, new TouchProbeExporter.Options(true, false, false)));
         assertFalse(TouchProbeExporter.shouldAttachLibrary(
                 context, map, new TouchProbeExporter.Options(true, true, true)));
     }
 
     @Test
-    public void unknownLibraryAttachesOnceThenDefaultsToCompactReport() {
+    public void mismatchingLibraryIsAttachedOnEveryAutomaticExport() {
         Context context = RuntimeEnvironment.getApplication();
         String hash =
                 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -75,10 +75,10 @@ public class TouchProbeExporterTest {
                 .edit()
                 .putBoolean("hash" + hash, true)
                 .commit();
-        assertFalse(TouchProbeExporter.shouldAttachLibrary(
-                context, map, TouchProbeExporter.Options.smartDefault()));
         assertTrue(TouchProbeExporter.shouldAttachLibrary(
-                context, map, new TouchProbeExporter.Options(false, false, true)));
+                context, map, TouchProbeExporter.Options.smartDefault()));
+        assertFalse(TouchProbeExporter.shouldAttachLibrary(
+                context, map(""), TouchProbeExporter.Options.smartDefault()));
     }
 
     @Test
@@ -130,6 +130,32 @@ public class TouchProbeExporterTest {
             assertTrue(report.contains("mapping unavailable"));
             assertTrue(report.contains("profile_match_exact=false"));
         }
+    }
+
+    @Test
+    public void failedFreshDiscoveryDoesNotCopyStaleConnectedLibrary() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        TouchDeviceMapParser.DeviceMap map = map("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        TouchReportReader.ConnectionInfo connection = new TouchReportReader.ConnectionInfo(
+                map,
+                TouchProfileRegistry.resolve(map),
+                null,
+                "unavailable");
+
+        TouchProbeExporter.Result result = TouchProbeExporter.export(
+                context,
+                connection,
+                new TouchProbeCollector().snapshot(),
+                "触控数据流已中断，采样已停止：读取失败",
+                TouchProbeExporter.Options.smartDefault(),
+                () -> { throw new java.io.IOException("discovery interrupted"); });
+
+        assertEquals(TouchProbeExporter.PackageKind.TEXT_REPORT, result.kind);
+        assertFalse(result.libraryAttached);
+        String report = Files.readString(result.file.toPath(), StandardCharsets.UTF_8);
+        assertTrue(report.contains("触控数据流已中断，采样已停止：读取失败"));
+        assertTrue(report.contains("discovery interrupted"));
+        assertTrue(report.contains("先生成文字报告"));
     }
 
     @Test

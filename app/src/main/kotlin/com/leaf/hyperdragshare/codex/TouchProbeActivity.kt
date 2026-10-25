@@ -58,7 +58,6 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -86,10 +85,6 @@ internal data class TouchProbeUiState(
 
 internal fun canExportTouchProbeReport(state: TouchProbeUiState): Boolean =
     !state.captureActive && !state.exportInFlight
-
-internal fun shouldOfferTouchProbeExportOptions(
-    matchKind: TouchProfileRegistry.MatchKind,
-): Boolean = matchKind != TouchProfileRegistry.MatchKind.EXACT_LIBRARY
 
 internal fun interface TouchProbeReportRunner {
     fun export(
@@ -573,10 +568,6 @@ private fun TouchProbeScreen(
 ) {
     var group by rememberSaveable { mutableStateOf(TouchProbeCollector.Group.FINGERTIP) }
     var showClearConfirm by rememberSaveable { mutableStateOf(false) }
-    var showExportOptions by rememberSaveable { mutableStateOf(false) }
-    var alwaysAttachLibrary by rememberSaveable { mutableStateOf(false) }
-    var textOnlyReport by rememberSaveable { mutableStateOf(false) }
-    var recaptureLibrary by rememberSaveable { mutableStateOf(false) }
     val compatibility = TouchCompatibilityValidator.evaluate(
         state.connection,
         state.snapshot,
@@ -626,14 +617,7 @@ private fun TouchProbeScreen(
                     colors = ButtonDefaults.textButtonColorsPrimary(),
                     onClick = { onExport(TouchProbeExporter.Options.smartDefault()) },
                 )
-                if (shouldOfferTouchProbeExportOptions(compatibility.matchKind)) {
-                    BasicComponent(
-                        title = "适配排查选项",
-                        summary = "按需附带或重新采集算法库；报告仍会保留失败信息",
-                        enabled = canExportTouchProbeReport(state),
-                        onClick = { showExportOptions = true },
-                    )
-                }
+
             }
         },
     ) { padding ->
@@ -1054,69 +1038,6 @@ private fun TouchProbeScreen(
         }
     }
 
-    if (showExportOptions) {
-        TouchProbeDialog(
-            title = "适配排查选项",
-            summary = "默认会自动选择精简报告或完整适配包。导出后先选择保存位置，再决定是否分享。",
-            onDismissRequest = { showExportOptions = false },
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                ExportOptionRow(
-                    title = "始终附带算法库",
-                    summary = "生成完整适配包，便于复现未识别布局。",
-                    checked = alwaysAttachLibrary,
-                    onCheckedChange = {
-                        alwaysAttachLibrary = it
-                        if (it) textOnlyReport = false
-                    },
-                )
-                ExportOptionRow(
-                    title = "仅导出文字报告",
-                    summary = "不附带当前触控服务的算法库文件。",
-                    checked = textOnlyReport,
-                    onCheckedChange = {
-                        textOnlyReport = it
-                        if (it) {
-                            alwaysAttachLibrary = false
-                            recaptureLibrary = false
-                        }
-                    },
-                )
-                ExportOptionRow(
-                    title = "重新采集算法库",
-                    summary = "按当前触控服务映射重新读取并校验，同时附带算法库。",
-                    checked = recaptureLibrary,
-                    onCheckedChange = {
-                        recaptureLibrary = it
-                        if (it) textOnlyReport = false
-                    },
-                )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(
-                        text = "取消",
-                        modifier = Modifier.weight(1f),
-                        onClick = { showExportOptions = false },
-                    )
-                    TextButton(
-                        text = "按选项导出",
-                        enabled = !state.exportInFlight,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary(),
-                        onClick = {
-                            showExportOptions = false
-                            onExport(
-                                TouchProbeExporter.Options(
-                                    alwaysAttachLibrary,
-                                    textOnlyReport,
-                                    recaptureLibrary,
-                                ),
-                            )
-                        },
-                    )
-                }
-            }
-        }
-    }
 
 }
 
@@ -1203,35 +1124,6 @@ private fun TestInstructionStep(number: String, title: String, body: String) {
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
-    }
-}
-
-@Composable
-private fun ExportOptionRow(
-    title: String,
-    summary: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = summary,
-                fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
