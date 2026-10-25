@@ -6,12 +6,12 @@
 
 |职责|目录|分支/基线|
 |---|---|---|
-|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；当前HEAD`4a8ec68`；Beta28打包源码`827bf2a`|
+|Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；当前HEAD`886c284`；Phase1A实现`4a8ec68`；Beta28打包源码`827bf2a`|
 |正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@e25c66725cda51f23bdb8d95de036f7811eba017`；1.7.218/242，未改|
 
 开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
 
-## Phase 1A delayed callback owner 修复（源码 HEAD 4a8ec68，尚未增版打包）
+## Phase 1A delayed callback owner 修复（实现提交 4a8ec68，文档提交 886c284，尚未增版打包）
 
 - **现象与代码证据**：旧 `onHostTaskCancelled` 在32ms回调执行时读取当前`active`，并在inactive分支停止当前 blocker、清理当前窗口；现有测试曾直接证明它可能取消回调排队期间新建的Session。`finishFromControlEvent` 同样在主队列执行时才读取当前active/session。
 - **修改**：Controller主队列接受新的Root `ACTION_DOWN`时递增本地 generation。32ms回调捕获generation与Session身份；失主则直接返回，已结束但仍被引用的旧Session不再重复清理当前资源。257回调只接受到达时捕获的非空Session且执行时仍为同一Session。Root UP/CANCEL队列语义未过滤。`BackgroundTouchBlocker`生产代码和fallback顺序未改。
