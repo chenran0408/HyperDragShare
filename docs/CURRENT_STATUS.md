@@ -39,6 +39,7 @@
 
 - 在Integration设置中增加默认关闭的“全局兼容澎湃 AI 引擎签名校验”。开启后仅扩展上述 AICR Core 签名比较Hook到普通应用 UID；只在 AICR Core `onTransact`、Binder调用UID与待比较应用UID一致、另一端为system UID、且调用UID对应已解析包名时生效。未读到设置、Provider异常或证据不完整时都保留系统原结果。开关通过原有AICR专用 `get_aicr_settings` RPC读取，不新增公开入口。
 - 这不是对澎湃 AI 引擎全部白名单或权限的绕过：插件包策略、版本、能力、引擎就绪状态及其他服务检查继续运行；无法保证所有Rom/应用/接口都能调用成功。启用后应用提交给AICR的内容仍由AICR处理。
+- Hook 安装边界、当前残余混淆依赖、DEX 与 JADX 类名核对方法及升级验证步骤见[系统接口复用手册的 Hook 章节](SYSTEM_TEXT_AND_BARCODE.md#hook-aicr边界选择与抗混淆维护)。
 - 本轮仅完成源码和Debug验证，没有修改版本号或生成Beta候选。全量789项单测零失败/错误；Lint 0错误、181警告、2提示；`assembleDebug`成功。定向AICR Hook与Provider设置测试强制重新编译后通过。源码改动以`0ed47a5`和后续静态引用收敛提交保存；未进行设备验证、Beta/R8、安装或发布。
 
 ## Beta26诊断批次（历史；由Beta28设备复测更新）

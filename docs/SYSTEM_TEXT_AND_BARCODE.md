@@ -50,6 +50,58 @@ flowchart LR
 - 静态 AICR 接口资料记录 Core 还有 `isSupport(desc)` 事务 3；当前这三个生产客户端不把它当作 OCR/NER/Barcode 的前置判据。诊断包中有 AICR 版本，不能据此声称某能力可用；真正能力仍以对应插件调用结果为准。
 - 不同插件的状态文案与状态映射可能不同。不要把 OCR Status 7 直接复用为条码或 NER 的产品结论，也不要从用户看到的一句话反推 AICR 实际返回了哪一个 Status。
 
+## Hook AICR：边界选择与抗混淆维护
+
+本节说明 MMGG 当前如何在 AICR 进程里安装有限范围的 Xposed Hook，以及 AICR 内部符号变化时如何维护。目标是让一处已确认的 Core 调用兼容检查可以被诊断和局部适配；它不能阻止小米对 AICR 混淆，也不能保证未来所有版本都不需要更新。
+
+### 当前 Hook 的安装与命中路径
+
+入口位于[`MainHook.java`](../app/src/main/java/com/leaf/hyperdragshare/codex/MainHook.java)：只在 `com.xiaomi.aicr` 包加载时调用 `AicrCoreAccessHooks.install()`。因此这段 Hook 不会在普通 App 或全系统进程普遍改写 `PackageManager` 行为。当前 Hook 目标是 Android framework 的 `ApplicationPackageManager.checkSignatures(int,int)`，而不是 AICR 的混淆私有方法。
+
+安装后先 Hook `Application.attach(Context)`，保存 AICR 进程自己的 `ContentResolver`，用于读取模块设置；若安装失败或还没有 resolver，全球兼容分支按关闭处理。随后 Hook framework 的两个 `int` 参数重载。Hook 只在以下证据全部吻合时考虑返回兼容结果：
+
+1. `Binder.getCallingUid()` 是普通应用 UID 范围，且 `PackageManager.getPackagesForUid(uid)` 返回了包名；查询失败、空列表或系统/隔离 UID 不进入兼容分支。
+2. `checkSignatures` 的第一个参数等于 Binder 调用 UID，第二个参数等于 Android `SYSTEM_UID`。
+3. 当前调用栈包含 AICR Core Binder `AiCrCoreService$…onTransact`。
+4. 如果调用 UID 所属包包含 MMGG，则沿用既有 MMGG 专用兼容；否则必须从已有受限 `get_aicr_settings` RPC 读到用户已开启全局开关。
+
+任一条件不满足时不调用 `setResult`，让 Android 执行原签名比较。设置读取异常、Provider 不可用、AICR Context 未就绪、返回 Bundle 缺失或开关键缺失都等同关闭；不会因为诊断或设置读取失败而扩大授权。全局设置只让这个精确比较返回 `SIGNATURE_MATCH`，不是对 AICR 所有白名单、插件授权或系统接口的总开关。
+
+```text
+MainHook(AICR package)
+  └─ AicrCoreAccessHooks.install()
+       ├─ Application.attach → retain this process ContentResolver
+       └─ ApplicationPackageManager.checkSignatures(int, int)
+            ├─ check Binder UID + installed package evidence
+            ├─ check requestedUid == Binder UID
+            ├─ check comparedUid == SYSTEM_UID
+            ├─ check AICR Core onTransact stack
+            └─ MMGG caller OR protected setting enabled → return SIGNATURE_MATCH
+               otherwise → keep platform result
+```
+
+核心实现：[`AicrCoreAccessHooks.java`](../app/src/main/java/com/leaf/hyperdragshare/codex/AicrCoreAccessHooks.java)、设置持久化：[`IntegrationSettings.java`](../app/src/main/java/com/leaf/hyperdragshare/codex/IntegrationSettings.java)、受限 Provider：[`ShareImageProvider.java`](../app/src/main/java/com/leaf/hyperdragshare/codex/ShareImageProvider.java)。不要把该开关复制进公开配置 Bundle，也不要为它新增无调用者校验的 Provider 方法。
+
+### 混淆能做什么，不能做什么
+
+- **不能阻止供应方混淆。** AICR 是独立系统 APK；MMGG 无法控制它的 R8/ProGuard 配置、类名、方法名、字段名、内部 Binder 类或后续代码重排。所谓“防混淆”在这里指降低 Hook 对这些实现细节的依赖，并让变化后明确退回原行为。
+- **优先选择稳定边界。** 如果目标逻辑最终调用 Android framework API，优先 Hook framework 边界，再用调用进程、Binder UID、参数、包名与调用栈收窄范围。不要只凭“某个类名存在”或某个进程启动，就假定是目标功能。
+- **仍需承认当前残余依赖。** 当前代码避开了 Beta27 中误用的 AICR 私有 helper 名，但用 `AiCrCoreService$` 类名前缀识别 Core `onTransact`。若未来 AICR 改包名或混淆 Core 服务类，这个谓词会不命中并安全地保留系统结果；它不是完全免维护的动态 Hook。
+- **先用 DEX 描述符确认名字。** JADX 为便于阅读生成的包名不一定等于 DEX 中的真实类名。例如历史调查中，显示为 `defpackage.u8` 的类在 DEX 里是根包描述符 `Lu8;`。Xposed 的 `ClassLoader` 查找应使用运行时二进制名和目标 APK 的 ClassLoader，不要直接复制 JADX 左侧展示路径。先检查 DEX descriptor、运行时 `Class.forName(name, false, aicrLoader)` 与方法参数/返回类型，再决定精确 Hook 点。
+- **动态发现不能靠宽泛猜测。** 可以在已确认的 AICR ClassLoader 内枚举候选类，再按 Binder descriptor、接口方法签名、`onTransact` 参数及调用行为做验证；必须要求唯一候选并保留否定路径。不要“Hook 第一个名字像 OCR 的类”、遍历整个系统安装包或因找不到类就放宽到所有调用者。R8 也可能改变代码结构或内联逻辑，所以即便名称被动态找到，仍要验证实际行为。
+- **需要混合策略时分层。** 方法存在性/参数签名作为 Hook 安装能力探测；框架参数和 Binder caller 作为授权谓词；Core descriptor、事务号、插件 descriptor、Status 与版本作为协议核验。任一层缺失时记录受控的阶段和错误类别，保留原逻辑。不要用反射成功代替服务能力成功。
+
+### 版本变化时的维护步骤
+
+1. **固定样本与版本。** 记录 ROM build、AICR `versionName/versionCode`、APK SHA-256、目标进程包名与模块版本；不把“版本号相同”当作实现相同。
+2. **先比接口边界。** 对照 Core service component/action、Binder descriptor、事务号、参数顺序、响应 Bundle、插件 descriptor/minVersion。使用可读伪代码和 DEX descriptor 对照，不直接把反编译 Java 类当 SDK。
+3. **核对 Hook 入口。** 确认 framework 方法在当前 Android 版本仍存在且签名匹配；确认 Hook 在正确的 AICR ClassLoader/进程安装。再核验 Core Binder 栈谓词。Hook 没安装、没命中和命中后 AICR 拒绝是不同故障阶段。
+4. **按最小矩阵验证。** 至少测：开关关闭时 MMGG 既有路径；开关开启时普通 App UID 的精确 Core 比较；其他 PackageManager 签名查询不变；系统/隔离 UID 不被放行；AICR Status、接口版本、能力、图片传入和结果读取仍能分别失败并显示正确原因。
+5. **让 Hook 失败时可见但安全。** 只记录 Hook 安装/命中/未命中、受控 UID 类别、AICR 阶段和异常类型；不记用户正文、图片、敏感 URI、令牌或任意异常消息。若谓词或设置无法核实，继续原生路径，不做宽泛回退。
+6. **独立记录兼容结论。** 写明具体 APK/ROM 和测试层级。静态 descriptor 一致、单测通过、模拟环境通过、真实设备观察是不同证据；不能从某一版本的一次成功推广到任意未来版本。
+
+当前 Hook 的边界测试位于[`AicrCoreAccessHooksTest.java`](../app/src/test/java/com/leaf/hyperdragshare/codex/AicrCoreAccessHooksTest.java)，设置 Provider 测试位于[`ShareImageProviderTest.java`](../app/src/test/java/com/leaf/hyperdragshare/codex/ShareImageProviderTest.java)。若以后把类名前缀谓词改成动态 Core 识别，应先新增能证明“唯一识别正确 Core 且错误候选不触发”的行为测试，不要仅删除类名后让全局签名比较都命中。
+
 ## 图片文字识别：AICR Vision V2
 
 实现：[`AicrOcrClient.java`](../app/src/main/java/com/leaf/hyperdragshare/codex/AicrOcrClient.java)、[`AicrV2ResultReader.java`](../app/src/main/java/com/leaf/hyperdragshare/codex/AicrV2ResultReader.java)、[`AicrOcrResult.java`](../app/src/main/java/com/leaf/hyperdragshare/codex/AicrOcrResult.java)。产品调用边界见[图片与屏幕识字](IMAGE_OCR.md)与[OCR 连接诊断](OCR_CONNECTION_DIAGNOSTICS.md)。
