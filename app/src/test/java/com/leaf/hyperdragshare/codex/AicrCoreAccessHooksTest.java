@@ -16,6 +16,18 @@ public final class AicrCoreAccessHooksTest {
                 new String[] {"com.example.other"}, coreStack()));
     }
 
+    @Test public void globalSettingAllowsOtherApplicationOnlyAtAicrCoreSignatureGate() {
+        String[] caller = {"com.example.other"};
+        assertFalse(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(
+                10280, 1000, 10280, caller, coreStack()));
+        assertTrue(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(
+                10280, 1000, 10280, caller, coreStack(), true));
+        assertFalse(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(
+                10280, 1000, 10280, caller, new StackTraceElement[] {
+                        new StackTraceElement("android.app.SomeOtherCaller", "onTransact", null, 1)
+                }, true));
+    }
+
     @Test public void acceptsCoreBinderInnerClassWithoutVersionSpecificNumber() {
         // AICR's anonymous Binder class number can differ between builds.
         assertTrue(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(10279, 1000, 10279,
@@ -48,6 +60,15 @@ public final class AicrCoreAccessHooksTest {
                 null, coreStack()));
         assertFalse(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(10279, 1000, 10279,
                 new String[] {"com.leaf.hyperdragshare.codex"}, null));
+    }
+
+    @Test public void globalSettingStillRequiresARealApplicationUidAndPackage() {
+        assertFalse(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(
+                9999, 1000, 9999, new String[] {"com.example.other"}, coreStack(), true));
+        assertFalse(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(
+                10280, 1000, 10280, new String[0], coreStack(), true));
+        assertFalse(AicrCoreAccessHooks.shouldAllowSystemSignatureMatch(
+                10280, 1001, 10280, new String[] {"com.example.other"}, coreStack(), true));
     }
 
     private static StackTraceElement[] coreStack() {

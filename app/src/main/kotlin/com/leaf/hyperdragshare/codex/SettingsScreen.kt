@@ -318,6 +318,9 @@ private fun portalSettingEntries(
     var trustServiceRiskDisabled by remember(context) {
         mutableStateOf(IntegrationSettings.isTrustServiceRiskDetectionDisabled(context))
     }
+    var aicrGlobalSignatureAccessEnabled by remember(context) {
+        mutableStateOf(IntegrationSettings.isAicrGlobalSignatureAccessEnabled(context))
+    }
     var selectionHapticEnabled by remember(context) {
         mutableStateOf(BigBangSettings.isSelectionHapticEnabled(context))
     }
@@ -451,6 +454,26 @@ private fun portalSettingEntries(
                         Toast.LENGTH_LONG,
                     ).show()
                 }
+            },
+            enabled = enabled,
+        )
+    }
+    row(
+        "aicr.globalSignatureAccess",
+        "全局兼容澎湃 AI 引擎签名校验",
+        SettingModule.GENERAL,
+        "运行与权限",
+        summary = "开启后，普通应用可通过 AICR Core 的指定系统签名比较；插件版本、能力和其他权限检查仍有效。调用方提交的文字或图片会交给 AICR 处理。默认关闭。",
+        keywords = "AICR 小米 澎湃AI 白名单 签名 全局 所有应用 OCR 条码权限",
+    ) { title, summary, enabled ->
+        SwitchPreference(
+            title = title,
+            summary = summary,
+            checked = aicrGlobalSignatureAccessEnabled,
+            onCheckedChange = { allow ->
+                IntegrationSettings.setAicrGlobalSignatureAccessEnabled(context, allow)
+                aicrGlobalSignatureAccessEnabled = allow
+                Toast.makeText(context, "已保存；从下一次 AICR Core 请求起生效", Toast.LENGTH_SHORT).show()
             },
             enabled = enabled,
         )

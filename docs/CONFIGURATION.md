@@ -26,6 +26,7 @@ flowchart TD
 - `SettingsScreen.kt`：根回调在每次事件执行时读取最新 Compose 状态，调用更新入口，保存/提示后立即同步状态。子页面传字段操作，不再用捕获的页面快照构造整份配置。
 - `ShareTargetSettingsPages.kt`、`ApplicationSettingsPages.kt`：集合增删从 mutation 的 `current` 读取；排序只提交当前编辑结果。显隐、排序、黑名单、游戏名单不会整包覆盖其他设置。
 - `ConfigStore`、`ConfigContract`、`GestureConfig` 是独立手势配置体系；只保留现有通知和避让名单交集。Integration/BigBang/LauncherIcon 的独立配置也不并入本模型。
+- AICR 全局签名兼容是独立 Integration 设置：`IntegrationSettings` 存于 `drag_share_integrations`，`aicr_global_signature_access_enabled` 缺失时为 false。AICR 进程只通过现有、限定 AICR/模块调用方的 `get_aicr_settings` Provider RPC读取；不要把开关放入公开 `get_settings` Bundle，也不要拓宽 Provider 调用者。当前 Hook 对每个匹配的非 MMGG Core 签名比较读取该值，读取失败 fail-closed。
 
 ## 修改现有设置
 

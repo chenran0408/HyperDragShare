@@ -12,17 +12,22 @@ public final class IntegrationSettings {
     public static final String METHOD_OPEN_AICR_TEXT = "open_aicr_text";
     public static final String METHOD_GET_TRUST_SERVICE_SETTINGS = "get_trust_service_settings";
     public static final String EXTRA_COPY_DIRECT_ENABLED = "copy_direct_enabled";
+    public static final String EXTRA_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED =
+            "aicr_global_signature_access_enabled";
     public static final String EXTRA_TRUST_SERVICE_RISK_DISABLED =
             "trust_service_risk_disabled";
     public static final String EXTRA_TEXT = "text";
 
     private static final String PREFS_NAME = "drag_share_integrations";
     private static final String KEY_COPY_DIRECT_ENABLED = "copy_direct_enabled";
+    private static final String KEY_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED =
+            "aicr_global_signature_access_enabled";
     private static final String KEY_BACK_TAP_MODE = "back_tap_mode";
     private static final String KEY_TRUST_SERVICE_RISK_DISABLED =
             "trust_service_risk_disabled";
     private static final String BACK_TAP_GLOBAL_KEY = "dragshare_back_tap_mode";
     private static final boolean DEFAULT_COPY_DIRECT_ENABLED = false;
+    private static final boolean DEFAULT_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED = false;
 
     private IntegrationSettings() {}
 
@@ -34,6 +39,22 @@ public final class IntegrationSettings {
 
     public static void setCopyDirectEnabled(Context context, boolean enabled) {
         preferences(context).edit().putBoolean(KEY_COPY_DIRECT_ENABLED, enabled).apply();
+    }
+
+    /**
+     * Allows ordinary app UIDs to pass only the AICR Core system-signature comparison.
+     * Other AICR permission, plugin, version and capability checks remain in force.
+     */
+    public static boolean isAicrGlobalSignatureAccessEnabled(Context context) {
+        return preferences(context).getBoolean(
+                KEY_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED,
+                DEFAULT_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED);
+    }
+
+    public static void setAicrGlobalSignatureAccessEnabled(Context context, boolean enabled) {
+        preferences(context).edit()
+                .putBoolean(KEY_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED, enabled)
+                .apply();
     }
 
     public static boolean isTrustServiceRiskDetectionDisabled(Context context) {

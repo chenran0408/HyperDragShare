@@ -31,9 +31,15 @@
 
 - 静态比较设备活动更新版4.13.2与系统内置4.12.18：Core AIDL描述符/事务保持一致；4.13.2在Core `onTransact`前做调用方签名校验，4.12.18 Core Stub没有这道门。
 - Beta27设备复测发现错误Hook使用了JADX显示的`defpackage.u8`，但设备DEX类描述符实际为根类`Lu8;`，因此Hook没有安装，AICR仍拒绝。该失败已明确记录，Beta27不作为可用修复交付。
-- Beta28改为Hook Android `ApplicationPackageManager.checkSignatures(int,int)`；仅当Binder真实调用UID所属包包含MMGG、比较参数是该UID与system UID、调用栈属于AICR Core Binder `onTransact`时返回签名匹配。无需解析AICR混淆helper类名；其余签名比较保持原样。AICR不存在/不支持目标方法时fail-closed，保留原逻辑。
-- 设备复测观察到Hook在AICR Core进程加载并命中；Core接口匹配、引擎就绪、Vision V2匹配、图片接受、检测完成、结果读取及释放均成功；用户确认页面已显示识别结果。4.13.2当前设备链路验证通过。4.12.18旧版没有该Core授权门，静态证据预期兼容但未在设备上降级安装验证。任意未来AICR内部调用方式变化不保证兼容；若不再用系统签名比较，Hook会不命中并保留原拒绝行为。
+- Beta28改为Hook Android `ApplicationPackageManager.checkSignatures(int,int)`；默认仅当Binder真实调用UID所属包包含MMGG、比较参数是该UID与system UID、调用栈属于AICR Core Binder `onTransact`时返回签名匹配。新增默认关闭的“全局兼容澎湃 AI 引擎签名校验”设置；开启时只放宽该AICR Core应用UID/system UID比较，仍校验普通应用UID、已解析调用包和Core Binder栈。设置通过AICR专用受限Provider RPC按请求读取；读取失败保持系统原结果。不会绕过AICR插件Status、版本、能力或其他权限检查。AICR不存在/不支持目标方法时fail-closed，保留原逻辑。
+- 设备复测观察到Hook在AICR Core进程加载并命中；Core接口匹配、引擎就绪、Vision V2匹配、图片接受、检测完成、结果读取及释放均成功；用户确认页面已显示识别结果。4.13.2当前设备链路验证通过。4.12.18旧版没有该Core授权门，静态证据预期兼容但未在设备上降级安装验证。任意未来AICR内部调用方式变化不保证兼容；若不再用系统签名比较，Hook会不命中并保留原拒绝行为。全局开关只改变该已确认比较，不能保证越过其他AICR包/插件策略，也不代表AICR承诺支持所有调用方。
 - 本轮全量758项测试0失败/错误/跳过，Lint 0错误/181警告/2提示，Debug与Beta/R8通过。Beta28 v2签名与Beta26相同；APK SHA-256见页首。源码提交`cdbaa4f`先加入版本无关Hook草案，Beta27实测发现并定位类名问题；`827bf2a`改为框架签名比较边界并增版Beta28。Beta27安装包失败草案留在任务目录，不作为候选。
+
+## AICR 全局签名兼容开关（源码已完成，未增版）
+
+- 在Integration设置中增加默认关闭的“全局兼容澎湃 AI 引擎签名校验”。开启后仅扩展上述 AICR Core 签名比较Hook到普通应用 UID；只在 AICR Core `onTransact`、Binder调用UID与待比较应用UID一致、另一端为system UID、且调用UID对应已解析包名时生效。未读到设置、Provider异常或证据不完整时都保留系统原结果。开关通过原有AICR专用 `get_aicr_settings` RPC读取，不新增公开入口。
+- 这不是对澎湃 AI 引擎全部白名单或权限的绕过：插件包策略、版本、能力、引擎就绪状态及其他服务检查继续运行；无法保证所有Rom/应用/接口都能调用成功。启用后应用提交给AICR的内容仍由AICR处理。
+- 本轮仅完成源码和Debug验证，没有修改版本号或生成Beta候选。全量789项单测零失败/错误；Lint 0错误、182警告、2提示；`assembleDebug`成功。定向AICR Hook与Provider设置测试强制重新编译后通过。当前改动待独立提交；未进行设备验证、Beta/R8、安装或发布。
 
 ## Beta26诊断批次（历史；由Beta28设备复测更新）
 

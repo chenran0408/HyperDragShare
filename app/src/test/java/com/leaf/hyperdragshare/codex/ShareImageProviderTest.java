@@ -124,6 +124,27 @@ public final class ShareImageProviderTest {
         }
     }
 
+    @Test public void aicrSettingsProviderReturnsDefaultOffAndCurrentGlobalToggle() {
+        Context context = RuntimeEnvironment.getApplication();
+        boolean previous = IntegrationSettings.isAicrGlobalSignatureAccessEnabled(context);
+        try {
+            IntegrationSettings.setAicrGlobalSignatureAccessEnabled(context, false);
+            Bundle disabled = newProvider(context).call(
+                    IntegrationSettings.METHOD_GET_AICR_SETTINGS, null, null);
+            assertNotNull(disabled);
+            assertFalse(disabled.getBoolean(
+                    IntegrationSettings.EXTRA_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED, true));
+
+            IntegrationSettings.setAicrGlobalSignatureAccessEnabled(context, true);
+            Bundle enabled = newProvider(context).call(
+                    IntegrationSettings.METHOD_GET_AICR_SETTINGS, null, null);
+            assertTrue(enabled.getBoolean(
+                    IntegrationSettings.EXTRA_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED));
+        } finally {
+            IntegrationSettings.setAicrGlobalSignatureAccessEnabled(context, previous);
+        }
+    }
+
     private static ShareImageProvider newProvider(Context context) {
         ShareImageProvider provider = new ShareImageProvider();
         ProviderInfo info = new ProviderInfo();

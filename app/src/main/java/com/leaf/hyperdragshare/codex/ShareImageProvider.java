@@ -153,6 +153,9 @@ public final class ShareImageProvider extends ContentProvider {
             result.putBoolean(
                     IntegrationSettings.EXTRA_COPY_DIRECT_ENABLED,
                     IntegrationSettings.isCopyDirectEnabled(contextOrThrow()));
+            result.putBoolean(
+                    IntegrationSettings.EXTRA_AICR_GLOBAL_SIGNATURE_ACCESS_ENABLED,
+                    IntegrationSettings.isAicrGlobalSignatureAccessEnabled(contextOrThrow()));
             return result;
         }
         if (IntegrationSettings.METHOD_GET_TRUST_SERVICE_SETTINGS.equals(method)) {
