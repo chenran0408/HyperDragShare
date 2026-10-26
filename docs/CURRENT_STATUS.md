@@ -1,6 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-26。唯一当前状态入口。Candidate A 仍冻结于 Phase 1A baseline `080c30c`。Candidate B 为 **1.7.219-beta.29 / 271**，源码`e49f48de9746254e1ca2922e7f02253c4c61f572`，APK SHA-256 `B920A46BDAC355C5CE1802F0344ACC5E04CD2330EE4D2B9E5D53F85564B17011`；设备验证结论是 **DEVICE NO-GO**：系统双指模式下单指仍触发MMGG面板。该结论供后续输入根因调查使用，本轮侧栏图标UI提交不改写Candidate B代码或产物。Beta29 APK与完整设备证据见`D:/CODEX/Tasks/2026-10-26/mmgg-candidate-b/outputs/`和`D:/CODEX/Tasks/2026-10-26/mmgg-beta29-device-validation/outputs/DEVICE_EVIDENCE.md`。本轮只处理安全中心侧栏中转站图标浅色背景对比度，详情见下方“侧栏中转站图标可见性”。没有连接设备、安装、发布或push。
+核对日期：2026-10-26。唯一当前状态入口。Candidate A 仍冻结于 Phase 1A baseline `080c30c`。Candidate B 为 **1.7.219-beta.29 / 271**，源码`e49f48de9746254e1ca2922e7f02253c4c61f572`，APK SHA-256 `B920A46BDAC355C5CE1802F0344ACC5E04CD2330EE4D2B9E5D53F85564B17011`；设备验证结论是 **DEVICE NO-GO**：系统双指模式下单指仍触发MMGG面板。该结论供后续输入根因调查使用；Beta29及其NO-GO证据保持冻结，见`D:/CODEX/Tasks/2026-10-26/mmgg-candidate-b/outputs/`和`D:/CODEX/Tasks/2026-10-26/mmgg-beta29-device-validation/outputs/DEVICE_EVIDENCE.md`。
+
+## 最新 Beta 包（未做设备验收）
+
+- **MMGG 1.7.219-beta.30 / versionCode 272**，beta 源码提交`eac1e8246d6da16cea7141f9aa5f665a5e15ba83`。包含默认关闭的AICR全局签名兼容开关；不修改Beta29的冻结候选及设备结论。该版本继承的双指误触发尚未实机复验，因此不能标记为设备通过。
+- Beta/R8 `assembleBeta` 成功。APK：`D:/CODEX/Tasks/2026-10-26/mmgg-beta30-apk/outputs/MMGG-1.7.219-beta.30.apk`；大小4,980,261字节；SHA-256 `CAF94CBE601A050F6B27BEA755FCEAFD926044951C5B795B7B19CD59CB922554`。
+- 签名证书SHA-256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，与Beta29相同，因此可覆盖安装在该Beta29签名包上；这是Android Debug证书，不代表可覆盖正式版。未安装、未发布、未push。完整构建记录见`D:/CODEX/Tasks/2026-10-26/mmgg-beta30-apk/outputs/DELIVERY.md`。
 
 ## 在哪里继续
 
@@ -40,7 +46,7 @@
 - 在Integration设置中增加默认关闭的“全局兼容澎湃 AI 引擎签名校验”。开启后仅扩展上述 AICR Core 签名比较Hook到普通应用 UID；只在 AICR Core `onTransact`、Binder调用UID与待比较应用UID一致、另一端为system UID、且调用UID对应已解析包名时生效。未读到设置、Provider异常或证据不完整时都保留系统原结果。开关通过原有AICR专用 `get_aicr_settings` RPC读取，不新增公开入口。
 - 这不是对澎湃 AI 引擎全部白名单或权限的绕过：插件包策略、版本、能力、引擎就绪状态及其他服务检查继续运行；无法保证所有Rom/应用/接口都能调用成功。启用后应用提交给AICR的内容仍由AICR处理。
 - Hook 安装边界、当前残余混淆依赖、DEX 与 JADX 类名核对方法及升级验证步骤见[系统接口复用手册的 Hook 章节](SYSTEM_TEXT_AND_BARCODE.md#hook-aicr边界选择与抗混淆维护)。
-- 本轮仅完成源码和Debug验证，没有修改版本号或生成Beta候选。全量789项单测零失败/错误；Lint 0错误、181警告、2提示；`assembleDebug`成功。定向AICR Hook与Provider设置测试强制重新编译后通过。源码改动以`0ed47a5`和后续静态引用收敛提交保存；未进行设备验证、Beta/R8、安装或发布。
+- AICR开关源码由`0ed47a5`和`d20191b`提交；全量789项单测零失败/错误，Lint 0错误/181警告/2提示，Debug构建成功。随后按请求增版并在`eac1e82`生成Beta30；R8结果与APK信息见本文件开头的最新Beta包记录。设置行为尚未对Beta30做设备验证。
 
 ## Beta26诊断批次（历史；由Beta28设备复测更新）
 
