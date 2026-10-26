@@ -1,6 +1,7 @@
 package com.leaf.hyperdragshare.codex;
 
 import android.app.Application;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Binder;
@@ -25,7 +26,7 @@ final class AicrCoreAccessHooks {
     private static final AtomicBoolean LOGGED_MMGG_OVERRIDE = new AtomicBoolean();
     private static final AtomicBoolean LOGGED_GLOBAL_OVERRIDE = new AtomicBoolean();
     private static final AtomicBoolean LOGGED_SETTING_READ_FAILURE = new AtomicBoolean();
-    private static volatile Context aicrContext;
+    private static volatile ContentResolver aicrContentResolver;
 
     private AicrCoreAccessHooks() {}
 
@@ -34,7 +35,7 @@ final class AicrCoreAccessHooks {
             XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class,
                     new XC_MethodHook() {
                         @Override protected void afterHookedMethod(MethodHookParam param) {
-                            aicrContext = (Context) param.thisObject;
+                            aicrContentResolver = ((Context) param.thisObject).getContentResolver();
                         }
                     });
             XposedBridge.log(TAG + ": captured AICR application context for settings RPC");
@@ -121,10 +122,10 @@ final class AicrCoreAccessHooks {
     private static boolean isAicrGlobalSignatureAccessEnabled(String[] callerPackages) {
         if (callerPackagesContainMmgg(callerPackages) || callerPackages == null
                 || callerPackages.length == 0) return false;
-        Context context = aicrContext;
-        if (context == null) return false;
+        ContentResolver resolver = aicrContentResolver;
+        if (resolver == null) return false;
         try {
-            android.os.Bundle settings = context.getContentResolver().call(
+            android.os.Bundle settings = resolver.call(
                     ImageStagingClient.BASE_URI,
                     IntegrationSettings.METHOD_GET_AICR_SETTINGS,
                     null,
