@@ -1,12 +1,12 @@
 # MMGG 当前状态与接手
 
-核对日期：2026-10-26。唯一当前状态入口。Candidate A 仍冻结于 Phase 1A baseline `080c30c`。Candidate B 为 **1.7.219-beta.29 / 271**，源码`e49f48de9746254e1ca2922e7f02253c4c61f572`，APK SHA-256 `B920A46BDAC355C5CE1802F0344ACC5E04CD2330EE4D2B9E5D53F85564B17011`；设备验证结论是 **DEVICE NO-GO**：系统双指模式下单指仍触发MMGG面板。该结论供后续输入根因调查使用；Beta29及其NO-GO证据保持冻结，见`D:/CODEX/Tasks/2026-10-26/mmgg-candidate-b/outputs/`和`D:/CODEX/Tasks/2026-10-26/mmgg-beta29-device-validation/outputs/DEVICE_EVIDENCE.md`。
+核对日期：2026-10-30。唯一当前状态入口。Candidate A 仍冻结于 Phase 1A baseline `080c30c`。Candidate B 为 **1.7.219-beta.29 / 271**，源码`e49f48de9746254e1ca2922e7f02253c4c61f572`，APK SHA-256 `B920A46BDAC355C5CE1802F0344ACC5E04CD2330EE4D2B9E5D53F85564B17011`；设备验证结论是 **DEVICE NO-GO**：系统双指模式下单指仍触发MMGG面板。该结论供后续输入根因调查使用；Beta29及其NO-GO证据保持冻结，见`D:/CODEX/Tasks/2026-10-26/mmgg-candidate-b/outputs/`和`D:/CODEX/Tasks/2026-10-26/mmgg-beta29-device-validation/outputs/DEVICE_EVIDENCE.md`。
 
 ## 最新 Beta 包（未做设备验收）
 
-- **MMGG 1.7.219-beta.30 / versionCode 272**，beta 源码提交`eac1e8246d6da16cea7141f9aa5f665a5e15ba83`。包含默认关闭的AICR全局签名兼容开关；不修改Beta29的冻结候选及设备结论。该版本继承的双指误触发尚未实机复验，因此不能标记为设备通过。
-- Beta/R8 `assembleBeta` 成功。APK：`D:/CODEX/Tasks/2026-10-26/mmgg-beta30-apk/outputs/MMGG-1.7.219-beta.30.apk`；大小4,980,261字节；SHA-256 `CAF94CBE601A050F6B27BEA755FCEAFD926044951C5B795B7B19CD59CB922554`。
-- 签名证书SHA-256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，与Beta29相同，因此可覆盖安装在该Beta29签名包上；这是Android Debug证书，不代表可覆盖正式版。未安装、未发布、未push。完整构建记录见`D:/CODEX/Tasks/2026-10-26/mmgg-beta30-apk/outputs/DELIVERY.md`。
+- **MMGG 1.7.219-beta.31 / versionCode 273**，行为修复提交`fcbde841a455b6e14adb7ad198989907e75b52a4`，版本提交`1899e70`。双指确认后允许剩余一指继续同一 Root 拖拽；未确认抬指、再次加指和真实 CANCEL 仍结束候选/流。Candidate B 的旧双指单指误触 NO-GO 仍冻结，Beta31 尚未实机复验。
+- Beta/R8 `assembleBeta` 成功。APK：`D:/CODEX/Tasks/2026-10-30/mmgg-two-finger-single-drag/outputs/MMGG-1.7.219-beta.31.apk`；大小4,980,257字节；SHA-256 `35DBD76538F678190B459F414A602C8091CB328EDD4027D339E16A16E69C0DEC`。
+- 包名`com.leaf.hyperdragshare.codex`，ABI`arm64-v8a`，min/target SDK `33/34`。签名证书SHA-256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，与Beta30相同，可覆盖同证书Beta包；这是Android Debug证书，不代表可覆盖正式版。未安装、未发布、未push；beta分支推送待本轮最终审查后执行。构建日志见`D:/CODEX/Tasks/2026-10-30/mmgg-two-finger-single-drag/work/`。
 
 ## 在哪里继续
 
