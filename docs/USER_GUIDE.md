@@ -50,6 +50,6 @@ MMGG 面向已经 Root 并安装 LSPosed 的小米用户。当前验证环境是
 
 ## 下载与使用提醒
 
-[下载 MMGG 正式版](https://github.com/chenran0408/HyperDragShare/releases/latest)。只提供 arm64-v8a，使用 R8 压缩；原 HyperDragShare fork 用户可直接覆盖安装，包名和配置保留。更新后若提示旧版本仍在运行，使用设置里的作用域重载；系统框架更新仍需软重启或整机重启。
+[下载 MMGG 正式版](https://github.com/chenran0408/MMGG/releases/latest)。只提供 arm64-v8a，使用 R8 压缩；原 HyperDragShare fork 用户可直接覆盖安装，包名和配置保留。更新后若提示旧版本仍在运行，使用设置里的作用域重载；系统框架更新仍需软重启或整机重启。
 
 其他机型与系统版本尚未逐一验证。现有翻译入口沿用原方式，小米翻译内部接口尚未接入。

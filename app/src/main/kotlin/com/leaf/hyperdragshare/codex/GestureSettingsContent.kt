@@ -541,7 +541,7 @@ private fun GestureFeedbackPreference(
         scope.launch {
             try {
                 val report = withContext(Dispatchers.IO) { CompatibilityReport.build(context, store) }
-                val issueUri = Uri.parse("https://github.com/chenran0408/HyperDragShare/issues/new")
+                val issueUri = Uri.parse("https://github.com/chenran0408/MMGG/issues/new")
                     .buildUpon().appendQueryParameter("title", "Hyper 手势兼容性反馈")
                     .appendQueryParameter("body", report).build()
                 context.startActivity(Intent(Intent.ACTION_VIEW, issueUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

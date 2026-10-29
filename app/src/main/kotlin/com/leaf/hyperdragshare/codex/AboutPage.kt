@@ -69,7 +69,7 @@ import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
 
-private const val PROJECT_URL = "https://github.com/chenran0408/HyperDragShare"
+private const val PROJECT_URL = "https://github.com/chenran0408/MMGG"
 private const val COMMUNITY_URL = "https://t.me/+EMRMXl6BKllmMjdl"
 
 @Composable

@@ -55,8 +55,8 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 private const val UPDATE_TAG = "HyperDragShare/Update"
-private const val RELEASE_PAGE = "https://github.com/chenran0408/HyperDragShare/releases/latest"
-private const val RELEASES_PREFIX = "https://github.com/chenran0408/HyperDragShare/releases/download/"
+private const val RELEASE_PAGE = "https://github.com/chenran0408/MMGG/releases/latest"
+private const val RELEASES_PREFIX = "https://github.com/chenran0408/MMGG/releases/download/"
 private const val UPDATE_PREFS = "app_update"
 private const val KEY_DOWNLOAD_ID = "download_id"
 private const val KEY_DOWNLOAD_NAME = "download_name"
