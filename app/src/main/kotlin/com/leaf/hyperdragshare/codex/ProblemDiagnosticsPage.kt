@@ -315,9 +315,9 @@ internal fun ProblemDiagnosticsPage(
                         summary = "提交前可附上刚导出的诊断 ZIP",
                         icon = MiuixIcons.Help,
                         onClick = {
-                            val issue = Uri.parse("https://github.com/chenran0408/HyperDragShare/issues/new")
+                            val issue = Uri.parse("https://github.com/chenran0408/MMGG/issues/new")
                                 .buildUpon()
-                                .appendQueryParameter("title", "HyperDragShare 问题反馈")
+                                .appendQueryParameter("title", "MMGG 问题反馈")
                                 .appendQueryParameter("body", "问题现象：\n\n复现步骤：\n\n请附上“问题反馈与诊断”页面导出的诊断 ZIP。")
                                 .build()
                             try {

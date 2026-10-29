@@ -2,7 +2,7 @@
 
 ## 2026-10-25 Beta24 推送与远程清理（当前状态）
 
-核对日期：2026-10-25。GitHub 仓库 `chenran0408/HyperDragShare` 为公开仓库；默认分支已从`hyperos4-adaptation`改为`repair-from-189`。origin 仅保留两条长期远程分支；上文旧调查表和命令是2026-10-24历史快照，不是当前远程状态或待执行步骤。
+核对日期：2026-10-30。GitHub 仓库已更名为 `chenran0408/MMGG`，仍为公开仓库；默认分支为`repair-from-189`。origin 仅保留两条长期远程分支：正式维护线`repair-from-189`与测试线`beta`。上文旧调查表和命令是历史快照，不是当前远程状态或待执行步骤。
 
 | origin ref | HEAD | 状态 |
 |---|---|---|
@@ -32,7 +32,7 @@
 
 ## 仓库与并发状态
 
-- origin：`https://github.com/chenran0408/HyperDragShare.git`；upstream：`https://github.com/Leaf-lsgtky/HyperDragShare.git`。
+- origin：`https://github.com/chenran0408/MMGG.git`；upstream：`https://github.com/Leaf-lsgtky/HyperDragShare.git`。
 - 两本地分支、两工作树；没有其他本地历史分支/游离工作树/锁定工作树。两个工作树均无已暂存/未暂存/非忽略未跟踪文件；本机配置/缓存与学习记录被忽略，未清理、未读签名秘密。
 - 两本地分支未配置upstream。`git ls-remote --heads`、`--symref ... HEAD`、`--tags`直接核对服务端，与现有remote-tracking refs相符；没有fetch/prune或任何ref改写。
 - 同一团队仅主Agent活动；相关MMGG聊天空闲或未加载，写回前还要核对。未观察到并发写入不代表未来可以共享写树。
@@ -134,7 +134,7 @@ Beta独有58提交均在当前开发线上；不是应反向整并稳定线的�
    ```
 
 4. 独立CI变更：将push与PR基线覆盖beta、repair-from-189；Beta执行testDebugUnitTest/lintDebug/assembleBeta（R8）并保存报告/映射/版本/SHA，正式维护执行对应检查和发布门槛。不要借此步骤发布未经验收的正式版；签名策略见RELEASE_CHANNELS。
-5. 默认分支建议设稳定线`repair-from-189`，开发任务/PR明确选Beta。需要用户选择默认面向稳定下载还是开发协作，确认后才执行`gh repo edit chenran0408/HyperDragShare --default-branch repair-from-189`，然后`git remote set-head origin -a`更新本地别名。
+5. 默认分支保持稳定线`repair-from-189`，开发任务/PR明确选Beta。仓库更名和默认分支已落实；新工作树使用`https://github.com/chenran0408/MMGG.git`，然后执行`git remote set-head origin -a`更新本地别名。
 6. 默认/CI/文档入口迁移和tag远程核验完成后，确认历史远程头是否仍有PR/外部消费者，再另行批准收尾origin的`kotlin-libxposed-102`、`main`、`hyperos4-adaptation`。本轮不删除、不提供可误跑的批量删除脚本；upstream分支不属于本fork清理范围。
 7. 稳定独有文档按前述逐项适配到Beta，未来发布准备再处理稳定与Beta的必要内容整合；不整并Kotlin实验，不删除仍承载维护的两工作树。
 

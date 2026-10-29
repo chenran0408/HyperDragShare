@@ -2,9 +2,9 @@
 
 让小米伟大重生。基于 [Leaf-lsgtky/HyperDragShare](https://github.com/Leaf-lsgtky/HyperDragShare) 的开源分支，为 Xiaomi HyperOS 增加拖拽手势、原页分词、OCR 和临时中转站。MMGG 的第二个 G 代表 Genesis；工程与应用显示名已更换，包名和现有配置保留，仍可覆盖更新。
 
-[下载正式版 APK](https://github.com/chenran0408/HyperDragShare/releases/latest) · 仅 **arm64-v8a**，使用 **R8 压缩**。
+[下载正式版 APK](https://github.com/chenran0408/MMGG/releases/latest) · 仅 **arm64-v8a**，使用 **R8 压缩**。
 
-第一代正式版为 **MMGG 1.7.218**。项目名称来源、设计目标与功能概览见 [MMGG.md](MMGG.md)，版本与安装包以 [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) 为准。
+第一代正式版为 **MMGG 1.7.218**。项目名称来源、设计目标与功能概览见 [MMGG.md](MMGG.md)，版本与安装包以 [GitHub Releases](https://github.com/chenran0408/MMGG/releases/latest) 为准。
 
 后续版本先经过 Beta 验收，再发布正式版。Beta 与正式版使用相同包名；实际签名一致且版本满足升级条件时可保留配置覆盖安装，不能直接降级；发布门槛见[版本线与发布门槛](docs/RELEASE_CHANNELS.md)。
 
@@ -78,4 +78,4 @@ Beta 与 Release 均启用 R8；自行构建应配置自己的签名。Beta APK 
 
 ## English
 
-MMGG (Make Mi Great Genesis), a HyperDragShare fork, adds drag gestures, in-page text selection, OCR, and a temporary drag-and-drop stash to HyperOS. It requires an arm64-v8a device, Root and LSPosed. The verified target is Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17; other ROMs are unverified. AICR V2 is an OCR service, not Xiaomi's screen-recognition feature. Release APKs are optimized with R8; check [GitHub Releases](https://github.com/chenran0408/HyperDragShare/releases/latest) for the APK. Licensed under GPL-3.0-only; upstream attribution is preserved.
+MMGG (Make Mi Great Genesis), a HyperDragShare fork, adds drag gestures, in-page text selection, OCR, and a temporary drag-and-drop stash to HyperOS. It requires an arm64-v8a device, Root and LSPosed. The verified target is Xiaomi 15 Pro / HyperOS 4.0.0.17 / Android 17; other ROMs are unverified. AICR V2 is an OCR service, not Xiaomi's screen-recognition feature. Release APKs are optimized with R8; check [GitHub Releases](https://github.com/chenran0408/MMGG/releases/latest) for the APK. Licensed under GPL-3.0-only; upstream attribution is preserved.

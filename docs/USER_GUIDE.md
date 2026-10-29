@@ -34,6 +34,6 @@ MMGG 面向已经取得Root并安装LSPosed的小米用户。它提供原页选�
 
 ## 下载与更新
 
-[下载正式版](https://github.com/chenran0408/HyperDragShare/releases/latest)。Beta用于测试，签名相同且versionCode满足升级要求才能覆盖保留配置；不要卸载或清数据强行切换，也不要直接装回旧包。发布规则见[版本线说明](RELEASE_CHANNELS.md)。
+[下载正式版](https://github.com/chenran0408/MMGG/releases/latest)。Beta用于测试，签名相同且versionCode满足升级要求才能覆盖保留配置；不要卸载或清数据强行切换，也不要直接装回旧包。发布规则见[版本线说明](RELEASE_CHANNELS.md)。
 
 其他机型、ROM与未覆盖交互不能保证相同行为。小米翻译内部服务尚未接入；既有翻译入口沿用原方式。项目来源与许可见[致谢](ACKNOWLEDGEMENTS.md)。

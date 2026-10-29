@@ -55,8 +55,8 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 private const val UPDATE_TAG = "HyperDragShare/Update"
-private const val RELEASE_PAGE = "https://github.com/chenran0408/HyperDragShare/releases/latest"
-private const val RELEASES_PREFIX = "https://github.com/chenran0408/HyperDragShare/releases/download/"
+private const val RELEASE_PAGE = "https://github.com/chenran0408/MMGG/releases/latest"
+private const val RELEASES_PREFIX = "https://github.com/chenran0408/MMGG/releases/download/"
 private const val UPDATE_PREFS = "app_update"
 private const val KEY_DOWNLOAD_ID = "download_id"
 private const val KEY_DOWNLOAD_NAME = "download_name"
@@ -193,7 +193,7 @@ internal fun AppUpdatePreference(title: String, enabled: Boolean = true) {
         releaseState == null -> if (isBeta) {
             "检查可用于切换的 MMGG 正式版"
         } else {
-            "检查 chenran0408/HyperDragShare 正式版更新"
+            "检查 chenran0408/MMGG 正式版更新"
         }
         currentVersionComparison == null -> "当前版本号无法比较，请通过 GitHub Releases 手动核对。"
         currentVersionComparison > 0 -> "本地版本 ${BuildConfig.VERSION_NAME} 比正式版 ${releaseState.versionName} 更新。"
@@ -336,22 +336,22 @@ private fun fetchLatestRelease(): ReleaseInfo {
     val finalUrl = URL(finalPageUrl)
     val tag = finalUrl.path.substringAfterLast('/')
     if (finalUrl.protocol != "https" || finalUrl.host != "github.com" ||
-        finalUrl.path.substringBeforeLast('/') != "/chenran0408/HyperDragShare/releases/tag" ||
+        finalUrl.path.substringBeforeLast('/') != "/chenran0408/MMGG/releases/tag" ||
         !tag.startsWith("v") || !VERSION_PATTERN.matcher(tag.removePrefix("v")).matches()) {
         throw IllegalArgumentException("GitHub 没有返回可识别的正式版页面。")
     }
     val version = tag.removePrefix("v")
-    val fragmentSource = Regex("""<include-fragment[^>]+src=["'](https://github\.com/chenran0408/HyperDragShare/releases/expanded_assets/v${Regex.escape(version)})["']""")
+    val fragmentSource = Regex("""<include-fragment[^>]+src=["'](https://github\.com/chenran0408/MMGG/releases/expanded_assets/v${Regex.escape(version)})["']""")
         .find(page)?.groupValues?.get(1)
         ?: throw IllegalArgumentException("正式版页面没有提供可验证的安装包列表。")
     val (assetsHtml, assetsUrl) = fetchGithubPage(fragmentSource)
     val assetsPage = URL(assetsUrl)
     if (assetsPage.protocol != "https" || assetsPage.host != "github.com" ||
-        assetsPage.path != "/chenran0408/HyperDragShare/releases/expanded_assets/v$version") {
+        assetsPage.path != "/chenran0408/MMGG/releases/expanded_assets/v$version") {
         throw IllegalArgumentException("安装包列表不是当前正式版的官方页面。")
     }
     val assetPattern = Regex(
-        """<a[^>]+href=["'](/chenran0408/HyperDragShare/releases/download/v${Regex.escape(version)}/([^"']+))["']""",
+        """<a[^>]+href=["'](/chenran0408/MMGG/releases/download/v${Regex.escape(version)}/([^"']+))["']""",
         RegexOption.IGNORE_CASE,
     )
     val asset = assetPattern.findAll(assetsHtml).firstOrNull { match ->
@@ -380,7 +380,7 @@ private fun fetchLatestRelease(): ReleaseInfo {
 private fun fetchGithubPage(url: String): Pair<String, String> {
     val requested = URL(url)
     if (requested.protocol != "https" || requested.host != "github.com" ||
-        !requested.path.startsWith("/chenran0408/HyperDragShare/releases/")) {
+        !requested.path.startsWith("/chenran0408/MMGG/releases/")) {
         throw IllegalArgumentException("请求地址不属于官方 GitHub Releases 页面。")
     }
     val connection = (requested.openConnection() as HttpURLConnection).apply {
@@ -477,7 +477,7 @@ private fun enqueueDownload(context: Context, release: ReleaseInfo): Pair<Long, 
 private fun isTrustedReleaseAssetUrl(value: String): Boolean = try {
     val url = URL(value)
     url.protocol == "https" && url.host == "github.com" &&
-        url.path.startsWith("/chenran0408/HyperDragShare/releases/download/")
+        url.path.startsWith("/chenran0408/MMGG/releases/download/")
 } catch (_: java.net.MalformedURLException) {
     false
 }
