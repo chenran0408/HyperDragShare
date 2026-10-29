@@ -72,6 +72,7 @@ final class EvdevTouchParser {
     private int lastContactCount;
     private volatile boolean twoFingerPressEnabled;
     private boolean twoFingerStream;
+    private boolean singleFingerContinuation;
 
     EvdevTouchParser(Listener listener) {
         this(listener, null);
@@ -237,6 +238,25 @@ final class EvdevTouchParser {
             return;
         }
 
+        if (previousContactCount == 2 && trackedCount == 1 && twoFingerStream
+                && (primaryLifted || secondaryLifted)) {
+            int remaining = firstTrackedSlotWithCoordinates();
+            if (remaining >= 0) {
+                // Keep the Root stream alive; PressCaptureSource decides whether the
+                // confirmed two-finger press may continue as a one-finger drag.
+                // This is now a single-pointer stream. A later contact must not be
+                // treated as a continuation of the original two-finger qualification.
+                twoFingerStream = false;
+                singleFingerContinuation = true;
+                primarySlot = remaining;
+                setLast(remaining);
+                listener.onFrame(MotionEvent.ACTION_MOVE, lastX, lastY,
+                        lastTouchMajor, lastTouchMinor, lastWidthMajor);
+                finishFrame();
+                return;
+            }
+        }
+
         if (previousContactCount == 2
                 && (trackedCount < 2 && trackedCount > 0 || primaryLifted || secondaryLifted)) {
             emitCancelAndIgnore();
@@ -245,6 +265,12 @@ final class EvdevTouchParser {
         }
 
         if (trackedCount > 2 || thirdContactDetected || multiTouchDetected && trackedCount != 2) {
+            emitCancelAndIgnore();
+            finishFrame();
+            return;
+        }
+
+        if (singleFingerContinuation && trackedCount > 1) {
             emitCancelAndIgnore();
             finishFrame();
             return;
@@ -457,6 +483,7 @@ final class EvdevTouchParser {
     private void resetGesture() {
         gestureActive = false;
         twoFingerStream = false;
+        singleFingerContinuation = false;
         primarySlot = -1;
         primaryLifted = false;
         secondaryLifted = false;

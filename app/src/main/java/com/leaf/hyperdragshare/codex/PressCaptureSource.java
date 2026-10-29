@@ -267,7 +267,12 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
             return;
         }
         boolean hadFired = detector.isFired();
-        if (action != MotionEvent.ACTION_DOWN) detector.onPointerEvent(action, x, y, 1);
+        // Once the two-finger hold has fired, the remaining finger owns the
+        // drag stream. Do not feed its single-pointer MOVE/UP back into the
+        // two-pointer qualification detector.
+        if (action != MotionEvent.ACTION_DOWN && !detector.isFired()) {
+            detector.onPointerEvent(action, x, y, 1);
+        }
         if (action == MotionEvent.ACTION_UP) pointerDown = false;
         if (action == MotionEvent.ACTION_MOVE
                 && Math.hypot(x - downX, y - downY) > WECHAT_DRAG_DISTANCE_DP
@@ -366,7 +371,16 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
                 || action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_UP) {
             boolean released = action == MotionEvent.ACTION_UP
                     || action == MotionEvent.ACTION_POINTER_UP;
-            if (released && detector.isFired() && !controller.isActive()) {
+            boolean confirmed = detector.isFired();
+            if (released && detector.isFired() && controller.isActive()) {
+                // The hold has already opened the preview. Keep the same
+                // session alive while the user lifts either trigger finger
+                // and continues dragging with the one that remains.
+                twoFingerContactSequence = false;
+                pointerDown = true;
+                return true;
+            }
+            if (released && confirmed && !controller.isActive()) {
                 // Match a confirmed single-finger release: let accepted OCR/capture work
                 // finish after the Root stream cancels its now-invalid physical drag.
                 pointerDown = false;
@@ -381,6 +395,10 @@ final class PressCaptureSource implements RootTouchSource.ContactListener {
             if (pointerCount == 0 || action == MotionEvent.ACTION_CANCEL) {
                 twoFingerContactSequence = false;
             }
+            // RootTouchSource uses false only for an unconfirmed pointer
+            // reduction; it then emits one synthetic Root CANCEL and drops
+            // the remaining raw frames until all contacts are released.
+            return !(released && !confirmed);
         }
         return true;
     }

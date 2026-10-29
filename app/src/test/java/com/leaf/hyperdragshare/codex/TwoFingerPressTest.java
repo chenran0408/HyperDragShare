@@ -252,6 +252,7 @@ public final class TwoFingerPressTest {
                 (action, x, y, time, major, minor, width) -> { }, (ready, reason) -> { });
         field(input, "ready").setBoolean(input, true);
         PressCaptureSource source = new PressCaptureSource(context, input, controller, settings);
+        AtomicBoolean reducedContactAccepted = new AtomicBoolean(true);
         long downTime = SystemClock.uptimeMillis();
         try {
             field(source, "nodeSession").set(source, provider.connection);
@@ -289,6 +290,7 @@ public final class TwoFingerPressTest {
                 (action, x, y, time, major, minor, width) -> { }, (ready, reason) -> { });
         field(input, "ready").setBoolean(input, true);
         PressCaptureSource source = new PressCaptureSource(context, input, controller, settings);
+        AtomicBoolean reducedContactAccepted = new AtomicBoolean(true);
         long downTime = SystemClock.uptimeMillis();
         try {
             field(source, "nodeSession").set(source, provider.connection);
@@ -298,8 +300,8 @@ public final class TwoFingerPressTest {
                 source.onPointerEvent(MotionEvent.ACTION_DOWN, 20f, 30f, downTime);
                 source.onContactEvent(MotionEvent.ACTION_POINTER_DOWN,
                         20f, 30f, 40f, 50f, 2, downTime + 100L);
-                source.onContactEvent(MotionEvent.ACTION_POINTER_UP,
-                        20f, 30f, 40f, 50f, 1, downTime + 200L);
+                reducedContactAccepted.set(source.onContactEvent(MotionEvent.ACTION_POINTER_UP,
+                        20f, 30f, 40f, 50f, 1, downTime + 200L));
             });
             ShadowLooper.shadowMainLooper().idle();
 
@@ -312,11 +314,82 @@ public final class TwoFingerPressTest {
             ShadowLooper.shadowMainLooper().idle();
 
             PressTriggerDetector detector = (PressTriggerDetector) field(source, "detector").get(source);
+            assertFalse("unconfirmed pointer reduction must reject the Root stream",
+                    reducedContactAccepted.get());
             assertFalse("lifting finger two must not restore single-finger confirmation", detector.isFired());
             assertNull(provider.bigBangRequest);
         } finally {
             source.stop();
             controller.destroy();
+            ShadowLooper.shadowMainLooper().idle();
+            clearPortalSettings(context);
+        }
+    }
+
+    @Test
+    public void confirmedTwoFingerHoldHandsOffToSingleFingerDragUntilRootUp() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        clearPortalSettings(context);
+        BigBangProvider provider = new BigBangProvider(context);
+        ShadowContentResolver.registerProviderInternal(ImageStagingClient.AUTHORITY, provider);
+        DragShareSettings settings = DragShareSettings.defaults().toBuilder()
+                .setTwoFingerLongPressEnabled(true)
+                .setTwoFingerLongPressTimeoutMillis(600)
+                .build();
+        DragShareController controller = new DragShareController(context, OverlayWindowPolicy.portal());
+        RootTouchSource input = new RootTouchSource(context,
+                (action, x, y, time, major, minor, width) -> { }, (ready, reason) -> { });
+        field(input, "ready").setBoolean(input, true);
+        PressCaptureSource source = new PressCaptureSource(context, input, controller, settings);
+        Bitmap image = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888);
+        long downTime = SystemClock.uptimeMillis();
+        try {
+            field(source, "nodeSession").set(source, provider.connection);
+            controller.acceptPointerEvent(MotionEvent.ACTION_DOWN, 20f, 30f, downTime, "root");
+            ShadowLooper.shadowMainLooper().idle();
+            new Handler(Looper.getMainLooper()).post(() -> {
+                source.onPointerEvent(MotionEvent.ACTION_DOWN, 20f, 30f, downTime);
+                source.onContactEvent(MotionEvent.ACTION_POINTER_DOWN,
+                        20f, 30f, 40f, 50f, 2, downTime + 100L);
+                fieldUnchecked(source, "cached", CapturedContent.image(
+                        image, "test.source", new Rect(0, 0, 4, 4), true));
+            });
+            ShadowLooper.shadowMainLooper().idle();
+
+            // The confirmation timer starts when the second finger joins.
+            ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(800));
+            ShadowLooper.shadowMainLooper().idle();
+            assertTrue("confirmed two-finger press should show its drag preview", controller.isActive());
+
+            new Handler(Looper.getMainLooper()).post(() -> source.onContactEvent(
+                    MotionEvent.ACTION_POINTER_UP, 20f, 30f, 40f, 50f, 1, downTime + 601L));
+            ShadowLooper.shadowMainLooper().idle();
+            assertTrue("lifting one finger must preserve the accepted drag session", controller.isActive());
+            assertFalse("the remaining finger should leave two-contact qualification mode",
+                    field(source, "twoFingerContactSequence").getBoolean(source));
+
+            new Handler(Looper.getMainLooper()).post(() ->
+                    {
+                        controller.acceptPointerEvent(MotionEvent.ACTION_MOVE,
+                                80f, 90f, downTime + 850L, "root");
+                        source.onPointerEvent(MotionEvent.ACTION_MOVE, 80f, 90f, downTime + 850L);
+                    });
+            ShadowLooper.shadowMainLooper().idle();
+            assertTrue("single-finger movement should continue the same preview", controller.isActive());
+            assertEquals(80f, controller.latestPointerX(), 0f);
+
+            new Handler(Looper.getMainLooper()).post(() ->
+                    {
+                        controller.acceptPointerEvent(MotionEvent.ACTION_UP,
+                                80f, 90f, downTime + 900L, "root");
+                        source.onPointerEvent(MotionEvent.ACTION_UP, 80f, 90f, downTime + 900L);
+                    });
+            ShadowLooper.shadowMainLooper().idle();
+            assertFalse("the remaining finger UP should finish the drag", controller.isActive());
+        } finally {
+            source.stop();
+            controller.destroy();
+            if (!image.isRecycled()) image.recycle();
             ShadowLooper.shadowMainLooper().idle();
             clearPortalSettings(context);
         }

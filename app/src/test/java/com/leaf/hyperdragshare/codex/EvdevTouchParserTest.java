@@ -187,7 +187,7 @@ public final class EvdevTouchParserTest {
     }
 
     @Test
-    public void losingOneOfTwoContactsCancelsRootCandidateAndReportsRemainingCount() {
+    public void losingOneOfTwoContactsKeepsRootStreamForSingleFingerContinuation() {
         List<Frame> frames = new ArrayList<>();
         List<Integer> contactCounts = new ArrayList<>();
         EvdevTouchParser parser = new EvdevTouchParser(
@@ -199,10 +199,34 @@ public final class EvdevTouchParserTest {
         pointerDown(parser, 0, 42, 10, 20);
         pointerDown(parser, 1, 43, 30, 40);
         pointerUp(parser, 1);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_SLOT, 0);
+        parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_POSITION_X, 20);
+        parser.consume(EvdevTouchParser.EV_SYN, EvdevTouchParser.SYN_REPORT, 0);
+        pointerUp(parser, 0);
 
         assertEquals(Arrays.asList(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
-                MotionEvent.ACTION_CANCEL), actions(frames));
-        assertEquals(Arrays.asList(1, 2, 1), contactCounts);
+                MotionEvent.ACTION_MOVE, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP),
+                actions(frames));
+        assertEquals(Arrays.asList(1, 2, 1, 1, 0), contactCounts);
+        assertEquals(20f, frames.get(3).x, 0f);
+    }
+
+    @Test
+    public void contactAddedAfterSingleFingerContinuationCancelsRootStream() {
+        List<Frame> frames = new ArrayList<>();
+        EvdevTouchParser parser = new EvdevTouchParser(
+                (action, x, y, major, minor, widthMajor) ->
+                        frames.add(new Frame(action, x, y, major, minor)),
+                (action, x, y, secondX, secondY, count) -> { });
+        parser.setTwoFingerPressEnabled(true);
+
+        pointerDown(parser, 0, 42, 10, 20);
+        pointerDown(parser, 1, 43, 30, 40);
+        pointerUp(parser, 1);
+        pointerDown(parser, 2, 44, 50, 60);
+
+        assertEquals(Arrays.asList(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
+                MotionEvent.ACTION_MOVE, MotionEvent.ACTION_CANCEL), actions(frames));
     }
 
     @Test
@@ -221,7 +245,7 @@ public final class EvdevTouchParserTest {
     }
 
     @Test
-    public void survivingFingerAfterLostContactStaysIgnoredUntilAllUp() {
+    public void survivingFingerAfterLostContactCanFinishBeforeNextTouch() {
         List<Frame> frames = new ArrayList<>();
         EvdevTouchParser parser = new EvdevTouchParser(
                 (action, x, y, major, minor, widthMajor) ->
@@ -239,8 +263,9 @@ public final class EvdevTouchParserTest {
         pointerDown(parser, 0, 44, 50, 60);
 
         assertEquals(Arrays.asList(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
-                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_DOWN), actions(frames));
-        assertEquals(new Frame(MotionEvent.ACTION_DOWN, 50, 60, 0, 0), frames.get(3));
+                MotionEvent.ACTION_MOVE, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_DOWN), actions(frames));
+        assertEquals(new Frame(MotionEvent.ACTION_DOWN, 50, 60, 0, 0), frames.get(5));
     }
 
     @Test

@@ -566,11 +566,21 @@ final class RootTouchSource {
             if (target == null || run.ignoredGesture) return;
             boolean accepted = target.onContactEvent(
                     action, x, y, secondX, secondY, pointerCount, eventTime);
-            if ((action == MotionEvent.ACTION_POINTER_DOWN || action == MotionEvent.ACTION_DOWN)
-                    && pointerCount == 2 && !accepted) {
-                rejectTwoFingerCandidate(run, x, y, eventTime, pointerCount, rawX, rawY);
-            }
+            handleContactDecision(run, action, x, y, eventTime, pointerCount,
+                    rawX, rawY, accepted);
         });
+    }
+
+    void handleContactDecision(Run run, int action, float x, float y, long eventTime,
+                               int pointerCount, float rawX, float rawY, boolean accepted) {
+        if (accepted) return;
+        boolean rejectedSecondPointer = (action == MotionEvent.ACTION_POINTER_DOWN
+                || action == MotionEvent.ACTION_DOWN) && pointerCount == 2;
+        boolean unconfirmedPointerReduction = action == MotionEvent.ACTION_POINTER_UP
+                && pointerCount == 1;
+        if (rejectedSecondPointer || unconfirmedPointerReduction) {
+            rejectTwoFingerCandidate(run, x, y, eventTime, pointerCount, rawX, rawY);
+        }
     }
 
     void rejectTwoFingerCandidate(Run run, float x, float y, long eventTime,

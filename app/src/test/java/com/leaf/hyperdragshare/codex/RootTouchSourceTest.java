@@ -90,6 +90,38 @@ public final class RootTouchSourceTest {
         assertTrue(run.rejectedTwoFingerCandidate);
     }
 
+    @Test public void unconfirmedPointerReductionCancelsRootStreamAndIgnoresRemainingTail() {
+        List<Integer> actions = new ArrayList<>();
+        RootTouchSource source = new RootTouchSource(RuntimeEnvironment.getApplication(),
+                (action, x, y, eventTime, major, minor, width) -> actions.add(action),
+                (ready, reason) -> { });
+        RootTouchSource.Run run = new RootTouchSource.Run();
+        run.pointerDown = true;
+
+        source.handleContactDecision(run, MotionEvent.ACTION_POINTER_UP,
+                20f, 30f, 300L, 1, 200f, 300f, false);
+
+        assertEquals(Arrays.asList(MotionEvent.ACTION_CANCEL), actions);
+        assertFalse(run.pointerDown);
+        assertTrue(run.rejectedTwoFingerCandidate);
+    }
+
+    @Test public void confirmedPointerReductionKeepsRootStreamForRemainingPointer() {
+        List<Integer> actions = new ArrayList<>();
+        RootTouchSource source = new RootTouchSource(RuntimeEnvironment.getApplication(),
+                (action, x, y, eventTime, major, minor, width) -> actions.add(action),
+                (ready, reason) -> { });
+        RootTouchSource.Run run = new RootTouchSource.Run();
+        run.pointerDown = true;
+
+        source.handleContactDecision(run, MotionEvent.ACTION_POINTER_UP,
+                20f, 30f, 300L, 1, 200f, 300f, true);
+
+        assertEquals(0, actions.size());
+        assertTrue(run.pointerDown);
+        assertFalse(run.rejectedTwoFingerCandidate);
+    }
+
     private static void pointerDown(EvdevTouchParser parser, int slot, int trackingId, int x, int y) {
         parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_SLOT, slot);
         parser.consume(EvdevTouchParser.EV_ABS, EvdevTouchParser.ABS_MT_TRACKING_ID, trackingId);
