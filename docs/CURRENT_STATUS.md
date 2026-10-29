@@ -7,7 +7,7 @@
 - **MMGG 1.7.219-beta.32 / versionCode 274**（由 Beta31 增量修正仓库更名后的 GitHub 更新/反馈链接），双指确认后允许剩余一指继续同一 Root 拖拽；未确认抬指、再次加指和真实 CANCEL 仍结束候选/流。Candidate B 的旧双指单指误触 NO-GO 仍冻结，Beta31/Beta32 尚未实机复验。
 - Beta31 的行为提交为`fcbde841a455b6e14adb7ad198989907e75b52a4`，版本提交`1899e70`；Beta32 仅调整发布地址和版本元数据，不改变手势逻辑。
 - Beta/R8 `assembleBeta` 成功。Beta32 APK：`D:/CODEX/Tasks/2026-10-30/mmgg-two-finger-single-drag/outputs/MMGG-1.7.219-beta.32.apk`；大小4,980,261字节；SHA-256 `C24DB7204D535D1E63021731C0E8D8AA84670D0920C695C412344FF78B9378E6`。Beta31 APK仍保留在同目录，供回退核对。
-- 包名`com.leaf.hyperdragshare.codex`，ABI`arm64-v8a`，min/target SDK `33/34`。签名证书SHA-256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，与Beta30相同，可覆盖同证书Beta包；这是Android Debug证书，不代表可覆盖正式版。Beta31 已创建并推送 tag `delivered/mmgg-1.7.219-beta.31`，GitHub 预发布页为 [Beta31](https://github.com/chenran0408/MMGG/releases/tag/delivered/mmgg-1.7.219-beta.31)。Beta32构建完成后将单独建立新tag和预发布页。包名本轮未改：它同时是 LSPosed 注入身份、Provider authority、配置迁移和升级兼容边界，直接改名会变成新应用并丢失覆盖升级路径；如要改包名需另立迁移方案。构建日志见`D:/CODEX/Tasks/2026-10-30/mmgg-two-finger-single-drag/work/`。
+- 包名`com.leaf.hyperdragshare.codex`，ABI`arm64-v8a`，min/target SDK `33/34`。签名证书SHA-256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`，与Beta30相同，可覆盖同证书Beta包；这是Android Debug证书，不代表可覆盖正式版。Beta31 tag `delivered/mmgg-1.7.219-beta.31` 与 [Beta31 预发布](https://github.com/chenran0408/MMGG/releases/tag/delivered/mmgg-1.7.219-beta.31) 保留。当前 Beta32 tag `delivered/mmgg-1.7.219-beta.32` 与 [Beta32 预发布](https://github.com/chenran0408/MMGG/releases/tag/delivered/mmgg-1.7.219-beta.32) 已发布。包名本轮未改：它同时是 LSPosed 注入身份、Provider authority、配置迁移和升级兼容边界，直接改名会变成新应用并丢失覆盖升级路径；如要改包名需另立迁移方案。构建日志见`D:/CODEX/Tasks/2026-10-30/mmgg-two-finger-single-drag/work/`。
 
 ## 在哪里继续
 
