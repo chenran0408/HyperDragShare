@@ -7,13 +7,13 @@
 | origin ref | HEAD | 状态 |
 |---|---|---|
 | `beta` | `9e1d8acc0c9fec097aeb0cd6f604f9d81f5118bb` | 唯一 Beta 开发线；Beta32 tag 与 GitHub prerelease 已发布 |
-| `repair-from-189` | `e25c66725cda51f23bdb8d95de036f7811eba017` | 稳定维护线及 GitHub 默认分支，未改动 |
+| `repair-from-189` | `98a7fdb` | 唯一正式维护线及 GitHub 默认分支；已同步仓库更名后的项目、更新与反馈地址 |
 
 - 本次核对确认本地及远程只保留`beta`、`repair-from-189`。没有多余分支需要删除。Candidate A/B 是独立detached worktree，作为冻结验证证据保留，不属于远程分支。
 - 仓库已由`chenran0408/HyperDragShare`更名为`chenran0408/MMGG`；origin使用新地址，upstream仍是原作者仓库。默认分支仍是`repair-from-189`。
 - Beta31 tag `delivered/mmgg-1.7.219-beta.31` 绑定`ddded3d`，APK已发布。
 - Beta32 tag `delivered/mmgg-1.7.219-beta.32` 绑定`9e1d8ac`。APK SHA256 `C24DB7204D535D1E63021731C0E8D8AA84670D0920C695C412344FF78B9378E6`；本地全量测试、Lint、Debug、Beta/R8通过，尚无设备验证。
-- Beta32同步更新应用内更新、项目和反馈地址。正式维护源码仍含旧路径；下一次正式版源码/发布应纳入新仓库地址。当前已发布正式APK需等后续正式包才包含更新器地址修正。
+- Beta32同步更新应用内更新、项目和反馈地址；正式维护线以`98a7fdb`同步修改相同地址。现有已发布正式APK仍需等下一个正式包才包含更新器地址修正。
 
 - Beta24 APK `D:/CODEX/Tasks/2026-10-25/mmgg-beta-upload-cleanup/outputs/beta24/MMGG-1.7.219-beta.24.apk`，versionCode 266，4,947,493 bytes，SHA256 `B932D60E7CB3C2329AFD911BF099DC8418381C0FAE732412872BAFE67BC4A5B6`。源码提交只将`app/build.gradle`从beta23/265增至beta24/266。实际`assembleBeta`成功（R8、资源收缩、lintVitalBeta；1m14s），APK v2签名通过，证书为Android Debug（SHA256 `b86a4a1d5ca870ea986585714fd2e9d349a6679fc8d7e1e682e1594d7c2c89c0`），不是正式签名证明。单测、完整Lint、模拟器/实机验收、设备安装未运行。
 - Beta24 push触发GitHub Actions Android checks run `40112982633`（SHA `bdd6bdf`），最终 `success`；这是云端检查结果，不包含设备验收。
