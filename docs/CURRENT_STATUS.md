@@ -16,7 +16,7 @@
 |Beta开发|`D:/CODEX/Tasks/2026-10-22/new-chat-3/work/HyperDragShare`|`beta`；Candidate B冻结输入基线`e49f48d`；其后仅有独立侧栏图标UI改动；双指实机结论DEVICE NO-GO|
 |正式维护|`D:/CODEX/Tasks/2026-10-20/new-chat-2/work/HyperDragShare`|`repair-from-189@98a7fdb`；1.7.218/242；已同步仓库更名后的项目、更新与反馈地址|
 
-开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。分支策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
+开始前核对status/log/worktree和并发写入。origin仅beta与repair-from-189，默认正式线；upstream原作者仓库不推送。正式分支地址调整由`98a7fdb`完成；仓库策略见[BRANCHES](BRANCHES.md)。本轮整合了先前保留的RootNodeCaptureMain/Client差异，没有覆盖或丢弃它们。
 
 ## 双指长按触发资格修复（`f8213cf`；未增版、未生成Beta包）
 
